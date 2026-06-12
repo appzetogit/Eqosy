@@ -40,6 +40,12 @@ const normalizePhone10 = (value) => String(value || "").replace(/\D/g, "").slice
 
 const isDefaultPhone = (inputPhone, defaultPhone) =>
   normalizePhone10(inputPhone) === normalizePhone10(defaultPhone);
+const previewToken = (token) => {
+  const normalized = String(token || "").trim();
+  if (!normalized) return "<empty>";
+  if (normalized.length <= 16) return normalized;
+  return `${normalized.slice(0, 8)}...${normalized.slice(-8)}`;
+};
 
 const withTimeout = async (promise, timeoutMs, label) => {
   let timeoutId;
@@ -135,10 +141,25 @@ export const verifyUserOtpAndLogin = async (
   // Update FCM token in background so login is not blocked on this write.
   if (fcmToken) {
     const tokenField = platform === "mobile" ? "fcmTokenMobile" : "fcmTokens";
+    const existingCount = Array.isArray(userDoc?.[tokenField])
+      ? userDoc[tokenField].length
+      : 0;
+    logger.info(
+      `[Auth Verify] FCM login-save start userId=${userDoc._id} phone=${phone} platform=${platform || "web"} field=${tokenField} existingCount=${existingCount} tokenPreview=${previewToken(fcmToken)}`,
+    );
     try {
-      await FoodUser.updateOne(
+      const updateResult = await FoodUser.updateOne(
         { _id: userDoc._id },
         { $addToSet: { [tokenField]: String(fcmToken).trim() } },
+      );
+      const refreshedUser = await FoodUser.findById(userDoc._id)
+        .select(`${tokenField}`)
+        .lean();
+      const refreshedCount = Array.isArray(refreshedUser?.[tokenField])
+        ? refreshedUser[tokenField].length
+        : 0;
+      logger.info(
+        `[Auth Verify] FCM login-save success userId=${userDoc._id} field=${tokenField} matched=${updateResult?.matchedCount || 0} modified=${updateResult?.modifiedCount || 0} newCount=${refreshedCount}`,
       );
     } catch (err) {
       logger.warn(

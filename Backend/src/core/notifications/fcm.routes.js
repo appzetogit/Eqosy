@@ -8,6 +8,7 @@ import {
 import { verifyAccessToken as verifyCoreAccessToken } from '../auth/token.util.js';
 import { verifyAccessToken as verifyTaxiAccessToken } from '../../modules/taxi/services/tokenService.js';
 import { FoodUser } from '../users/user.model.js';
+import { logger } from '../../utils/logger.js';
 
 const router = express.Router();
 
@@ -71,6 +72,12 @@ const getOwnerContext = (req) => ({
 });
 
 const readTokenFromBody = (req) => String(req.body?.token || '').trim();
+const previewToken = (token) => {
+    const normalized = String(token || '').trim();
+    if (!normalized) return '<empty>';
+    if (normalized.length <= 16) return normalized;
+    return `${normalized.slice(0, 8)}...${normalized.slice(-8)}`;
+};
 
 const validateToken = (token) => {
     if (!token) return 'FCM token is required';
@@ -137,19 +144,28 @@ router.post('/save', unifiedAuthMiddleware, async (req, res, next) => {
         const { ownerType, ownerId } = getOwnerContext(req);
         const token = readTokenFromBody(req);
         const platform = String(req.body?.platform || '').trim();
+        logger.info(
+            `[FCM Route] /save hit role=${req.user?.role || 'unknown'} ownerType=${ownerType || 'unknown'} ownerId=${ownerId || 'unknown'} bodyPlatform=${platform || '<missing>'} tokenPreview=${previewToken(token)}`
+        );
 
         if (!ownerType || !ownerId) {
+            logger.warn('[FCM Route] /save rejected because auth context could not be resolved');
             return sendError(res, 401, 'Authentication required');
         }
         if (platform !== 'web') {
+            logger.warn(`[FCM Route] /save rejected due to invalid platform=${platform || '<missing>'}`);
             return sendError(res, 400, 'platform must be "web" for this endpoint');
         }
         const tokenError = validateToken(token);
         if (tokenError) {
+            logger.warn(`[FCM Route] /save rejected due to token validation error="${tokenError}"`);
             return sendError(res, 400, tokenError);
         }
 
         await upsertFirebaseDeviceToken({ ownerType, ownerId, token, platform: 'web' });
+        logger.info(
+            `[FCM Route] /save success ownerType=${ownerType} ownerId=${ownerId} platform=web tokenPreview=${previewToken(token)}`
+        );
         return res.status(200).json({
             success: true,
             message: 'FCM token saved',
@@ -164,20 +180,29 @@ router.post('/mobile/save', unifiedAuthMiddleware, async (req, res, next) => {
     try {
         const { ownerType, ownerId } = getOwnerContext(req);
         const token = readTokenFromBody(req);
+        logger.info(
+            `[FCM Route] /mobile/save hit role=${req.user?.role || 'unknown'} ownerType=${ownerType || 'unknown'} ownerId=${ownerId || 'unknown'} bodyPlatform=${req.body?.platform === undefined ? '<omitted>' : String(req.body?.platform)} tokenPreview=${previewToken(token)}`
+        );
 
         if (!ownerType || !ownerId) {
+            logger.warn('[FCM Route] /mobile/save rejected because auth context could not be resolved');
             return sendError(res, 401, 'Authentication required');
         }
 
         if (req.body?.platform !== undefined) {
+            logger.warn(`[FCM Route] /mobile/save rejected because platform was provided (${String(req.body?.platform)})`);
             return sendError(res, 400, 'platform is not allowed on this endpoint');
         }
         const tokenError = validateToken(token);
         if (tokenError) {
+            logger.warn(`[FCM Route] /mobile/save rejected due to token validation error="${tokenError}"`);
             return sendError(res, 400, tokenError);
         }
 
         await upsertFirebaseDeviceToken({ ownerType, ownerId, token, platform: 'mobile' });
+        logger.info(
+            `[FCM Route] /mobile/save success ownerType=${ownerType} ownerId=${ownerId} platform=mobile tokenPreview=${previewToken(token)}`
+        );
         return res.status(200).json({
             success: true,
             message: 'Mobile FCM token saved successfully',
