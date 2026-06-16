@@ -28,10 +28,10 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
     // A. Use provided data if available (Direct distance from socket)
     const rawDist = order.pickupDistanceKm || order.distanceKm;
     const rawEta = order.estimatedTime || order.duration || order.eta;
-    
+
     if (rawDist != null) {
-      return { 
-        distanceKm: Number(rawDist).toFixed(1), 
+      return {
+        distanceKm: Number(rawDist).toFixed(1),
         etaMins: rawEta && rawEta > 0 ? Math.ceil(rawEta) : Math.ceil((rawDist * 1000) / 416) + 5
       };
     }
@@ -49,10 +49,10 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
       const km = distM / 1000;
       // Assume 25km/h avg for initial estimate (roughly 416m/min)
       const mins = Math.ceil(distM / 416) + (order.prepTime || 5);
-      
-      return { 
-        distanceKm: km.toFixed(1), 
-        etaMins: mins 
+
+      return {
+        distanceKm: km.toFixed(1),
+        etaMins: mins
       };
     }
 
@@ -70,25 +70,43 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
     order.restaurantId?.phone ||
     order.restaurantId?.ownerPhone ||
     '';
-  const deliveryAddress = order?.deliveryAddress || {};
+  const orderDeliveryAddress = order?.deliveryAddress || {};
 
   const geoCoords =
-    Array.isArray(deliveryAddress?.location?.coordinates) &&
-    deliveryAddress.location.coordinates.length >= 2
+    Array.isArray(orderDeliveryAddress?.location?.coordinates) &&
+      orderDeliveryAddress.location.coordinates.length >= 2
       ? {
-          lng: deliveryAddress.location.coordinates[0],
-          lat: deliveryAddress.location.coordinates[1],
-        }
+        lng: orderDeliveryAddress.location.coordinates[0],
+        lat: orderDeliveryAddress.location.coordinates[1],
+      }
       : null;
 
   const customerLocation = order.customerLocation || order.deliveryLocation || geoCoords || null;
 
+  const restToCustomerDistKm = useMemo(() => {
+    const rest = order.restaurantLocation || order.restaurantId?.location || {};
+    const resLat = parseFloat(order.restaurant_lat || order.restaurantLat || rest.latitude || rest.lat);
+    const resLng = parseFloat(order.restaurant_lng || order.restaurantLng || rest.longitude || rest.lng);
+
+    const cusLat = parseFloat(customerLocation?.lat || customerLocation?.latitude);
+    const cusLng = parseFloat(customerLocation?.lng || customerLocation?.longitude);
+
+    if (!isNaN(resLat) && !isNaN(resLng) && !isNaN(cusLat) && !isNaN(cusLng)) {
+      const distM = getHaversineDistance(resLat, resLng, cusLat, cusLng);
+      return (distM / 1000).toFixed(1);
+    }
+    if (order.pricing?.deliveryFeeBreakdown?.distanceKm != null) {
+      return Number(order.pricing.deliveryFeeBreakdown.distanceKm).toFixed(1);
+    }
+    return null;
+  }, [order, customerLocation]);
+
   const addressPartsFromSchema = [
-    deliveryAddress.street,
-    deliveryAddress.additionalDetails,
-    deliveryAddress.city,
-    deliveryAddress.state,
-    deliveryAddress.zipCode,
+    orderDeliveryAddress.street,
+    orderDeliveryAddress.additionalDetails,
+    orderDeliveryAddress.city,
+    orderDeliveryAddress.state,
+    orderDeliveryAddress.zipCode,
   ]
     .map((v) => String(v || '').trim())
     .filter(Boolean);
@@ -104,8 +122,8 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
   const mapsLink =
     customerLocation?.lat != null && customerLocation?.lng != null
       ? `https://www.google.com/maps?q=${encodeURIComponent(
-          `${customerLocation.lat},${customerLocation.lng}`,
-        )}`
+        `${customerLocation.lat},${customerLocation.lng}`,
+      )}`
       : null;
 
   return (
@@ -115,7 +133,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
       exit={{ opacity: 0 }}
       className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center"
     >
-      <motion.div 
+      <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
@@ -124,8 +142,8 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
       >
         {/* Handle / Minimize */}
         <div className="w-full flex justify-center py-3 bg-white relative z-20">
-          <button 
-            onClick={onMinimize} 
+          <button
+            onClick={onMinimize}
             className="w-12 h-1.5 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors active:scale-95"
             aria-label="Minimize"
           />
@@ -150,24 +168,24 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
           <div className="px-6 py-4 space-y-5">
             {/* Direct Summary Metrics (Horizontal Compact Row) */}
             <div className="flex gap-2">
-               <div className="flex-1 p-3 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3">
-                 <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-emerald-500">
-                    <Clock className="w-5 h-5" />
-                 </div>
-                 <div className="flex flex-col">
-                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">EST. Time</span>
-                    <span className="text-sm font-black text-gray-900 tracking-tight leading-none">{etaMins} MINS</span>
-                 </div>
-               </div>
-               <div className="flex-1 p-3 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3">
-                 <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-blue-500">
-                    <MapPin className="w-5 h-5" />
-                 </div>
-                 <div className="flex flex-col">
-                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Distance</span>
-                    <span className="text-sm font-black text-gray-900 tracking-tight leading-none">{distanceKm} KM</span>
-                 </div>
-               </div>
+              <div className="flex-1 p-3 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-emerald-500">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">EST. Time</span>
+                  <span className="text-sm font-black text-gray-900 tracking-tight leading-none">{etaMins} MINS</span>
+                </div>
+              </div>
+              <div className="flex-1 p-3 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-blue-500">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest leading-none mb-1">Distance</span>
+                  <span className="text-sm font-black text-gray-900 tracking-tight leading-none">{distanceKm} KM</span>
+                </div>
+              </div>
             </div>
 
             {/* Delivery Locations (Tighter Timeline) */}
@@ -178,11 +196,13 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
                   <div className="flex-1 w-0.5 border-l-2 border-dashed border-gray-200 my-1" />
                   <div className="w-3 h-3 rounded-full bg-blue-500 shadow-lg shadow-blue-500/20" />
                 </div>
-                
+
                 <div className="flex-1 space-y-4">
                   <div>
                     <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600 mb-0.5">Restaurant Pickup</h4>
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600 mb-0.5">
+                        Restaurant Pickup {distanceKm ? `(${distanceKm} km)` : ''}
+                      </h4>
                       {restaurantPhone && (
                         <button
                           onClick={() => (window.location.href = `tel:${restaurantPhone}`)}
@@ -199,8 +219,10 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
 
                   <div className="pt-1">
                     <div className="flex items-center justify-between">
-                       <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-600 mb-0.5">Customer Drop</h4>
-                       {mapsLink && (
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-600 mb-0.5">
+                        Customer Drop {restToCustomerDistKm ? `(${restToCustomerDistKm} km)` : ''}
+                      </h4>
+                      {mapsLink && (
                         <a href={mapsLink} target="_blank" rel="noreferrer" className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full hover:bg-blue-100 transition-colors">
                           Open Map
                         </a>
@@ -217,14 +239,14 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
 
         {/* Action Area (Fixed / Non-Scrolling Footer) */}
         <div className="px-6 pb-8 pt-2 space-y-4 bg-white">
-          <ActionSlider 
-            label="Slide to Accept" 
-            onConfirm={() => onAccept(order)} 
+          <ActionSlider
+            label="Slide to Accept"
+            onConfirm={() => onAccept(order)}
             color="bg-emerald-600"
             successLabel="Order Accepted ✓"
           />
 
-          <button 
+          <button
             onClick={onReject}
             className="w-full text-gray-400 font-black text-[11px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors active:scale-95 py-2"
           >

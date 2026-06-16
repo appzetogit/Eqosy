@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, startTransition, useDeferredValue
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, Star, Clock, Search, SlidersHorizontal, ChevronDown, Bookmark, BadgePercent, MapPin, ArrowDownUp, Timer, IndianRupee, UtensilsCrossed, ShieldCheck, X, Loader2, Grid2x2 } from "lucide-react"
+import { ArrowLeft, Star, Clock, Search, SlidersHorizontal, ChevronDown, Bookmark, BadgePercent, MapPin, ArrowDownUp, Timer, IndianRupee, UtensilsCrossed, ShieldCheck, X, Loader2, Grid2x2, Tag } from "lucide-react"
 import { Card, CardContent } from "@food/components/ui/card"
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
@@ -573,6 +573,18 @@ export default function CategoryPage() {
       nextRows = nextRows.filter((row) => matchesOfferText(row?.offer, /50\s*%/i))
     }
 
+    if (activeFilters.has('pricing-same-price')) {
+      nextRows = nextRows.filter((row) =>
+        Array.isArray(row?.pricingAttributes) && row.pricingAttributes.includes('same_price')
+      )
+    }
+
+    if (activeFilters.has('pricing-no-packaging')) {
+      nextRows = nextRows.filter((row) =>
+        Array.isArray(row?.pricingAttributes) && row.pricingAttributes.includes('no_packaging')
+      )
+    }
+
     if (activeFilters.has('price-match')) {
       nextRows = nextRows.filter((row) =>
         matchesOfferText(row?.offer, /price\s*match/i) ||
@@ -950,6 +962,7 @@ export default function CategoryPage() {
                 slug: restaurant.slug || (restaurant.restaurantName || restaurant.name)?.toLowerCase().replace(/\s+/g, '-'),
                 restaurantId: restaurantId,
                 mongoId: restaurant._id || null,
+                pricingAttributes: Array.isArray(restaurant.pricingAttributes) ? restaurant.pricingAttributes : [],
                 hasPaneer: false,
                 category: 'all',
               }
@@ -1813,6 +1826,7 @@ export default function CategoryPage() {
                     <div className="w-24 sm:w-28 md:w-32 bg-gray-50 dark:bg-[#0a0a0a] border-r border-gray-200 dark:border-gray-800 flex flex-col">
                       {[
                         { id: 'sort', label: 'Sort By', icon: ArrowDownUp },
+                        { id: 'perks', label: 'Pricing Perks', icon: Tag },
                         { id: 'time', label: 'Time', icon: Timer },
                         { id: 'rating', label: 'Rating', icon: Star },
                         { id: 'distance', label: 'Distance', icon: MapPin },
@@ -1875,6 +1889,37 @@ export default function CategoryPage() {
                               </span>
                             </button>
                           ))}
+                        </div>
+                      </div>
+
+                      {/* Perks Tab */}
+                      <div
+                        ref={el => filterSectionRefs.current['perks'] = el}
+                        data-section-id="perks"
+                        className="space-y-4 mb-8"
+                      >
+                        <h3 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-white mb-4">Pricing Perks</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                          <button
+                            onClick={() => toggleFilter('pricing-same-price')}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has('pricing-same-price')
+                              ? 'border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/20'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-[#EB590E]'
+                              }`}
+                          >
+                            <Tag className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has('pricing-same-price') ? 'text-[#EB590E]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                            <span className={`text-sm md:text-base font-medium ${activeFilters.has('pricing-same-price') ? 'text-[#EB590E]' : 'text-gray-700 dark:text-gray-300'}`}>Same Price</span>
+                          </button>
+                          <button
+                            onClick={() => toggleFilter('pricing-no-packaging')}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has('pricing-no-packaging')
+                              ? 'border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/20'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-[#EB590E]'
+                              }`}
+                          >
+                            <Tag className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has('pricing-no-packaging') ? 'text-[#EB590E]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                            <span className={`text-sm md:text-base font-medium ${activeFilters.has('pricing-no-packaging') ? 'text-[#EB590E]' : 'text-gray-700 dark:text-gray-300'}`}>No Packaging</span>
+                          </button>
                         </div>
                       </div>
 

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus } from "lucide-react"
 import { adminAPI, restaurantAPI, uploadAPI } from "@food/api"
@@ -120,6 +120,7 @@ export default function RestaurantsList() {
   const [detailsForm, setDetailsForm] = useState({
     name: "",
     pureVegRestaurant: false,
+    pricingAttributes: [],
     ownerName: "",
     ownerEmail: "",
     ownerPhone: "",
@@ -722,6 +723,7 @@ export default function RestaurantsList() {
       return {
         name: "",
         pureVegRestaurant: false,
+        pricingAttributes: [],
         ownerName: "",
         ownerEmail: "",
         ownerPhone: "",
@@ -755,6 +757,7 @@ export default function RestaurantsList() {
         typeof restaurant.pureVegRestaurant === "boolean"
           ? restaurant.pureVegRestaurant
           : false,
+      pricingAttributes: Array.isArray(restaurant.pricingAttributes) ? restaurant.pricingAttributes : [],
       ownerName: restaurant.ownerName || "",
       ownerEmail: restaurant.ownerEmail || "",
       ownerPhone: restaurant.ownerPhone || restaurant.phone || "",
@@ -818,6 +821,7 @@ export default function RestaurantsList() {
       const payload = {
         name: detailsForm.name.trim(),
         pureVegRestaurant: detailsForm.pureVegRestaurant === true,
+        pricingAttributes: detailsForm.pricingAttributes || [],
         ownerName: detailsForm.ownerName.trim(),
         ownerEmail: detailsForm.ownerEmail.trim(),
         ownerPhone: detailsForm.ownerPhone.trim(),
@@ -1411,6 +1415,49 @@ export default function RestaurantsList() {
                           }`}
                         >
                           No
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Pricing Perks (Optional)</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const attrs = detailsForm.pricingAttributes || []
+                            setDetailsForm((prev) => ({
+                              ...prev,
+                              pricingAttributes: attrs.includes("same_price")
+                                ? attrs.filter(a => a !== "same_price")
+                                : [...attrs, "same_price"]
+                            }))
+                          }}
+                          className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                            (detailsForm.pricingAttributes || []).includes("same_price")
+                              ? "bg-emerald-600 text-white border-emerald-600 font-medium"
+                              : "bg-white text-slate-700 border-slate-300"
+                          }`}
+                        >
+                          Same price
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const attrs = detailsForm.pricingAttributes || []
+                            setDetailsForm((prev) => ({
+                              ...prev,
+                              pricingAttributes: attrs.includes("no_packaging")
+                                ? attrs.filter(a => a !== "no_packaging")
+                                : [...attrs, "no_packaging"]
+                            }))
+                          }}
+                          className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                            (detailsForm.pricingAttributes || []).includes("no_packaging")
+                              ? "bg-emerald-600 text-white border-emerald-600 font-medium"
+                              : "bg-white text-slate-700 border-slate-300"
+                          }`}
+                        >
+                          No packaging
                         </button>
                       </div>
                     </div>

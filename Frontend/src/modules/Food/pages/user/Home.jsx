@@ -37,6 +37,7 @@ import {
   Plus,
   Check,
   Share2,
+  ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "@food/components/user/Footer";
@@ -89,7 +90,7 @@ import { useLocation } from "@food/hooks/useLocation";
 import { useZone } from "@food/hooks/useZone";
 import quickSpicyLogo from "@food/assets/eqosy-logo.png";
 import offerImage from "@food/assets/offerimage.png";
-import api, { publicGetOnce, restaurantAPI, adminAPI } from "@food/api";
+import api, { publicGetOnce, restaurantAPI, adminAPI, orderAPI } from "@food/api";
 import { API_BASE_URL } from "@food/api/config";
 import OptimizedImage from "@food/components/OptimizedImage";
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability";
@@ -1262,6 +1263,8 @@ export default function Home() {
   });
   const [isLoadingFilterResults, setIsLoadingFilterResults] = useState(false);
   const [activeFilterTab, setActiveFilterTab] = useState("sort");
+  const [previouslyOrderedRestaurants, setPreviouslyOrderedRestaurants] = useState([]);
+  const [loadingPreviouslyOrdered, setLoadingPreviouslyOrdered] = useState(false);
   const categoryScrollRef = useRef(null);
   const gsapAnimationsRef = useRef([]);
   // Show skeletons immediately while loading â€” delayed toggles caused visible layout swap (CLS).
@@ -1560,6 +1563,32 @@ export default function Home() {
     });
   };
 
+  const handleToggleHorizontalFilter = (filterId) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+
+      // Mutual exclusivity for rating filters
+      if (filterId === "rating-4-plus") {
+        next.delete("rating-35-plus");
+        next.delete("rating-45-plus");
+      } else if (filterId === "rating-35-plus") {
+        next.delete("rating-4-plus");
+        next.delete("rating-45-plus");
+      }
+
+      // Toggle the clicked filter
+      if (next.has(filterId)) {
+        next.delete(filterId);
+      } else {
+        next.add(filterId);
+      }
+
+      // Apply changes and trigger immediate refetch
+      applyFiltersAndRefetch(next, sortBy, selectedCuisine);
+      return next;
+    });
+  };
+
   // Refs for scroll tracking
   const filterSectionRefs = useRef({});
   const [activeScrollSection, setActiveScrollSection] = useState("sort");
@@ -1669,6 +1698,18 @@ export default function Home() {
           params.topRated = "true";
         } else if (filters.activeFilters?.has("trusted")) {
           params.trusted = "true";
+        }
+
+        // Pricing attributes
+        const pricingAttrs = [];
+        if (filters.activeFilters?.has("pricing-same-price")) {
+          pricingAttrs.push("same_price");
+        }
+        if (filters.activeFilters?.has("pricing-no-packaging")) {
+          pricingAttrs.push("no_packaging");
+        }
+        if (pricingAttrs.length > 0) {
+          params.pricingAttributes = pricingAttrs.join(",");
         }
 
         // Strict zone-only listing for user home.
@@ -1860,6 +1901,7 @@ export default function Home() {
                 slug: restaurant.slug,
                 restaurantId: restaurant.restaurantId,
                 pureVegRestaurant: restaurant.pureVegRestaurant === true,
+                pricingAttributes: Array.isArray(restaurant.pricingAttributes) ? restaurant.pricingAttributes : [],
                 location: restaurant.location, // Store location for distance recalculation
                 isActive: restaurant.isActive !== false, // Default to true if not specified
                 isAcceptingOrders: restaurant.isAcceptingOrders !== false, // Default to true if not specified
@@ -2034,6 +2076,89 @@ export default function Home() {
   useEffect(() => {
     fetchRestaurants(appliedFilters);
   }, [appliedFilters, fetchRestaurants]);
+
+  // Load previously ordered restaurants on mount if user is authenticated
+  useEffect(() => {
+    let active = true;
+    const fetchPreviouslyOrdered = async () => {
+      const isAuthenticated =
+        localStorage.getItem("user_authenticated") === "true" ||
+        !!localStorage.getItem("user_accessToken");
+      if (!isAuthenticated) return;
+
+      try {
+        setLoadingPreviouslyOrdered(true);
+        const response = await orderAPI.getOrders({ limit: 50, page: 1 });
+        if (!active) return;
+
+        if (response?.data?.success && response?.data?.data?.orders) {
+          const orders = response.data.data.orders;
+          const uniqueMap = new Map();
+
+          orders.forEach((order) => {
+            const rest = order.restaurantId;
+            if (rest && rest._id && !uniqueMap.has(rest._id)) {
+              // Extract and normalize images using existing functions
+              const coverImages = extractImages([
+                ...(Array.isArray(rest.coverImages) ? rest.coverImages : [rest.coverImages]).filter(Boolean),
+                rest.coverImage,
+              ]);
+
+              const profileImageCandidates = extractImages([
+                ...buildRestaurantImageCandidates(rest.profileImage),
+                ...buildRestaurantImageCandidates(rest.onboarding?.step2?.profileImageUrl),
+                ...buildRestaurantImageCandidates(rest.image),
+                ...buildRestaurantImageCandidates(rest.imageUrl),
+              ]);
+              const profileImageUrl = profileImageCandidates[0] || "";
+
+              const allImages = Array.from(
+                new Set(
+                  [
+                    ...coverImages,
+                    ...profileImageCandidates,
+                  ].filter(Boolean),
+                ),
+              );
+
+              const image = allImages[0] || profileImageUrl || "";
+
+              uniqueMap.set(rest._id, {
+                id: rest._id,
+                mongoId: rest._id,
+                name: rest.restaurantName || rest.name || order.restaurantName || "Restaurant",
+                slug: rest.slug || (rest.restaurantName || rest.name || "restaurant").toLowerCase().replace(/\s+/g, "-"),
+                coverImages: rest.coverImages || null,
+                profileImage: rest.profileImage || null,
+                image: image,
+                images: allImages,
+                rating: Number(rest.rating) || 0,
+                cuisines: Array.isArray(rest.cuisines) ? rest.cuisines : [],
+                cuisine: Array.isArray(rest.cuisines) && rest.cuisines.length > 0 ? rest.cuisines[0] : "Multi-cuisine",
+                estimatedDeliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
+                deliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
+                location: rest.location || {},
+                pricingAttributes: Array.isArray(rest.pricingAttributes) ? rest.pricingAttributes : [],
+              });
+            }
+          });
+
+          setPreviouslyOrderedRestaurants(Array.from(uniqueMap.values()));
+        }
+      } catch (err) {
+        debugError("Error fetching previously ordered restaurants:", err);
+      } finally {
+        if (active) {
+          setLoadingPreviouslyOrdered(false);
+        }
+      }
+    };
+
+    fetchPreviouslyOrdered();
+    return () => {
+      active = false;
+    };
+  }, [extractImages, buildRestaurantImageCandidates]);
 
   // Recalculate distances when user location updates
   useEffect(() => {
@@ -2404,6 +2529,7 @@ export default function Home() {
         slug: restaurant?.slug || restaurant?.restaurantId || restaurantId,
         offer: null,
         pureVegRestaurant: restaurant?.pureVegRestaurant === true,
+        pricingAttributes: Array.isArray(restaurant?.pricingAttributes) ? restaurant.pricingAttributes : [],
         isActive: true,
         isAcceptingOrders: true,
       };
@@ -2642,6 +2768,136 @@ export default function Home() {
     );
   }, [displayCategories, showCategorySkeleton, navigate, isCategoryStuck]);
 
+  const renderHorizontalFilters = () => {
+    const filtersList = [
+      { id: "rating-4-plus", label: "Rating 4.0+", icon: Star },
+      { id: "rating-35-plus", label: "Rating 3.5+", icon: Star },
+      { id: "pricing-no-packaging", label: "No packaging charges" },
+      { id: "pricing-same-price", label: "Same price as restaurant" },
+      { id: "price-under-200", label: "Under 200", icon: IndianRupee },
+      { id: "distance-under-2km", label: "Nearby (< 2 km)", icon: MapPin },
+    ];
+
+    return (
+      <div className="w-full overflow-x-auto scrollbar-hide py-3 px-4 bg-white dark:bg-[#0a0a0a] border-b border-gray-100 dark:border-gray-900 z-30">
+        <div className="flex items-center gap-2 pr-4 min-w-max">
+          {/* Main Filter Toggle Pill */}
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white dark:bg-[#1a1a1a] border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all shadow-sm active:scale-95 flex-shrink-0"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>Filters</span>
+            <ChevronDown className="w-3 h-3 text-gray-400" />
+          </button>
+
+          {/* Individual Filter Pills */}
+          {filtersList.map((filter) => {
+            const isActive = activeFilters.has(filter.id);
+            const Icon = filter.icon;
+
+            return (
+              <button
+                key={filter.id}
+                onClick={() => handleToggleHorizontalFilter(filter.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 shadow-sm flex-shrink-0 ${
+                  isActive
+                    ? "bg-[#EB590E] border-[#EB590E] text-white hover:bg-[#D94F0C]"
+                    : "bg-white dark:bg-[#1a1a1a] border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+              >
+                {Icon && (
+                  <Icon
+                    className={`w-3.5 h-3.5 ${
+                      isActive
+                        ? "text-white"
+                        : filter.id.startsWith("rating")
+                        ? "text-yellow-500 fill-yellow-500"
+                        : "text-gray-400"
+                    }`}
+                  />
+                )}
+                <span>{filter.label}</span>
+                {isActive && <Check className="w-3 h-3 ml-1" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPreviouslyOrderedSection = () => {
+    if (loadingPreviouslyOrdered) {
+      return (
+        <section className="space-y-4 pt-4 sm:pt-6 px-4">
+          <div className="h-6 w-48 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide py-2">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="flex-shrink-0 w-56 h-48 bg-gray-100 dark:bg-gray-800 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    if (previouslyOrderedRestaurants.length === 0) return null;
+
+    return (
+      <section className="space-y-4 pt-4 sm:pt-6">
+        <div className="px-4 flex items-center justify-between">
+          <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+            <Clock className="w-4 h-4 text-orange-500" />
+            Previously Ordered
+          </h2>
+        </div>
+        
+        <HorizontalCarousel showControls={previouslyOrderedRestaurants.length > 3} className="px-4">
+          {previouslyOrderedRestaurants.map((restaurant, idx) => {
+            const restaurantSlug =
+              restaurant.slug ||
+              restaurant.name.toLowerCase().replace(/\s+/g, "-");
+            return (
+              <div
+                key={`prev-ordered-${restaurant.id || idx}`}
+                className="flex-shrink-0 w-56 transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02]"
+              >
+                <Link
+                  to={`/user/restaurants/${restaurantSlug}`}
+                  className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="relative h-28 bg-gray-50">
+                    <RestaurantImageCarousel
+                      restaurant={restaurant}
+                      backendOrigin={BACKEND_ORIGIN}
+                      className="h-28"
+                      roundedClass="rounded-t-2xl"
+                    />
+                    <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-lg ${Number(restaurant.rating) > 0 ? "bg-black/80 backdrop-blur-md text-white font-medium" : "bg-gray-200/90 text-gray-600 font-medium"} text-[10px] shadow-lg border border-white/10`}>
+                      {Number(restaurant.rating) > 0 ? `★ ${Number(restaurant.rating).toFixed(1)}` : "NEW"}
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate tracking-tight">
+                      {restaurant.name}
+                    </p>
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                      <span className="truncate max-w-[120px]">{restaurant.cuisine}</span>
+                      <span className="flex items-center gap-1 font-medium text-orange-600 dark:text-orange-400">
+                        <Flame className="w-3 h-3 fill-orange-600" />
+                        {restaurant.deliveryTime}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            );
+          })}
+        </HorizontalCarousel>
+      </section>
+    );
+  };
+
   return (
 
     <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
@@ -2802,6 +3058,9 @@ export default function Home() {
           {CategoryRailSection}
         </div>
 
+        {renderHorizontalFilters()}
+
+        {renderPreviouslyOrderedSection()}
 
         {HeroBannerSection}
 
@@ -3169,6 +3428,7 @@ export default function Home() {
                   <div className="w-24 sm:w-28 bg-gray-50 dark:bg-[#0a0a0a] border-r dark:border-gray-800 flex flex-col">
                     {[
                       { id: "sort", label: "Sort By", icon: ArrowDownUp },
+                      { id: "perks", label: "Pricing Perks", icon: Tag },
                       { id: "time", label: "Time", icon: Timer },
                       { id: "rating", label: "Rating", icon: Star },
                       { id: "distance", label: "Distance", icon: MapPin },
@@ -3244,6 +3504,50 @@ export default function Home() {
                             </span>
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    {/* Perks Tab */}
+                    <div
+                      ref={(el) => (filterSectionRefs.current["perks"] = el)}
+                      data-section-id="perks"
+                      className="space-y-4 mb-8">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        Pricing Perks
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => toggleFilter("pricing-same-price")}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
+                            activeFilters.has("pricing-same-price")
+                              ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                          }`}>
+                          <Tag
+                            className={`h-6 w-6 ${activeFilters.has("pricing-same-price") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                            strokeWidth={1.5}
+                          />
+                          <span
+                            className={`text-sm font-medium ${activeFilters.has("pricing-same-price") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                            Same price as restaurant
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => toggleFilter("pricing-no-packaging")}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
+                            activeFilters.has("pricing-no-packaging")
+                              ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                          }`}>
+                          <Tag
+                            className={`h-6 w-6 ${activeFilters.has("pricing-no-packaging") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                            strokeWidth={1.5}
+                          />
+                          <span
+                            className={`text-sm font-medium ${activeFilters.has("pricing-no-packaging") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                            No packaging charges
+                          </span>
+                        </button>
                       </div>
                     </div>
 

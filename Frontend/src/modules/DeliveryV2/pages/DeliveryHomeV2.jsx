@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
@@ -115,6 +115,23 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     activeOrder?.deliveryAddress?.phone ||
     activeOrder?.userId?.phone ||
     activeOrder?.user?.phone ||
+    '';
+
+  const deliveryAddress = activeOrder?.deliveryAddress || {};
+  const addressPartsFromSchema = [
+    deliveryAddress.street,
+    deliveryAddress.additionalDetails,
+    deliveryAddress.city,
+    deliveryAddress.state,
+    deliveryAddress.zipCode,
+  ]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+
+  const customerAddress =
+    activeOrder?.customerAddress ||
+    activeOrder?.customer_address ||
+    (addressPartsFromSchema.length ? addressPartsFromSchema.join(', ') : '') ||
     '';
 
   const [zoom, setZoom] = useState(14);
@@ -839,9 +856,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${isWithinRange ? 'bg-emerald-50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
                                    <div className={`w-1.5 h-1.5 rounded-full ${isWithinRange ? 'bg-emerald-500 animate-pulse' : 'bg-orange-500'}`} />
                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isWithinRange ? 'text-emerald-600' : 'text-orange-500'}`}>
-                                     {isWithinRange ? 'Ready to Arrive' : `${(distanceToTarget / 1000).toFixed(1)} km â€¢ ${eta || '--'} min`}
+                                     {isWithinRange ? 'Ready to Arrive' : `${(distanceToTarget / 1000).toFixed(1)} km • ${eta || '--'} min`}
                                    </span>
                                  </div>
+                                 {customerAddress && (
+                                   <p className="text-gray-500 text-xs font-bold mt-2 max-w-[240px] leading-tight text-left">
+                                     {customerAddress}
+                                   </p>
+                                 )}
                               </div>
                             </div>
                             {customerPhone && (

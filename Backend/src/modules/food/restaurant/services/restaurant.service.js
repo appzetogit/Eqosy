@@ -140,6 +140,8 @@ const toRestaurantProfile = (doc) => {
         restaurantId: doc.restaurantId || undefined,
         name: doc.restaurantName || '',
         restaurantName: doc.restaurantName || '',
+        pureVegRestaurant: Boolean(doc.pureVegRestaurant),
+        pricingAttributes: Array.isArray(doc.pricingAttributes) ? doc.pricingAttributes : [],
         zoneId: doc.zoneId ? String(doc.zoneId) : '',
         cuisines: Array.isArray(doc.cuisines) ? doc.cuisines : [],
         location,
@@ -329,6 +331,7 @@ export const registerRestaurant = async (payload, files) => {
         ownerPhone,
         primaryContactNumber,
         pureVegRestaurant,
+        pricingAttributes,
         addressLine1,
         addressLine2,
         area,
@@ -464,6 +467,7 @@ export const registerRestaurant = async (payload, files) => {
             ownerPhoneLast10,
             primaryContactNumber,
             pureVegRestaurant: pureVegRestaurant === true,
+            pricingAttributes: Array.isArray(pricingAttributes) ? pricingAttributes : [],
             zoneId: zoneId && mongoose.Types.ObjectId.isValid(String(zoneId).trim())
                 ? new mongoose.Types.ObjectId(String(zoneId).trim())
                 : undefined,
@@ -556,6 +560,7 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
                 'upiId',
                 'upiQrImage',
                 'pureVegRestaurant',
+                'pricingAttributes',
                 'profileImage',
                 'coverImages',
                 'menuImages',
@@ -806,6 +811,19 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
             }
         } else {
             throw new ValidationError('pureVegRestaurant must be a boolean');
+        }
+    }
+
+    if (body.pricingAttributes !== undefined) {
+        if (Array.isArray(body.pricingAttributes)) {
+            update.pricingAttributes = body.pricingAttributes.filter(a => ['same_price', 'no_packaging'].includes(a));
+        } else if (typeof body.pricingAttributes === 'string') {
+            update.pricingAttributes = body.pricingAttributes
+                .split(',')
+                .map(s => s.trim())
+                .filter(a => ['same_price', 'no_packaging'].includes(a));
+        } else {
+            throw new ValidationError('pricingAttributes must be an array or comma-separated string');
         }
     }
 
@@ -1062,7 +1080,8 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
         'upiQrImage',
         'profileImage',
         'coverImages',
-        'menuImages'
+        'menuImages',
+        'pricingAttributes'
     ]);
 
     const requiresReview = Object.keys(update).some((field) => reviewRequiredFields.has(field));
@@ -1346,6 +1365,18 @@ export const listApprovedRestaurants = async (query = {}) => {
 
     const filter = { status: 'approved' };
 
+    if (query.pricingAttributes) {
+        let attrs = [];
+        if (Array.isArray(query.pricingAttributes)) {
+            attrs = query.pricingAttributes;
+        } else if (typeof query.pricingAttributes === 'string') {
+            attrs = query.pricingAttributes.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (attrs.length > 0) {
+            filter.pricingAttributes = { $all: attrs };
+        }
+    }
+
     if (query.city && String(query.city).trim()) {
         const city = String(query.city).trim().slice(0, 80);
         const rx = { $regex: escapeRegex(city), $options: 'i' };
@@ -1428,6 +1459,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         isAcceptingOrders: 1,
         status: 1,
         pureVegRestaurant: 1,
+        pricingAttributes: 1,
         createdAt: 1,
         location: 1,
         openingTime: 1,
@@ -1520,6 +1552,8 @@ export const listApprovedRestaurants = async (query = {}) => {
         coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
         openingTime: r.openingTime || null,
         closingTime: r.closingTime || null,
+        pureVegRestaurant: Boolean(r.pureVegRestaurant),
+        pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
         openDays: Array.isArray(r.openDays) ? r.openDays : [],
         // Keep menuImages as an array for fallbacks; allow both string and {url} on client.
         menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],

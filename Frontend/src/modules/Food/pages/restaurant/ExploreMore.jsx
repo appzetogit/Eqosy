@@ -1269,12 +1269,8 @@ export default function ExploreMore() {
 
               {/* User Information Section */}
               <div className="px-6 py-6">
-                <button 
-                  onClick={() => {
-                    setProfileOpen(false)
-                    navigate("/food/restaurant/onboarding?step=1")
-                  }}
-                  className="w-full flex items-start gap-4 text-left p-2 -m-2 hover:bg-gray-50 rounded-xl transition-colors group"
+                <div 
+                  className="w-full flex items-start gap-4 text-left p-2 -m-2 rounded-xl"
                 >
                   {/* Avatar */}
                   <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center shrink-0 overflow-hidden ring-2 ring-white">
@@ -1295,7 +1291,6 @@ export default function ExploreMore() {
                       <h3 className="text-base font-bold text-gray-900 truncate">
                         {loadingRestaurant ? "Loading..." : userData.name}
                       </h3>
-                      <Edit className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     {userData.phone && (
                       <p className="text-sm text-gray-600 mb-1">
@@ -1311,7 +1306,7 @@ export default function ExploreMore() {
                       {userData.role}
                     </p>
                   </div>
-                </button>
+                </div>
               </div>
 
               {/* Logout Buttons */}

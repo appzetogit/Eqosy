@@ -552,6 +552,7 @@ export default function RestaurantOnboarding() {
   const [step1, setStep1] = useState({
     restaurantName: "",
     pureVegRestaurant: null,
+    pricingAttributes: [],
     ownerName: "",
     ownerEmail: "",
     ownerPhone: "",
@@ -852,6 +853,9 @@ export default function RestaurantOnboarding() {
                 typeof localData.step1.pureVegRestaurant === "boolean"
                   ? localData.step1.pureVegRestaurant
                   : null,
+              pricingAttributes: Array.isArray(localData.step1.pricingAttributes)
+                ? localData.step1.pricingAttributes
+                : [],
               ownerName: localData.step1.ownerName || "",
               ownerEmail: localData.step1.ownerEmail || "",
               ownerPhone: localData.step1.ownerPhone || "",
@@ -1043,6 +1047,11 @@ export default function RestaurantOnboarding() {
                   : typeof data.pureVegRestaurant === "boolean"
                   ? data.pureVegRestaurant
                   : prev.pureVegRestaurant,
+              pricingAttributes: Array.isArray(step1Data.pricingAttributes)
+                ? step1Data.pricingAttributes
+                : (Array.isArray(data.pricingAttributes)
+                  ? data.pricingAttributes
+                  : (prev.pricingAttributes || [])),
               ownerName: step1Data.ownerName || data.ownerName || prev.ownerName || "",
               ownerEmail: step1Data.ownerEmail || data.ownerEmail || data.email || prev.ownerEmail || "",
               ownerPhone: step1Data.ownerPhone || data.ownerPhone || data.phone || prev.ownerPhone || "",
@@ -1512,6 +1521,54 @@ export default function RestaurantOnboarding() {
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
               This helps users filter restaurants by dietary preference.
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">Pricing perks (Optional)</Label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isEditing) return
+                  const attrs = step1.pricingAttributes || []
+                  setStep1({
+                    ...step1,
+                    pricingAttributes: attrs.includes("same_price")
+                      ? attrs.filter(a => a !== "same_price")
+                      : [...attrs, "same_price"]
+                  })
+                }}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  (step1.pricingAttributes || []).includes("same_price")
+                    ? "bg-emerald-600 text-white border-emerald-600 font-medium shadow-sm"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                } ${!isEditing ? "opacity-70 cursor-not-allowed" : ""}`}
+              >
+                Same price as restaurant
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isEditing) return
+                  const attrs = step1.pricingAttributes || []
+                  setStep1({
+                    ...step1,
+                    pricingAttributes: attrs.includes("no_packaging")
+                      ? attrs.filter(a => a !== "no_packaging")
+                      : [...attrs, "no_packaging"]
+                  })
+                }}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  (step1.pricingAttributes || []).includes("no_packaging")
+                    ? "bg-emerald-600 text-white border-emerald-600 font-medium shadow-sm"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                } ${!isEditing ? "opacity-70 cursor-not-allowed" : ""}`}
+              >
+                No packaging charges
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Select pricing benefits you want to advertise to customers.
             </p>
           </div>
         </div>
@@ -2695,6 +2752,7 @@ export default function RestaurantOnboarding() {
       const formData = new FormData()
       formData.append('restaurantName', step1.restaurantName || '')
       formData.append('pureVegRestaurant', step1.pureVegRestaurant === true ? 'true' : 'false')
+      formData.append('pricingAttributes', (step1.pricingAttributes || []).join(','))
       formData.append('ownerName', step1.ownerName || '')
       formData.append('ownerEmail', (step1.ownerEmail || '').trim())
       formData.append('ownerPhone', normalizePhoneDigits(step1.ownerPhone))

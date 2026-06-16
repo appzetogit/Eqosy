@@ -83,6 +83,11 @@ const restaurantSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    pricingAttributes: {
+      type: [String],
+      enum: ["same_price", "no_packaging"],
+      default: [],
+    },
     addressLine1: {
       type: String,
     },

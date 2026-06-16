@@ -1386,29 +1386,8 @@ export default function OrderTracking() {
           </div>
         </div>
 
-        {/* 1-minute cancellation window after admin acceptance */}
-        {isAdminAccepted && isEditWindowOpen && (
-          <motion.div
-            className="bg-white dark:bg-zinc-900 rounded-xl p-4 shadow-sm border border-orange-100 dark:border-zinc-800"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Cancel order</p>
-              <span className="text-sm font-bold px-2 py-1 rounded-md bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-400">
-                {editWindowText}
-              </span>
-            </div>
-            <div className="mt-3">
-              <Button type="button" onClick={handleCancelOrder} className="w-full bg-red-600 hover:bg-red-700 text-white">
-                Cancel Order
-              </Button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Cancel Button - Only show if NOT delivered/cancelled */}
-        {!isDeliveredOrder && !isCancelledOrder && (
+        {/* Cancel Button - Only show if placed and waiting for restaurant confirmation */}
+        {orderStatus === "placed" && (
           <div className="px-2">
             <button onClick={handleCancelOrder} className="w-full py-4 text-sm font-bold text-red-500 bg-red-50 dark:bg-red-950/20 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2">
               <X className="w-4 h-4" />
@@ -1554,6 +1533,24 @@ export default function OrderTracking() {
             </>
           )}
         </div>
+
+        {/* Cute Food Wastage Card */}
+        {["confirmed", "preparing", "assigned", "at_pickup", "ready", "on_way", "at_drop"].includes(orderStatus) && (
+          <div className="bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/30 rounded-3xl p-5 flex gap-4 items-start relative overflow-hidden transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-100/30 dark:bg-amber-950/20 rounded-full blur-2xl pointer-events-none" />
+            <div className="w-10 h-10 rounded-2xl bg-amber-100/80 dark:bg-amber-950/30 flex items-center justify-center text-amber-600 shrink-0 select-none">
+              <span className="text-xl">🌱</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest mb-1 select-none">
+                Wastage Policy
+              </p>
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-relaxed">
+                In order to reduce the food wastage, once the order gets confirmed by the restaurant. it can't be cancelled
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cancel Order Dialog */}

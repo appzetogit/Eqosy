@@ -256,13 +256,17 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   const order = await FoodOrder.findOneAndUpdate(
     {
-      ...identity,
-      orderStatus: { $in: acceptedStatuses },
-      $or: [
-        { 'dispatch.status': 'unassigned' },
+      $and: [
+        identity,
         {
-          'dispatch.status': 'assigned',
-          'dispatch.deliveryPartnerId': partnerId,
+          orderStatus: { $in: acceptedStatuses },
+          $or: [
+            { 'dispatch.status': 'unassigned' },
+            {
+              'dispatch.status': 'assigned',
+              'dispatch.deliveryPartnerId': partnerId,
+            },
+          ],
         },
       ],
     },
@@ -361,8 +365,7 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
       await foodTransactionService.updateTransactionRider(order._id, deliveryPartnerId);
     } catch (error) {
       logger.error(
-        `Error updating delivery rider transaction for ${order._id}: ${
-          error?.message || error
+        `Error updating delivery rider transaction for ${order._id}: ${error?.message || error
         }`,
       );
     }
@@ -416,8 +419,7 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
       );
     } catch (error) {
       logger.error(
-        `Error notifying delivery acceptance for ${order._id}: ${
-          error?.message || error
+        `Error notifying delivery acceptance for ${order._id}: ${error?.message || error
         }`,
       );
     }
@@ -530,9 +532,8 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
       [{ ownerType: 'RESTAURANT', ownerId: order.restaurantId }],
       {
         title: 'Rider arrived!',
-        body: `${partner?.name || 'The delivery partner'} has arrived at ${
-          restaurant?.restaurantName || 'your restaurant'
-        } to pick up Order #${order._id.toString()}.`,
+        body: `${partner?.name || 'The delivery partner'} has arrived at ${restaurant?.restaurantName || 'your restaurant'
+          } to pick up Order #${order._id.toString()}.`,
         data: {
           type: 'rider_arrived',
           orderId: String(order._id.toString()),
@@ -543,8 +544,7 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
     );
   } catch (error) {
     logger.error(
-      `Error notifying restaurant about rider arrival for ${order._id}: ${
-        error?.message || error
+      `Error notifying restaurant about rider arrival for ${order._id}: ${error?.message || error
       }`,
     );
   }
@@ -573,7 +573,7 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
   const from = order.orderStatus;
   const nextStatus = 'picked_up';
   if (!isStatusAdvance(from, nextStatus)) {
-      throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
+    throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
   }
   order.orderStatus = nextStatus;
   order.deliveryState = {
@@ -771,10 +771,10 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
   const from = order.orderStatus;
   const nextStatus = 'delivered';
   if (!isStatusAdvance(from, nextStatus)) {
-      logger.warn(`[DeliveryComplete] Status advance check failed for ${order._id}. Current: ${from}`);
-      throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
+    logger.warn(`[DeliveryComplete] Status advance check failed for ${order._id}. Current: ${from}`);
+    throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
   }
-  
+
   const tx = await FoodTransaction.findOne({ orderId: order._id }).lean();
   const prevPayStatus = String(tx?.payment?.status || order?.payment?.status || 'unpaid').toLowerCase();
   const payMethod = String(tx?.payment?.method || order?.payment?.method || order?.paymentMethod || 'cash').toLowerCase();
@@ -849,7 +849,7 @@ export async function updateOrderStatusDelivery(orderId, deliveryPartnerId, orde
 
   const from = order.orderStatus;
   if (!isStatusAdvance(from, orderStatus)) {
-      throw new ValidationError(`Current order status '${from}' is further ahead than '${orderStatus}'. Order cannot be moved backwards.`);
+    throw new ValidationError(`Current order status '${from}' is further ahead than '${orderStatus}'. Order cannot be moved backwards.`);
   }
   order.orderStatus = orderStatus;
   pushStatusHistory(order, {

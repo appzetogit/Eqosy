@@ -52,9 +52,9 @@ import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import quickSpicyLogo from "@food/assets/eqosy-logo.png"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 // Icon mapping
@@ -130,17 +130,21 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
     if (l.includes("food approval")) return badges.foodApprovals
     if (l === "foods") return badges.foods
+    if (l.includes("restaurant foods list")) return badges.foodApprovals
+    if (l.includes("restaurant addons list")) return badges.addons
+    if (l === "categories" || l === "category") return badges.categories
     if (l === "restaurants" || l.includes("new joining request")) return badges.restaurants
     if (l.includes("restaurant complaints")) return badges.restaurantComplaints
+    if (l === "orders") return (badges.orders || 0) + (badges.offlinePayments || 0)
     if (p.includes("orders/pending")) return badges.orders
     if (p.includes("offline-payments")) return badges.offlinePayments
     if (l.includes("support tickets")) return l.includes("delivery") ? badges.deliverySupportTickets : badges.userSupportTickets
-    if (l.includes("withdrawal")) return l.includes("delivery") ? badges.deliveryWithdrawals : badges.restaurantWithdrawals
+    if (l.includes("withdrawal") || l.includes("withdraw")) return l.includes("delivery") ? badges.deliveryWithdrawals : badges.restaurantWithdrawals
     if (l.includes("emergency help")) return badges.emergencyHelp
     if (l.includes("earning addon history")) return badges.earningAddons
     if (l.includes("safety emergency reports")) return badges.safetyReports
     if (l === "deliveryman" && !p.includes("join-request")) return badges.deliveryPartners // expandable parent
-    if (l.includes("join-request")) return badges.deliveryPartners
+    if (l.includes("join-request") || l.includes("join request") || p.includes("join-request")) return badges.deliveryPartners
     return 0
   }
   const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)

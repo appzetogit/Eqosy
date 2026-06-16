@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
 import { useNavigate } from "react-router-dom"
 import { Building2, Info, Tag, Upload, Calendar, FileText, MapPin, CheckCircle2, X, Image as ImageIcon, Clock, Loader2 } from "lucide-react"
@@ -168,6 +168,7 @@ export default function AddRestaurant() {
   const [step1, setStep1] = useState({
     restaurantName: "",
     pureVegRestaurant: null,
+    pricingAttributes: [],
     ownerName: "",
     ownerEmail: "",
     ownerPhone: "",
@@ -570,6 +571,7 @@ export default function AddRestaurant() {
         // Step 1
         restaurantName: step1.restaurantName,
         pureVegRestaurant: step1.pureVegRestaurant,
+        pricingAttributes: step1.pricingAttributes || [],
         ownerName: step1.ownerName,
         ownerEmail: step1.ownerEmail,
         ownerPhone: step1.ownerPhone,
@@ -910,6 +912,52 @@ export default function AddRestaurant() {
             </div>
             <p className="text-[11px] text-gray-500 mt-1">
               This helps users filter restaurants by dietary preference.
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">Pricing perks (Optional)</Label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const attrs = step1.pricingAttributes || []
+                  setStep1({
+                    ...step1,
+                    pricingAttributes: attrs.includes("same_price")
+                      ? attrs.filter(a => a !== "same_price")
+                      : [...attrs, "same_price"]
+                  })
+                }}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  (step1.pricingAttributes || []).includes("same_price")
+                    ? "bg-emerald-600 text-white border-emerald-600 font-medium shadow-sm"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                Same price as restaurant
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const attrs = step1.pricingAttributes || []
+                  setStep1({
+                    ...step1,
+                    pricingAttributes: attrs.includes("no_packaging")
+                      ? attrs.filter(a => a !== "no_packaging")
+                      : [...attrs, "no_packaging"]
+                  })
+                }}
+                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  (step1.pricingAttributes || []).includes("no_packaging")
+                    ? "bg-emerald-600 text-white border-emerald-600 font-medium shadow-sm"
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                No packaging charges
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Select pricing benefits to display to customers.
             </p>
           </div>
         </div>

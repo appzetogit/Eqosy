@@ -97,6 +97,7 @@ const buildOnboardingLikeDataFromRestaurant = (restaurant) => {
         typeof restaurant?.pureVegRestaurant === "boolean"
           ? restaurant.pureVegRestaurant
           : null,
+      pricingAttributes: restaurant?.pricingAttributes || [],
       ownerName: restaurant?.ownerName,
       ownerEmail: restaurant?.ownerEmail || restaurant?.email,
       ownerPhone: restaurant?.ownerPhone || restaurant?.phone,

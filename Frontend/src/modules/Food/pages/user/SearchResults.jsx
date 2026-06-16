@@ -19,6 +19,8 @@ const debugError = (...args) => { }
 // Filter options
 const filterOptions = [
   { id: 'under-30-mins', label: 'Under 30 mins' },
+  { id: 'pricing-same-price', label: 'Same Price' },
+  { id: 'pricing-no-packaging', label: 'No Packaging' },
   { id: 'price-match', label: 'Price Match', hasIcon: true },
   { id: 'flat-50-off', label: 'Flat 50% OFF', hasIcon: true },
   { id: 'under-250', label: 'Switch 99' },
@@ -316,6 +318,7 @@ export default function SearchResults() {
                 offer: offer, // Use backend offer or null (defaults filtered out)
                 slug: restaurant.slug || restaurant.name?.toLowerCase().replace(/\s+/g, '-'),
                 restaurantId: restaurantId,
+                pricingAttributes: Array.isArray(restaurant.pricingAttributes) ? restaurant.pricingAttributes : [],
                 hasPaneer: false, // Will be updated after menu fetch
                 category: 'all',
               }
@@ -640,6 +643,12 @@ export default function SearchResults() {
     if (activeFilters.has('flat-50-off')) {
       filtered = filtered.filter(r => r.offer && r.offer.includes('50%'))
     }
+    if (activeFilters.has('pricing-same-price')) {
+      filtered = filtered.filter(r => Array.isArray(r.pricingAttributes) && r.pricingAttributes.includes('same_price'))
+    }
+    if (activeFilters.has('pricing-no-packaging')) {
+      filtered = filtered.filter(r => Array.isArray(r.pricingAttributes) && r.pricingAttributes.includes('no_packaging'))
+    }
 
     return uniqueRestaurants(filtered)
   }, [deferredQuery, selectedCategory, activeFilters, restaurantsData, categoryKeywords, loadingCategories])
@@ -747,6 +756,12 @@ export default function SearchResults() {
     }
     if (activeFilters.has('flat-50-off')) {
       filtered = filtered.filter(r => r.offer && r.offer.includes('50%'))
+    }
+    if (activeFilters.has('pricing-same-price')) {
+      filtered = filtered.filter(r => Array.isArray(r.pricingAttributes) && r.pricingAttributes.includes('same_price'))
+    }
+    if (activeFilters.has('pricing-no-packaging')) {
+      filtered = filtered.filter(r => Array.isArray(r.pricingAttributes) && r.pricingAttributes.includes('no_packaging'))
     }
 
     return uniqueRestaurants(filtered)

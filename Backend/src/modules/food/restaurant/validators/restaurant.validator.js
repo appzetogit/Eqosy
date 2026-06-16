@@ -60,6 +60,18 @@ const restaurantRegisterSchema = z.object({
     ownerPhone: phoneSchema.optional(),
     primaryContactNumber: phoneSchema.optional(),
     pureVegRestaurant: requiredBooleanSchema,
+    pricingAttributes: z.preprocess((val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'string') {
+            try {
+                const parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) return parsed;
+            } catch (e) {}
+            return val.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return [];
+    }, z.array(z.enum(["same_price", "no_packaging"])).optional().default([])),
     addressLine1: z.string().optional(),
     addressLine2: z.string().optional(),
     area: z.string().optional(),

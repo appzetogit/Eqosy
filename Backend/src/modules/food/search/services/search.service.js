@@ -20,7 +20,8 @@ export const searchUnified = async (query = {}, options = {}) => {
         isVeg,
         page = 1,
         limit = 20,
-        zoneId
+        zoneId,
+        pricingAttributes
     } = query;
 
     const skip = (page - 1) * limit;
@@ -38,6 +39,18 @@ export const searchUnified = async (query = {}, options = {}) => {
 
     if (isVeg === 'true') {
         restaurantFilter.pureVegRestaurant = true;
+    }
+
+    if (pricingAttributes) {
+        let attrs = [];
+        if (Array.isArray(pricingAttributes)) {
+            attrs = pricingAttributes;
+        } else if (typeof pricingAttributes === 'string') {
+            attrs = pricingAttributes.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (attrs.length > 0) {
+            restaurantFilter.pricingAttributes = { $all: attrs };
+        }
     }
 
     if (minRating) {
