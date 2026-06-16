@@ -64,6 +64,12 @@ let cachedAccessTokenExpiryMs = 0;
 let cachedServiceAccount = null;
 
 const sanitizeString = (value) => String(value ?? '').trim();
+const previewToken = (token) => {
+    const normalized = sanitizeString(token);
+    if (!normalized) return '<empty>';
+    if (normalized.length <= 16) return normalized;
+    return `${normalized.slice(0, 8)}...${normalized.slice(-8)}`;
+};
 
 const toBase64Url = (input) =>
     Buffer.from(JSON.stringify(input))
@@ -315,11 +321,17 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
         throw new Error(`Unsupported owner type: ${ownerType}`);
     }
     const existingTokens = readTokenFieldAsList(doc, field);
+    logger.info(
+        `[FCM Service] upsert start ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} existingCount=${existingTokens.length} tokenPreview=${previewToken(normalizedToken)}`
+    );
     
     const tokens = normalizeTokenList([...existingTokens, normalizedToken]);
     writeTokenFieldFromList(doc, field, tokens);
     
     await doc.save();
+    logger.info(
+        `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${tokens.length} tokenPresent=${tokens.includes(normalizedToken)}`
+    );
     return { success: true };
 };
 
