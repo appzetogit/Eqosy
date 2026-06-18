@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom"
+import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { useEffect, useState, createContext, useContext } from "react"
 import { ProfileProvider } from "@food/context/ProfileContext"
 import LocationPrompt from "./LocationPrompt"
@@ -105,6 +105,8 @@ function LocationSelectorProvider({ children }) {
 
 export default function UserLayout() {
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const superAppVertical = searchParams.get("vertical")
 
   useEffect(() => {
     const syncFoodTheme = () => {
@@ -140,14 +142,14 @@ export default function UserLayout() {
     normalizedPath === "/profile" ||
     normalizedPath === "/user/profile"
 
-  const showBottomNav = normalizedPath === "/" ||
+  const showBottomNav = (normalizedPath === "/" ||
     normalizedPath === "/user" ||
     normalizedPath === "/dining" ||
     normalizedPath === "/user/dining" ||
     normalizedPath === "/under-250" ||
     normalizedPath === "/user/under-250" ||
     isProfileRoot ||
-    normalizedPath === "" // Handle empty string case for root relative to /food
+    normalizedPath === "") && superAppVertical !== "taxi"
 
   const isUnder250 = normalizedPath === "/under-250" || normalizedPath === "/user/under-250"
 

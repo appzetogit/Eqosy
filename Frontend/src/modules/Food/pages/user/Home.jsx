@@ -2952,7 +2952,7 @@ export default function Home() {
 
   return (
 
-    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
+    <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${superAppVertical === "taxi" ? "pb-6" : "pb-16"} md:pb-6 overflow-x-clip`}>
       <HomeHeader
         activeVertical={superAppVertical}
         onVerticalChange={handleVerticalChange}
@@ -2960,10 +2960,10 @@ export default function Home() {
         savedAddressText={headerSavedAddressText}
         locationTitle={headerLocationTitle}
         locationSubtitle={headerLocationSubtitle}
-        handleLocationClick={handleLocationClick}
-        handleSearchFocus={handleSearchFocus}
-        placeholderIndex={placeholderIndex}
-        placeholders={placeholders}
+        handleLocationClick={superAppVertical === "food" ? handleLocationClick : undefined}
+        handleSearchFocus={superAppVertical === "food" ? handleSearchFocus : undefined}
+        placeholderIndex={superAppVertical === "food" ? placeholderIndex : undefined}
+        placeholders={superAppVertical === "food" ? placeholders : undefined}
         handleVegModeChange={handleVegModeChange}
         isVegMode={vegMode}
         vegModeToggleRef={vegModeToggleRef}

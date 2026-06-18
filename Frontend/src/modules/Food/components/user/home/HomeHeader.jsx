@@ -611,9 +611,25 @@ export default function HomeHeader({
         <div
           className={`relative z-30 px-3 pt-3 flex items-center gap-2.5 ${
             isFood ? 'pb-0' : 'pb-4'
-          } ${isCategoryStuck ? `sticky top-0 z-50 ${currentVertical.themeBg}` : ''}`}
-          style={isCategoryStuck ? { backgroundColor: verticalTheme.theme } : undefined}
+          } ${isCategoryStuck && isFood ? `sticky top-0 z-50 ${currentVertical.themeBg}` : ''}`}
+          style={isCategoryStuck && isFood ? { backgroundColor: verticalTheme.theme } : undefined}
         >
+          {isTaxi ? (
+            <button
+              type="button"
+              onClick={onSearchFocus}
+              className="flex w-full items-center gap-2 rounded-[18px] border border-white/80 bg-white/92 px-3.5 py-3 text-left shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-[0.99] transition-transform"
+            >
+              <Search className="h-4 w-4 text-slate-500 flex-shrink-0" strokeWidth={2.5} />
+              <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-500">
+                Search destination
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600 flex-shrink-0">
+                Go
+              </span>
+            </button>
+          ) : (
+          <>
           <div
             className="flex-1 min-w-0 rounded-[14px] flex items-center px-3 py-2 bg-white dark:bg-[#1a1a1a] shadow-[0_4px_16px_rgba(0,0,0,0.15)] cursor-pointer active:scale-[0.99] transition-all duration-200 overflow-hidden"
             onClick={onSearchFocus}
@@ -667,6 +683,8 @@ export default function HomeHeader({
               <div className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white transition-transform ${isVegMode ? 'translate-x-[18px]' : 'translate-x-[2px]'} shadow-sm`} />
             </div>
           </div>
+          )}
+          </>
           )}
         </div>
 
