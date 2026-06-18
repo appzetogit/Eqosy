@@ -171,3 +171,30 @@
 .pac-container::after {
   display: none !important;
 }
+
+/* Curvy active tab styling for super app header */
+.curvy-active-tab {
+  position: relative;
+}
+
+.curvy-active-tab::before,
+.curvy-active-tab::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.curvy-active-tab::before {
+  right: 100%;
+  background: radial-gradient(circle at 0% 0%, transparent 18px, var(--active-tab-bg, #FC6C00) 18.5px);
+}
+
+.curvy-active-tab::after {
+  left: 100%;
+  background: radial-gradient(circle at 100% 0%, transparent 18px, var(--active-tab-bg, #FC6C00) 18.5px);
+}
+

@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useCallback,
   startTransition,
+  Suspense,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -38,6 +39,7 @@ import {
   Check,
   Share2,
   ChevronDown,
+  Car,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Footer from "@food/components/user/Footer";
@@ -95,7 +97,9 @@ import { API_BASE_URL } from "@food/api/config";
 import OptimizedImage from "@food/components/OptimizedImage";
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability";
 import HomeHeader from "@food/components/user/home/HomeHeader";
-import QuickSection from "@food/components/user/home/QuickSection";
+import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
+import TaxiSection from "@food/components/user/home/TaxiSection";
+import GrocerySection from "@food/components/user/home/QuickSection";
 import PromoRow from "@food/components/user/home/PromoRow";
 import PromotionBannerCarousel from "@food/components/user/home/PromotionBannerCarousel";
 
@@ -578,7 +582,23 @@ export default function Home() {
   const HERO_BANNER_AUTO_SLIDE_MS = 3500;
   const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const verticalParam = searchParams.get("vertical");
+  const superAppVertical = ["food", "taxi", "grocery"].includes(verticalParam)
+    ? verticalParam
+    : "food";
+
+  const handleVerticalChange = useCallback(
+    (id) => {
+      if (id === "food") {
+        setSearchParams({}, { replace: true });
+      } else {
+        setSearchParams({ vertical: id }, { replace: true });
+      }
+    },
+    [setSearchParams],
+  );
+
   const query = searchParams.get("q") || "";
   const [heroSearch, setHeroSearch] = useState("");
   const { openSearch, closeSearch, searchValue, setSearchValue } =
@@ -855,8 +875,9 @@ export default function Home() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Fire when sentinel hits 72px from top (matches sticky top value)
-        setIsCategoryStuck(!entry.isIntersecting);
+        // Only mark stuck after the sentinel has scrolled above the viewport —
+        // not when it simply starts below the fold on initial load.
+        setIsCategoryStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
       },
       { threshold: 0, rootMargin: '-72px 0px 0px 0px' }
     );
@@ -1543,11 +1564,42 @@ export default function Home() {
   const headerSavedAddressText =
     deliveryAddressMode === "saved" ? savedAddressText : "";
 
+  const headerLocationTitle = useMemo(() => {
+    if (deliveryAddressMode === "saved" && defaultSavedAddress) {
+      return (
+        defaultSavedAddress.additionalDetails ||
+        defaultSavedAddress.street ||
+        defaultSavedAddress.label ||
+        ""
+      );
+    }
+    return (
+      effectiveLocation?.area ||
+      effectiveLocation?.street ||
+      effectiveLocation?.formattedAddress?.split(",")[0] ||
+      ""
+    );
+  }, [deliveryAddressMode, defaultSavedAddress, effectiveLocation]);
+
+  const headerLocationSubtitle = useMemo(() => {
+    if (deliveryAddressMode === "saved" && defaultSavedAddress) {
+      const parts = [
+        defaultSavedAddress.state,
+        defaultSavedAddress.zipCode,
+      ].filter(Boolean);
+      if (parts.length > 0) return parts.join(", ");
+    }
+    const parts = [
+      effectiveLocation?.state,
+      effectiveLocation?.zipCode || effectiveLocation?.postalCode,
+    ].filter(Boolean);
+    return parts.join(", ");
+  }, [deliveryAddressMode, defaultSavedAddress, effectiveLocation]);
+
   // Mock points value - replace with actual points from context/store
   const userPoints = 99;
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState("food");
 
 
   // Simple filter toggle function
@@ -2901,9 +2953,36 @@ export default function Home() {
   return (
 
     <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
-      <div className="transition-all duration-300">
-        {/* Unified Background for Entire Page - Vibrant Food Theme */}
-        <div className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none overflow-hidden z-0">
+      <HomeHeader
+        activeVertical={superAppVertical}
+        onVerticalChange={handleVerticalChange}
+        location={effectiveLocation}
+        savedAddressText={headerSavedAddressText}
+        locationTitle={headerLocationTitle}
+        locationSubtitle={headerLocationSubtitle}
+        handleLocationClick={handleLocationClick}
+        handleSearchFocus={handleSearchFocus}
+        placeholderIndex={placeholderIndex}
+        placeholders={placeholders}
+        handleVegModeChange={handleVegModeChange}
+        isVegMode={vegMode}
+        vegModeToggleRef={vegModeToggleRef}
+        isCategoryStuck={isCategoryStuck}
+        heroBannerImages={heroBannerImages}
+      />
+
+      <AnimatePresence mode="wait">
+        {superAppVertical === "food" && (
+          <motion.div
+            key="food-panel"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+      <div className="relative transition-all duration-300">
+        {/* Scoped to food content only — must not escape to page root or it covers HomeHeader */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {/* Main Background */}
           <div className="absolute inset-0 bg-white dark:bg-[#0a0a0a]"></div>
           {/* Background Elements - Reduced to 2 blobs with CSS animations for better performance */}
@@ -3012,22 +3091,6 @@ export default function Home() {
       </div>
 
       <div className="relative z-10">
-        <HomeHeader
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          location={effectiveLocation}
-          savedAddressText={headerSavedAddressText}
-          handleLocationClick={handleLocationClick}
-          handleSearchFocus={handleSearchFocus}
-          placeholderIndex={placeholderIndex}
-          placeholders={placeholders}
-          handleVegModeChange={handleVegModeChange}
-          isVegMode={vegMode}
-          vegModeToggleRef={vegModeToggleRef}
-          isCategoryStuck={isCategoryStuck}
-        />
-
-
 
         <PromoRow 
           handleVegModeChange={handleVegModeChange}
@@ -3047,8 +3110,8 @@ export default function Home() {
             One blur context = no seam between the two sticky bars. */}
         {isCategoryStuck && (
           <div
-            className="fixed top-0 left-0 right-0 z-[48] bg-white/75 dark:bg-[#0a0a0a]/75 backdrop-blur-xl border-b border-white/20 dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.07)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.35)]"
-            style={{ height: '170px' }}
+            className="fixed top-0 left-0 right-0 z-[48] backdrop-blur-xl border-b border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.12)]"
+            style={{ height: '170px', backgroundColor: getVerticalTheme(superAppVertical).stickyBackdrop }}
             aria-hidden="true"
           />
         )}
@@ -3066,21 +3129,23 @@ export default function Home() {
 
         {recommendedForYouRestaurants.length > 0 && (
           <motion.section
-            className="content-auto space-y-4 pt-4 sm:pt-6"
+            className="content-auto space-y-3 pt-2 sm:pt-4"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}>
-            <div className="px-4 flex items-center justify-between">
-              <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+            <div className="px-4">
+              <h2 className="text-[11px] sm:text-xs font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase">
                 Recommended for you
               </h2>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 px-4 pb-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-4 pb-2">
                 {recommendedForYouRestaurants.map((restaurant, index) => {
                   const restaurantSlug =
                     restaurant.slug ||
                     restaurant.name.toLowerCase().replace(/\s+/g, "-");
+                  const ratingValue = Number(restaurant.rating);
+                  const showMartSwitch = index % 2 === 0;
                   return (
                     <motion.div
                       key={`recommended-${restaurant.mongoId || restaurant.id || restaurantSlug}`}
@@ -3090,26 +3155,34 @@ export default function Home() {
                       transition={{ duration: 0.35, delay: index * 0.05 }}>
                       <Link
                         to={`/user/restaurants/${restaurantSlug}`}
-                        className="block rounded-[20px] overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow">
-                        <div className="relative h-24 sm:h-28 md:h-32 bg-gray-50">
+                        className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow">
+                        <div className="relative h-28 sm:h-32 bg-gray-50">
                           <RestaurantImageCarousel
                             restaurant={restaurant}
                             backendOrigin={BACKEND_ORIGIN}
-                            className="h-24 sm:h-28 md:h-32"
-                            roundedClass="rounded-t-[20px]"
+                            className="h-28 sm:h-32"
+                            roundedClass="rounded-t-2xl"
                           />
-                          <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-lg ${Number(restaurant.rating) > 0 ? "bg-black/80 backdrop-blur-md text-white font-medium" : "bg-gray-200/90 text-gray-600 font-medium"} text-[10px] shadow-lg border border-white/10`}>
-                            {Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "NEW"}
+                          <div className="absolute bottom-2 left-2 flex items-center gap-0.5 bg-black/85 backdrop-blur-sm text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md shadow-sm">
+                            <Star className="w-2.5 h-2.5 fill-white text-white" />
+                            <span>{ratingValue > 0 ? ratingValue.toFixed(1) : "NEW"}</span>
                           </div>
                         </div>
-                        <div className="p-2.5">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate tracking-tight">
+                        <div className="px-2.5 py-2">
+                          <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate tracking-tight">
                             {restaurant.name}
                           </p>
-                          <p className="text-[10px] text-orange-600 font-bold mt-1 flex items-center gap-1 uppercase tracking-wider">
-                            <Flame className="w-3.5 h-3.5 fill-orange-600" />
-                            Near & Fast
-                          </p>
+                          {showMartSwitch ? (
+                            <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 uppercase tracking-wide">
+                              <Car className="w-3.5 h-3.5" />
+                              Switch to EqosyTaxi
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-orange-600 font-bold mt-1 flex items-center gap-1 uppercase tracking-wide">
+                              <Flame className="w-3.5 h-3.5 fill-orange-600" />
+                              Near &amp; Fast
+                            </p>
+                          )}
                         </div>
                       </Link>
                     </motion.div>
@@ -4514,6 +4587,33 @@ export default function Home() {
       <StickyCartCard />
       {/* Live order strip: only on homepage (not in UserLayout) */}
       <OrderTrackingCard hasBottomNav />
+          </motion.div>
+        )}
+
+        {superAppVertical === "taxi" && (
+          <motion.div
+            key="taxi-panel"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <TaxiSection />
+          </motion.div>
+        )}
+
+        {superAppVertical === "grocery" && (
+          <motion.div
+            key="grocery-panel"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <GrocerySection />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

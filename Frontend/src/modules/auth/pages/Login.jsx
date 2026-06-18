@@ -131,7 +131,7 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
   // Check if already logged in on mount - if at login page, redirect to services
   useEffect(() => {
     if (isUnifiedAuthenticated() && viewType === "auth") {
-      navigate("/login/services", { replace: true })
+      navigate("/food/user", { replace: true })
     }
   }, [viewType, navigate])
 
@@ -322,7 +322,7 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
         console.warn("[Auth] FCM save route failed after login:", fcmSaveError?.message || fcmSaveError)
       }
       toast.success("Authentication successful!")
-      navigate("/login/services")
+      navigate("/food/user")
     } catch (err) {
       const status = err?.response?.status
       let msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Invalid OTP. Please try again."
@@ -380,7 +380,7 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
 
       setUnifiedAuthData(nextData)
       toast.success("Profile completed successfully!")
-      navigate("/login/services")
+      navigate("/food/user")
     } catch (err) {
       const msg =
         err?.response?.data?.message ||

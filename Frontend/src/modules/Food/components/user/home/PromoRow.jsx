@@ -34,7 +34,7 @@ export default function PromoRow({ handleVegModeChange, navigate, isVegMode, tog
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-2 px-3 py-6 bg-transparent justify-items-center w-full max-w-[500px] mx-auto">
+    <div className="grid grid-cols-4 gap-2 px-3 pt-2 pb-5 bg-transparent justify-items-center w-full max-w-[500px] mx-auto">
       {promoCardsData.map((promo, idx) => (
         <motion.div
           key={idx}

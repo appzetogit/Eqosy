@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarClock, ChevronRight, Clock3, MapPin, ShieldCheck, User } from 'lucide-react';
-import HeaderGreeting from '../components/HeaderGreeting';
+import HomeHeader from '@food/components/user/home/HomeHeader';
 import ServiceGrid from '../components/ServiceGrid';
 import LocationMapSection from '../components/LocationMapSection';
 import ActionsSection from '../components/ActionsSection';
@@ -186,7 +186,7 @@ const normalizeRentalCurrentRideSnapshot = (ride = {}, previousRide = {}) => {
   };
 };
 
-const Home = () => {
+const Home = ({ embedded = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { settings } = useSettings();
@@ -547,15 +547,19 @@ const Home = () => {
     maskSize: '100% 100%',
   };
 
+  const pageBgClass = embedded
+    ? 'bg-[linear-gradient(180deg,#E8EEF7_0%,#F8FAFC_38%,#E8EEF7_100%)]'
+    : 'bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)]';
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] pb-24 max-w-lg mx-auto relative overflow-hidden font-sans no-scrollbar">
-      <div className="absolute -top-16 right-[-40px] h-44 w-44 rounded-full bg-orange-100/60 blur-3xl pointer-events-none" />
-      <div className="absolute top-52 left-[-60px] h-52 w-52 rounded-full bg-emerald-100/60 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-28 right-[-40px] h-40 w-40 rounded-full bg-blue-100/60 blur-3xl pointer-events-none" />
+    <div className={`${embedded ? 'relative' : 'min-h-screen'} ${pageBgClass} ${embedded ? 'pb-6' : 'pb-24'} max-w-lg mx-auto relative overflow-hidden font-sans no-scrollbar`}>
+      <div className={`absolute -top-16 right-[-40px] h-44 w-44 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#0A2540]/15' : 'bg-orange-100/60'}`} />
+      <div className={`absolute top-52 left-[-60px] h-52 w-52 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#2563EB]/12' : 'bg-emerald-100/60'}`} />
+      <div className={`absolute bottom-28 right-[-40px] h-40 w-40 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#0A2540]/20' : 'bg-blue-100/60'}`} />
 
 
       <div className="relative z-10 space-y-4 pb-6">
-        <HeaderGreeting />
+        {!embedded && <HomeHeader />}
 
         {isScheduledAcceptedRide && (
           <motion.button
@@ -828,7 +832,7 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      <BottomNavbar />
+      {!embedded && <BottomNavbar />}
     </div>
   );
 };

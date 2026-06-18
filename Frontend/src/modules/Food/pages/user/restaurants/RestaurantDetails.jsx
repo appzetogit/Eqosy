@@ -37,6 +37,7 @@ import {
   MessageCircle,
   Send,
   Mail,
+  Leaf,
 } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Badge } from "@food/components/ui/badge"
@@ -553,6 +554,8 @@ function RestaurantDetailsContent() {
             // Availability fields for grayscale styling
             isActive: actualRestaurant?.isActive !== false, // Default to true if not specified
             isAcceptingOrders: actualRestaurant?.isAcceptingOrders !== false, // Default to true if not specified
+            pricingAttributes: Array.isArray(actualRestaurant?.pricingAttributes) ? actualRestaurant.pricingAttributes : (Array.isArray(apiRestaurant?.pricingAttributes) ? apiRestaurant.pricingAttributes : []),
+            pureVegRestaurant: actualRestaurant?.pureVegRestaurant === true || apiRestaurant?.pureVegRestaurant === true || actualRestaurant?.pureVeg === true || apiRestaurant?.pureVeg === true,
           }
 
           debugLog('? Transformed restaurant:', transformedRestaurant)
@@ -2062,6 +2065,12 @@ function RestaurantDetailsContent() {
       {/* Main Content Card */}
       <div className="bg-white dark:bg-[#1a1a1a] rounded-t-3xl relative z-10 min-h-[40vh]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-5 md:py-6 lg:py-8 space-y-3 md:space-y-4 lg:space-y-5 pb-0">
+          {restaurant?.pureVegRestaurant && (
+            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold text-xs bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 px-2.5 py-1 rounded-full w-fit uppercase tracking-wider">
+              <Leaf className="h-3.5 w-3.5 fill-emerald-600 dark:fill-emerald-400" />
+              <span>Pure Veg</span>
+            </div>
+          )}
           {/* Restaurant Name and Rating */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
@@ -2089,7 +2098,7 @@ function RestaurantDetailsContent() {
             onClick={() => setShowLocationSheet(true)}
           >
             <MapPin className="h-4 w-4" />
-            <span>{restaurant?.distance || "1.2 km"} � {restaurant?.location || "Location"}</span>
+            <span>{restaurant?.distance || "1.2 km"} • {restaurant?.location || "Location"}</span>
             <ChevronDown className="h-4 w-4 text-gray-500" />
           </div>
 
@@ -2103,6 +2112,24 @@ function RestaurantDetailsContent() {
               {isRestaurantOffline ? "Offline" : "Open now"}
             </Badge>
           </div>
+
+          {/* Pricing Perks Badge Row */}
+          {restaurant?.pricingAttributes && restaurant.pricingAttributes.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {restaurant.pricingAttributes.includes("no_packaging") && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-gray-300 shadow-sm">
+                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>No packaging charges</span>
+                </div>
+              )}
+              {restaurant.pricingAttributes.includes("same_price") && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-gray-300 shadow-sm">
+                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Same price as restaurant</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {isRestaurantOffline && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
