@@ -243,11 +243,19 @@ const Home = ({ embedded = false }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    if (embedded) return undefined;
+
+    const token =
+      localStorage.getItem('userToken') ||
+      localStorage.getItem('user_accessToken') ||
+      localStorage.getItem('token');
+
     if (!token) {
-      navigate('/taxi/user/login', { replace: true });
+      navigate('/login', { replace: true });
     }
-  }, [navigate]);
+
+    return undefined;
+  }, [navigate, embedded]);
 
   const shouldTickClock =
     String(currentRide?.serviceType || '').toLowerCase() === 'rental'

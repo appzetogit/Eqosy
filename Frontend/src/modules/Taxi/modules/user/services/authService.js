@@ -25,11 +25,19 @@ const getTokenPayload = (token) => {
   }
 };
 
-const readLocalUserToken = () =>
-  [
+const readLocalUserToken = () => {
+  const candidates = [
     localStorage.getItem('userToken'),
+    localStorage.getItem('user_accessToken'),
     localStorage.getItem('token'),
-  ].filter(Boolean).find((token) => String(getTokenPayload(token)?.role || '').toLowerCase() === 'user') || '';
+  ].filter(Boolean);
+
+  return (
+    candidates.find(
+      (token) => String(getTokenPayload(token)?.role || '').toLowerCase() === 'user',
+    ) || candidates[0] || ''
+  );
+};
 
 export const getLocalUserToken = readLocalUserToken;
 

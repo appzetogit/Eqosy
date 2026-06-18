@@ -1,12 +1,12 @@
-import React, { useEffect, useLayoutEffect, useState, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Routes, Route, Navigate, Link, useNavigate } from "react-router-dom"
-import { Phone, Lock, ArrowRight, ShieldCheck, Loader2, UtensilsCrossed, Car, ShoppingBag, Building2 } from "lucide-react"
+import React, { useEffect, useState, useRef } from "react"
+import { motion } from "framer-motion"
+import { Link, useNavigate } from "react-router-dom"
+import { ShieldCheck, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
 
-export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
+export default function UnifiedOTPFastLogin() {
   const RESEND_COOLDOWN_SECONDS = 60
   const VERIFY_REQUEST_TIMEOUT_MS = 20000
   const FCM_FETCH_TIMEOUT_MS = 12000
@@ -80,60 +80,12 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
     return normalizedToken
   }
 
-  // Keep /login/services visually consistent (light) regardless of global app theme.
-  // Scope-limited: only active while selector view is mounted.
-  useLayoutEffect(() => {
-    if (typeof document === "undefined") return
-    const html = document.documentElement
-    const body = document.body
-    const root = document.getElementById("root")
-    let htmlObserver = null
-    let bodyObserver = null
-    let rootObserver = null
-
-    if (viewType !== "selector") {
-      return
-    }
-
-    const enforceLight = () => {
-      if (html.classList.contains("dark")) {
-        html.classList.remove("dark")
-      }
-      if (body?.classList.contains("dark")) {
-        body.classList.remove("dark")
-      }
-      if (root?.classList.contains("dark")) {
-        root.classList.remove("dark")
-      }
-    }
-    enforceLight()
-
-    // Enforce priority: while selector is open, keep this page in light mode
-    // even if any other module tries to re-apply "dark" on <html> or <body>.
-    htmlObserver = new MutationObserver(enforceLight)
-    htmlObserver.observe(html, { attributes: true, attributeFilter: ["class"] })
-    if (body) {
-      bodyObserver = new MutationObserver(enforceLight)
-      bodyObserver.observe(body, { attributes: true, attributeFilter: ["class"] })
-    }
-    if (root) {
-      rootObserver = new MutationObserver(enforceLight)
-      rootObserver.observe(root, { attributes: true, attributeFilter: ["class"] })
-    }
-
-    return () => {
-      if (htmlObserver) htmlObserver.disconnect()
-      if (bodyObserver) bodyObserver.disconnect()
-      if (rootObserver) rootObserver.disconnect()
-    }
-  }, [viewType])
-
-  // Check if already logged in on mount - if at login page, redirect to services
+  // Check if already logged in on mount
   useEffect(() => {
-    if (isUnifiedAuthenticated() && viewType === "auth") {
+    if (isUnifiedAuthenticated()) {
       navigate("/food/user", { replace: true })
     }
-  }, [viewType, navigate])
+  }, [navigate])
 
   const normalizedPhone = () => {
     const digits = String(phoneNumber).replace(/\D/g, "").slice(-15)
@@ -408,34 +360,8 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
 
-  const selectionOptions = [
-    {
-      id: "food",
-      name: "Food Delivery",
-      description: "Order from the best restaurants around you",
-      icon: UtensilsCrossed,
-      color: "bg-[#1A1A1A]",
-      path: "/food/user",
-      delay: 0.1
-    },
-    {
-      id: "taxi",
-      name: "Ride Hailing",
-      description: "Book safe and reliable rides instantly",
-      icon: Car,
-      color: "bg-[#F38F24]",
-      path: "/taxi/user",
-      delay: 0.2
-    }
-  ]
-
   return (
-    <div
-      className={cn(
-        "min-h-screen flex flex-col md:flex-row overflow-hidden font-sans",
-        viewType === "selector" ? "bg-[#FDFDFD]" : "bg-[#F8F9FA] dark:bg-[#1A1A1A]"
-      )}
-    >
+    <div className="min-h-screen flex flex-col md:flex-row overflow-hidden font-sans bg-[#F8F9FA] dark:bg-[#1A1A1A]">
       {/* Premium Branding Panel (Hidden on mobile) */}
       <motion.div
         layout
@@ -510,15 +436,12 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
         <div className="flex-1 w-full relative z-20 flex flex-col items-center justify-center py-4 lg:justify-center">
           <div className="w-full max-w-[420px] px-6 w-full flex flex-col items-center">
             
-            <AnimatePresence mode="wait">
-              {viewType === "auth" ? (
-                <motion.div
-                  key="auth-view"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="w-full flex flex-col items-center"
-                >
+            <motion.div
+              key="auth-view"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full flex flex-col items-center"
+            >
                   {/* Circular Logo */}
                   <img 
                     src="/eqosy-logo.png" 
@@ -714,66 +637,9 @@ export default function UnifiedOTPFastLogin({ viewType = "auth" }) {
                     </div>
                   </form>
                 </motion.div>
-              ) : (
-                <motion.div
-                  key="selector-view"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.05 }}
-                  className="w-full relative"
-                >
-                  <div className="text-center lg:text-left mb-8 lg:mb-10">
-                    <h2 className="text-[32px] leading-tight font-black text-slate-900 dark:text-white tracking-tight mb-3">
-                      Choose a Service
-                    </h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-[15px] max-w-[28ch] mx-auto lg:mx-0">
-                      Select the module you want to access today.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4">
-                    {selectionOptions.map((opt, idx) => {
-                      const Icon = opt.icon
-                      return (
-                        <motion.div
-                          key={opt.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.1 * idx }}
-                          onClick={() => navigate(opt.path)}
-                          className="group cursor-pointer bg-white border border-gray-200 rounded-3xl p-5 lg:p-6 shadow-sm hover:shadow-md hover:border-[#F38F24]/30 transition-all duration-300"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex gap-4 items-center">
-                              <div className={cn(
-                                "w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-105",
-                                opt.id === 'food' ? "bg-[#1A1A1A] text-white" : "bg-[#F38F24] text-white"
-                              )}>
-                                <Icon className="w-6 h-6" />
-                              </div>
-                              <div>
-                                <h3 className="text-[18px] font-bold text-slate-900 mb-0.5">{opt.name}</h3>
-                                <p className="text-slate-500 text-[13px] font-medium leading-tight max-w-[20ch]">{opt.description}</p>
-                              </div>
-                            </div>
-                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-[#F38F24]/10 transition-colors shrink-0">
-                               <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-[#F38F24] transition-colors" />
-                            </div>
-                          </div>
-                        </motion.div>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
       </div>
     </div>
   )
-}
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ")
 }

@@ -175,7 +175,7 @@ const VERTICALS = [
   {
     id: 'taxi',
     name: 'EqosyTaxi',
-    path: '/taxi/user',
+    path: '/food/user?vertical=taxi',
     icon: quickIcon,
     themeBg: taxiTheme.themeBg,
     activeTabBg: taxiTheme.activeTabBg,
@@ -184,7 +184,7 @@ const VERTICALS = [
   {
     id: 'grocery',
     name: 'EqosyGrocery',
-    path: '/food/user/grocery',
+    path: '/food/user?vertical=grocery',
     icon: hotelIcon,
     themeBg: groceryTheme.themeBg,
     activeTabBg: groceryTheme.activeTabBg,
@@ -237,8 +237,11 @@ export default function HomeHeader({
       onVerticalChange(verticalId);
       return;
     }
-    const vertical = VERTICALS.find((v) => v.id === verticalId);
-    if (vertical?.path) navigate(vertical.path);
+    if (verticalId === 'food') {
+      navigate('/food/user');
+      return;
+    }
+    navigate(`/food/user?vertical=${verticalId}`);
   }, [isControlled, onVerticalChange, navigate]);
 
   const currentVertical = VERTICALS.find((v) => v.id === activeVertical) || VERTICALS[0];

@@ -407,7 +407,7 @@ const UserProtectedRoute = () => {
   const location = useLocation();
 
   if (!getLocalUserToken()) {
-    const loginPath = '/login/services';
+    const loginPath = '/login';
     return <Navigate to={loginPath} replace />;
   }
 
@@ -417,7 +417,7 @@ const UserProtectedRoute = () => {
 const UserHomeRoute = ({ taxiPrefixed = true }) => (
   getLocalUserToken()
     ? <UserHome />
-    : <Navigate to="/login/services" replace />
+    : <Navigate to="/login" replace />
 );
 
 const UserAccountInvalidationListener = () => {
@@ -439,7 +439,7 @@ const UserAccountInvalidationListener = () => {
     const handleLogout = () => {
       clearUserSession();
       socketService.disconnect();
-      navigate('/taxi/user/login', { replace: true });
+      navigate('/login', { replace: true });
     };
 
     const handleAdminChatMessage = (payload = {}) => {
@@ -683,9 +683,9 @@ function TaxiApp() {
               <Route path="privacy-policy" element={<LegalPage />} />
               <Route path="refund" element={<LegalPage />} />
               <Route path="cancellation" element={<LegalPage />} />
-              <Route path="login" element={<Navigate to="/login/services" replace />} />
-              <Route path="onboarding" element={<Navigate to="/login/services" replace />} />
-              <Route path="verify-otp" element={<Navigate to="/login/services" replace />} />
+              <Route path="login" element={<Navigate to="/login" replace />} />
+              <Route path="onboarding" element={<Navigate to="/login" replace />} />
+              <Route path="verify-otp" element={<Navigate to="/login" replace />} />
               <Route path="signup" element={<Signup />} />
 
               <Route element={<UserProtectedRoute />}>
@@ -781,12 +781,12 @@ function TaxiApp() {
               </Route>
 
               {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
-              <Route path="user/onboarding" element={<Navigate to="/login/services" replace />} />
-              <Route path="user/login" element={<Navigate to="/login/services" replace />} />
+              <Route path="user/onboarding" element={<Navigate to="/login" replace />} />
+              <Route path="user/login" element={<Navigate to="/login" replace />} />
               <Route path="user/terms" element={<LegalPage />} />
               <Route path="user/privacy" element={<LegalPage />} />
               <Route path="user/refund" element={<LegalPage />} />
-              <Route path="user/verify-otp" element={<Navigate to="/login/services" replace />} />
+              <Route path="user/verify-otp" element={<Navigate to="/login" replace />} />
               <Route path="user/signup" element={<Signup />} />
               <Route path="user" element={<UserHomeRoute taxiPrefixed />} />
 

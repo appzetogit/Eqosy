@@ -8,9 +8,9 @@ export default function AuthRoutes() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
-        <Route index element={<Login viewType="auth" />} />
-        <Route path="login" element={<Login viewType="auth" />} />
-        <Route path="services" element={<Login viewType="selector" />} />
+        <Route index element={<Login />} />
+        <Route path="login" element={<Login />} />
+        <Route path="services" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Suspense>
