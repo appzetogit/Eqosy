@@ -55,7 +55,7 @@ export default function Restaurants() {
     const fetchRestaurants = async () => {
       try {
         setLoading(true)
-        const params = { limit: 300, _ts: Date.now() }
+        const params = { limit: 300, _ts: Date.now(), isRestaurant: "true" }
         if (zoneId) {
           params.zoneId = zoneId
         }

@@ -46,7 +46,7 @@ export const useCategoryData = (zoneId) => {
   const fetchRestaurants = useCallback(async () => {
     try {
       setLoadingRestaurants(true);
-      const params = zoneId ? { zoneId } : {};
+      const params = zoneId ? { zoneId, isRestaurant: "true" } : { isRestaurant: "true" };
       const response = await restaurantAPI.getRestaurants(params);
       if (response.data?.success) {
         const raw = response.data.data.restaurants || [];

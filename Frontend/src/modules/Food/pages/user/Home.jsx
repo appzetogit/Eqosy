@@ -1123,7 +1123,9 @@ export default function Home() {
         setExploreMoreHeading(settings.exploreMoreHeading || "Explore More");
         setRecommendedRestaurantIds(settings.recommendedRestaurantIds || []);
         setRecommendedRestaurantsFromSettings(
-          settings.recommendedRestaurants || [],
+          (settings.recommendedRestaurants || []).filter(
+            (restaurant) => restaurant?.isRestaurant !== false,
+          ),
         );
       })
       .catch(() => {
@@ -1775,6 +1777,7 @@ export default function Home() {
           return;
         }
         params.zoneId = zoneId;
+        params.isRestaurant = "true";
 
         debugLog("Fetching restaurants with params:", params);
         const response = await restaurantAPI.getRestaurants(params);
@@ -2585,6 +2588,7 @@ export default function Home() {
         slug: restaurant?.slug || restaurant?.restaurantId || restaurantId,
         offer: null,
         pureVegRestaurant: restaurant?.pureVegRestaurant === true,
+        isRestaurant: restaurant?.isRestaurant !== false,
         pricingAttributes: Array.isArray(restaurant?.pricingAttributes) ? restaurant.pricingAttributes : [],
         isActive: true,
         isAcceptingOrders: true,
@@ -2616,6 +2620,7 @@ export default function Home() {
     });
 
     return [...orderedFromSettings, ...fromFetchedMissing]
+      .filter((restaurant) => restaurant.isRestaurant !== false)
       .filter(matchesVegMode)
       .slice(0, 12);
   }, [

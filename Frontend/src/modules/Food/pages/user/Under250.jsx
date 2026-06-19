@@ -461,7 +461,7 @@ export default function Under250() {
           setUnder250Restaurants([])
           return
         }
-        const response = await restaurantAPI.getRestaurants({ zoneId })
+        const response = await restaurantAPI.getRestaurants({ zoneId, isRestaurant: "true" })
         const restaurantsRaw = Array.isArray(response?.data?.data?.restaurants)
           ? response.data.data.restaurants
           : []

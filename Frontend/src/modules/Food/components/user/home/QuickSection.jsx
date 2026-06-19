@@ -1,86 +1,303 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Clock, Star, ShoppingBasket, Timer } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ShoppingBasket, Zap, Clock, Star } from 'lucide-react';
-import OptimizedImage from '@food/components/OptimizedImage';
+import { restaurantAPI } from '@food/api';
+import { API_BASE_URL } from '@food/api/config';
+import { useLocation } from '@food/hooks/useLocation';
+import { useZone } from '@food/hooks/useZone';
 
-const quickCategories = [
-  { name: 'Dairy, Bread & Eggs', image: 'https://images.unsplash.com/photo-1550583760-706c4210077c?w=100&h=100&fit=crop' },
-  { name: 'Vegetables & Fruits', image: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=100&h=100&fit=crop' },
-  { name: 'Snacks & Munchies', image: 'https://images.unsplash.com/photo-1599490659223-e1539e7af924?w=100&h=100&fit=crop' },
-  { name: 'Soft Drinks & Ice', image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=100&h=100&fit=crop' },
-  { name: 'Cleaning Essentials', image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=100&h=100&fit=crop' },
-  { name: 'Personal Care', image: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=100&h=100&fit=crop' },
-  { name: 'Pet Care', image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=100&h=100&fit=crop' },
-  { name: 'Baby Care', image: 'https://images.unsplash.com/photo-1555252333-978fe3f780c4?w=100&h=100&fit=crop' },
-];
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+
+const normalizeImageUrl = (imageUrl) => {
+  if (typeof imageUrl !== 'string' || !imageUrl.trim()) return '';
+  const trimmed = imageUrl.trim();
+  if (/^(https?:)?\/\//i.test(trimmed) || /^data:/i.test(trimmed) || /^blob:/i.test(trimmed)) {
+    return trimmed;
+  }
+  return trimmed.startsWith('/')
+    ? `${BACKEND_ORIGIN}${trimmed}`
+    : `${BACKEND_ORIGIN}/${trimmed}`;
+};
+
+const pickStoreImage = (restaurant) => {
+  const candidates = [
+    restaurant?.coverImage?.url,
+    restaurant?.coverImage,
+    ...(Array.isArray(restaurant?.coverImages) ? restaurant.coverImages.map((img) => img?.url || img) : []),
+    ...(Array.isArray(restaurant?.menuImages) ? restaurant.menuImages.map((img) => img?.url || img) : []),
+    restaurant?.profileImage?.url,
+    restaurant?.profileImage,
+  ];
+  const firstValid = candidates.find((value) => typeof value === 'string' && value.trim());
+  return normalizeImageUrl(firstValid || '');
+};
+
+/** Compute "Closes in Xh Ym" from openingHours if available, else null */
+function getClosesIn(restaurant) {
+  try {
+    const now = new Date();
+    const hours = restaurant?.openingHours;
+    if (!hours) return null;
+    const closeStr = hours?.close || hours?.closingTime || hours?.closeTime;
+    if (!closeStr) return null;
+    const [hh, mm] = String(closeStr).split(':').map(Number);
+    const close = new Date();
+    close.setHours(hh, mm, 0, 0);
+    const diffMs = close - now;
+    if (diffMs <= 0) return null;
+    const diffMins = Math.floor(diffMs / 60000);
+    const h = Math.floor(diffMins / 60);
+    const m = diffMins % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  } catch {
+    return null;
+  }
+}
+
+// Skeleton card matching the style
+function StoreCardSkeleton() {
+  return (
+    <div className="bg-white rounded-3xl overflow-hidden shadow-sm animate-pulse mb-4">
+      <div className="h-52 bg-gray-100 rounded-t-3xl" />
+      <div className="p-4 space-y-3">
+        <div className="flex justify-between items-center">
+          <div className="h-5 bg-gray-100 rounded-full w-2/5" />
+          <div className="h-8 w-16 bg-gray-100 rounded-full" />
+        </div>
+        <div className="h-3.5 bg-gray-100 rounded-full w-1/3" />
+        <div className="h-3.5 bg-gray-100 rounded-full w-1/4" />
+        <div className="h-8 bg-gray-100 rounded-full w-2/5 mt-1" />
+      </div>
+    </div>
+  );
+}
+
+function StoreCard({ store, index }) {
+  const [imgError, setImgError] = useState(false);
+  const closesIn = getClosesIn(store._raw);
+
+  const fallbackGradients = [
+    'from-green-100 to-emerald-200',
+    'from-teal-100 to-cyan-200',
+    'from-lime-100 to-green-200',
+    'from-emerald-100 to-teal-200',
+  ];
+  const fallback = fallbackGradients[index % fallbackGradients.length];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, delay: index * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className="mb-4"
+    >
+      <Link to={`/user/restaurants/${store.slug}`} className="block">
+        <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.08)] active:scale-[0.99] transition-transform duration-150">
+
+          {/* Image */}
+          <div className="relative h-52 overflow-hidden">
+            {store.image && !imgError ? (
+              <img
+                src={store.image}
+                alt={store.name}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div className={`w-full h-full bg-gradient-to-br ${fallback} flex items-center justify-center`}>
+                <ShoppingBasket className="w-14 h-14 text-green-300" />
+              </div>
+            )}
+
+            {/* OPEN NOW badge — bottom left */}
+            <div className="absolute bottom-4 left-4">
+              <span className="bg-[#1A9E5C] text-white text-[11px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-full shadow-md">
+                Open Now
+              </span>
+            </div>
+
+            {/* Save badge — top right */}
+            <div className="absolute top-4 right-4">
+              <span className="bg-white/90 backdrop-blur-sm text-gray-800 text-[13px] font-semibold px-3.5 py-1.5 rounded-full shadow-sm">
+                Save
+              </span>
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="px-4 pt-4 pb-4">
+            {/* Name + Rating */}
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <h3 className="text-[19px] font-black text-gray-900 leading-snug flex-1 line-clamp-1">
+                {store.name}
+              </h3>
+              {store.rating > 0 && (
+                <div className="flex-shrink-0 flex items-center gap-1.5 bg-[#E8F8F0] text-[#1A9E5C] text-sm font-bold px-3 py-1.5 rounded-full">
+                  <Star className="w-3.5 h-3.5 fill-[#1A9E5C] text-[#1A9E5C]" />
+                  <span>{store.rating.toFixed(1)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Cuisine/category */}
+            {store.cuisine && (
+              <p className="text-[14px] text-gray-500 font-normal mb-2.5">{store.cuisine}</p>
+            )}
+
+            {/* Delivery time */}
+            <div className="flex items-center gap-1.5 text-[14px] text-gray-600 mb-3">
+              <Clock className="w-4 h-4 text-gray-400" />
+              <span>{store.deliveryTime}</span>
+            </div>
+
+            {/* Closes in */}
+            {(closesIn || store.closesIn) && (
+              <div className="inline-flex items-center gap-1.5 border border-orange-200 text-orange-600 text-[13px] font-semibold px-3 py-1.5 rounded-full bg-orange-50/60">
+                <Timer className="w-3.5 h-3.5" />
+                <span>Closes in {closesIn || store.closesIn}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
 
 export default function QuickSection() {
+  const { location: userLocation } = useLocation();
+  const { zoneId } = useZone(userLocation);
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchGroceryStores = async () => {
+      if (!zoneId) {
+        setStores([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await restaurantAPI.getRestaurants({
+          zoneId,
+          isRestaurant: 'false',
+        });
+        if (cancelled) return;
+
+        const list =
+          response?.data?.data?.restaurants ||
+          response?.data?.restaurants ||
+          [];
+
+        const transformed = list.map((restaurant) => {
+          const name = restaurant?.name || restaurant?.restaurantName || 'Store';
+          const slug =
+            restaurant?.slug ||
+            String(name).toLowerCase().trim().replace(/\s+/g, '-');
+
+          const closesInVal = getClosesIn(restaurant);
+
+          return {
+            id: restaurant?._id || restaurant?.restaurantId || slug,
+            slug,
+            name,
+            cuisine: restaurant?.cuisine || restaurant?.category || restaurant?.type || '',
+            rating: Number(restaurant?.rating || 0) || 0,
+            deliveryTime:
+              restaurant?.estimatedDeliveryTime ||
+              (restaurant?.estimatedDeliveryTimeMinutes
+                ? `${restaurant.estimatedDeliveryTimeMinutes} mins`
+                : '25-30 mins'),
+            distance:
+              restaurant?.distanceInKm != null
+                ? `${Number(restaurant.distanceInKm).toFixed(1)} km`
+                : restaurant?.distance || '1.2 km',
+            offer: restaurant?.offer || '',
+            closesIn: closesInVal,
+            image: pickStoreImage(restaurant),
+            _raw: restaurant,
+          };
+        });
+
+        setStores(transformed);
+      } catch {
+        if (!cancelled) setStores([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchGroceryStores();
+    return () => { cancelled = true; };
+  }, [zoneId]);
+
+  const hasStores = useMemo(() => stores.length > 0, [stores.length]);
+
   return (
-    <div className="relative min-h-[360px] bg-[#F3FBE8] pb-10">
-      <div className="relative min-h-[360px] pt-2">
-        {/* "Coming Soon" Overlay */}
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#F3FBE8]/60 backdrop-blur-[2px]">
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-[#4A8508] text-white px-8 py-3 rounded-2xl shadow-2xl flex flex-col items-center gap-1 border-4 border-white"
-        >
-          <Zap className="h-8 w-8 fill-white" />
-          <span className="text-xl font-black uppercase tracking-tighter italic">Coming Soon</span>
-          <span className="text-xs font-bold opacity-80 uppercase tracking-widest leading-none">Instant Grocery</span>
-        </motion.div>
+    <div className="min-h-screen bg-white px-4 pt-5 pb-28">
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.15em] mb-1">
+            Grocery Stores
+          </p>
+          <h2 className="text-[26px] font-black text-gray-900 leading-tight">
+            Grocery near you
+          </h2>
         </div>
 
-      <div className="px-4 space-y-6 opacity-40 grayscale-[0.5] select-none pointer-events-none">
-        {/* Banner */}
-        <div className="bg-yellow-50 rounded-2xl p-4 flex justify-between items-center border border-yellow-100">
-          <div className="space-y-1">
-            <h3 className="text-sm font-black text-yellow-900 leading-tight">Munchies <br />at 10 PM?</h3>
-            <p className="text-[10px] font-bold text-yellow-700 uppercase">Get them in 10 mins</p>
-          </div>
-          <ShoppingBasket className="h-10 w-10 text-yellow-500 opacity-50" />
-        </div>
-
-        {/* Categories Grid */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-bold text-gray-900 px-1">Shop by category</h4>
-          <div className="grid grid-cols-4 gap-x-2 gap-y-4">
-            {quickCategories.map((cat, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-1.5 animate-pulse" style={{ animationDelay: `${idx * 100}ms` }}>
-                <div className="w-full aspect-square bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100 flex items-center justify-center p-1">
-                  <OptimizedImage src={cat.image} alt={cat.name} className="w-full h-full object-contain rounded-lg" />
-                </div>
-                <span className="text-[9px] font-bold text-gray-600 text-center leading-tight">
-                  {cat.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Features */}
-        <div className="flex justify-between px-2 pt-4 border-t border-gray-50">
-          <div className="flex flex-col items-center gap-1">
-            <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-              <Clock className="h-4 w-4 text-blue-500" />
-            </div>
-            <span className="text-[8px] font-bold text-gray-400">FAST DELIVERY</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="h-8 w-8 rounded-full bg-orange-50 flex items-center justify-center">
-              <Star className="h-4 w-4 text-orange-500" />
-            </div>
-            <span className="text-[8px] font-bold text-gray-400">TOP BRANDS</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center">
-              <ShoppingBasket className="h-4 w-4 text-green-500" />
-            </div>
-            <span className="text-[8px] font-bold text-gray-400">BEST PRICES</span>
-          </div>
-        </div>
+        {!loading && hasStores && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="mt-1 bg-[#E8F8F0] text-[#1A9E5C] text-sm font-bold px-4 py-2 rounded-full whitespace-nowrap"
+          >
+            {stores.length} stores
+          </motion.div>
+        )}
       </div>
-      </div>
+
+      {/* Content */}
+      {loading ? (
+        <>
+          <StoreCardSkeleton />
+          <StoreCardSkeleton />
+          <StoreCardSkeleton />
+        </>
+      ) : !zoneId ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-4">
+            <ShoppingBasket className="w-8 h-8 text-green-400" />
+          </div>
+          <h4 className="text-base font-bold text-gray-800 mb-1">Set your location</h4>
+          <p className="text-sm text-gray-500 max-w-[220px] leading-relaxed">
+            Enable location to see grocery stores delivering to you.
+          </p>
+        </div>
+      ) : !hasStores ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-4">
+            <ShoppingBasket className="w-8 h-8 text-green-400" />
+          </div>
+          <h4 className="text-base font-bold text-gray-800 mb-1">No stores yet</h4>
+          <p className="text-sm text-gray-500 max-w-[220px] leading-relaxed">
+            No grocery stores available in your area right now. Check back soon!
+          </p>
+        </div>
+      ) : (
+        <div>
+          {stores.map((store, index) => (
+            <StoreCard key={store.id} store={store} index={index} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

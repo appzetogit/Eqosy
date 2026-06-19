@@ -43,6 +43,7 @@ export const useHomeData = (location, zoneId) => {
       setLoadingRestaurants(true);
       const params = {
         _ts: Date.now(),
+        isRestaurant: "true",
         ...(filters.sortBy && { sortBy: filters.sortBy }),
         ...(filters.cuisine && { cuisine: filters.cuisine }),
         ...(zoneId && { zoneId })

@@ -291,7 +291,7 @@ export async function getRestaurants(query) {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('restaurantName slug location area city status ownerName ownerPhone zoneId profileImage coverImages menuImages')
+            .select('restaurantName slug location area city status ownerName ownerPhone zoneId profileImage coverImages menuImages isRestaurant')
             .populate('zoneId', 'name zoneName')
             .lean(),
         FoodRestaurant.countDocuments(filter)
@@ -2339,6 +2339,10 @@ export async function updateRestaurantById(id, body = {}) {
 
     if (body.isAcceptingOrders !== undefined) {
         doc.isAcceptingOrders = parseBooleanLike(body.isAcceptingOrders, 'isAcceptingOrders');
+    }
+
+    if (body.isRestaurant !== undefined) {
+        doc.isRestaurant = parseBooleanLike(body.isRestaurant, 'isRestaurant');
     }
 
     if (body.cuisines !== undefined) {

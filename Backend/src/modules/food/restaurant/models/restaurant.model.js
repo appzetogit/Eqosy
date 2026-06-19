@@ -83,6 +83,12 @@ const restaurantSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    /** When true (default), outlet appears in Food vertical; when false, in Grocery vertical. */
+    isRestaurant: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
     pricingAttributes: {
       type: [String],
       enum: ["same_price", "no_packaging"],

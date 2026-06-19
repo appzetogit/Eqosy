@@ -1365,6 +1365,12 @@ export const listApprovedRestaurants = async (query = {}) => {
 
     const filter = { status: 'approved' };
 
+    if (query.isRestaurant === 'false') {
+        filter.isRestaurant = false;
+    } else if (query.isRestaurant === 'true') {
+        filter.isRestaurant = { $ne: false };
+    }
+
     if (query.pricingAttributes) {
         let attrs = [];
         if (Array.isArray(query.pricingAttributes)) {
@@ -1459,6 +1465,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         isAcceptingOrders: 1,
         status: 1,
         pureVegRestaurant: 1,
+        isRestaurant: 1,
         pricingAttributes: 1,
         createdAt: 1,
         location: 1,
@@ -1553,6 +1560,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         openingTime: r.openingTime || null,
         closingTime: r.closingTime || null,
         pureVegRestaurant: Boolean(r.pureVegRestaurant),
+        isRestaurant: r.isRestaurant !== false,
         pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
         openDays: Array.isArray(r.openDays) ? r.openDays : [],
         // Keep menuImages as an array for fallbacks; allow both string and {url} on client.

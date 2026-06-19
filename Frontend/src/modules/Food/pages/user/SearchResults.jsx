@@ -191,6 +191,7 @@ export default function SearchResults() {
         if (zoneId) {
           params.zoneId = zoneId
         }
+        params.isRestaurant = "true"
         const response = await restaurantAPI.getRestaurants(params)
 
         debugLog('?? Full API Response:', response)

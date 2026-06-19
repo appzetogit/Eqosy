@@ -112,6 +112,7 @@ export default function RestaurantsList() {
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [banConfirmDialog, setBanConfirmDialog] = useState(null) // { restaurant, action: 'ban' | 'unban' }
   const [banning, setBanning] = useState(false)
+  const [togglingIsRestaurantId, setTogglingIsRestaurantId] = useState(null)
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(null) // { restaurant }
   const [deleting, setDeleting] = useState(false)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" })
@@ -254,6 +255,7 @@ export default function RestaurantsList() {
             zone: zoneLabelFromRestaurant(restaurant),
             approvalStatus: normalizeApprovalStatus(restaurant),
             isActive: restaurant.isActive !== false,
+            isRestaurant: restaurant.isRestaurant !== false,
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: getPrimaryRestaurantImage(restaurant, PLACEHOLDER_40),
             originalData: restaurant,
@@ -949,6 +951,29 @@ export default function RestaurantsList() {
     setBanConfirmDialog(null)
   }
 
+  const handleToggleIsRestaurant = async (restaurant) => {
+    const restaurantId = restaurant._id || restaurant.id
+    if (!restaurantId) return
+
+    const nextValue = !restaurant.isRestaurant
+    try {
+      setTogglingIsRestaurantId(restaurantId)
+      await adminAPI.updateRestaurant(restaurantId, { isRestaurant: nextValue })
+      setRestaurants((prevRestaurants) =>
+        prevRestaurants.map((r) =>
+          r.id === restaurant.id || r._id === restaurant._id
+            ? { ...r, isRestaurant: nextValue }
+            : r
+        )
+      )
+    } catch (err) {
+      debugError("Error toggling isRestaurant:", err)
+      alert("Failed to update restaurant type. Please try again.")
+    } finally {
+      setTogglingIsRestaurantId(null)
+    }
+  }
+
   // Handle delete restaurant
   const handleDeleteRestaurant = (restaurant) => {
     setDeleteConfirmDialog({ restaurant })
@@ -1171,6 +1196,11 @@ export default function RestaurantsList() {
                       </div>
                     </th>
                     <th
+                      className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider"
+                    >
+                      isRestaurant
+                    </th>
+                    <th
                       className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                       onClick={() => handleSort('status')}
                     >
@@ -1185,7 +1215,7 @@ export default function RestaurantsList() {
                 <tbody className="bg-white divide-y divide-slate-100">
                   {filteredRestaurants.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={8} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
                           <p className="text-sm text-slate-500">No restaurants match your search</p>
@@ -1244,6 +1274,23 @@ export default function RestaurantsList() {
                               {(Number(restaurant.rating) || 0).toFixed(1)}
                             </span>
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleIsRestaurant(restaurant)}
+                            disabled={togglingIsRestaurantId === (restaurant._id || restaurant.id)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              restaurant.isRestaurant ? "bg-blue-600" : "bg-slate-300"
+                            } ${togglingIsRestaurantId === (restaurant._id || restaurant.id) ? "opacity-60 cursor-not-allowed" : ""}`}
+                            title={restaurant.isRestaurant ? "Shown in Food section" : "Shown in Grocery section"}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                restaurant.isRestaurant ? "translate-x-6" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col gap-1">

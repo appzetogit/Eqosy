@@ -873,7 +873,7 @@ export default function CategoryPage() {
     const fetchRestaurants = async () => {
       try {
         setLoadingRestaurants(true)
-        const params = zoneId ? { zoneId } : {}
+        const params = zoneId ? { zoneId, isRestaurant: "true" } : { isRestaurant: "true" }
         const response = await restaurantAPI.getRestaurants(params)
 
         if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
