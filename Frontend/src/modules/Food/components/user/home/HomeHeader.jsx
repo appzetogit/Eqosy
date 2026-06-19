@@ -315,8 +315,12 @@ export default function HomeHeader({
     }
     if (isFood) {
       navigate('/food/user/search');
+      return;
     }
-  }, [handleSearchFocus, isTaxi, isFood, navigate]);
+    if (isGrocery) {
+      navigate('/food/user/search?vertical=grocery');
+    }
+  }, [handleSearchFocus, isTaxi, isFood, isGrocery, navigate]);
 
   const walletPath = isTaxi ? '/taxi/user/wallet' : '/food/user/wallet';
 

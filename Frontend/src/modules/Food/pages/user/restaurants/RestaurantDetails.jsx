@@ -556,6 +556,8 @@ function RestaurantDetailsContent() {
             isAcceptingOrders: actualRestaurant?.isAcceptingOrders !== false, // Default to true if not specified
             pricingAttributes: Array.isArray(actualRestaurant?.pricingAttributes) ? actualRestaurant.pricingAttributes : (Array.isArray(apiRestaurant?.pricingAttributes) ? apiRestaurant.pricingAttributes : []),
             pureVegRestaurant: actualRestaurant?.pureVegRestaurant === true || apiRestaurant?.pureVegRestaurant === true || actualRestaurant?.pureVeg === true || apiRestaurant?.pureVeg === true,
+            // isRestaurant flag from backend — false means it is a grocery/quick-commerce store
+            isRestaurant: actualRestaurant?.isRestaurant !== false && apiRestaurant?.isRestaurant !== false,
           }
 
           debugLog('? Transformed restaurant:', transformedRestaurant)
@@ -2086,11 +2088,13 @@ function RestaurantDetailsContent() {
             </div>
           </div>
 
-          {/* Top Category */} 
-          <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <Utensils className="h-4 w-4" />
-            <span>{restaurant?.topCategory || restaurant?.cuisine || "Multi-cuisine"}</span>
-          </div>
+          {/* Top Category — hidden for non-restaurant stores */}
+          {restaurant?.isRestaurant !== false && (
+            <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <Utensils className="h-4 w-4" />
+              <span>{restaurant?.topCategory || restaurant?.cuisine || "Multi-cuisine"}</span>
+            </div>
+          )}
 
           {/* Location */}
           <div
@@ -2113,8 +2117,8 @@ function RestaurantDetailsContent() {
             </Badge>
           </div>
 
-          {/* Pricing Perks Badge Row */}
-          {restaurant?.pricingAttributes && restaurant.pricingAttributes.length > 0 && (
+          {/* Pricing Perks Badge Row — hidden for non-restaurant stores */}
+          {restaurant?.isRestaurant !== false && restaurant?.pricingAttributes && restaurant.pricingAttributes.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {restaurant.pricingAttributes.includes("no_packaging") && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-700 dark:text-gray-300 shadow-sm">

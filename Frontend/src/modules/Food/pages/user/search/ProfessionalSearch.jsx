@@ -41,6 +41,8 @@ const SEARCH_HISTORY_KEY = "professional_search_history_v1"
 export default function ProfessionalSearch() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQuery = searchParams.get("q") || ""
+  const isGrocerySearch = searchParams.get("vertical") === "grocery"
+  const isRestaurantParam = isGrocerySearch ? "false" : "true"
   const navigate = useNavigate()
   const { getDefaultAddress } = useProfile()
   const { location: userCoords } = useGeoLocation()
@@ -107,7 +109,7 @@ export default function ProfessionalSearch() {
 
   useEffect(() => {
     fetchCategories()
-  }, [zoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates])
+  }, [zoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates, isGrocerySearch, isRestaurantParam])
 
   useEffect(() => {
     const readMode = () => {
@@ -135,12 +137,21 @@ export default function ProfessionalSearch() {
     }
 
     try {
-      const res = await searchAPI.getAdminCategories({ zoneId })
+      const res = await searchAPI.getAdminCategories({
+        zoneId,
+        isRestaurant: isRestaurantParam,
+      })
       if (res.data?.success) setCategories(res.data.data.categories)
     } catch (err) {
       console.error("Failed to fetch categories", err)
     }
   }
+
+  const buildSearchParams = useCallback((overrides = {}) => {
+    const next = { ...overrides }
+    if (isGrocerySearch) next.vertical = "grocery"
+    return next
+  }, [isGrocerySearch])
 
   const addToHistory = (term) => {
     const newHistory = [term, ...history.filter(h => h !== term)].slice(0, 5)
@@ -165,7 +176,8 @@ export default function ProfessionalSearch() {
         categoryId: catId,
         lat: effectiveLocation?.latitude,
         lng: effectiveLocation?.longitude,
-        zoneId
+        zoneId,
+        isRestaurant: isRestaurantParam,
       })
       
       if (res.data?.success) {
@@ -181,14 +193,17 @@ export default function ProfessionalSearch() {
     } finally {
       setLoading(false)
     }
-  }, [effectiveLocation, zoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates])
+  }, [effectiveLocation, zoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates, isRestaurantParam])
 
   useEffect(() => {
     performSearch(debouncedQuery, selectedCategoryId)
     if (debouncedQuery) {
-        setSearchParams({ q: debouncedQuery, ...(selectedCategoryId ? { cat: selectedCategoryId } : {}) })
+        setSearchParams(buildSearchParams({
+          q: debouncedQuery,
+          ...(selectedCategoryId ? { cat: selectedCategoryId } : {}),
+        }))
     }
-  }, [debouncedQuery, selectedCategoryId, performSearch, setSearchParams])
+  }, [debouncedQuery, selectedCategoryId, performSearch, setSearchParams, buildSearchParams])
 
   // Speech Recognition Implementation
   const handleVoiceSearch = () => {
@@ -213,20 +228,29 @@ export default function ProfessionalSearch() {
   const handleClear = () => {
     setQuery("")
     setSelectedCategoryId(null)
-    setSearchParams({})
+    setSearchParams(buildSearchParams())
     setResults({ restaurants: [], dishes: [] })
   }
 
   const handleCategoryClick = (id) => {
     const newCat = selectedCategoryId === id ? null : id
     setSelectedCategoryId(newCat)
+    const base = Object.fromEntries(searchParams)
     if (newCat) {
-        setSearchParams({ ...Object.fromEntries(searchParams), cat: newCat })
+        setSearchParams(buildSearchParams({ ...base, cat: newCat }))
     } else {
-        const p = Object.fromEntries(searchParams)
+        const p = { ...base }
         delete p.cat
-        setSearchParams(p)
+        setSearchParams(buildSearchParams(p))
     }
+  }
+
+  const handleBack = () => {
+    if (isGrocerySearch) {
+      navigate("/food/user?vertical=grocery")
+      return
+    }
+    navigate(-1)
   }
 
   return (
@@ -234,7 +258,7 @@ export default function ProfessionalSearch() {
       {/* Header */}
       <div className="sticky top-0 z-50 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+          <button onClick={handleBack} className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           
@@ -242,7 +266,7 @@ export default function ProfessionalSearch() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input 
               autoFocus
-              placeholder="Search for restaurants or dishes..." 
+              placeholder={isGrocerySearch ? 'Search for stores or products...' : 'Search for restaurants or dishes...'} 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-10 pr-10 h-11 bg-slate-100 dark:bg-zinc-800 border-none focus:ring-2 focus:ring-rose-500 rounded-xl"
@@ -335,7 +359,9 @@ export default function ProfessionalSearch() {
               <section>
                 <div className="flex items-center gap-2 mb-4">
                    <div className="w-1 h-5 bg-orange-500 rounded-full" />
-                   <h2 className="text-lg font-bold dark:text-white">Dishes from restaurants</h2>
+                   <h2 className="text-lg font-bold dark:text-white">
+                     {isGrocerySearch ? 'Products from stores' : 'Dishes from restaurants'}
+                   </h2>
                 </div>
                 <div className="grid gap-4">
                   {results.dishes.map((r) => (
@@ -379,7 +405,9 @@ export default function ProfessionalSearch() {
               <section>
                 <div className="flex items-center gap-2 mb-4">
                    <div className="w-1 h-5 bg-rose-500 rounded-full" />
-                   <h2 className="text-lg font-bold dark:text-white">Restaurants</h2>
+                   <h2 className="text-lg font-bold dark:text-white">
+                     {isGrocerySearch ? 'Stores' : 'Restaurants'}
+                   </h2>
                 </div>
                 <div className="grid gap-6">
                   {results.restaurants.map((r) => (

@@ -21,7 +21,8 @@ export const searchUnified = async (query = {}, options = {}) => {
         page = 1,
         limit = 20,
         zoneId,
-        pricingAttributes
+        pricingAttributes,
+        isRestaurant
     } = query;
 
     const skip = (page - 1) * limit;
@@ -35,6 +36,12 @@ export const searchUnified = async (query = {}, options = {}) => {
 
     if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
         restaurantFilter.zoneId = new mongoose.Types.ObjectId(zoneId);
+    }
+
+    if (isRestaurant === 'false') {
+        restaurantFilter.isRestaurant = false;
+    } else if (isRestaurant === 'true') {
+        restaurantFilter.isRestaurant = { $ne: false };
     }
 
     if (isVeg === 'true') {
@@ -205,6 +212,11 @@ export const getAdminCategories = async (query = {}) => {
     const restaurantFilter = { status: 'approved' };
     if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
         restaurantFilter.zoneId = new mongoose.Types.ObjectId(query.zoneId);
+    }
+    if (query.isRestaurant === 'false') {
+        restaurantFilter.isRestaurant = false;
+    } else if (query.isRestaurant === 'true') {
+        restaurantFilter.isRestaurant = { $ne: false };
     }
 
     const eligibleRestaurantIds = await FoodRestaurant.distinct('_id', restaurantFilter);
