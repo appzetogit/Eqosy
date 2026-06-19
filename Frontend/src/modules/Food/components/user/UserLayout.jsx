@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom"
+import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useEffect, useState, createContext, useContext } from "react"
 import { ProfileProvider } from "@food/context/ProfileContext"
 import LocationPrompt from "./LocationPrompt"
@@ -12,7 +12,6 @@ import SearchOverlay from "./SearchOverlay"
 import BottomNavigation from "./BottomNavigation"
 import DesktopNavbar from "./DesktopNavbar"
 import { useUserNotifications } from "../../hooks/useUserNotifications"
-import { applyFoodUserTheme } from "@/shared/utils/theme.js"
 
 // Create SearchOverlay context with default value
 const SearchOverlayContext = createContext({
@@ -105,21 +104,6 @@ function LocationSelectorProvider({ children }) {
 
 export default function UserLayout() {
   const location = useLocation()
-  const [searchParams] = useSearchParams()
-  const superAppVertical = searchParams.get("vertical")
-
-  useEffect(() => {
-    const syncFoodTheme = () => {
-      applyFoodUserTheme()
-    }
-
-    syncFoodTheme()
-    window.addEventListener("pageshow", syncFoodTheme)
-
-    return () => {
-      window.removeEventListener("pageshow", syncFoodTheme)
-    }
-  }, [location.pathname])
 
   useEffect(() => {
     // Reset scroll to top whenever location changes (pathname, search, or hash)
@@ -149,7 +133,7 @@ export default function UserLayout() {
     normalizedPath === "/under-250" ||
     normalizedPath === "/user/under-250" ||
     isProfileRoot ||
-    normalizedPath === "") && superAppVertical !== "taxi"
+    normalizedPath === "")
 
   const isUnder250 = normalizedPath === "/under-250" || normalizedPath === "/user/under-250"
 

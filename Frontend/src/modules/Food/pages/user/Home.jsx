@@ -98,7 +98,7 @@ import OptimizedImage from "@food/components/OptimizedImage";
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability";
 import HomeHeader from "@food/components/user/home/HomeHeader";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
-import TaxiSection from "@food/components/user/home/TaxiSection";
+import { scheduleFoodThemeReassert } from "@/shared/utils/theme.js";
 import GrocerySection from "@food/components/user/home/QuickSection";
 import PromoRow from "@food/components/user/home/PromoRow";
 import PromotionBannerCarousel from "@food/components/user/home/PromotionBannerCarousel";
@@ -584,19 +584,23 @@ export default function Home() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const verticalParam = searchParams.get("vertical");
-  const superAppVertical = ["food", "taxi", "grocery"].includes(verticalParam)
-    ? verticalParam
-    : "food";
+  const superAppVertical = verticalParam === "grocery" ? "grocery" : "food";
 
   const handleVerticalChange = useCallback(
     (id) => {
       if (id === "food") {
+        scheduleFoodThemeReassert();
         setSearchParams({}, { replace: true });
-      } else {
-        setSearchParams({ vertical: id }, { replace: true });
+        return;
       }
+      if (id === "taxi") {
+        navigate("/taxi/user", { replace: true });
+        return;
+      }
+      scheduleFoodThemeReassert();
+      setSearchParams({ vertical: id }, { replace: true });
     },
-    [setSearchParams],
+    [navigate, setSearchParams],
   );
 
   const query = searchParams.get("q") || "";
@@ -2952,7 +2956,7 @@ export default function Home() {
 
   return (
 
-    <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${superAppVertical === "taxi" ? "pb-6" : "pb-16"} md:pb-6 overflow-x-clip`}>
+    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
       <HomeHeader
         activeVertical={superAppVertical}
         onVerticalChange={handleVerticalChange}
@@ -4587,18 +4591,6 @@ export default function Home() {
       <StickyCartCard />
       {/* Live order strip: only on homepage (not in UserLayout) */}
       <OrderTrackingCard hasBottomNav />
-          </motion.div>
-        )}
-
-        {superAppVertical === "taxi" && (
-          <motion.div
-            key="taxi-panel"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-          >
-            <TaxiSection />
           </motion.div>
         )}
 

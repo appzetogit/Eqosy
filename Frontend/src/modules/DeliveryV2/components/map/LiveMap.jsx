@@ -1,13 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { 
-  GoogleMap, 
-  Marker, 
-  DirectionsService, 
+import {
+  GoogleMap,
+  Marker,
+  DirectionsService,
   Polygon,
   Polyline,
-  useJsApiLoader,
   OverlayView
 } from '@react-google-maps/api';
+import { useAppGoogleMapsLoader } from '@/modules/Taxi/modules/admin/utils/googleMaps';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { zoneAPI } from '@food/api';
 
@@ -38,15 +38,10 @@ const mapOptions = {
     { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] }
   ]
 };
-const LIBRARIES = ['places', 'geometry'];
-
 export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineReceived, zoom = 12 }) => {
   const { riderLocation, activeOrder, tripStatus } = useDeliveryStore();
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES
-  });
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   const [directions, setDirections] = useState(null);
   const [map, setMapInternal] = useState(null);

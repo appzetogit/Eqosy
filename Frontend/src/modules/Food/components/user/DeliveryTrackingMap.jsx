@@ -1,21 +1,18 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { 
-  GoogleMap, 
-  useJsApiLoader, 
-  Marker, 
-  OverlayView, 
-  DirectionsService, 
+import {
+  GoogleMap,
+  OverlayView,
+  DirectionsService,
   DirectionsRenderer,
   Polyline
 } from '@react-google-maps/api';
+import { useAppGoogleMapsLoader } from '@/modules/Taxi/modules/admin/utils/googleMaps';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@food/api/config';
 import bikeLogo from '@food/assets/bikelogo.png';
 import { subscribeOrderTracking } from '@food/realtimeTracking';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Navigation, Info, Circle } from 'lucide-react';
-
-const LIBRARIES = ['geometry', 'places'];
 
 const RIDER_BIKE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
   <circle cx="30" cy="30" r="28" fill="white" stroke="#ff8100" stroke-width="4" />
@@ -55,10 +52,7 @@ const DeliveryTrackingMap = ({
   const socketRef = useRef(null);
   const interpStateRef = useRef({ lastPos: null, nextPos: null, startTime: 0 });
 
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES,
-  });
+  const { isLoaded } = useAppGoogleMapsLoader();
 
   const trackingIds = useMemo(() => {
     const ids = [orderId, ...(Array.isArray(orderTrackingIds) ? orderTrackingIds : [])]

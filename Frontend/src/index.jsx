@@ -3,10 +3,9 @@ import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
 import App from './app/App.jsx'
 import { isModuleAuthenticated } from './modules/Food/utils/auth.js'
-import { applySavedTheme } from './shared/utils/theme.js'
+import { syncThemeForPath } from './shared/utils/theme.js'
+import { NATIVE_LAST_ROUTE_KEY } from './shared/utils/activeModule.js'
 import './shared/styles/global.css'
-
-const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
 
 // ─── Quick-spicy Food Module Initialization ───────────────────────────────────
 
@@ -15,7 +14,17 @@ import('./modules/Food/utils/businessSettings.js')
   .then(({ loadBusinessSettings }) => loadBusinessSettings())
   .catch(() => { /* Silently fail — settings load when admin authenticates */ })
 
-applySavedTheme()
+function getInitialPathname() {
+  if (typeof window === 'undefined') return '/'
+
+  const hash = String(window.location?.hash || '')
+  if (hash.startsWith('#/')) {
+    return hash.slice(1).split('?')[0] || '/'
+  }
+
+  const pathname = String(window.location?.pathname || '/')
+  return pathname.replace(/\/index\.html$/i, '') || '/'
+}
 
 function isNativeLikeShell() {
   if (typeof window === 'undefined') return false
@@ -93,6 +102,7 @@ function bootstrapNativeHashRoute() {
 }
 
 bootstrapNativeHashRoute()
+syncThemeForPath(getInitialPathname())
 
 // ─── Suppress known non-critical errors ──────────────────────────────────────
 

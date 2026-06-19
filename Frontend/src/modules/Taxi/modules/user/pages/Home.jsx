@@ -567,7 +567,7 @@ const Home = ({ embedded = false }) => {
 
 
       <div className="relative z-10 space-y-4 pb-6">
-        {!embedded && <HomeHeader />}
+        {!embedded && <HomeHeader activeVertical="taxi" />}
 
         {isScheduledAcceptedRide && (
           <motion.button

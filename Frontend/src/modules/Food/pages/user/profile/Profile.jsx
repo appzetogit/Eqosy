@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -56,6 +56,7 @@ const USER_SESSION_PREFERENCE_KEYS = ["userVegMode", "food-under-250-filters"];
 
 import { registerWebPushForCurrentModule } from "@food/utils/firebaseMessaging";
 import {
+  applyTheme,
   getFoodUserTheme,
   saveFoodUserTheme,
 } from "@/shared/utils/theme.js";
@@ -103,9 +104,14 @@ export default function Profile() {
   const [appearance, setAppearance] = useState(() => {
     return getFoodUserTheme();
   });
+  const appearanceBootstrapped = useRef(false);
 
-  // Apply theme to document
   useEffect(() => {
+    if (!appearanceBootstrapped.current) {
+      appearanceBootstrapped.current = true;
+      applyTheme(appearance);
+      return;
+    }
     saveFoodUserTheme(appearance);
   }, [appearance]);
 

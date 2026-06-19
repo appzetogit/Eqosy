@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Link, useNavigate } from "react-router-dom"
-import { ShieldCheck, Loader2 } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
+import { resolvePostLoginRoute } from "@/shared/utils/activeModule.js"
 
 export default function UnifiedOTPFastLogin() {
   const RESEND_COOLDOWN_SECONDS = 60
@@ -83,7 +84,7 @@ export default function UnifiedOTPFastLogin() {
   // Check if already logged in on mount
   useEffect(() => {
     if (isUnifiedAuthenticated()) {
-      navigate("/food/user", { replace: true })
+      navigate(resolvePostLoginRoute(), { replace: true })
     }
   }, [navigate])
 
@@ -274,7 +275,7 @@ export default function UnifiedOTPFastLogin() {
         console.warn("[Auth] FCM save route failed after login:", fcmSaveError?.message || fcmSaveError)
       }
       toast.success("Authentication successful!")
-      navigate("/food/user")
+      navigate(resolvePostLoginRoute())
     } catch (err) {
       const status = err?.response?.status
       let msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Invalid OTP. Please try again."
@@ -332,7 +333,7 @@ export default function UnifiedOTPFastLogin() {
 
       setUnifiedAuthData(nextData)
       toast.success("Profile completed successfully!")
-      navigate("/food/user")
+      navigate(resolvePostLoginRoute())
     } catch (err) {
       const msg =
         err?.response?.data?.message ||

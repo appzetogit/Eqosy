@@ -11,6 +11,7 @@ import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../se
 import { clearCurrentRide } from '../services/currentRideService';
 import { socketService } from '../../../shared/api/socket';
 import api from '../../../shared/api/axiosInstance';
+import { syncThemeForPath } from '@/shared/utils/theme.js';
 
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
@@ -183,17 +184,7 @@ const Profile = () => {
 
     // Normalize theme classes before route switch so /login does not momentarily
     // inherit stale dark-mode DOM classes from the previous screen.
-    if (typeof document !== 'undefined') {
-      const savedTheme = localStorage.getItem('appTheme') || 'light';
-      const html = document.documentElement;
-      const body = document.body;
-      const root = document.getElementById('root');
-      const shouldUseDark = savedTheme === 'dark';
-
-      html.classList.toggle('dark', shouldUseDark);
-      if (body) body.classList.toggle('dark', shouldUseDark);
-      if (root) root.classList.toggle('dark', shouldUseDark);
-    }
+    syncThemeForPath('/login');
 
     navigate('/login', { replace: true });
   };

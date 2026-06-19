@@ -31,14 +31,14 @@ export default function BottomNavigation() {
         <Link
           to="/food/user"
           className={`flex flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 transition-all duration-300 relative rounded-full ${isDelivery
-              ? "text-[#FA0272] bg-[#FA0272]/10"
+              ? "text-[#F97316] bg-[#F97316]/10"
               : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
             }`}
         >
           <div className="relative">
-            <Truck className={`h-5 w-5 transition-transform duration-300 ${isDelivery ? "text-[#FA0272] fill-[#FA0272]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isDelivery ? 2.5 : 2} />
+            <Truck className={`h-5 w-5 transition-transform duration-300 ${isDelivery ? "text-[#F97316] fill-[#F97316]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isDelivery ? 2.5 : 2} />
           </div>
-          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isDelivery ? "text-[#FA0272]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
+          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isDelivery ? "text-[#F97316]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
             Delivery
           </span>
         </Link>
@@ -47,14 +47,14 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/dining"
           className={`flex flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 transition-all duration-300 relative rounded-full ${isDining
-              ? "text-[#FA0272] bg-[#FA0272]/10"
+              ? "text-[#F97316] bg-[#F97316]/10"
               : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
             }`}
         >
           <div className="relative">
-            <UtensilsCrossed className={`h-5 w-5 transition-transform duration-300 ${isDining ? "text-[#FA0272] scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isDining ? 2.5 : 2} />
+            <UtensilsCrossed className={`h-5 w-5 transition-transform duration-300 ${isDining ? "text-[#F97316] scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isDining ? 2.5 : 2} />
           </div>
-          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isDining ? "text-[#FA0272]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
+          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isDining ? "text-[#F97316]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
             Dining
           </span>
         </Link>
@@ -63,14 +63,14 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/under-250"
           className={`flex flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 transition-all duration-300 relative rounded-full ${isUnder250
-              ? "text-[#FA0272] bg-[#FA0272]/10"
+              ? "text-[#F97316] bg-[#F97316]/10"
               : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
             }`}
         >
           <div className="relative">
-            <Tag className={`h-5 w-5 transition-transform duration-300 ${isUnder250 ? "text-[#FA0272] fill-[#FA0272]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isUnder250 ? 2.5 : 2} />
+            <Tag className={`h-5 w-5 transition-transform duration-300 ${isUnder250 ? "text-[#F97316] fill-[#F97316]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isUnder250 ? 2.5 : 2} />
           </div>
-          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isUnder250 ? "text-[#FA0272]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
+          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isUnder250 ? "text-[#F97316]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
             Switch 99
           </span>
         </Link>
@@ -79,14 +79,14 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/profile"
           className={`flex flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 transition-all duration-300 relative rounded-full ${isProfile
-              ? "text-[#FA0272] bg-[#FA0272]/10"
+              ? "text-[#F97316] bg-[#F97316]/10"
               : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
             }`}
         >
           <div className="relative">
-            <User className={`h-5 w-5 transition-transform duration-300 ${isProfile ? "text-[#FA0272] fill-[#FA0272]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isProfile ? 2.5 : 2} />
+            <User className={`h-5 w-5 transition-transform duration-300 ${isProfile ? "text-[#F97316] fill-[#F97316]/20 scale-110" : "text-gray-500 dark:text-gray-400"}`} strokeWidth={isProfile ? 2.5 : 2} />
           </div>
-          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isProfile ? "text-[#FA0272]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
+          <span className={`text-[10px] sm:text-xs font-semibold tracking-wide transition-all ${isProfile ? "text-[#F97316]" : "text-gray-500 dark:text-gray-400 opacity-80"}`}>
             Profile
           </span>
         </Link>

@@ -1,27 +1,35 @@
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useLayoutEffect } from 'react'
 import { AppShellSkeleton } from '@food/components/ui/loading-skeletons'
-import { applyFoodUserTheme, applySavedTheme, applyTheme } from '../shared/utils/theme.js'
-
-const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
+import { scheduleFoodThemeReassert } from '../shared/utils/theme.js'
+import {
+  NATIVE_LAST_ROUTE_KEY,
+  syncActiveModule,
+} from '../shared/utils/activeModule.js'
 
 // Lazy load the Food service module (Quick-spicy app)
 const FoodApp = lazy(() => import('../modules/Food/routes'))
 const TaxiApp = lazy(() => import('../modules/Taxi/TaxiApp'))
 const AuthApp = lazy(() => import('../modules/auth/routes'))
-import ProtectedRoute from '@food/components/ProtectedRoute'
 
 const PageLoader = () => <AppShellSkeleton />
 
-/**
- * FoodAppWrapper — Quick-spicy App. को /food prefix के साथ render करता है.
- * 
- * Quick-spicy की App.jsx में routes /restaurant, /usermain, /admin, /delivery
- * जैसे hain (bina /food prefix ke). Yahan hum useLocation se /food ke baad wala
- * path nikalne ke baad FoodApp render karte hain. FoodApp internally BrowserRouter
- * nahi use karta (sirf Routes use karta hai), isliye ye directly kaam karta hai.
- */
 const FoodAppWrapper = () => {
+  const location = useLocation()
+  const vertical = new URLSearchParams(location.search).get('vertical')
+
+  useLayoutEffect(() => {
+    scheduleFoodThemeReassert()
+  }, [location.pathname])
+
+  // Taxi lives under /taxi/* only — never embed it on /food/user.
+  if (
+    location.pathname.replace(/\/$/, '') === '/food/user' &&
+    vertical === 'taxi'
+  ) {
+    return <Navigate to="/taxi/user" replace />
+  }
+
   return (
     <Suspense fallback={<PageLoader />}>
       <FoodApp />
@@ -29,51 +37,24 @@ const FoodAppWrapper = () => {
   )
 }
 
-const TaxiAppWrapper = () => {
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <TaxiApp />
-    </Suspense>
-  )
-}
+const TaxiAppWrapper = () => (
+  <Suspense fallback={<PageLoader />}>
+    <TaxiApp />
+  </Suspense>
+)
 
 const RedirectToFood = () => {
-  const location = useLocation();
-  // We safely replace the exact current pathname with a /food prefixed pathname
-  // This effectively catches programmatic navigation to absolute paths like '/restaurant/login'
-  // and turns them into '/food/restaurant/login'
-  return <Navigate to={`/food${location.pathname}${location.search}`} replace />;
-};
-
+  const location = useLocation()
+  return <Navigate to={`/food${location.pathname}${location.search}`} replace />
+}
 
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
 
 const AppRoutes = () => {
   const location = useLocation()
 
-  useLayoutEffect(() => {
-    const syncThemeForCurrentRoute = () => {
-      if (location.pathname.startsWith('/taxi/user')) {
-        applyTheme('light')
-        return
-      }
-
-      if (location.pathname.startsWith('/food/user')) {
-        applyFoodUserTheme()
-        return
-      }
-
-      applySavedTheme()
-    }
-
-    // Taxi user screens are currently designed as light-only. Keep the shared
-    // user preference light so returning to Food does not create a mismatch.
-    syncThemeForCurrentRoute()
-    window.addEventListener('pageshow', syncThemeForCurrentRoute)
-
-    return () => {
-      window.removeEventListener('pageshow', syncThemeForCurrentRoute)
-    }
+  useEffect(() => {
+    syncActiveModule(location.pathname)
   }, [location.pathname])
 
   useEffect(() => {
@@ -98,20 +79,10 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Root → Master Landing Page */}
       <Route path="/" element={<Navigate to="/login" replace />} />
-
-      {/* Auth Module */}
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
-
-
-      {/* Food Module */}
       <Route path="/food/*" element={<FoodAppWrapper />} />
-
-      {/* Taxi Module */}
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
-
-      {/* Global Admin Portal - AdminRouter handles its own protection for sub-routes */}
       <Route
         path="/admin/*"
         element={
@@ -120,8 +91,6 @@ const AppRoutes = () => {
           </Suspense>
         }
       />
-      
-      {/* Dynamic intercept redirects for bare paths (accessed programmatically) */}
       <Route path="/user/*" element={<RedirectToFood />} />
       <Route path="/restaurant/*" element={<RedirectToFood />} />
       <Route path="/delivery/*" element={<RedirectToFood />} />
@@ -129,8 +98,6 @@ const AppRoutes = () => {
       <Route path="/profile/*" element={<RedirectToFood />} />
       <Route path="/cart/*" element={<Navigate to="/food/user/cart" replace />} />
       <Route path="/orders/*" element={<RedirectToFood />} />
-
-      {/* Fallback 404 */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -14,6 +14,7 @@ import hotelIcon from "@food/assets/category-icons/hotel.png";
 import { useCart } from "@food/context/CartContext";
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
+import { scheduleFoodThemeReassert } from "@/shared/utils/theme.js";
 
 const ICON_MAP = {
   CheckCircle2,
@@ -175,7 +176,7 @@ const VERTICALS = [
   {
     id: 'taxi',
     name: 'EqosyTaxi',
-    path: '/food/user?vertical=taxi',
+    path: '/taxi/user',
     icon: quickIcon,
     themeBg: taxiTheme.themeBg,
     activeTabBg: taxiTheme.activeTabBg,
@@ -217,10 +218,12 @@ export default function HomeHeader({
   const isControlled = typeof onVerticalChange === 'function';
 
   let routeVertical = 'food';
-  if (locationPath.includes('/food/user/grocery') || locationPath.includes('/grocery')) {
-    routeVertical = 'grocery';
-  } else if (locationPath.includes('/taxi')) {
+  if (locationPath.startsWith('/taxi/')) {
     routeVertical = 'taxi';
+  } else if (locationPath.includes('/food/user/grocery') || locationPath.includes('/grocery')) {
+    routeVertical = 'grocery';
+  } else if (new URLSearchParams(reactLocation.search).get('vertical') === 'grocery') {
+    routeVertical = 'grocery';
   } else if (['food', 'taxi', 'grocery'].includes(activeVerticalProp)) {
     routeVertical = activeVerticalProp;
   }
@@ -238,9 +241,15 @@ export default function HomeHeader({
       return;
     }
     if (verticalId === 'food') {
+      scheduleFoodThemeReassert();
       navigate('/food/user');
       return;
     }
+    if (verticalId === 'taxi') {
+      navigate('/taxi/user');
+      return;
+    }
+    scheduleFoodThemeReassert();
     navigate(`/food/user?vertical=${verticalId}`);
   }, [isControlled, onVerticalChange, navigate]);
 
@@ -591,7 +600,7 @@ export default function HomeHeader({
                     className={`w-full flex flex-col items-center justify-center px-2 transition-all duration-300 ${
                       isActive
                         ? `${currentVertical.activeTabBg} curvy-active-tab pt-2.5 pb-2.5 rounded-t-[1.75rem] shadow-sm`
-                        : `${currentVertical.inactiveTabBg} rounded-t-[1.25rem] mt-1.5 pt-2.5 pb-2`
+                        : `${currentVertical.inactiveTabBg} rounded-t-[1.25rem] pt-2.5 pb-2.5`
                     }`}
                   >
                     <div className="mb-1.5 flex items-center justify-center">
