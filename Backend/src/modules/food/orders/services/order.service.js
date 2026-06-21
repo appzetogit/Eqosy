@@ -1,4 +1,5 @@
 ﻿import mongoose from 'mongoose';
+import crypto from 'crypto';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
 // import { paymentSnapshotFromOrder } from './foodOrderPayment.service.js';
 import { logger } from '../../../../utils/logger.js';
@@ -284,6 +285,10 @@ export async function createOrder(userId, dto) {
       }
     }
 
+    if (!order.shareTrackingId) {
+      order.shareTrackingId = crypto.randomUUID();
+    }
+
     await order.save();
 
     if (isWallet) {
@@ -470,6 +475,16 @@ export async function listOrdersUser(userId, query) {
   });
 }
 
+async function ensureShareTrackingId(order) {
+  if (!order || order.shareTrackingId) return order;
+  const shareTrackingId = crypto.randomUUID();
+  await FoodOrder.updateOne(
+    { _id: order._id },
+    { $set: { shareTrackingId } },
+  );
+  return { ...order, shareTrackingId };
+}
+
 export async function getOrderById(
   orderId,
   { userId, restaurantId, deliveryPartnerId, admin } = {},
@@ -505,12 +520,13 @@ export async function getOrderById(
   }
 
   if (userId) {
-    const drop = order.deliveryVerification?.dropOtp || {};
-    const secret = String(order.deliveryOtp || "").trim();
-    const out = normalizeOrderForClient(order);
+    const orderWithShare = await ensureShareTrackingId(order);
+    const drop = orderWithShare.deliveryVerification?.dropOtp || {};
+    const secret = String(orderWithShare.deliveryOtp || "").trim();
+    const out = normalizeOrderForClient(orderWithShare);
     delete out.deliveryOtp;
     out.deliveryVerification = {
-      ...(order.deliveryVerification || {}),
+      ...(orderWithShare.deliveryVerification || {}),
       dropOtp: {
         required: Boolean(drop.required),
         verified: Boolean(drop.verified),
@@ -874,6 +890,67 @@ export async function updateOrderInstructions(orderId, userId, instructions) {
   order.note = String(instructions || "").trim();
   await order.save();
   return order;
+}
+
+export async function getOrderPublic(shareId) {
+  if (!shareId) throw new ValidationError('Share id required');
+
+  const order = await FoodOrder.findOne({
+    shareTrackingId: shareId,
+  })
+    .populate(
+      'restaurantId',
+      'restaurantName ownerPhone profileImage area city location rating totalRatings primaryContactNumber',
+    )
+    .populate(
+      'dispatch.deliveryPartnerId',
+      'name fullName phone phoneNumber rating totalRatings profileImage avatar',
+    )
+    .populate('userId', 'name fullName')
+    .lean();
+
+  if (!order) throw new NotFoundError('Order not found');
+
+  const sanitized = sanitizeOrderForExternal(order);
+  const normalized = normalizeOrderForClient(sanitized);
+
+  return {
+    shareTrackingId: order.shareTrackingId,
+    order: {
+      ...normalized,
+      restaurantName:
+        order.restaurantId?.restaurantName || order.restaurantName || '',
+      customerName:
+        order.customerName ||
+        order.userId?.name ||
+        order.userId?.fullName ||
+        '',
+      userName:
+        order.customerName ||
+        order.userId?.name ||
+        order.userId?.fullName ||
+        '',
+      estimatedDeliveryTime: order.estimatedDeliveryTime || '25-30 mins',
+      deliveryPartnerId:
+        order.dispatch?.deliveryPartnerId || order.deliveryPartnerId || null,
+      deliveryPartner: order.dispatch?.deliveryPartnerId
+        ? {
+            name:
+              order.dispatch.deliveryPartnerId.name ||
+              order.dispatch.deliveryPartnerId.fullName ||
+              'Delivery Partner',
+            phone:
+              order.dispatch.deliveryPartnerId.phone ||
+              order.dispatch.deliveryPartnerId.phoneNumber ||
+              '',
+            avatar:
+              order.dispatch.deliveryPartnerId.avatar ||
+              order.dispatch.deliveryPartnerId.profileImage ||
+              null,
+          }
+        : null,
+    },
+  };
 }
 
 // ----- Restaurant -----

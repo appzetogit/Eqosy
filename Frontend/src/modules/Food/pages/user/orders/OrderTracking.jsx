@@ -38,6 +38,11 @@ import { useProfile } from "@food/context/ProfileContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import DeliveryTrackingMap from "@food/components/user/DeliveryTrackingMap"
 import { orderAPI, restaurantAPI } from "@food/api"
+import { API_BASE_URL } from "@food/api/config"
+import {
+  resolveSharerDisplayName,
+  saveSharedOrder,
+} from "@food/utils/sharedOrderStorage"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { useUserNotifications } from "@food/hooks/useUserNotifications"
 import circleIcon from "@food/assets/circleicon.png"
@@ -52,6 +57,17 @@ const SAFE_RESTAURANT_PIN = typeof RESTAURANT_PIN_SVG !== 'undefined' ? RESTAURA
 const debugLog = (...args) => console.log('[OrderTracking]', ...args)
 const debugWarn = (...args) => console.warn('[OrderTracking]', ...args)
 const debugError = (...args) => console.error('[OrderTracking]', ...args)
+
+async function fetchPublicOrderDetails(shareId) {
+  const base = (API_BASE_URL || '/api/v1').replace(/\/$/, '')
+  const res = await fetch(`${base}/public/order-track/${encodeURIComponent(shareId)}`)
+  if (!res.ok) throw new Error('Order not found')
+  const json = await res.json()
+  if (!json?.success || !json?.data?.order) {
+    throw new Error(json?.message || 'Failed to load order')
+  }
+  return json.data.order
+}
 
 
 // Animated checkmark component
@@ -284,11 +300,13 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     id: apiOrder?.orderId || apiOrder?._id,
     mongoId: apiOrder?._id || null,
     orderId: apiOrder?.orderId || apiOrder?._id,
+    shareTrackingId: apiOrder?.shareTrackingId || previousOrder?.shareTrackingId || null,
     restaurant: apiOrder?.restaurantName || previousOrder?.restaurant || 'Restaurant',
     restaurantPhone:
       apiOrder?.restaurantPhone ||
       apiOrder?.restaurantId?.phone ||
       apiOrder?.restaurantId?.ownerPhone ||
+      apiOrder?.restaurantId?.primaryContactNumber ||
       apiOrder?.restaurant?.phone ||
       apiOrder?.restaurant?.ownerPhone ||
       previousOrder?.restaurantPhone ||
@@ -296,7 +314,7 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     restaurantAddress,
     restaurantId: apiOrder?.restaurantId || previousOrder?.restaurantId || null,
     userId: apiOrder?.userId || previousOrder?.userId || null,
-    userName: apiOrder?.userName || apiOrder?.userId?.name || apiOrder?.userId?.fullName || previousOrder?.userName || '',
+    userName: apiOrder?.userName || apiOrder?.customerName || apiOrder?.userId?.name || apiOrder?.userId?.fullName || previousOrder?.userName || '',
     userPhone: apiOrder?.userPhone || apiOrder?.userId?.phone || previousOrder?.userPhone || '',
     address: {
       street: addr?.street || previousOrder?.address?.street || '',
@@ -322,11 +340,11 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     total: apiOrder?.pricing?.total || previousOrder?.total || 0,
     // Backend canonical field is orderStatus; keep legacy `status` for UI compatibility.
     status: apiOrder?.orderStatus || apiOrder?.status || previousOrder?.status || 'pending',
-    deliveryPartner: apiOrder?.deliveryPartnerId ? {
+    deliveryPartner: apiOrder?.deliveryPartner || (apiOrder?.deliveryPartnerId ? {
       name: apiOrder.deliveryPartnerId.name || apiOrder.deliveryPartnerId.fullName || 'Delivery Partner',
       phone: apiOrder.deliveryPartnerId.phone || apiOrder.deliveryPartnerId.phoneNumber || '',
       avatar: apiOrder.deliveryPartnerId.avatar || apiOrder.deliveryPartnerId.profilePicture || null
-    } : (previousOrder?.deliveryPartner || null),
+    } : (previousOrder?.deliveryPartner || null)),
     deliveryPartnerId: apiOrder?.deliveryPartnerId?._id || apiOrder?.deliveryPartnerId || apiOrder?.dispatch?.deliveryPartnerId?._id || apiOrder?.dispatch?.deliveryPartnerId || apiOrder?.assignmentInfo?.deliveryPartnerId || null,
     dispatch: apiOrder?.dispatch || previousOrder?.dispatch || null,
     assignmentInfo: apiOrder?.assignmentInfo || previousOrder?.assignmentInfo || null,
@@ -429,13 +447,18 @@ function normalizeLookupId(value) {
   return raw
 }
 
-export default function OrderTracking() {
+export default function OrderTracking({ isSharedView = false }) {
   const companyName = useCompanyName()
-  const { orderId } = useParams()
+  const { orderId: orderIdParam, shareId: shareIdParam } = useParams()
+  const isShared = isSharedView || Boolean(shareIdParam)
+  const shareId = shareIdParam || null
+  const orderId = isShared ? null : orderIdParam
+  const trackingKey = isShared ? shareId : orderId
   const [searchParams] = useSearchParams()
-  const confirmed = searchParams.get("confirmed") === "true"
+  const confirmed = !isShared && searchParams.get("confirmed") === "true"
+  const sharedViewerName = searchParams.get("name")
   const { getOrderById } = useOrders()
-  const { profile, getDefaultAddress } = useProfile()
+  const { userProfile, getDefaultAddress } = useProfile()
   const { location: userLiveLocation } = useUserLocation()
 
   const { isConnected: isSocketConnected } = useUserNotifications()
@@ -485,10 +508,9 @@ export default function OrderTracking() {
 
       // If the order is already loaded, match by either orderId or mongoId.
       // Otherwise, match against the current URL param.
-      const currentIds = [String(orderId)]
-      if (order?.orderId) currentIds.push(String(order.orderId))
-      if (order?.mongoId) currentIds.push(String(order.mongoId))
-      if (order?._id) currentIds.push(String(order._id))
+      const currentIds = [orderId, order?.orderId, order?.mongoId, order?._id]
+        .filter(Boolean)
+        .map(String)
 
       const matches =
         (evtOrderId && currentIds.includes(evtOrderId)) ||
@@ -533,7 +555,7 @@ export default function OrderTracking() {
   // Socket notifications include order ids — keep a set so events match this page.
   useEffect(() => {
     const s = trackingOrderIdsRef.current
-    s.add(String(orderId))
+    if (orderId) s.add(String(orderId))
     if (order?.orderId) s.add(String(order.orderId))
     if (order?.mongoId) s.add(String(order.mongoId))
     if (order?.id) s.add(String(order.id))
@@ -671,6 +693,16 @@ export default function OrderTracking() {
     return { lat, lng }
   }, [userLiveLocation?.latitude, userLiveLocation?.longitude])
 
+  const mapOrderId = useMemo(
+    () => order?.orderId || order?.mongoId || order?._id || orderId || '',
+    [order?.orderId, order?.mongoId, order?._id, orderId],
+  )
+
+  const displayOrderRef = useMemo(() => {
+    const id = mapOrderId || trackingKey || ''
+    return id ? String(id).slice(-6).toUpperCase() : '------'
+  }, [mapOrderId, trackingKey])
+
   const isAdminAccepted = useMemo(() => {
     const status = order?.status
     return [
@@ -803,7 +835,7 @@ export default function OrderTracking() {
 
   // Main fetch & polling core logic. (Isolated from socket connection stat-changes)
   useEffect(() => {
-    if (!orderId) return;
+    if (!trackingKey) return;
 
     let isSubscribed = true;
     let requestInProgress = false;
@@ -817,7 +849,7 @@ export default function OrderTracking() {
       if (isInitial) lastPollExecutionRef.current = now;
 
       // Check context immediately to avoid loaders if data exists locally
-      if (isInitial) {
+      if (isInitial && !isShared && orderId) {
         const rawContext = getOrderById(orderId);
         if (rawContext) {
           setOrder(transformOrderForTracking(rawContext));
@@ -827,19 +859,33 @@ export default function OrderTracking() {
 
       requestInProgress = true;
       try {
-        const response = await fetchOrderDetailsWithFallback({ force: isInitial });
-        if (!isSubscribed) return;
-
         let finalOrderData = null;
 
-        if (response.data?.success && response.data.data?.order) {
-          finalOrderData = response.data.data.order;
-        } else if (isInitial) {
-          const matchedOrder = await resolveOrderFromList(orderId);
-          if (matchedOrder) finalOrderData = matchedOrder;
+        if (isShared) {
+          finalOrderData = await fetchPublicOrderDetails(shareId);
+        } else {
+          const response = await fetchOrderDetailsWithFallback({ force: isInitial });
+          if (!isSubscribed) return;
+
+          if (response.data?.success && response.data.data?.order) {
+            finalOrderData = response.data.data.order;
+          } else if (isInitial) {
+            const matchedOrder = await resolveOrderFromList(orderId);
+            if (matchedOrder) finalOrderData = matchedOrder;
+          }
         }
 
+        if (!isSubscribed) return;
+
         if (finalOrderData) {
+          if (isShared) {
+            const sharedName = resolveSharerDisplayName({
+              urlName: sharedViewerName,
+              order: finalOrderData,
+            });
+            saveSharedOrder(shareId, sharedName);
+          }
+
           setOrder(prev => {
             const transformedOrder = transformOrderForTracking(finalOrderData, prev);
             const ui = mapOrderToTrackingUiStatus(transformedOrder);
@@ -852,23 +898,29 @@ export default function OrderTracking() {
         }
 
         if (isInitial && !order) {
-          setError(response.data?.message || 'Order not found');
+          setError(isShared ? 'Order not found' : 'Order not found');
           terminalPollStopRef.current = true;
         }
       } catch (err) {
         if (isInitial && !order) {
-          try {
-            const matchedOrder = await resolveOrderFromList(orderId);
-            if (matchedOrder) {
-              if (!isSubscribed) return;
-              setOrder(prev => transformOrderForTracking(matchedOrder, prev));
-              setError(null);
-              setLoading(false);
-              return;
-            }
-          } catch { }
+          if (!isShared) {
+            try {
+              const matchedOrder = await resolveOrderFromList(orderId);
+              if (matchedOrder) {
+                if (!isSubscribed) return;
+                setOrder(prev => transformOrderForTracking(matchedOrder, prev));
+                setError(null);
+                setLoading(false);
+                return;
+              }
+            } catch { }
+          }
           if (!isSubscribed) return;
-          setError(err.response?.data?.message || 'Failed to fetch order details');
+          setError(
+            isShared
+              ? err?.message || 'Failed to fetch order details'
+              : err.response?.data?.message || 'Failed to fetch order details',
+          );
           terminalPollStopRef.current = true;
         }
       } finally {
@@ -880,19 +932,28 @@ export default function OrderTracking() {
     pollRef.current = poll;
     terminalPollStopRef.current = false;
 
-    if (isInitialPollRequestedRef.current !== orderId) {
-      isInitialPollRequestedRef.current = orderId;
+    if (isInitialPollRequestedRef.current !== trackingKey) {
+      isInitialPollRequestedRef.current = trackingKey;
       poll(true);
     }
 
     return () => {
       isSubscribed = false;
     };
-  }, [orderId, fetchOrderDetailsWithFallback, resolveOrderFromList]);
+  }, [
+    trackingKey,
+    isShared,
+    shareId,
+    orderId,
+    sharedViewerName,
+    fetchOrderDetailsWithFallback,
+    resolveOrderFromList,
+    getOrderById,
+  ]);
 
   // Interval Manager (dynamically adapts based on socket connection state independently)
   useEffect(() => {
-    if (!orderId) return;
+    if (!trackingKey) return;
 
     const tick = () => {
       if (terminalPollStopRef.current) return;
@@ -905,7 +966,7 @@ export default function OrderTracking() {
     const interval = setInterval(tick, pollInterval);
 
     return () => clearInterval(interval);
-  }, [orderId, isSocketConnected]);
+  }, [trackingKey, isSocketConnected]);
 
   useEffect(() => {
     if (!order) return
@@ -997,6 +1058,8 @@ export default function OrderTracking() {
   }, [orderId])
 
   const handleCancelOrder = () => {
+    if (isShared) return;
+
     // Check if order can be cancelled (only Razorpay orders that aren't delivered/cancelled)
     if (!order) return;
 
@@ -1082,28 +1145,49 @@ export default function OrderTracking() {
   };
 
   const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `Track my order from ${order?.restaurant || companyName}`,
-          text: `Hey! Track my order from ${order?.restaurant || companyName} with ID #${order?.orderId || order?.id}.`,
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success("Tracking link copied to clipboard!");
+    let shareId = order?.shareTrackingId;
+    if (!shareId) {
+      try {
+        const response = await fetchOrderDetailsWithFallback({ force: true });
+        const apiOrder = response?.data?.data?.order;
+        shareId = apiOrder?.shareTrackingId;
+        if (apiOrder) {
+          setOrder((prev) => transformOrderForTracking(apiOrder, prev));
+        }
+      } catch {
+        toast.error('Unable to generate share link. Please try again.');
+        return;
       }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        debugError('Error sharing:', error);
-        toast.error("Failed to share link");
+    }
+    if (!shareId) {
+      toast.error('Share link is not available for this order yet.');
+      return;
+    }
+    const sharerName = userProfile?.name || userProfile?.fullName || userProfile?.displayName || 'Someone';
+    const url = `${window.location.origin}/food/user/track-shared/${shareId}?name=${encodeURIComponent(sharerName)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Track my order', url });
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          toast.error('Failed to share link');
+        }
       }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied!');
     }
   };
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
+      if (isShared) {
+        const apiOrder = await fetchPublicOrderDetails(shareId)
+        setOrder((prev) => transformOrderForTracking(apiOrder, prev))
+        return
+      }
+
       const response = await fetchOrderDetailsWithFallback({ force: true })
       if (response.data?.success && response.data.data?.order) {
         const apiOrder = response.data.data.order
@@ -1180,7 +1264,7 @@ export default function OrderTracking() {
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4 dark:text-white">Order Not Found</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
-          <Link to="/user/orders">
+          <Link to={isShared ? '/food/user' : '/user/orders'}>
             <Button className="bg-[#EB590E] hover:bg-[#D44D0D] text-white">Back to Orders</Button>
           </Link>
         </div>
@@ -1318,16 +1402,17 @@ export default function OrderTracking() {
       {/* Header */}
       <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50 border-b border-gray-100 dark:border-zinc-800">
         <div className="flex items-center gap-3">
-          <Link to="/user/orders">
+          <Link to={isShared ? '/food/user' : '/user/orders'}>
             <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
               <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
             </button>
           </Link>
           <div>
             <h1 className="text-lg font-bold text-gray-800 dark:text-white">Track Order</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Order #{orderId?.slice(-6).toUpperCase()}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Order #{displayOrderRef}</p>
           </div>
         </div>
+        {!isShared && (
         <motion.button
           className="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-700 dark:text-gray-200"
           whileTap={{ scale: 0.9 }}
@@ -1335,13 +1420,14 @@ export default function OrderTracking() {
         >
           <Share2 className="w-5 h-5" />
         </motion.button>
+        )}
       </div>
       </motion.div>
 
       {/* Map Section */}
       {!isDeliveredOrder && orderStatus !== 'cancelled' && (
         <DeliveryMap
-          orderId={orderId}
+          orderId={mapOrderId}
           order={order}
           isVisible={order !== null}
           fallbackCustomerCoords={fallbackCustomerCoords}
@@ -1352,7 +1438,7 @@ export default function OrderTracking() {
       )}
 
       {/* Scrollable Content */}
-      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
         
         {/* Main Status Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
@@ -1387,7 +1473,7 @@ export default function OrderTracking() {
         </div>
 
         {/* Cancel Button - Only show if placed and waiting for restaurant confirmation */}
-        {orderStatus === "placed" && (
+        {!isShared && orderStatus === "placed" && (
           <div className="px-2">
             <button onClick={handleCancelOrder} className="w-full py-4 text-sm font-bold text-red-500 bg-red-50 dark:bg-red-950/20 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2">
               <X className="w-4 h-4" />
@@ -1489,7 +1575,7 @@ export default function OrderTracking() {
         </div>
 
         {/* Delivery Instructions - Only show if NOT delivered */}
-        {!isDeliveredOrder && !isCancelledOrder && (
+        {!isShared && !isDeliveredOrder && !isCancelledOrder && (
           <div onClick={() => setIsInstructionsModalOpen(true)} className="bg-white dark:bg-zinc-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-zinc-800 mb-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1554,6 +1640,7 @@ export default function OrderTracking() {
       </div>
 
       {/* Cancel Order Dialog */}
+      {!isShared && (
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] bg-white dark:bg-zinc-900 border-none rounded-3xl">
           <DialogHeader>
@@ -1601,6 +1688,7 @@ export default function OrderTracking() {
           </div>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Delivery Instructions Modal */}
       <Dialog open={isInstructionsModalOpen} onOpenChange={setIsInstructionsModalOpen}>

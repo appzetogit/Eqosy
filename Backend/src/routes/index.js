@@ -20,11 +20,22 @@ import webhookRoutes from '../core/payments/routes/webhook.routes.js'; // ✅ NE
 import searchRoutes from '../modules/food/search/routes/search.routes.js';
 import { taxiRouter } from '../modules/taxi/routes/index.js';
 import { promotionsRouter as taxiPromotionsRouter } from '../modules/taxi/admin/promotions/routes/index.js';
+import { getOrderPublic } from '../modules/food/orders/services/order.service.js';
+import { sendResponse } from '../utils/response.js';
 
 const router = express.Router();
 
 router.get('/v1/health', (req, res) => {
     res.status(200).json({ status: 'UP', message: 'Server is healthy' });
+});
+
+router.get('/v1/public/order-track/:shareId', async (req, res, next) => {
+    try {
+        const data = await getOrderPublic(req.params.shareId);
+        return sendResponse(res, 200, 'Order info', data);
+    } catch (err) {
+        next(err);
+    }
 });
 
 // Food-prefixed auth routes (preferred)

@@ -208,6 +208,12 @@ const orderSchema = new mongoose.Schema(
             sparse: true,
             index: true
         },
+        shareTrackingId: {
+            type: String,
+            index: true,
+            unique: true,
+            sparse: true
+        },
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'FoodUser',

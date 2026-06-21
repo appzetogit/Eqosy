@@ -36,6 +36,7 @@ const AddressSelectorPage = lazy(() => import("@food/pages/user/cart/AddressSele
 // Orders
 const Orders = lazy(() => import("@food/pages/user/orders/Orders"))
 const OrderTracking = lazy(() => import("@food/pages/user/orders/OrderTracking"))
+const SharedOrderTrackingPage = lazy(() => import("@food/pages/user/orders/SharedOrderTrackingPage"))
 const OrderInvoice = lazy(() => import("@food/pages/user/orders/OrderInvoice"))
 const UserOrderDetails = lazy(() => import("@food/pages/user/orders/UserOrderDetails"))
 
@@ -93,11 +94,22 @@ const Wallet = lazy(() => import("@food/pages/user/Wallet"))
 // Complaints
 const SubmitComplaint = lazy(() => import("@food/pages/user/complaints/SubmitComplaint"))
 
+import SharedOrderCard from "@food/components/user/SharedOrderCard"
+
+function UserLayoutWithSharedCard() {
+  return (
+    <>
+      <SharedOrderCard />
+      <UserLayout />
+    </>
+  )
+}
+
 export default function UserRouter() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
-        <Route element={<UserLayout />}>
+        <Route element={<UserLayoutWithSharedCard />}>
           {/* Home & Discovery */}
           <Route path="" element={<Home />} />
           <Route path="dining" element={<Dining />} />
@@ -126,6 +138,7 @@ export default function UserRouter() {
           <Route path="restaurants/:slug" element={<RestaurantDetails />} />
           <Route path="search" element={<SearchResults />} />
           <Route path="product/:id" element={<ProductDetail />} />
+          <Route path="track-shared/:shareId" element={<SharedOrderTrackingPage />} />
 
           {/* Cart - Now Public */}
           <Route path="cart" element={<Cart />} />
