@@ -188,6 +188,15 @@ export async function createOrder(userId, dto) {
 
     normalizedPricing.total = Math.round(computedTotal * 100) / 100;
 
+    if (
+      paymentMethod === "cash" &&
+      pricingResult.pricing.codLimit !== null &&
+      pricingResult.pricing.codLimit !== undefined &&
+      normalizedPricing.total >= pricingResult.pricing.codLimit
+    ) {
+      throw new ValidationError('COD unavailable for this order amount');
+    }
+
     if (paymentMethod === "razorpay" && !isRazorpayConfigured()) {
       throw new ValidationError("Razorpay payment gateway is not configured");
     }

@@ -20,6 +20,7 @@ export default function FeeSettings() {
     },
     platformFee: "",
     gstRate: "",
+    codLimit: "",
   })
   const [distanceRules, setDistanceRules] = useState([])
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
@@ -101,6 +102,7 @@ export default function FeeSettings() {
           },
           platformFee: saved.platformFee ?? "",
           gstRate: saved.gstRate ?? "",
+          codLimit: saved.codLimit ?? "",
         })
       } else {
         setFeeSettings({
@@ -113,6 +115,7 @@ export default function FeeSettings() {
           },
           platformFee: "",
           gstRate: "",
+          codLimit: "",
         })
       }
     } catch {
@@ -309,6 +312,14 @@ export default function FeeSettings() {
         toast.error("GST rate must be between 0 and 100")
         return
       }
+      const codLimit =
+        feeSettings.codLimit === "" || feeSettings.codLimit == null
+          ? null
+          : Number(feeSettings.codLimit)
+      if (codLimit !== null && (!Number.isFinite(codLimit) || codLimit < 0)) {
+        toast.error("COD order limit must be 0 or greater")
+        return
+      }
 
       setSavingFeeSettings(true)
       const response = await adminAPI.createOrUpdateFeeSettings({
@@ -325,6 +336,7 @@ export default function FeeSettings() {
         },
         platformFee,
         gstRate,
+        codLimit,
         isActive: true,
       })
       if (response?.data?.success) {
@@ -680,6 +692,18 @@ export default function FeeSettings() {
                     step="0.1"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
                     placeholder="5"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">COD order limit (₹)</label>
+                  <input
+                    type="number"
+                    value={feeSettings.codLimit}
+                    onChange={(e) => setFeeSettings((s) => ({ ...s, codLimit: e.target.value }))}
+                    min="0"
+                    step="1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="Leave empty for no limit"
                   />
                 </div>
               </div>

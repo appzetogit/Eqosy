@@ -322,6 +322,7 @@ export async function calculateOrderPricing(userId, dto) {
       currency: "INR",
       couponCode: appliedCoupon?.code || codeRaw || null,
       appliedCoupon,
+      codLimit: feeSettings?.codLimit ?? null,
     },
   };
 }

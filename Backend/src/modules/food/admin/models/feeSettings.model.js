@@ -75,6 +75,7 @@ const feeSettingsSchema = new mongoose.Schema(
         freeDeliveryThreshold: { type: Number, min: 0 },
         platformFee: { type: Number, min: 0 },
         gstRate: { type: Number, min: 0, max: 100 },
+        codLimit: { type: Number, min: 0 },
         isActive: { type: Boolean, default: true, index: true }
     },
     { collection: 'food_fee_settings', timestamps: true }

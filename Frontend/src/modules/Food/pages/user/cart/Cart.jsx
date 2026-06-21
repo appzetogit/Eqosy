@@ -954,6 +954,16 @@ export default function Cart() {
         ? "Online Payment"
         : "Cash on Delivery"
 
+  useEffect(() => {
+    if (
+      selectedPaymentMethod === "cash" &&
+      pricing?.codLimit != null &&
+      total >= pricing.codLimit
+    ) {
+      setSelectedPaymentMethod("razorpay");
+    }
+  }, [selectedPaymentMethod, total, pricing]);
+
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
 
@@ -2857,7 +2867,10 @@ export default function Cart() {
                           color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
                           selectedColor: 'bg-orange-500 text-white'
                         }
-                      ].map((option) => (
+                      ].filter((option) => {
+                        if (option.id !== 'cash') return true
+                        return !(pricing?.codLimit != null && total >= pricing.codLimit)
+                      }).map((option) => (
                         <button
                           key={option.id}
                           onClick={() => {
