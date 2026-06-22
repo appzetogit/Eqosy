@@ -121,6 +121,7 @@ export const HistoryV2 = () => {
     const deliveryFee = Number(trip.riderDeliveryFeeShare || 0);
     const surgeAmount = Number(trip.riderSurgePay || 0);
     const incentiveAmount = Number(trip.riderIncentivePay || 0);
+    const tipReceived = Number(trip.riderTipPay || trip.deliveryPartnerTip || 0);
     const totalPayout = Number(
       trip.riderTotalPayout ||
       trip.deliveryEarning ||
@@ -134,6 +135,7 @@ export const HistoryV2 = () => {
       { key: 'deliveryFee', label: 'Delivery Fee', value: deliveryFee },
       { key: 'surgeAmount', label: 'Surge Amount', value: surgeAmount },
       { key: 'incentiveAmount', label: 'Incentive', value: incentiveAmount },
+      { key: 'tipReceived', label: 'Tip received', value: tipReceived },
       { key: 'totalPayout', label: 'Total Earned', value: totalPayout, isTotal: true }
     ].filter((item) => item.isTotal || item.value > 0);
   };

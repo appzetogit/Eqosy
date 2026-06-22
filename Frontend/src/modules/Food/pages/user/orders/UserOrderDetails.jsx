@@ -528,6 +528,14 @@ export default function UserOrderDetails() {
                 ₹{Number(pricing.platformFee || 0).toFixed(2)}
               </span>
             </div>
+            {Number(pricing.deliveryPartnerTip || 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Delivery partner tip</span>
+                <span className="text-gray-800 dark:text-gray-200">
+                  ₹{Number(pricing.deliveryPartnerTip || 0).toFixed(2)}
+                </span>
+              </div>
+            )}
             {Number(pricing.surgeAmount || 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Surge Amount</span>

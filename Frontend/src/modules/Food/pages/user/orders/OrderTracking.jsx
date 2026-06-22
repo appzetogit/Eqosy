@@ -1568,7 +1568,7 @@ export default function OrderTracking({ isSharedView = false }) {
         {/* Action Buttons */}
         <div className="grid grid-cols-1 gap-3 px-1">
           {isDeliveredOrder ? (
-            <Link to="/user/support" className="flex items-center justify-center gap-2 py-4 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 font-bold text-gray-800 dark:text-white text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors w-full">
+            <Link to="/user/profile/support" className="flex items-center justify-center gap-2 py-4 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 font-bold text-gray-800 dark:text-white text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors w-full">
               <AlertCircle className="w-4 h-4 text-red-500" /> Raise a Complaint
             </Link>
           ) : null}

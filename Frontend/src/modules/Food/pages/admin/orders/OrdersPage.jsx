@@ -414,7 +414,8 @@ export default function OrdersPage({ statusKey = "all" }) {
       const platformFee = Number(pricing.platformFee || 0)
       const taxAmount = Number(pricing.tax || 0)
       const discountAmount = Number(pricing.discount || 0)
-      const computedTotal = subtotal + deliveryFee + platformFee + taxAmount - discountAmount
+      const deliveryPartnerTip = Number(pricing.deliveryPartnerTip || 0)
+      const computedTotal = subtotal + deliveryFee + platformFee + taxAmount + deliveryPartnerTip - discountAmount
       const totalAmount = Number(
         pricing.total != null ? pricing.total : computedTotal
       )
@@ -499,6 +500,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         deliveryCharge: deliveryFee,
         vatTax: taxAmount,
         platformFee,
+        deliveryPartnerTip,
         totalAmount,
         paymentType,
         paymentStatus,

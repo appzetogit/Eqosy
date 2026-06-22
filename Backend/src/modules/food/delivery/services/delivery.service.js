@@ -587,7 +587,8 @@ const toTripDto = (order) => {
     const riderDeliveryFeeShare = Number(order?.riderDeliveryFeeShare) || Number(order?.pricing?.riderDeliveryEarningAfterAdminCommission) || 0;
     const riderSurgePay = Number(order?.riderSurgePay) || Number(order?.pricing?.surgeAmount) || 0;
     const riderIncentivePay = Number(order?.riderIncentivePay) || Number(order?.pricing?.deliveryPartnerIncentiveAmount) || 0;
-    const computedTotalPayout = Math.round((riderBasePay + riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
+    const riderTipPay = Number(order?.pricing?.deliveryPartnerTip) || 0;
+    const computedTotalPayout = Math.round((riderBasePay + riderDeliveryFeeShare + riderSurgePay + riderIncentivePay + riderTipPay) * 100) / 100;
     const riderTotalPayout =
         Number(order?.riderTotalPayout) ||
         computedTotalPayout ||
@@ -615,6 +616,8 @@ const toTripDto = (order) => {
         riderDeliveryFeeShare,
         riderSurgePay,
         riderIncentivePay,
+        riderTipPay,
+        deliveryPartnerTip: riderTipPay,
         riderTotalPayout,
         createdAt: order?.createdAt,
         deliveredAt: deliveredAt,

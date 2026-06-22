@@ -438,6 +438,12 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                     : <span className="text-slate-400">₹0.00</span>}
                 </span>
               </div>
+              {order.deliveryPartnerTip !== undefined && order.deliveryPartnerTip > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Delivery Partner Tip</span>
+                  <span className="font-medium text-slate-900">₹{order.deliveryPartnerTip.toFixed(2)}</span>
+                </div>
+              )}
               {order.vatTax !== undefined && order.vatTax > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">Tax (GST)</span>

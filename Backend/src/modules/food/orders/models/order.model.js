@@ -54,6 +54,7 @@ const pricingSchema = new mongoose.Schema(
         surgeAmount: { type: Number, default: 0, min: 0 },
         restaurantCommission: { type: Number, default: 0, min: 0 },
         discount: { type: Number, default: 0, min: 0 },
+        deliveryPartnerTip: { type: Number, default: 0, min: 0 },
         total: { type: Number, required: true, min: 0 },
         currency: { type: String, default: 'INR' }
     },

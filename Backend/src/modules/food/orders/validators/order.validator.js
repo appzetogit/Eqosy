@@ -60,6 +60,7 @@ const pricingSchema = z.object({
     platformFee: z.number().min(0).optional(),
     surgeAmount: z.number().min(0).optional(),
     discount: z.number().min(0).optional(),
+    deliveryPartnerTip: z.number().min(0).optional(),
     total: z.number().min(0),
     currency: z.string().optional()
 });

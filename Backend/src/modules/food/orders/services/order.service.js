@@ -155,6 +155,7 @@ export async function createOrder(userId, dto) {
       platformFee: Number(pricingResult.pricing.platformFee ?? 0) || 0,
       surgeAmount: Number(pricingResult.pricing.surgeAmount ?? 0) || 0,
       discount: Number(pricingResult.pricing.discount ?? 0) || 0,
+      deliveryPartnerTip: 0,
       total: Number(pricingResult.pricing.total ?? 0) || 0,
       currency: String(pricingResult.pricing.currency || "INR"),
       couponCode: pricingResult.pricing.couponCode || null,
@@ -175,6 +176,10 @@ export async function createOrder(userId, dto) {
     const surgeSnapshot = await getZoneSurgeSnapshot(orderZoneId);
     normalizedPricing.surgeAmount = surgeSnapshot.surgeAmount;
 
+    normalizedPricing.deliveryPartnerTip = Math.round(
+      Math.max(0, Number(dto.pricing?.deliveryPartnerTip ?? 0) || 0) * 100,
+    ) / 100;
+
     const computedTotal = Math.max(
       0,
       (Number.isFinite(normalizedPricing.subtotal) ? normalizedPricing.subtotal : 0) +
@@ -182,7 +187,8 @@ export async function createOrder(userId, dto) {
         (Number.isFinite(normalizedPricing.packagingFee) ? normalizedPricing.packagingFee : 0) +
         (Number.isFinite(normalizedPricing.deliveryFee) ? normalizedPricing.deliveryFee : 0) +
         (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
-        (Number.isFinite(normalizedPricing.surgeAmount) ? normalizedPricing.surgeAmount : 0) -
+        (Number.isFinite(normalizedPricing.surgeAmount) ? normalizedPricing.surgeAmount : 0) +
+        (Number.isFinite(normalizedPricing.deliveryPartnerTip) ? normalizedPricing.deliveryPartnerTip : 0) -
         (Number.isFinite(normalizedPricing.discount) ? normalizedPricing.discount : 0),
     );
 
@@ -213,7 +219,8 @@ export async function createOrder(userId, dto) {
     const riderDeliveryFeeShare = Math.round((Number(normalizedPricing.riderDeliveryEarningAfterAdminCommission || 0) * 100)) / 100;
     const riderSurgePay = Number(normalizedPricing.surgeAmount) || 0;
     const riderIncentivePay = Math.round((Number(normalizedPricing.deliveryPartnerIncentiveAmount || 0) * 100)) / 100;
-    const riderTotalPayout = Math.round((riderBasePay + riderSurgePay + riderDeliveryFeeShare + riderIncentivePay) * 100) / 100;
+    const riderTipPay = Math.round((Number(normalizedPricing.deliveryPartnerTip || 0) * 100)) / 100;
+    const riderTotalPayout = Math.round((riderBasePay + riderSurgePay + riderDeliveryFeeShare + riderIncentivePay + riderTipPay) * 100) / 100;
     const riderEarning = riderTotalPayout;
     
     // Calculate restaurant commission from subtotal

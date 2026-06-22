@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -78,6 +78,8 @@ const formatFullAddress = (address) => {
 const RUPEE_SYMBOL = "\u20B9"
 const CART_RECIPIENT_DETAILS_STORAGE_KEY = "food-cart-recipient-details-v1"
 const CART_ORDER_NOTE_STORAGE_KEY = "food-cart-order-note-v1"
+const CART_TIP_PREFERENCE_KEY = "food-cart-tip-preference-v1"
+const TIP_PRESET_AMOUNTS = [15, 20, 30]
 
 export default function Cart() {
   const companyName = useCompanyName()
@@ -160,6 +162,10 @@ export default function Cart() {
   const [sendCutlery, setSendCutlery] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [showBillDetails, setShowBillDetails] = useState(true)
+  const [selectedDeliveryTip, setSelectedDeliveryTip] = useState(0)
+  const [saveTipPreference, setSaveTipPreference] = useState(false)
+  const [showCustomTipInput, setShowCustomTipInput] = useState(false)
+  const [customTipInput, setCustomTipInput] = useState("")
   const [showPlacingOrder, setShowPlacingOrder] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
   const [scheduledDate, setScheduledDate] = useState("")
@@ -452,6 +458,40 @@ export default function Cart() {
       // Ignore storage errors and keep note flow working.
     }
   }, [note, showNoteInput])
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      const raw = window.localStorage.getItem(CART_TIP_PREFERENCE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (parsed?.savePreference && Number.isFinite(Number(parsed?.amount))) {
+        setSelectedDeliveryTip(Math.max(0, Number(parsed.amount)))
+        setSaveTipPreference(true)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      if (saveTipPreference && selectedDeliveryTip > 0) {
+        window.localStorage.setItem(
+          CART_TIP_PREFERENCE_KEY,
+          JSON.stringify({
+            savePreference: true,
+            amount: selectedDeliveryTip,
+          }),
+        )
+      } else if (!saveTipPreference) {
+        window.localStorage.removeItem(CART_TIP_PREFERENCE_KEY)
+      }
+    } catch {
+      // ignore
+    }
+  }, [saveTipPreference, selectedDeliveryTip])
 
   useEffect(() => {
     if (deliveryAddressMode === "current") {
@@ -945,8 +985,10 @@ export default function Cart() {
   const gstCharges = Number(pricing?.tax ?? 0)
   const discount = pricing?.discount ?? (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount
-  const total = pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - (pricing?.discount ?? discount))
-  const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - total)
+  const deliveryPartnerTip = Math.max(0, Number(selectedDeliveryTip) || 0)
+  const baseTotal = pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - (pricing?.discount ?? discount))
+  const total = baseTotal + deliveryPartnerTip
+  const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - baseTotal)
   const selectedPaymentLabel =
     selectedPaymentMethod === "wallet"
       ? "Wallet"
@@ -1371,7 +1413,11 @@ export default function Cart() {
       debugLog("?? Delivery address:", defaultAddress?.label || defaultAddress?.city)
 
       // Ensure couponCode is included in pricing
-      const orderPricing = { ...pricing };
+      const orderPricing = {
+        ...pricing,
+        deliveryPartnerTip,
+        total: (Number(pricing?.total) || 0) + deliveryPartnerTip,
+      };
 
       // Add couponCode if not present but coupon is applied
       if (!orderPricing.couponCode && appliedCoupon?.code) {
@@ -2437,6 +2483,118 @@ export default function Cart() {
                   </div>
                 )}
               </div>
+              {/* Gratitude Corner - Delivery partner tip */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500 px-1">
+                  Gratitude Corner
+                </p>
+                <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-5 py-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white">Tip your delivery partner</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                        Your kindness means a lot! 100% of your tip will go directly to them.
+                      </p>
+                    </div>
+                    <div className="text-3xl shrink-0" aria-hidden="true">🛵</div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {TIP_PRESET_AMOUNTS.map((amount) => {
+                      const isSelected = deliveryPartnerTip === amount && !showCustomTipInput
+                      return (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDeliveryTip(amount)
+                            setShowCustomTipInput(false)
+                            setCustomTipInput("")
+                          }}
+                          className={`min-w-[64px] rounded-xl border px-4 py-2.5 text-sm font-bold transition-all ${
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
+                          }`}
+                        >
+                          {RUPEE_SYMBOL}{amount}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomTipInput(true)
+                        setCustomTipInput(
+                          deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip)
+                            ? String(deliveryPartnerTip)
+                            : customTipInput || "",
+                        )
+                      }}
+                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${
+                        showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
+                      }`}
+                    >
+                      {showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                        ? `${RUPEE_SYMBOL}${deliveryPartnerTip}`
+                        : "Other"}
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {showCustomTipInput && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={customTipInput}
+                        onChange={(e) => setCustomTipInput(e.target.value)}
+                        placeholder="Enter tip amount"
+                        className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = Math.max(0, Number(customTipInput) || 0)
+                          setSelectedDeliveryTip(next)
+                          setShowCustomTipInput(false)
+                        }}
+                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={saveTipPreference}
+                        onChange={(e) => setSaveTipPreference(e.target.checked)}
+                        className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Save my preference for next order
+                    </label>
+                    {deliveryPartnerTip > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDeliveryTip(0)
+                          setShowCustomTipInput(false)
+                          setCustomTipInput("")
+                        }}
+                        className="text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 {/* Bill Details */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                 <button
@@ -2482,6 +2640,12 @@ export default function Cart() {
                       <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{isPricingAvailable ? `${RUPEE_SYMBOL}${platformFee.toFixed(2)}` : "-"}</span>
                     </div>
+                    {deliveryPartnerTip > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Delivery partner tip</span>
+                        <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{deliveryPartnerTip.toFixed(2)}</span>
+                      </div>
+                    )}
                     {surgeAmount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">Surge Amount</span>
