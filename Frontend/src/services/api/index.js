@@ -474,6 +474,12 @@ export const adminAPI = {
       body ?? {},
       { contextModule: "admin" },
     ),
+  updateRestaurantZoneFeaturedRank: (id, body) =>
+    apiClient.patch(
+      `/food/admin/restaurants/${String(id)}/zone-featured-rank`,
+      body ?? {},
+      { contextModule: "admin" },
+    ),
   /** Restaurant menu (admin) */
   getRestaurantMenuById: (id, config = {}) =>
     apiClient.get(`/food/admin/restaurants/${id}/menu`, {

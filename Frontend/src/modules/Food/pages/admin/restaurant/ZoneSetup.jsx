@@ -133,7 +133,13 @@ export default function ZoneSetup() {
             {filteredZones.map((zone) => (
               <div
                 key={zone._id || zone.id}
-                className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow"
+                onClick={() =>
+                  navigate(
+                    `/admin/food/zone-setup/restaurants/${zone._id || zone.id}`,
+                    { state: { zone } }
+                  )
+                }
+                className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:border-blue-400 hover:bg-slate-50/50 transition-all"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -142,21 +148,30 @@ export default function ZoneSetup() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => navigate(`/admin/food/zone-setup/view/${zone._id || zone.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(`/admin/food/zone-setup/view/${zone._id || zone.id}`)
+                      }}
                       className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="View"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => navigate(`/admin/food/zone-setup/edit/${zone._id || zone.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(`/admin/food/zone-setup/edit/${zone._id || zone.id}`)
+                      }}
                       className="p-2 text-slate-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                       title="Edit"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteZone(zone._id || zone.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteZone(zone._id || zone.id)
+                      }}
                       className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Delete"
                     >
@@ -176,6 +191,10 @@ export default function ZoneSetup() {
                     }`}>
                       {zone.isActive ? "Active" : "Inactive"}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Restaurants:</span>
+                    <span className="font-medium text-slate-900">{zone.restaurantsCount || 0}</span>
                   </div>
                   {zone.coordinates && zone.coordinates.length > 0 && (
                     <div className="flex items-center justify-between">

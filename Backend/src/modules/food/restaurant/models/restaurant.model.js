@@ -212,6 +212,13 @@ const restaurantSchema = new mongoose.Schema(
       ref: "FoodZone",
       index: true,
     },
+    /** Featured home rank (1-10) within the pinned zone. */
+    zoneFeaturedRank: {
+      type: Number,
+      min: 1,
+      max: 10,
+      default: null,
+    },
     businessModel: {
       type: String,
       trim: true,
@@ -410,6 +417,7 @@ restaurantSchema.index(
   },
 );
 restaurantSchema.index({ status: 1, createdAt: -1 });
+restaurantSchema.index({ zoneId: 1, zoneFeaturedRank: 1 });
 
 export const FoodRestaurant = mongoose.model(
   "FoodRestaurant",

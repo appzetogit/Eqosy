@@ -286,17 +286,99 @@ export async function getRestaurants(query) {
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
         filter.status = status;
     }
+    if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
+        filter.zoneId = new mongoose.Types.ObjectId(query.zoneId);
+    }
     const [restaurants, total] = await Promise.all([
         FoodRestaurant.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('restaurantName slug location area city status ownerName ownerPhone zoneId profileImage coverImages menuImages isRestaurant')
+            .select('restaurantName slug location area city status ownerName ownerPhone zoneId zoneFeaturedRank profileImage coverImages menuImages isRestaurant')
             .populate('zoneId', 'name zoneName')
             .lean(),
         FoodRestaurant.countDocuments(filter)
     ]);
     return { restaurants, total, page, limit };
+}
+
+const applyZoneFeaturedRanks = async (zoneObjectId, orderedIds) => {
+    const top10Ids = orderedIds.slice(0, 10);
+    const top10ObjectIds = top10Ids.map((id) => new mongoose.Types.ObjectId(id));
+
+    const updates = top10Ids.map((id, index) =>
+        FoodRestaurant.updateOne(
+            { _id: id, zoneId: zoneObjectId },
+            { $set: { zoneFeaturedRank: index + 1 } }
+        )
+    );
+
+    updates.push(
+        FoodRestaurant.updateMany(
+            {
+                zoneId: zoneObjectId,
+                zoneFeaturedRank: { $gte: 1, $lte: 10 },
+                _id: { $nin: top10ObjectIds }
+            },
+            { $unset: { zoneFeaturedRank: 1 } }
+        )
+    );
+
+    await Promise.all(updates);
+};
+
+export async function updateRestaurantZoneFeaturedRank(restaurantId, body = {}) {
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+        return { error: 'Invalid restaurant id' };
+    }
+
+    const zoneIdRaw = String(body.zoneId || '').trim();
+    if (!zoneIdRaw || !mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
+        return { error: 'Invalid zoneId' };
+    }
+    const zoneObjectId = new mongoose.Types.ObjectId(zoneIdRaw);
+
+    const target = await FoodRestaurant.findById(restaurantId).select('zoneId').lean();
+    if (!target) return { error: 'Restaurant not found' };
+    if (!target.zoneId || String(target.zoneId) !== String(zoneObjectId)) {
+        return { error: 'Restaurant is not pinned to this zone' };
+    }
+
+    const ranked = await FoodRestaurant.find({
+        zoneId: zoneObjectId,
+        zoneFeaturedRank: { $gte: 1, $lte: 10 }
+    })
+        .select('_id zoneFeaturedRank')
+        .sort({ zoneFeaturedRank: 1, _id: 1 })
+        .lean();
+
+    let orderedIds = ranked
+        .filter((row) => String(row._id) !== String(restaurantId))
+        .map((row) => String(row._id));
+
+    const rankRaw = body.rank;
+    if (rankRaw === null || rankRaw === '' || rankRaw === undefined) {
+        await applyZoneFeaturedRanks(zoneObjectId, orderedIds);
+        const restaurant = await FoodRestaurant.findById(restaurantId)
+            .select('restaurantName slug location area city status ownerName ownerPhone zoneId zoneFeaturedRank profileImage coverImages menuImages isRestaurant')
+            .lean();
+        return { restaurant };
+    }
+
+    const newRank = parseInt(rankRaw, 10);
+    if (!Number.isFinite(newRank) || newRank < 1 || newRank > 10) {
+        return { error: 'Rank must be between 1 and 10' };
+    }
+
+    const insertIndex = Math.min(Math.max(newRank - 1, 0), orderedIds.length);
+    orderedIds.splice(insertIndex, 0, String(restaurantId));
+
+    await applyZoneFeaturedRanks(zoneObjectId, orderedIds);
+
+    const restaurant = await FoodRestaurant.findById(restaurantId)
+        .select('restaurantName slug location area city status ownerName ownerPhone zoneId zoneFeaturedRank profileImage coverImages menuImages isRestaurant')
+        .lean();
+    return { restaurant };
 }
 
 const CANCELLED_ORDER_STATUSES = ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin'];
@@ -4537,11 +4619,25 @@ export async function getZones(query) {
         ];
     }
 
-    const [zones, total] = await Promise.all([
+    const [zones, total, countByZone] = await Promise.all([
         FoodZone.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-        FoodZone.countDocuments(filter)
+        FoodZone.countDocuments(filter),
+        FoodRestaurant.aggregate([
+            { $match: { zoneId: { $ne: null } } },
+            { $group: { _id: '$zoneId', count: { $sum: 1 } } }
+        ])
     ]);
-    return { zones, total, page, limit };
+
+    const countMap = new Map(
+        countByZone.map((item) => [String(item._id), item.count])
+    );
+
+    const zonesWithCounts = zones.map((zone) => ({
+        ...zone,
+        restaurantsCount: countMap.get(String(zone._id)) || 0
+    }));
+
+    return { zones: zonesWithCounts, total, page, limit };
 }
 
 export async function getZoneById(id) {

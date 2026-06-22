@@ -338,6 +338,26 @@ export async function updateRestaurantLocation(req, res, next) {
     }
 }
 
+export async function updateRestaurantZoneFeaturedRank(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid restaurant id' });
+        }
+        const result = await adminService.updateRestaurantZoneFeaturedRank(id, req.body || {});
+        if (result?.error) {
+            return res.status(400).json({ success: false, message: result.error });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Restaurant featured rank updated successfully',
+            data: { restaurant: result.restaurant }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 // ----- Foods -----
 export async function getFoods(req, res, next) {
     try {

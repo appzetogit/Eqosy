@@ -1971,6 +1971,11 @@ export default function Home() {
                 outletTimings: restaurant.outletTimings || null,
                 openingTime: restaurant.openingTime || restaurant?.deliveryTimings?.openingTime || null,
                 closingTime: restaurant.closingTime || restaurant?.deliveryTimings?.closingTime || null,
+                zoneFeaturedRank:
+                  Number(restaurant.zoneFeaturedRank) >= 1 &&
+                  Number(restaurant.zoneFeaturedRank) <= 10
+                    ? Number(restaurant.zoneFeaturedRank)
+                    : null,
               };
             },
           );
@@ -2486,9 +2491,27 @@ export default function Home() {
 
     // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
-    // Rely on API data which is already filtered and sorted by the backend.
-    // We only apply client-side Veg Mode filtering here.
-    return (restaurantsData || []).filter(matchesVegMode);
+    const base = (restaurantsData || []).filter(matchesVegMode);
+    const hasRankedFeatured = base.some(
+      (restaurant) =>
+        Number(restaurant.zoneFeaturedRank) >= 1 &&
+        Number(restaurant.zoneFeaturedRank) <= 10,
+    );
+
+    if (!hasRankedFeatured) {
+      return base;
+    }
+
+    return base
+      .filter(
+        (restaurant) =>
+          Number(restaurant.zoneFeaturedRank) >= 1 &&
+          Number(restaurant.zoneFeaturedRank) <= 10,
+      )
+      .sort(
+        (a, b) =>
+          Number(a.zoneFeaturedRank) - Number(b.zoneFeaturedRank),
+      );
   }, [restaurantsData, matchesVegMode]);
 
   const restaurantLazyLoadResetKey = useMemo(() => {
