@@ -88,7 +88,13 @@ export const initSocket = async (server) => {
                 tokenPreview: maskToken(token),
             });
             const decoded = verifyAccessToken(token);
-            socket.user = { userId: decoded.userId, role: decoded.role };
+            const entityId = decoded.userId || decoded.sub;
+            const role = decoded.role;
+            socket.user = { userId: entityId, role };
+            socket.auth = {
+                sub: String(entityId || ''),
+                role: String(role || '').toLowerCase(),
+            };
             logger.info(`Socket auth success: ${decoded.role}:${decoded.userId} for socket ${socket.id}`);
             return next();
         } catch (err) {
@@ -381,6 +387,18 @@ export const initSocket = async (server) => {
           }
         });
     });
+
+    try {
+        const { registerTaxiSocketIntegration } = await import('../modules/taxi/socket/index.js');
+        const { restoreScheduledDispatches } = await import('../modules/taxi/services/dispatchService.js');
+        registerTaxiSocketIntegration(io);
+        restoreScheduledDispatches().catch((err) => {
+            logger.error(`Taxi scheduled dispatch restore failed: ${err.message}`);
+        });
+        logger.info('Taxi Socket.IO handlers registered');
+    } catch (err) {
+        logger.error(`Taxi Socket.IO integration failed: ${err.message}`);
+    }
 
     logger.info('Socket.IO infrastructure initialized');
     return io;

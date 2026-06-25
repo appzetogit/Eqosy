@@ -40,20 +40,35 @@ const onAsync = (socket, handler) => async (payload = {}) => {
   }
 };
 
-export const configureTaxiSocketServer = (httpServer) => {
-  const io = new Server(httpServer, {
-    cors: {
-      origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),
-      credentials: true,
-    },
-  });
+const TAXI_SOCKET_ROLES = new Set(['driver', 'user', 'admin', 'owner']);
 
-  attachSocketAuth(io);
-  setSocketServer(io);
-  setSupportChatServer(io);
+const resolveTaxiSocketIdentity = (socket) => {
+  if (socket.auth?.sub && socket.auth?.role) {
+    return socket.auth;
+  }
 
+  const userId = socket.user?.userId;
+  const role = String(socket.user?.role || '').toLowerCase();
+
+  if (!userId || !TAXI_SOCKET_ROLES.has(role)) {
+    return null;
+  }
+
+  return {
+    sub: String(userId),
+    role,
+  };
+};
+
+const registerTaxiSocketConnectionHandlers = (io) => {
   io.on('connection', async (socket) => {
-    const identity = socket.auth;
+    const identity = resolveTaxiSocketIdentity(socket);
+
+    if (!identity) {
+      return;
+    }
+
+    socket.auth = identity;
 
     addSocketSubscriptions(socket, { role: identity.role, entityId: identity.sub });
 
@@ -266,6 +281,30 @@ export const configureTaxiSocketServer = (httpServer) => {
       }
     });
   });
+};
+
+export const registerTaxiSocketIntegration = (io) => {
+  if (!io) {
+    return null;
+  }
+
+  setSocketServer(io);
+  setSupportChatServer(io);
+  registerTaxiSocketConnectionHandlers(io);
+
+  return io;
+};
+
+export const configureTaxiSocketServer = (httpServer) => {
+  const io = new Server(httpServer, {
+    cors: {
+      origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),
+      credentials: true,
+    },
+  });
+
+  attachSocketAuth(io);
+  registerTaxiSocketIntegration(io);
 
   return io;
 };

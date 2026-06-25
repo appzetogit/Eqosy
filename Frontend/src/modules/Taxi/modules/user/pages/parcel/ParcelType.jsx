@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
@@ -16,6 +16,17 @@ import moversImg from '../../../../assets/images/delivery/movers.png';
 
 const Motion = motion;
 const PARCEL_BOOKING_DRAFT_KEY = 'parcelBookingDraft';
+
+const unwrapVehicleCatalog = (response) => {
+  const data = response?.data?.data || response?.data || response;
+  return data?.results || data?.vehicle_types || (Array.isArray(data) ? data : []);
+};
+
+const isActiveDeliveryVehicle = (vehicle) => {
+  const isActive = vehicle?.active !== false && Number(vehicle?.status ?? 1) !== 0;
+  const transportType = String(vehicle?.transport_type || '').trim().toLowerCase();
+  return isActive && (transportType === 'delivery' || transportType === 'both');
+};
 
 const DELIVERY_CATEGORY_OPTIONS = [
   {
@@ -41,18 +52,27 @@ const DELIVERY_CATEGORY_OPTIONS = [
 const ParcelType = () => {
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [pickupAddress, setPickupAddress] = useState('1A, Vandana Nagar Main Rd, Rajshri Palace Colon...');
   const navigate = useNavigate();
+  const location = useLocation();
+  const routePrefix = useMemo(
+    () => (location.pathname.startsWith('/taxi/user') ? '/taxi/user' : ''),
+    [location.pathname],
+  );
 
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
         setLoading(true);
+        setLoadError('');
         const response = await api.get('/users/vehicle-types');
-        const items = response?.results || response?.data?.results || [];
-        setVehicleTypes(items.filter(v => v.active && (v.transport_type === 'delivery' || v.transport_type === 'both')));
+        const items = unwrapVehicleCatalog(response);
+        setVehicleTypes(items.filter(isActiveDeliveryVehicle));
       } catch (err) {
         console.error('Failed to load vehicles:', err);
+        setLoadError(err?.message || 'Could not load delivery vehicle types.');
+        setVehicleTypes([]);
       } finally {
         setLoading(false);
       }
@@ -62,6 +82,10 @@ const ParcelType = () => {
   }, []);
 
   const handleCategorySelect = (category) => {
+    if (loading) {
+      return;
+    }
+
     const filteredVehicles = vehicleTypes.filter((vehicle) => {
       const configuredCategory = String(vehicle.delivery_category || '').trim().toLowerCase();
       if (configuredCategory) {
@@ -73,19 +97,21 @@ const ParcelType = () => {
       return category.searchTokens.some((token) => name.includes(token) || iconType.includes(token));
     });
 
-    if (loading || vehicleTypes.length === 0) return;
-
-    const selectedVehicle = filteredVehicles[0] || vehicleTypes[0];
+    const selectedVehicle = filteredVehicles[0] || vehicleTypes[0] || null;
     const selectedVehicleIds = filteredVehicles.length
       ? filteredVehicles.map((vehicle) => vehicle?._id || vehicle?.id).filter(Boolean)
       : [selectedVehicle?._id || selectedVehicle?.id].filter(Boolean);
-    const selectedVehicles = filteredVehicles.length ? filteredVehicles : selectedVehicle ? [selectedVehicle] : [];
+    const selectedVehicles = filteredVehicles.length
+      ? filteredVehicles
+      : selectedVehicle
+        ? [selectedVehicle]
+        : [];
 
     const nextState = {
       parcelType: 'General Parcel',
-      selectedVehicle: selectedVehicle,
+      selectedVehicle,
       selectedVehicles,
-      selectedVehicleId: selectedVehicle?._id || selectedVehicle?.id,
+      selectedVehicleId: selectedVehicle?._id || selectedVehicle?.id || '',
       selectedVehicleIds,
       category: category.id,
       deliveryCategory: category.id,
@@ -96,7 +122,7 @@ const ParcelType = () => {
       window.sessionStorage.setItem(PARCEL_BOOKING_DRAFT_KEY, JSON.stringify(nextState));
     }
 
-    navigate('/taxi/user/parcel/details', {
+    navigate(`${routePrefix || '/taxi/user'}/parcel/details`, {
       state: nextState,
     });
   };
@@ -119,7 +145,7 @@ const ParcelType = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-lg border border-white/50"
-            onClick={() => navigate('/taxi/user/parcel/details', { state: { editPickup: true } })}
+            onClick={() => navigate(`${routePrefix || '/taxi/user'}/parcel/details`, { state: { editPickup: true } })}
            >
              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
                <MapPin size={20} className="text-emerald-500 fill-emerald-500/20" />
@@ -136,17 +162,27 @@ const ParcelType = () => {
       {/* Main Content Area */}
       <main className="flex-1 px-5 -mt-10 z-20 pb-10">
         
+        {!loading && vehicleTypes.length === 0 && (
+          <div className="mb-4 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-800">
+            {loadError || 'No delivery vehicle types are configured yet. You can still continue and choose locations.'}
+          </div>
+        )}
+
         {/* Category Grid */}
         <div className="grid grid-cols-3 gap-3 mb-8">
           {DELIVERY_CATEGORY_OPTIONS.map((cat, idx) => (
             <motion.button
               key={cat.id}
+              type="button"
+              disabled={loading}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: idx * 0.1 }}
-              whileTap={{ scale: 0.95 }}
+              whileTap={loading ? undefined : { scale: 0.95 }}
               onClick={() => handleCategorySelect(cat)}
-              className="bg-white rounded-[24px] p-4 flex flex-col items-center gap-4 shadow-md border border-slate-100/50 hover:shadow-xl transition-shadow aspect-[0.85/1]"
+              className={`bg-white rounded-[24px] p-4 flex flex-col items-center gap-4 shadow-md border border-slate-100/50 hover:shadow-xl transition-shadow aspect-[0.85/1] ${
+                loading ? 'cursor-wait opacity-60' : 'cursor-pointer'
+              }`}
             >
               <div className="flex-1 flex items-center justify-center w-full">
                 <img 
