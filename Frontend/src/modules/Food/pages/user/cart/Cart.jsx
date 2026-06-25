@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, Fragment } from "react"
+import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
 import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil } from "lucide-react"
@@ -121,6 +121,11 @@ export default function Cart() {
   const { location: currentLocation, loading: currentLocationLoading } = useUserLocation() // Get live location address
 
   const [showCoupons, setShowCoupons] = useState(false)
+  const [showGstModal, setShowGstModal] = useState(false)
+  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
+  const [showSavingsPopup, setShowSavingsPopup] = useState(null)
+  const [showDistanceWarning, setShowDistanceWarning] = useState(false)
+  const [distanceWarningResolved, setDistanceWarningResolved] = useState(false)
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [couponCode, setCouponCode] = useState("")
   const [manualCouponCode, setManualCouponCode] = useState("")
@@ -987,6 +992,24 @@ export default function Cart() {
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount
   const deliveryPartnerTip = Math.max(0, Number(selectedDeliveryTip) || 0)
   const baseTotal = pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - (pricing?.discount ?? discount))
+
+  // Helper for GST breakdown
+  const getGstBreakdown = () => {
+    if (pricing?.gstBreakdown) {
+      return {
+        item: pricing.gstBreakdown.item || 0,
+        platform: pricing.gstBreakdown.platform || 0,
+        delivery: pricing.gstBreakdown.delivery || 0
+      };
+    }
+
+    return {
+      item: 0,
+      platform: 0,
+      delivery: 0
+    };
+  };
+  const gstBreakdown = getGstBreakdown();
   const total = baseTotal + deliveryPartnerTip
   const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - baseTotal)
   const selectedPaymentLabel =
@@ -1205,6 +1228,26 @@ export default function Cart() {
     }
   }
 
+  const triggerCouponCelebration = (discountAmount, code) => {
+    const colors = ['#ff9900', '#ff0000', '#00ff00', '#0000ff', '#ff00ff', '#facc15', '#00e5ff'];
+
+    // Minimal confetti burst from bottom center
+    confetti({
+      particleCount: 100,
+      spread: 90,
+      origin: { y: 1.1, x: 0.5 },
+      startVelocity: 65,
+      gravity: 1.2,
+      colors: colors,
+      shapes: ['circle', 'square', 'star'],
+      zIndex: 9999
+    });
+
+    // Show centered savings popup
+    setShowSavingsPopup({ amount: discountAmount, code: code || 'Coupon' });
+    setTimeout(() => setShowSavingsPopup(null), 3200);
+  }
+
   const handleApplyCoupon = async (coupon) => {
     if (coupon?.customerGroup === "new" && userOrderCount > 0) {
       toast.error("This coupon is only for first-time users")
@@ -1251,6 +1294,8 @@ export default function Cart() {
         setCouponCode(coupon.code)
         setManualCouponCode(coupon.code)
         setShowCoupons(false)
+        const discountAmount = pricingData.appliedCoupon?.discount || coupon.discount || 0;
+        triggerCouponCelebration(discountAmount, coupon.code);
       } catch (error) {
         debugError("Error recalculating pricing:", error)
         toast.error("Failed to apply coupon")
@@ -1325,7 +1370,8 @@ export default function Cart() {
         },
       )
       setShowCoupons(false)
-      toast.success("Coupon applied")
+      const discountAmount = pricingData.appliedCoupon?.discount || 0;
+      triggerCouponCelebration(discountAmount, inputCode);
     } catch (error) {
       debugError("Error applying coupon code:", error)
       toast.error("Failed to apply coupon")
@@ -1400,6 +1446,12 @@ export default function Cart() {
     if (!pricing) {
       toast.error(loadingPricing ? "Calculating fees. Please wait." : "Unable to calculate fees. Please try again.")
       return
+    }
+
+    const distanceKm = pricing?.deliveryFeeBreakdown?.distanceKm || 0;
+    if (distanceKm > 7 && !distanceWarningResolved) {
+      setShowDistanceWarning(true);
+      return;
     }
 
     setIsPlacingOrder(true)
@@ -1569,7 +1621,7 @@ export default function Cart() {
         if (cartRestaurantName.toLowerCase().trim() !== finalRestaurantName.toLowerCase().trim()) {
           debugError('? CRITICAL ERROR: Restaurant name mismatch!', {
             cartRestaurantName: cartRestaurantName,
-            finalRestaurantName: finalRestaurantName
+            finalName: finalRestaurantName
           });
           alert(`Error: Cart items belong to "${cartRestaurantName}" but restaurant data shows "${finalRestaurantName}". Please refresh the page and try again.`);
           setIsPlacingOrder(false);
@@ -1865,9 +1917,9 @@ export default function Cart() {
       <AnimatedPage className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
         <div className="bg-white dark:bg-[#1a1a1a] border-b dark:border-gray-800 sticky top-0 z-10">
           <div className="flex items-center gap-3 px-4 py-3">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-8 w-8 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
               onClick={handleBack}
             >
@@ -1897,9 +1949,9 @@ export default function Cart() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-7 w-7 md:h-8 md:w-8 flex-shrink-0 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={handleBack}
               >
@@ -2304,107 +2356,107 @@ export default function Cart() {
                       <MapPin className="h-5 w-5 text-[#EB590E]" />
                     </div>
                     <div className="flex-1">
-                        <div className="flex flex-col">
-                          <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">
-                            Delivery at{" "}
-                            <span className="font-semibold">
-                              {deliveryAddressMode === "current" ? "Current location" : "Location"}
-                            </span>
-                          </p>
-                          {deliveryAddressMode === "current" ? (
-                            <div className="mt-1">
-                              {currentLocationLoading || !currentLocationAddress ? (
-                                <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 animate-pulse">
-                                  Finding your current address...
-                                </p>
-                              ) : (
-                                <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
-                                  {formatFullAddress(currentLocationAddress) ||
-                                    currentLocationAddress?.formattedAddress ||
-                                    currentLocationAddress?.address ||
-                                    "Add delivery address"}
-                                </p>
-                              )}
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#FFF2EB] text-[#EB590E] dark:bg-[#EB590E]/10 dark:text-[#EB590E] border border-[#EB590E]/30">
-                                  GPS enabled
-                                </span>
-                              </div>
+                      <div className="flex flex-col">
+                        <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">
+                          Delivery at{" "}
+                          <span className="font-semibold">
+                            {deliveryAddressMode === "current" ? "Current location" : "Location"}
+                          </span>
+                        </p>
+                        {deliveryAddressMode === "current" ? (
+                          <div className="mt-1">
+                            {currentLocationLoading || !currentLocationAddress ? (
+                              <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 animate-pulse">
+                                Finding your current address...
+                              </p>
+                            ) : (
+                              <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
+                                {formatFullAddress(currentLocationAddress) ||
+                                  currentLocationAddress?.formattedAddress ||
+                                  currentLocationAddress?.address ||
+                                  "Add delivery address"}
+                              </p>
+                            )}
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#FFF2EB] text-[#EB590E] dark:bg-[#EB590E]/10 dark:text-[#EB590E] border border-[#EB590E]/30">
+                                GPS enabled
+                              </span>
                             </div>
-                          ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 pr-4">
-                              {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Add delivery address") : "Add delivery address"}
-                            </p>
-                          )}
-                        </div>
-                        {!hasSavedAddress && (
-                          <p className="text-sm text-[#EB590E] mt-2 font-medium">
-                            Select a delivery location to continue
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 pr-4">
+                            {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Add delivery address") : "Add delivery address"}
                           </p>
                         )}
-                        {/* Address Selection Buttons */}
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {["Home", "Work", "Other"].map((label) => {
-                            const normalizedLabel = normalizeAddressLabel(label)
-                            const addressExists = addresses.some(addr => normalizeAddressLabel(addr.label) === normalizedLabel)
+                      </div>
+                      {!hasSavedAddress && (
+                        <p className="text-sm text-[#EB590E] mt-2 font-medium">
+                          Select a delivery location to continue
+                        </p>
+                      )}
+                      {/* Address Selection Buttons */}
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {["Home", "Work", "Other"].map((label) => {
+                          const normalizedLabel = normalizeAddressLabel(label)
+                          const addressExists = addresses.some(addr => normalizeAddressLabel(addr.label) === normalizedLabel)
+                          return (
+                            <button
+                              key={label}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleSelectAddressByLabel(label)
+                              }}
+                              disabled={!addressExists}
+                              className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${addressExists
+                                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300'
+                                : 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed dark:bg-gray-900'
+                                }`}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {addresses.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          {addresses.map((address) => {
+                            const addressId = getAddressId(address)
+                            const isSelected = addressId && addressId === selectedAddressId
                             return (
                               <button
-                                key={label}
+                                key={addressId || `${address.label}-${address.street}-${address.city}`}
+                                type="button"
                                 onClick={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
-                                  handleSelectAddressByLabel(label)
+                                  handleSelectSavedAddress(address)
                                 }}
-                                disabled={!addressExists}
-                                className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${addressExists
-                                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300'
-                                  : 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed dark:bg-gray-900'
+                                className={`w-full text-left rounded-xl border-2 p-3 transition-colors ${isSelected
+                                  ? "border-[#EB590E] bg-orange-50/50 dark:bg-[#EB590E]/5"
+                                  : "border-slate-100 dark:border-gray-800 hover:border-slate-200"
                                   }`}
                               >
-                                {label}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                      {getDisplayAddressLabel(address.label)}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
+                                      {formatFullAddress(address) || address.address || "Address details"}
+                                    </p>
+                                  </div>
+                                  {isSelected && (
+                                    <span className="text-[10px] bg-[#EB590E] text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
+                                      Selected
+                                    </span>
+                                  )}
+                                </div>
                               </button>
                             )
                           })}
                         </div>
-                        {addresses.length > 0 && (
-                          <div className="mt-4 space-y-3">
-                            {addresses.map((address) => {
-                              const addressId = getAddressId(address)
-                              const isSelected = addressId && addressId === selectedAddressId
-                              return (
-                                <button
-                                  key={addressId || `${address.label}-${address.street}-${address.city}`}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    handleSelectSavedAddress(address)
-                                  }}
-                                  className={`w-full text-left rounded-xl border-2 p-3 transition-colors ${isSelected
-                                    ? "border-[#EB590E] bg-orange-50/50 dark:bg-[#EB590E]/5"
-                                    : "border-slate-100 dark:border-gray-800 hover:border-slate-200"
-                                    }`}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                        {getDisplayAddressLabel(address.label)}
-                                      </p>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
-                                        {formatFullAddress(address) || address.address || "Address details"}
-                                      </p>
-                                    </div>
-                                    {isSelected && (
-                                      <span className="text-[10px] bg-[#EB590E] text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
-                                        Selected
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
+                      )}
                     </div>
                   </div>
                   <button
@@ -2511,11 +2563,10 @@ export default function Cart() {
                             setShowCustomTipInput(false)
                             setCustomTipInput("")
                           }}
-                          className={`min-w-[64px] rounded-xl border px-4 py-2.5 text-sm font-bold transition-all ${
-                            isSelected
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                              : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
-                          }`}
+                          className={`min-w-[64px] rounded-xl border px-4 py-2.5 text-sm font-bold transition-all ${isSelected
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                            : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
+                            }`}
                         >
                           {RUPEE_SYMBOL}{amount}
                         </button>
@@ -2531,11 +2582,10 @@ export default function Cart() {
                             : customTipInput || "",
                         )
                       }}
-                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${
-                        showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
-                      }`}
+                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                        : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
+                        }`}
                     >
                       {showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
                         ? `${RUPEE_SYMBOL}${deliveryPartnerTip}`
@@ -2595,7 +2645,7 @@ export default function Cart() {
                   </div>
                 </div>
               </div>
-{/* Bill Details */}
+              {/* Bill Details */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                 <button
                   onClick={() => setShowBillDetails(!showBillDetails)}
@@ -2630,8 +2680,13 @@ export default function Cart() {
                       <span className="text-gray-600 dark:text-gray-400">Item Total</span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
+                    <div className="flex justify-between text-sm items-center">
+                      <button
+                        onClick={() => setShowDeliveryFeeModal(true)}
+                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left"
+                      >
+                        Delivery partner fee for {pricing?.deliveryFeeBreakdown?.distanceKm || 0} km
+                      </button>
                       <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                         {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : ""}
                       </span>
@@ -2652,8 +2707,13 @@ export default function Cart() {
                         <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{surgeAmount.toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">GST and Restaurant Charges</span>
+                    <div className="flex justify-between text-sm items-center">
+                      <button
+                        onClick={() => setShowGstModal(true)}
+                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+                      >
+                        GST and Restaurant Charges
+                      </button>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{isPricingAvailable ? `${RUPEE_SYMBOL}${gstCharges.toFixed(2)}` : "-"}</span>
                     </div>
                     {discount > 0 && (
@@ -2738,9 +2798,9 @@ export default function Cart() {
                     ? "Calculating Fees..."
                     : !hasSavedAddress
                       ? "Select Address"
-                    : !isPricingAvailable
-                      ? "Fees Unavailable"
-                    : "Place Order"}
+                      : !isPricingAvailable
+                        ? "Fees Unavailable"
+                        : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
@@ -2750,383 +2810,383 @@ export default function Cart() {
         </div>
       </div>
 
-          {/* Placing Order Modal */}
-          {showPlacingOrder && (
-            <div className="fixed inset-0 z-[60] h-screen w-screen overflow-hidden">
-              {/* Backdrop */}
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      {/* Placing Order Modal */}
+      {showPlacingOrder && (
+        <div className="fixed inset-0 z-[60] h-screen w-screen overflow-hidden">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-              {/* Modal Sheet */}
-              <div
-                className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden"
-                style={{ animation: 'slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
-              >
-                <div className="px-6 py-8">
-                  {/* Title */}
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Placing your order</h2>
+          {/* Modal Sheet */}
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden"
+            style={{ animation: 'slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+          >
+            <div className="px-6 py-8">
+              {/* Title */}
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">Placing your order</h2>
 
-                  {/* Payment Info */}
-                  <div className="flex items-center gap-4 mb-5">
-                    <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-white shadow-sm">
-                      <CreditCard className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold text-gray-900">
-                        {selectedPaymentMethod === "razorpay"
-                          ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} online (Razorpay)`
-                          : selectedPaymentMethod === "wallet"
-                            ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} from Wallet`
-                            : `Pay on delivery (COD)`}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Delivery Address */}
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                      <svg className="w-7 h-7 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path d="M9 22V12h6v10" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold text-gray-900">Delivering to Location</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Address") : "Add address"}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {defaultAddress ? (formatFullAddress(defaultAddress) || "Address") : "Address"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="relative mb-6">
-                    <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#EB590E] to-[#D94F0C] rounded-full transition-all duration-100 ease-linear"
-                        style={{
-                          width: `${orderProgress}%`,
-                          boxShadow: '0 0 10px rgba(235, 89, 14, 0.5)'
-                        }}
-                      />
-                    </div>
-                    {/* Animated shimmer effect */}
-                    <div
-                      className="absolute inset-0 h-2.5 rounded-full overflow-hidden pointer-events-none"
-                      style={{
-                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-                        animation: 'shimmer 1.5s infinite',
-                        width: `${orderProgress}%`
-                      }}
-                    />
-                  </div>
-
-                  {/* Cancel Button */}
-                  <button
-                    onClick={() => {
-                      setShowPlacingOrder(false)
-                      setIsPlacingOrder(false)
-                    }}
-                    className="w-full text-right"
-                  >
-                    <span className="text-[#EB590E] font-semibold text-base hover:text-[#D94F0C] transition-colors">
-                      CANCEL
-                    </span>
-                  </button>
+              {/* Payment Info */}
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-white shadow-sm">
+                  <CreditCard className="w-6 h-6 text-gray-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedPaymentMethod === "razorpay"
+                      ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} online (Razorpay)`
+                      : selectedPaymentMethod === "wallet"
+                        ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} from Wallet`
+                        : `Pay on delivery (COD)`}
+                  </p>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Order Success Celebration Page */}
-          {showOrderSuccess && (
-            <div
-              className="fixed inset-0 z-[70] bg-white dark:bg-[#0a0a0a] flex flex-col items-center justify-center h-screen w-screen overflow-hidden"
-              style={{ animation: 'fadeIn 0.3s ease-out' }}
-            >
-              {/* Confetti Background */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {/* Animated confetti pieces */}
-                {[...Array(50)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute w-3 h-3 rounded-sm"
-                    style={{
-                      left: `${Math.random() * 100}%`,
-                      top: `-10%`,
-                      backgroundColor: ['#EB590E', '#3b82f6', '#f59e0b', '#ef4444', '#D94F0C', '#ec4899'][Math.floor(Math.random() * 6)],
-                      animation: `confettiFall ${2 + Math.random() * 2}s linear ${Math.random() * 2}s infinite`,
-                      transform: `rotate(${Math.random() * 360}deg)`,
-                    }}
-                  />
-                ))}
+              {/* Delivery Address */}
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
+                  <svg className="w-7 h-7 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path d="M9 22V12h6v10" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">Delivering to Location</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {defaultAddress ? (formatFullAddress(defaultAddress) || defaultAddress?.formattedAddress || defaultAddress?.address || "Address") : "Add address"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {defaultAddress ? (formatFullAddress(defaultAddress) || "Address") : "Address"}
+                  </p>
+                </div>
               </div>
 
-              {/* Success Content */}
-              <div className="relative z-10 flex flex-col items-center px-6">
-                {/* Success Tick Circle */}
-                <div
-                  className="relative mb-8"
-                  style={{ animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both' }}
-                >
-                  {/* Outer ring animation */}
+              {/* Progress Bar */}
+              <div className="relative mb-6">
+                <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
                   <div
-                    className="absolute inset-0 w-32 h-32 rounded-full border-4 border-green-500 dark:border-green-400"
+                    className="h-full bg-gradient-to-r from-[#EB590E] to-[#D94F0C] rounded-full transition-all duration-100 ease-linear"
                     style={{
-                      animation: 'ringPulse 1.5s ease-out infinite',
-                      opacity: 0.3
+                      width: `${orderProgress}%`,
+                      boxShadow: '0 0 10px rgba(235, 89, 14, 0.5)'
                     }}
                   />
-                  {/* Main circle */}
-                  <div className="w-32 h-32 bg-gradient-to-br from-green-500 to-green-600 dark:from-green-500 dark:to-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-200/60 dark:shadow-green-900/40">
-                    <svg
-                      className="w-16 h-16 text-white"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ animation: 'checkDraw 0.5s ease-out 0.5s both' }}
-                    >
-                      <path d="M5 12l5 5L19 7" className="check-path" />
-                    </svg>
+                </div>
+                {/* Animated shimmer effect */}
+                <div
+                  className="absolute inset-0 h-2.5 rounded-full overflow-hidden pointer-events-none"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                    animation: 'shimmer 1.5s infinite',
+                    width: `${orderProgress}%`
+                  }}
+                />
+              </div>
+
+              {/* Cancel Button */}
+              <button
+                onClick={() => {
+                  setShowPlacingOrder(false)
+                  setIsPlacingOrder(false)
+                }}
+                className="w-full text-right"
+              >
+                <span className="text-[#EB590E] font-semibold text-base hover:text-[#D94F0C] transition-colors">
+                  CANCEL
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Success Celebration Page */}
+      {showOrderSuccess && (
+        <div
+          className="fixed inset-0 z-[70] bg-white dark:bg-[#0a0a0a] flex flex-col items-center justify-center h-screen w-screen overflow-hidden"
+          style={{ animation: 'fadeIn 0.3s ease-out' }}
+        >
+          {/* Confetti Background */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {/* Animated confetti pieces */}
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-3 h-3 rounded-sm"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `-10%`,
+                  backgroundColor: ['#EB590E', '#3b82f6', '#f59e0b', '#ef4444', '#D94F0C', '#ec4899'][Math.floor(Math.random() * 6)],
+                  animation: `confettiFall ${2 + Math.random() * 2}s linear ${Math.random() * 2}s infinite`,
+                  transform: `rotate(${Math.random() * 360}deg)`,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Success Content */}
+          <div className="relative z-10 flex flex-col items-center px-6">
+            {/* Success Tick Circle */}
+            <div
+              className="relative mb-8"
+              style={{ animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both' }}
+            >
+              {/* Outer ring animation */}
+              <div
+                className="absolute inset-0 w-32 h-32 rounded-full border-4 border-green-500 dark:border-green-400"
+                style={{
+                  animation: 'ringPulse 1.5s ease-out infinite',
+                  opacity: 0.3
+                }}
+              />
+              {/* Main circle */}
+              <div className="w-32 h-32 bg-gradient-to-br from-green-500 to-green-600 dark:from-green-500 dark:to-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-200/60 dark:shadow-green-900/40">
+                <svg
+                  className="w-16 h-16 text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ animation: 'checkDraw 0.5s ease-out 0.5s both' }}
+                >
+                  <path d="M5 12l5 5L19 7" className="check-path" />
+                </svg>
+              </div>
+              {/* Sparkles */}
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-2 bg-yellow-400 dark:bg-yellow-300 rounded-full"
+                  style={{
+                    top: '50%',
+                    left: '50%',
+                    animation: `sparkle 0.6s ease-out ${0.3 + i * 0.1}s both`,
+                    transform: `rotate(${i * 60}deg) translateY(-80px)`,
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Location Info */}
+            <div
+              className="text-center"
+              style={{ animation: 'slideUp 0.5s ease-out 0.6s both' }}
+            >
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <div className="w-5 h-5 text-red-500 dark:text-red-400">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {defaultAddress
+                    ? (
+                      defaultAddress?.street ||
+                      defaultAddress?.additionalDetails ||
+                      String(defaultAddress?.formattedAddress || "").split(",")[0]?.trim() ||
+                      String(defaultAddress?.address || "").split(",")[0]?.trim() ||
+                      defaultAddress?.city
+                    )
+                    : "Your Location"}
+                </h2>
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 text-base">
+                {defaultAddress
+                  ? (
+                    formatFullAddress(defaultAddress) ||
+                    defaultAddress?.formattedAddress ||
+                    defaultAddress?.address ||
+                    [defaultAddress?.city, defaultAddress?.state].filter(Boolean).join(", ") ||
+                    "Delivery Address"
+                  )
+                  : "Delivery Address"}
+              </p>
+            </div>
+
+            {/* Order Placed Message */}
+            <div
+              className="mt-12 text-center"
+              style={{ animation: 'slideUp 0.5s ease-out 0.8s both' }}
+            >
+              <h3 className="text-3xl font-bold text-[#EB590E] dark:text-orange-400 mb-2">Order Placed!</h3>
+              <p className="text-gray-600 dark:text-gray-300">Your delicious food is on its way</p>
+            </div>
+
+            {/* Action Button */}
+            <button
+              onClick={handleGoToOrders}
+              className="mt-10 bg-[#EB590E] hover:bg-[#D94F0C] text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-orange-200/70 dark:shadow-orange-950/40 transition-all hover:shadow-xl hover:scale-105"
+              style={{ animation: 'slideUp 0.5s ease-out 1s both' }}
+            >
+              Track Your Order
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Selection Bottom Sheet */}
+      <AnimatePresence>
+        {showPaymentSheet && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPaymentSheet(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] rounded-t-[2rem] z-[101] shadow-2xl overflow-hidden max-h-[82vh] md:max-h-[60vh] flex flex-col"
+              style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+            >
+              <div className="p-5 md:p-6 flex flex-col h-full min-h-0">
+                {/* Compact Drag handle */}
+                <div className="w-10 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-auto mb-5" />
+
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="text-xl font-extrabold text-gray-900 dark:text-white leading-none">Payment Method</h2>
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1">Select how you want to pay</p>
                   </div>
-                  {/* Sparkles */}
-                  {[...Array(6)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="absolute w-2 h-2 bg-yellow-400 dark:bg-yellow-300 rounded-full"
-                      style={{
-                        top: '50%',
-                        left: '50%',
-                        animation: `sparkle 0.6s ease-out ${0.3 + i * 0.1}s both`,
-                        transform: `rotate(${i * 60}deg) translateY(-80px)`,
+                  <button
+                    onClick={() => setShowPaymentSheet(false)}
+                    className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar pb-4 flex-1 min-h-0">
+                  {[
+                    {
+                      id: 'razorpay',
+                      name: 'Online Payment',
+                      description: 'UPI, Cards, Netbanking',
+                      icon: <Zap className="w-5 h-5" />,
+                      color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
+                      selectedColor: 'bg-emerald-500 text-white',
+                      badge: 'SECURE'
+                    },
+                    {
+                      id: 'wallet',
+                      name: 'Quick Wallet',
+                      description: 'Pay from your wallet',
+                      icon: <Wallet className="w-5 h-5" />,
+                      color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
+                      selectedColor: 'bg-blue-500 text-white',
+                      subInfo: `Bal: ${RUPEE_SYMBOL}${walletBalance.toFixed(0)}`,
+                      disabled: walletBalance < total,
+                      disabledText: 'Low Balance'
+                    },
+                    {
+                      id: 'cash',
+                      name: 'Cash on Delivery',
+                      description: 'Pay when order arrives',
+                      icon: <Banknote className="w-5 h-5" />,
+                      color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
+                      selectedColor: 'bg-orange-500 text-white'
+                    }
+                  ].filter((option) => {
+                    if (option.id !== 'cash') return true
+                    return !(pricing?.codLimit != null && total >= pricing.codLimit)
+                  }).map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        if (!option.disabled) {
+                          setSelectedPaymentMethod(option.id)
+                          setShowPaymentSheet(false)
+                        }
                       }}
-                    />
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 group ${selectedPaymentMethod === option.id
+                        ? 'border-[#EB590E] bg-[#EB590E] shadow-lg shadow-orange-500/30'
+                        : 'border-gray-100 dark:border-gray-800/80 bg-white dark:bg-[#222222] hover:border-orange-200 dark:hover:border-orange-900/30 shadow-sm'
+                        } ${option.disabled ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${selectedPaymentMethod === option.id
+                          ? 'bg-white/20 text-white'
+                          : option.color
+                          }`}>
+                          {option.icon}
+                        </div>
+                        <div className="text-left">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-black tracking-tight leading-none transition-colors ${selectedPaymentMethod === option.id ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+                              }`}>
+                              {option.name}
+                            </span>
+                            {option.badge && (
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm tracking-wider ${selectedPaymentMethod === option.id
+                                ? 'bg-white/20 text-white'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                }`}>
+                                {option.badge}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <p className={`text-[11px] font-bold transition-colors ${selectedPaymentMethod === option.id ? 'text-white/80' : 'text-gray-400'
+                              }`}>
+                              {option.description}
+                            </p>
+                            {option.subInfo && !option.disabled && (
+                              <>
+                                <span className={`w-1 h-1 rounded-full ${selectedPaymentMethod === option.id ? 'bg-white/40' : 'bg-orange-300 dark:bg-orange-700'
+                                  }`} />
+                                <p className={`text-[10px] font-black uppercase tracking-tighter transition-colors ${selectedPaymentMethod === option.id ? 'text-white' : 'text-green-600 dark:text-green-500'
+                                  }`}>
+                                  {option.subInfo}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                          {option.disabled && (
+                            <p className="text-[9px] font-black text-red-500 mt-1 uppercase tracking-wide">
+                              {option.disabledText}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${selectedPaymentMethod === option.id
+                        ? 'bg-white border-white'
+                        : 'border-gray-200 dark:border-gray-700'
+                        }`}>
+                        {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-[#EB590E]" strokeWidth={4} />}
+                      </div>
+                    </button>
                   ))}
                 </div>
 
-                {/* Location Info */}
                 <div
-                  className="text-center"
-                  style={{ animation: 'slideUp 0.5s ease-out 0.6s both' }}
+                  className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white dark:bg-[#1a1a1a]"
+                  style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom, 0px))" }}
                 >
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <div className="w-5 h-5 text-red-500 dark:text-red-400">
-                      <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                      </svg>
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {defaultAddress
-                        ? (
-                            defaultAddress?.street ||
-                            defaultAddress?.additionalDetails ||
-                            String(defaultAddress?.formattedAddress || "").split(",")[0]?.trim() ||
-                            String(defaultAddress?.address || "").split(",")[0]?.trim() ||
-                            defaultAddress?.city
-                          )
-                        : "Your Location"}
-                    </h2>
+                  <div className="flex-shrink-0">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
+                    <p className="text-xl font-black text-[#EB590E] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-base">
-                    {defaultAddress
-                      ? (
-                          formatFullAddress(defaultAddress) ||
-                          defaultAddress?.formattedAddress ||
-                          defaultAddress?.address ||
-                          [defaultAddress?.city, defaultAddress?.state].filter(Boolean).join(", ") ||
-                          "Delivery Address"
-                        )
-                      : "Delivery Address"}
-                  </p>
+                  <Button
+                    onClick={() => setShowPaymentSheet(false)}
+                    className="flex-1 bg-[#EB590E] hover:bg-[#D94F0C] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
+                  >
+                    Confirm Order
+                  </Button>
                 </div>
-
-                {/* Order Placed Message */}
-                <div
-                  className="mt-12 text-center"
-                  style={{ animation: 'slideUp 0.5s ease-out 0.8s both' }}
-                >
-                  <h3 className="text-3xl font-bold text-[#EB590E] dark:text-orange-400 mb-2">Order Placed!</h3>
-                  <p className="text-gray-600 dark:text-gray-300">Your delicious food is on its way</p>
-                </div>
-
-                {/* Action Button */}
-                <button
-                  onClick={handleGoToOrders}
-                  className="mt-10 bg-[#EB590E] hover:bg-[#D94F0C] text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-orange-200/70 dark:shadow-orange-950/40 transition-all hover:shadow-xl hover:scale-105"
-                  style={{ animation: 'slideUp 0.5s ease-out 1s both' }}
-                >
-                  Track Your Order
-                </button>
               </div>
-            </div>
-          )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-          {/* Payment Selection Bottom Sheet */}
-          <AnimatePresence>
-            {showPaymentSheet && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowPaymentSheet(false)}
-                  className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
-                />
-                <motion.div
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={{ type: "spring", damping: 30, stiffness: 350 }}
-                  className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] rounded-t-[2rem] z-[101] shadow-2xl overflow-hidden max-h-[82vh] md:max-h-[60vh] flex flex-col"
-                  style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-                >
-                  <div className="p-5 md:p-6 flex flex-col h-full min-h-0">
-                    {/* Compact Drag handle */}
-                    <div className="w-10 h-1 bg-gray-200 dark:bg-gray-800 rounded-full mx-auto mb-5" />
-
-                    <div className="flex items-center justify-between mb-5">
-                      <div>
-                        <h2 className="text-xl font-extrabold text-gray-900 dark:text-white leading-none">Payment Method</h2>
-                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1">Select how you want to pay</p>
-                      </div>
-                      <button
-                        onClick={() => setShowPaymentSheet(false)}
-                        className="w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <X className="w-4 h-4 text-gray-500" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-3 overflow-y-auto pr-1 custom-scrollbar pb-4 flex-1 min-h-0">
-                      {[
-                        {
-                          id: 'razorpay',
-                          name: 'Online Payment',
-                          description: 'UPI, Cards, Netbanking',
-                          icon: <Zap className="w-5 h-5" />,
-                          color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
-                          selectedColor: 'bg-emerald-500 text-white',
-                          badge: 'SECURE'
-                        },
-                        {
-                          id: 'wallet',
-                          name: 'Quick Wallet',
-                          description: 'Pay from your wallet',
-                          icon: <Wallet className="w-5 h-5" />,
-                          color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
-                          selectedColor: 'bg-blue-500 text-white',
-                          subInfo: `Bal: ${RUPEE_SYMBOL}${walletBalance.toFixed(0)}`,
-                          disabled: walletBalance < total,
-                          disabledText: 'Low Balance'
-                        },
-                        {
-                          id: 'cash',
-                          name: 'Cash on Delivery',
-                          description: 'Pay when order arrives',
-                          icon: <Banknote className="w-5 h-5" />,
-                          color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
-                          selectedColor: 'bg-orange-500 text-white'
-                        }
-                      ].filter((option) => {
-                        if (option.id !== 'cash') return true
-                        return !(pricing?.codLimit != null && total >= pricing.codLimit)
-                      }).map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => {
-                            if (!option.disabled) {
-                              setSelectedPaymentMethod(option.id)
-                              setShowPaymentSheet(false)
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 group ${selectedPaymentMethod === option.id
-                              ? 'border-[#EB590E] bg-[#EB590E] shadow-lg shadow-orange-500/30'
-                              : 'border-gray-100 dark:border-gray-800/80 bg-white dark:bg-[#222222] hover:border-orange-200 dark:hover:border-orange-900/30 shadow-sm'
-                            } ${option.disabled ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${selectedPaymentMethod === option.id
-                                ? 'bg-white/20 text-white'
-                                : option.color
-                              }`}>
-                              {option.icon}
-                            </div>
-                            <div className="text-left">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-black tracking-tight leading-none transition-colors ${selectedPaymentMethod === option.id ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-                                  }`}>
-                                  {option.name}
-                                </span>
-                                {option.badge && (
-                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm tracking-wider ${selectedPaymentMethod === option.id
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                    }`}>
-                                    {option.badge}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <p className={`text-[11px] font-bold transition-colors ${selectedPaymentMethod === option.id ? 'text-white/80' : 'text-gray-400'
-                                  }`}>
-                                  {option.description}
-                                </p>
-                                {option.subInfo && !option.disabled && (
-                                  <>
-                                    <span className={`w-1 h-1 rounded-full ${selectedPaymentMethod === option.id ? 'bg-white/40' : 'bg-orange-300 dark:bg-orange-700'
-                                      }`} />
-                                    <p className={`text-[10px] font-black uppercase tracking-tighter transition-colors ${selectedPaymentMethod === option.id ? 'text-white' : 'text-green-600 dark:text-green-500'
-                                      }`}>
-                                      {option.subInfo}
-                                    </p>
-                                  </>
-                                )}
-                              </div>
-                              {option.disabled && (
-                                <p className="text-[9px] font-black text-red-500 mt-1 uppercase tracking-wide">
-                                  {option.disabledText}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${selectedPaymentMethod === option.id
-                              ? 'bg-white border-white'
-                              : 'border-gray-200 dark:border-gray-700'
-                            }`}>
-                            {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-[#EB590E]" strokeWidth={4} />}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div
-                      className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4 bg-white dark:bg-[#1a1a1a]"
-                      style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom, 0px))" }}
-                    >
-                      <div className="flex-shrink-0">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
-                        <p className="text-xl font-black text-[#EB590E] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
-                      </div>
-                      <Button
-                        onClick={() => setShowPaymentSheet(false)}
-                        className="flex-1 bg-[#EB590E] hover:bg-[#D94F0C] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
-                      >
-                        Confirm Order
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-
-          {/* Animation Styles */}
-          <style>{`
+      {/* Animation Styles */}
+      <style>{`
         @keyframes fadeInBackdrop {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -3208,6 +3268,226 @@ export default function Cart() {
         }
       `}</style>
 
+      {/* Coupon Savings Popup */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showSavingsPopup && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/20 z-[10030]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowSavingsPopup(null)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10031] w-[75vw] max-w-[280px]"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ type: "spring", bounce: 0.35, duration: 0.5 }}
+                >
+                  <div className="bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] p-6 text-center">
+                    <div className="w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Tag className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Coupon Applied</p>
+                    <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">'{showSavingsPopup.code}'</p>
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                      <p className="text-2xl font-black text-green-600 dark:text-green-400">
+                        {RUPEE_SYMBOL}{showSavingsPopup.amount} OFF
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Savings applied to your order</p>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Distance Warning Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showDistanceWarning && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <div className="px-5 py-6 text-center space-y-4">
+                    <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <MapPin className="h-8 w-8 text-orange-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Far Away Restaurant</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                      This restaurant is <strong>{pricing?.deliveryFeeBreakdown?.distanceKm} km</strong> away from your location. Delivery might take longer than usual.
+                    </p>
+                  </div>
+
+                  <div className="flex border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowDistanceWarning(false)}
+                      className="flex-1 py-3.5 text-center text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-r border-gray-100 dark:border-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDistanceWarning(false);
+                        setDistanceWarningResolved(true);
+                        setTimeout(() => handlePlaceOrder(), 0);
+                      }}
+                      className="flex-1 py-3.5 text-center text-sm font-bold text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                    >
+                      Continue Anyway
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* GST Breakdown Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showGstModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowGstModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-5 py-5 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed border-b border-gray-100 dark:border-gray-800 pb-4">
+                      {companyName || "Eqosy"} has no role to play in taxes levied by the govt.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on item total</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstBreakdown.item.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300 pr-4">GST on platform fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">{RUPEE_SYMBOL}{gstBreakdown.platform.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on delivery fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(gstBreakdown.delivery || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white border-t border-gray-100 dark:border-gray-800 pt-3">
+                      <span>Total</span>
+                      <span>{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowGstModal(false)}
+                      className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Delivery Fee Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showDeliveryFeeModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowDeliveryFeeModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-5 py-5 space-y-4">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 pb-4">
+                      Delivery partner Fee for {pricing?.deliveryFeeBreakdown?.distanceKm || 0} km
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">Base fee for 1 km</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.baseDeliveryFee || 23).toFixed(0)}</span>
+                      </div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-[-8px]">
+                        {RUPEE_SYMBOL}21 per order plus {RUPEE_SYMBOL}2 per km
+                      </div>
+                      {pricing?.deliveryFeeBreakdown?.smallOrderFee > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">Small order fee</span>
+                          <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.smallOrderFee || 0).toFixed(0)}</span>
+                        </div>
+                      )}
+                      {pricing?.deliveryFeeBreakdown?.discountAmount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[#009b4d] dark:text-[#00c562]">Zomato's discount on delivery fee</span>
+                          <span className="text-[#009b4d] dark:text-[#00c562] font-medium">- {RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.discountAmount || 0).toFixed(0)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowDeliveryFeeModal(false)}
+                      className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
       {/* Share Modal */}
       {typeof window !== "undefined" &&
         createPortal(
@@ -3287,5 +3567,5 @@ export default function Cart() {
         )}
     </div>
   )
-}      
+}
 

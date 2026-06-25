@@ -199,14 +199,11 @@ export async function calculateOrderPricing(userId, dto) {
     ? Math.round((subtotal * (deliveryPartnerIncentivePercent / 100)) * 100) / 100
     : 0;
 
-  const gstRate = Number(feeSettings.gstRate);
-  if (!Number.isFinite(gstRate) || gstRate < 0) {
-    throw new ValidationError('GST rate is not configured. Please save it in Delivery & Platform Fee settings.');
-  }
-  const tax =
-    Number.isFinite(gstRate) && gstRate > 0
-      ? Math.round(subtotal * (gstRate / 100))
-      : 0;
+  const itemGst = Math.round(subtotal * 0.05);
+  const platformGst = Math.round(platformFee * 0.18);
+  const deliveryGst = Math.round(deliveryFee * 0.18);
+  const tax = itemGst + platformGst + deliveryGst;
+  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst };
 
   let discount = 0;
   let appliedCoupon = null;
@@ -304,6 +301,7 @@ export async function calculateOrderPricing(userId, dto) {
     pricing: {
       subtotal,
       tax,
+      gstBreakdown,
       packagingFee,
       deliveryFee,
       deliveryFeeBreakdown,
