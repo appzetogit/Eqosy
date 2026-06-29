@@ -24,11 +24,12 @@ import {
 } from "lucide-react";
 import {
   GoogleMap,
-  DrawingManager,
   Circle,
   Polygon,
   Autocomplete,
 } from "@react-google-maps/api";
+import { useManualPolygonDrawing } from "@/shared/maps/useManualPolygonDrawing";
+import { pointsFromLatLngPath } from "@/shared/maps/polygonDrawingUtils";
 import { useAppGoogleMapsLoader } from "../../utils/googleMaps";
 import { adminService } from "../../services/adminService";
 import {
@@ -59,8 +60,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   const [countryBoundaryPaths, setCountryBoundaryPaths] = useState([]);
   const [boundaryLoading, setBoundaryLoading] = useState(false);
   const mapRef = useRef(null);
-  const polygonRef = useRef(null);
-  const polygonListenersRef = useRef([]);
+  const [googleMap, setGoogleMap] = useState(null);
+  const pendingPolygonCoordsRef = useRef(null);
   const circleRef = useRef(null);
   const circleListenersRef = useRef([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,7 +72,33 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   const [polygonCoords, setPolygonCoords] = useState([]);
   const [circleCenter, setCircleCenter] = useState(null);
   const [circleRadiusMeters, setCircleRadiusMeters] = useState('');
+  const [isPlacingCircle, setIsPlacingCircle] = useState(false);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
+
+  const {
+    isDrawing: isPolygonDrawing,
+    startDrawing: startPolygonDrawingHook,
+    finishDrawing: finishPolygonDrawingHook,
+    clearDrawing: clearPolygonDrawingHook,
+    loadCoordinates,
+    processMapClick,
+    getFinishedPolygon,
+  } = useManualPolygonDrawing({
+    map: view !== 'list' ? googleMap : null,
+    enabled: view !== 'list',
+    attachNativeMapClickListener: false,
+    polygonOptions: {
+      fillColor: '#4f46e5',
+      strokeColor: '#4f46e5',
+      strokeWeight: 2,
+      fillOpacity: 0.25,
+      editable: true,
+      draggable: false,
+      clickable: true,
+      zIndex: 2,
+    },
+    onCoordinatesChange: setPolygonCoords,
+  });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -169,46 +196,26 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     }
   };
 
-  const onPolygonComplete = (polygon) => {
-    const coords = polygon.getPath().getArray().map(p => ({
-      lat: p.lat(),
-      lng: p.lng()
-    }));
-    setBoundaryMode('polygon');
-    setPolygonCoords(coords);
-    setCircleCenter(null);
-    setCircleRadiusMeters('');
-    polygon.setMap(null);
-  };
-
-  const onCircleComplete = (circle) => {
-    const center = circle.getCenter();
-    setBoundaryMode('circle');
-    setCircleCenter({
-      lat: center.lat(),
-      lng: center.lng(),
-    });
-    setCircleRadiusMeters(String(Math.round(circle.getRadius())));
-    setPolygonCoords([]);
-    circle.setMap(null);
-  };
-
-  const syncPolygonState = () => {
-    const polygon = polygonRef.current;
-    if (!polygon) {
-      return polygonCoords;
+  useEffect(() => {
+    if (!googleMap || view === 'list' || boundaryMode !== 'polygon' || !pendingPolygonCoordsRef.current) {
+      return;
     }
 
-    const nextCoords = polygon
-      .getPath()
-      .getArray()
-      .map((point) => ({
-        lat: point.lat(),
-        lng: point.lng(),
-      }));
+    loadCoordinates(pendingPolygonCoordsRef.current);
+    pendingPolygonCoordsRef.current = null;
+  }, [boundaryMode, googleMap, loadCoordinates, view]);
 
-    setPolygonCoords(nextCoords);
-    return nextCoords;
+  const syncPolygonState = () => {
+    const finishedPolygon = getFinishedPolygon?.();
+    if (finishedPolygon?.getPath) {
+      const nextCoords = pointsFromLatLngPath(finishedPolygon.getPath());
+      if (nextCoords.length >= 3) {
+        setPolygonCoords(nextCoords);
+        return nextCoords;
+      }
+    }
+
+    return polygonCoords;
   };
 
   const syncCircleState = () => {
@@ -242,13 +249,77 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   };
 
   useEffect(() => () => {
-    polygonListenersRef.current.forEach((listener) => listener?.remove?.());
-    polygonListenersRef.current = [];
-    polygonRef.current = null;
     circleListenersRef.current.forEach((listener) => listener?.remove?.());
     circleListenersRef.current = [];
     circleRef.current = null;
   }, []);
+
+  const handleMapClick = (event) => {
+    if (view === 'list' || !event?.latLng) {
+      return;
+    }
+
+    if (boundaryMode === 'polygon') {
+      processMapClick(event);
+      return;
+    }
+
+    if (!isPlacingCircle) {
+      return;
+    }
+
+    const lat = event.latLng.lat();
+    const lng = event.latLng.lng();
+    setCircleCenter({ lat, lng });
+    setPolygonCoords([]);
+    clearPolygonDrawingHook();
+    setCircleRadiusMeters((current) => {
+      const numericRadius = Number(current);
+      return Number.isFinite(numericRadius) && numericRadius > 0 ? current : '2000';
+    });
+    setIsPlacingCircle(false);
+    if (googleMap) {
+      googleMap.setOptions({ draggableCursor: null, draggingCursor: null });
+    }
+  };
+
+  const startPolygonDrawing = () => {
+    setBoundaryMode('polygon');
+    setCircleCenter(null);
+    setCircleRadiusMeters('');
+    setIsPlacingCircle(false);
+
+    if (!googleMap) {
+      window.alert('Map is still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    const started = startPolygonDrawingHook();
+    if (!started) {
+      window.alert('Could not start polygon drawing. Refresh the page and try again.');
+    }
+  };
+
+  const startCirclePlacement = () => {
+    setBoundaryMode('circle');
+    setIsPlacingCircle(true);
+    clearPolygonDrawingHook();
+    setPolygonCoords([]);
+    if (googleMap) {
+      googleMap.setOptions({ draggableCursor: 'crosshair', draggingCursor: 'crosshair' });
+    }
+  };
+
+  const clearBoundaryDrawing = () => {
+    clearPolygonDrawingHook();
+    setPolygonCoords([]);
+    setCircleCenter(null);
+    setCircleRadiusMeters('');
+    setIsPlacingCircle(false);
+    if (googleMap) {
+      googleMap.setOptions({ draggableCursor: null, draggingCursor: null });
+    }
+  };
 
   const onPlaceChanged = () => {
     if (autocomplete !== null) {
@@ -331,6 +402,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     setPolygonCoords([]);
     setCircleCenter(null);
     setCircleRadiusMeters('');
+    setIsPlacingCircle(false);
+    clearPolygonDrawingHook();
     setCountryBoundaryPaths([]);
   };
 
@@ -393,6 +466,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     if (parsedCoords.length > 0) setMapCenter(parsedCoords[0]);
     const nextBoundaryMode = zone.boundary_mode === 'circle' ? 'circle' : 'polygon';
     setBoundaryMode(nextBoundaryMode);
+    pendingPolygonCoordsRef.current = nextBoundaryMode === 'polygon' ? parsedCoords : null;
     setPolygonCoords(parsedCoords);
     setCircleCenter(
       zone.circle_center && Number.isFinite(Number(zone.circle_center?.lat)) && Number.isFinite(Number(zone.circle_center?.lng))
@@ -703,7 +777,13 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                             <button
                               key={option.id}
                               type="button"
-                              onClick={() => setBoundaryMode(option.id)}
+                              onClick={() => {
+                                setBoundaryMode(option.id);
+                                setIsPlacingCircle(false);
+                                if (option.id === 'circle') {
+                                  clearPolygonDrawingHook();
+                                }
+                              }}
                               className={`rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
                                 boundaryMode === option.id
                                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
@@ -782,91 +862,95 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
 
                       <div className="flex flex-wrap items-center justify-between gap-3 md:justify-end">
                         <div className="rounded-full bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
-                          State and city labels remain visible while you draw zone boundaries.
+                          {boundaryMode === 'polygon'
+                            ? isPolygonDrawing
+                              ? 'Click the map to place draggable points, then finish the shape.'
+                              : 'Use Draw Polygon to start a manual boundary.'
+                            : isPlacingCircle
+                              ? 'Click the map once to place the circle center.'
+                              : 'Set radius on the left, then use Place Circle.'}
                         </div>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setPolygonCoords([]);
-                            setCircleCenter(null);
-                            setCircleRadiusMeters('');
-                          }}
-                          className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-rose-600 shadow-sm transition-all border border-gray-200 hover:bg-rose-50 active:scale-95"
-                        >
-                          <X size={14} />
-                          Clear Map
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {boundaryMode === 'polygon' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={startPolygonDrawing}
+                                className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest shadow-sm transition-all border active:scale-95 ${
+                                  isPolygonDrawing
+                                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                <MousePointer2 size={14} />
+                                Draw Polygon
+                              </button>
+                              {isPolygonDrawing && polygonCoords.length >= 3 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => finishPolygonDrawingHook()}
+                                  className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-700 shadow-sm transition-all active:scale-95"
+                                >
+                                  <Save size={14} />
+                                  Finish Shape
+                                </button>
+                              ) : null}
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={startCirclePlacement}
+                              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest shadow-sm transition-all border active:scale-95 ${
+                                isPlacingCircle
+                                  ? 'border-teal-500 bg-teal-50 text-teal-700'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              <Target size={14} />
+                              Place Circle
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={clearBoundaryDrawing}
+                            className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-rose-600 shadow-sm transition-all border border-gray-200 hover:bg-rose-50 active:scale-95"
+                          >
+                            <X size={14} />
+                            Clear Map
+                          </button>
+                        </div>
                       </div>
                    </div>
 
                    <div className="h-[620px] p-2">
                      {isLoaded ? (
                        <div className="w-full h-full rounded-lg overflow-hidden relative">
+                         {loadError ? (
+                           <div className="flex h-full items-center justify-center rounded-lg bg-rose-50 px-6 text-center text-sm font-medium text-rose-700">
+                             Google Maps failed to load. Check the browser API key and refresh the page.
+                           </div>
+                         ) : (
                          <GoogleMap
                            mapContainerStyle={{ width: '100%', height: '100%' }}
                            center={mapCenter} zoom={12}
-                           onLoad={m => { mapRef.current = m; }}
+                           onLoad={(mapInstance) => {
+                             mapRef.current = mapInstance;
+                             setGoogleMap(mapInstance);
+                           }}
+                           onClick={handleMapClick}
                            options={{
                               mapTypeId: 'roadmap',
                               disableDefaultUI: false,
                               zoomControl: true,
                               mapTypeControl: true,
                               streetViewControl: false,
-                              fullscreenControl: true
+                              fullscreenControl: true,
+                              draggableCursor:
+                                isPolygonDrawing || isPlacingCircle ? 'crosshair' : undefined,
+                              draggingCursor:
+                                isPolygonDrawing || isPlacingCircle ? 'crosshair' : undefined,
                            }}
                          >
-                           <DrawingManager
-                             onPolygonComplete={onPolygonComplete}
-                             options={{
-                               drawingControl: true,
-                               drawingControlOptions: {
-                                 position: window.google.maps.ControlPosition.TOP_RIGHT,
-                                 drawingModes: [
-                                   window.google.maps.drawing.OverlayType.POLYGON,
-                                   window.google.maps.drawing.OverlayType.CIRCLE,
-                                 ],
-                               },
-                               polygonOptions: {
-                                 fillColor: '#4f46e5',
-                                 fillOpacity: 0.15,
-                                 strokeColor: '#4f46e5',
-                                 strokeWeight: 2,
-                                 editable: true,
-                               },
-                               circleOptions: {
-                                 fillColor: '#0f766e',
-                                 fillOpacity: 0.12,
-                                 strokeColor: '#0f766e',
-                                 strokeWeight: 2,
-                                 editable: true,
-                               },
-                             }}
-                             onCircleComplete={onCircleComplete}
-                           />
-                           {boundaryMode === 'polygon' && polygonCoords.length > 0 && (
-                             <Polygon
-                               paths={polygonCoords}
-                               options={{ fillColor: '#4f46e5', strokeColor: '#4f46e5', strokeWeight: 2, fillOpacity: 0.25, editable: true, draggable: true }}
-                               onLoad={(polygon) => {
-                                 polygonListenersRef.current.forEach((listener) => listener?.remove?.());
-                                 polygonListenersRef.current = [];
-                                 polygonRef.current = polygon;
-                                 const path = polygon.getPath();
-                                 polygonListenersRef.current = [
-                                   path.addListener('set_at', syncPolygonState),
-                                   path.addListener('insert_at', syncPolygonState),
-                                   path.addListener('remove_at', syncPolygonState),
-                                   polygon.addListener('dragend', syncPolygonState),
-                                   polygon.addListener('mouseup', syncPolygonState),
-                                 ];
-                               }}
-                               onUnmount={() => {
-                                 polygonListenersRef.current.forEach((listener) => listener?.remove?.());
-                                 polygonListenersRef.current = [];
-                                 polygonRef.current = null;
-                               }}
-                             />
-                           )}
                            {boundaryMode === 'circle' && circleCenter && Number(circleRadiusMeters) > 0 ? (
                              <Circle
                                center={circleCenter}
@@ -903,6 +987,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                               />
                            ))}
                          </GoogleMap>
+                         )}
                        </div>
                      ) : (
                        <div className="flex h-full items-center justify-center bg-gray-50 rounded-lg">
@@ -923,7 +1008,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                     <Maximize2 className="absolute -right-4 -bottom-4 text-white/10" size={120} />
                     <h4 className="text-sm font-semibold mb-2">Instructions</h4>
                     <p className="text-xs text-indigo-100 leading-relaxed">
-                      Use the polygon or circle tool at the top of the map to define your zone boundary. Click to place polygon vertices and close the shape, or drop a circle and adjust its radius for a radial market boundary. The red dashed line represents the country boundary for reference.
+                      Use Draw Polygon to place draggable corner points on the map, then Finish Shape. Drag points while drawing for a live preview. After finishing, edit vertices directly on the polygon or right-click a vertex to delete it. For circles, set the radius and click Place Circle to drop the center.
                     </p>
                 </div>
               </div>

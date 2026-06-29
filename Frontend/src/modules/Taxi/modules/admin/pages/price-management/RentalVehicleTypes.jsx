@@ -734,7 +734,7 @@ const RentalVehicleTypes = ({ mode: propMode }) => {
           <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-400">No rental vehicles configured yet.</div>
         ) : (
           <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-            <div className="grid grid-cols-[minmax(0,1.6fr)_110px_110px_120px_180px] gap-4 border-b border-slate-100 px-6 py-4 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            <div className="grid gap-4 border-b border-slate-100 px-6 py-4 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400" style={{ gridTemplateColumns: 'minmax(0, 1.6fr) 110px 110px 120px 180px' }}>
               <span>Vehicle</span>
               <span>Seats</span>
               <span>Bags</span>
@@ -744,7 +744,8 @@ const RentalVehicleTypes = ({ mode: propMode }) => {
             {items.map((item) => (
               <div
                 key={item.id || item._id}
-                className="grid grid-cols-[minmax(0,1.6fr)_110px_110px_120px_180px] gap-4 border-b border-slate-100 px-6 py-4 last:border-b-0"
+                className="grid gap-4 border-b border-slate-100 px-6 py-4 last:border-b-0"
+                style={{ gridTemplateColumns: 'minmax(0, 1.6fr) 110px 110px 120px 180px' }}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">

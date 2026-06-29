@@ -327,7 +327,7 @@ const SidebarGroup = ({
 }) => {
   const isActive = hasActiveChild(pathname, subItems);
   const isOpen = expandedGroups.includes(groupKey);
-  const isExpanded = forceOpen || isActive || isOpen;
+  const isExpanded = forceOpen || isOpen;
   const unreadCount = subItems.reduce((sum, item) => sum + getSidebarItemCount(item, unreadCountsByPath), 0);
   const toggleGroup = () => {
     setExpandedGroups((current) =>
@@ -419,7 +419,7 @@ const NestedGroup = ({
 }) => {
   const isActive = hasActiveChild(pathname, subItems);
   const isOpen = expandedGroups.includes(groupKey);
-  const isExpanded = forceOpen || isActive || isOpen;
+  const isExpanded = forceOpen || isOpen;
   const unreadCount = subItems.reduce((sum, item) => sum + getSidebarItemCount(item, unreadCountsByPath), 0);
   const toggleGroup = () => {
     setExpandedGroups((current) =>
@@ -942,6 +942,39 @@ const AdminLayout = () => {
     }),
     [chatUnreadCount],
   );
+  useEffect(() => {
+    const activeKeys = [];
+    const traverse = (items, parentKey) => {
+      items.forEach((item) => {
+        if (item.subItems) {
+          const currentKey = parentKey ? `${parentKey}:${item.label}` : item.label;
+          if (hasActiveChild(location.pathname, item.subItems)) {
+            activeKeys.push(currentKey);
+          }
+          traverse(item.subItems, currentKey);
+        }
+      });
+    };
+
+    sidebarSections.forEach((section) => {
+      traverse(section.items, section.title);
+    });
+
+    if (activeKeys.length > 0) {
+      setExpandedSidebarGroups((current) => {
+        const next = [...current];
+        let changed = false;
+        activeKeys.forEach((key) => {
+          if (!next.includes(key)) {
+            next.push(key);
+            changed = true;
+          }
+        });
+        return changed ? next : current;
+      });
+    }
+  }, [location.pathname, sidebarSections]);
+
   const pageTitle = resolvePageTitle(location.pathname, sidebarSections, appName);
   const searchEntries = useMemo(() => flattenSearchEntries(flattenItems(sidebarSections)), [sidebarSections]);
   const filteredSearchEntries = useMemo(() => {

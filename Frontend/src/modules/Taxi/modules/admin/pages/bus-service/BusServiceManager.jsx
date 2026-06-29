@@ -882,7 +882,7 @@ const BusServiceManager = ({
         </div>
 
         <div className="mt-8 hidden overflow-hidden rounded-[28px] border border-slate-100 md:block">
-          <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_120px_120px_170px] gap-4 bg-slate-100 px-6 py-5 text-sm font-black text-slate-700">
+          <div className="grid gap-4 bg-slate-100 px-6 py-5 text-sm font-black text-slate-700" style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1fr) 120px 120px 170px' }}>
             <p>Name</p>
             <p>Driver</p>
             <p>Route</p>
@@ -902,9 +902,10 @@ const BusServiceManager = ({
                 return (
                   <div
                     key={`catalog-${bus.id}`}
-                    className={`grid grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_120px_120px_170px] gap-4 px-6 py-6 transition ${
+                    className={`grid gap-4 px-6 py-6 transition ${
                       active ? 'bg-indigo-50/70' : 'hover:bg-slate-50/80'
                     }`}
+                    style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1fr) 120px 120px 170px' }}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-lg font-black text-slate-900">{bus.busName || 'Untitled Bus'}</p>

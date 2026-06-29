@@ -111,7 +111,7 @@ const PoolingCommissionManager = () => {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative min-w-[280px]">
               <Search size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -133,7 +133,7 @@ const PoolingCommissionManager = () => {
         </div>
 
         <div className="overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm">
-          <div className="grid grid-cols-[minmax(0,1.2fr)_120px_120px_140px_200px_200px_150px] gap-4 bg-slate-100 px-6 py-5 text-sm font-black text-slate-700">
+          <div className="grid gap-4 bg-slate-100 px-6 py-5 text-sm font-black text-slate-700" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) 120px 120px 140px 200px 200px 150px' }}>
             <p>Vehicle</p>
             <p>Type</p>
             <p>Capacity</p>
@@ -156,7 +156,8 @@ const PoolingCommissionManager = () => {
                 return (
                   <div
                     key={vehicle._id}
-                    className="grid grid-cols-[minmax(0,1.2fr)_120px_120px_140px_200px_200px_150px] gap-4 px-6 py-5"
+                    className="grid gap-4 px-6 py-5"
+                    style={{ gridTemplateColumns: 'minmax(0, 1.2fr) 120px 120px 140px 200px 200px 150px' }}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-base font-black text-slate-900">{vehicle.name || 'Untitled Vehicle'}</p>
