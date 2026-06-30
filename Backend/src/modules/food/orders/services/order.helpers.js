@@ -4,7 +4,7 @@ import {
   sendNotificationToOwner,
   sendNotificationToOwners,
 } from "../../../../core/notifications/firebase.service.js";
-import { getIO, rooms } from '../../../../config/socket.js';
+import { getIO, rooms, resolveRoomOwnerId } from '../../../../config/socket.js';
 import { addOrderJob } from '../../../../queues/producers/order.producer.js';
 
 export function enqueueOrderEvent(action, payload = {}) {
@@ -51,6 +51,18 @@ export function sanitizeOrderForExternal(orderDoc) {
   // Ensure orderId field for UI always contains the pretty ID
   o.orderId = o.order_id || o.orderMongoId; 
   return o;
+}
+
+export function emitOrderStatusSocket({ userId, restaurantId, deliveryPartnerId } = {}, payload = {}) {
+  try {
+    const io = getIO();
+    if (!io) return;
+    if (userId) io.to(rooms.user(userId)).emit('order_status_update', payload);
+    if (restaurantId) io.to(rooms.restaurant(restaurantId)).emit('order_status_update', payload);
+    if (deliveryPartnerId) io.to(rooms.delivery(deliveryPartnerId)).emit('order_status_update', payload);
+  } catch (error) {
+    logger.warn(`emitOrderStatusSocket failed: ${error?.message || error}`);
+  }
 }
 
 export function emitDeliveryDropOtpToUser(order, plainOtp) {
@@ -255,7 +267,7 @@ export async function notifyRestaurantNewOrder(orderDoc) {
     }
 
     await notifyOwnersSafely(
-      [{ ownerType: "RESTAURANT", ownerId: orderDoc.restaurantId }],
+      [{ ownerType: "RESTAURANT", ownerId: resolveRoomOwnerId(orderDoc.restaurantId) }],
       {
         title: "New order received",
         body: `Order #${orderDoc.order_id || orderDoc._id} is waiting for review.`,

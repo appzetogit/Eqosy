@@ -11,6 +11,7 @@ import { Owner as TaxiOwner } from '../../modules/taxi/admin/models/Owner.js';
 import { ServiceStore as TaxiServiceStore } from '../../modules/taxi/admin/models/ServiceStore.js';
 import { ServiceCenterStaff as TaxiServiceCenterStaff } from '../../modules/taxi/admin/models/ServiceCenterStaff.js';
 import { config } from '../../config/env.js';
+import { resolveRoomOwnerId } from '../../config/socket.js';
 import { logger } from '../../utils/logger.js';
 import { AuthError } from '../auth/errors.js';
 
@@ -291,9 +292,11 @@ const readTokensFromDoc = (doc, platform) => {
 
 export const listOwnerTokens = async ({ ownerType, ownerId, platform }) => {
     if (!ownerType || !ownerId) return [];
+    const normalizedOwnerId = resolveRoomOwnerId(ownerId);
+    if (!normalizedOwnerId) return [];
     const model = getOwnerModel(ownerType);
     if (!model) return [];
-    const doc = await model.findById(ownerId).select('fcmTokens fcmTokenMobile fcmTokenWeb').lean();
+    const doc = await model.findById(normalizedOwnerId).select('fcmTokens fcmTokenMobile fcmTokenWeb').lean();
     if (doc) doc.__ownerType = ownerType;
     return readTokensFromDoc(doc, platform);
 };
@@ -305,13 +308,18 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
         throw new Error('ownerType, ownerId, and token are required.');
     }
 
+    const normalizedOwnerId = resolveRoomOwnerId(ownerId);
+    if (!normalizedOwnerId) {
+        throw new Error('ownerType, ownerId, and token are required.');
+    }
+
     const normalizedPlatform = platform === 'mobile' ? 'mobile' : 'web';
     const model = getOwnerModel(ownerType);
     if (!model) {
         throw new Error(`Unsupported owner type: ${ownerType}`);
     }
 
-    const doc = await model.findById(ownerId);
+    const doc = await model.findById(normalizedOwnerId);
     if (!doc) {
         throw new AuthError('Session is stale or invalid for this account. Please login again.');
     }

@@ -47,6 +47,7 @@ import {
   buildDeliverySocketPayload,
   notifyRestaurantNewOrder,
   isStatusAdvance,
+  emitOrderStatusSocket,
 } from './order.helpers.js';
 // ðŸ—‘ï¸ Moved to foodTransaction.service.js to centralize finance logic.
 
@@ -348,6 +349,21 @@ export async function createOrder(userId, dto) {
 
       // Restaurant gets new-order request only when payment flow is eligible.
       await notifyRestaurantNewOrder(order);
+
+      emitOrderStatusSocket(
+        { userId },
+        {
+          orderMongoId: order._id.toString(),
+          orderId: order.order_id || order._id.toString(),
+          orderStatus: order.orderStatus,
+          title: isAwaitingOnlinePayment
+            ? "Complete Payment to Confirm Order"
+            : "Order Confirmed!",
+          message: isAwaitingOnlinePayment
+            ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
+            : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
+        },
+      );
     } catch (err) {
       logger.warn(`Notifications failed for order ${order._id}: ${err.message}`);
     }
@@ -440,6 +456,17 @@ export async function verifyPayment(userId, dto) {
       orderMongoId: String(order._id),
     },
   });
+
+  emitOrderStatusSocket(
+    { userId },
+    {
+      orderMongoId: order._id.toString(),
+      orderId: order.order_id || order._id.toString(),
+      orderStatus: order.orderStatus,
+      title: "Payment Successful!",
+      message: `We have received your payment for Order #${order._id.toString()}.`,
+    },
+  );
 
 
   return { order: normalizeOrderForClient(order), payment: order.payment };

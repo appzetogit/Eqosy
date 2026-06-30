@@ -28,11 +28,34 @@ function maskToken(token) {
     return `${trimmed.slice(0, 12)}...${trimmed.slice(-6)}`;
 }
 
+/**
+ * Normalize Mongo ObjectId / populated refs into a stable room id string.
+ * Populated documents stringify to "{ ... }" and would target the wrong room.
+ */
+export function resolveRoomOwnerId(value) {
+    if (value == null || value === '') return null;
+
+    if (typeof value === 'object' && typeof value.toHexString === 'function') {
+        return value.toHexString();
+    }
+
+    if (typeof value === 'object' && value._id != null && value._id !== value) {
+        return resolveRoomOwnerId(value._id);
+    }
+
+    const normalized = String(value).trim();
+    if (!normalized || normalized === '[object Object]' || normalized.startsWith('{')) {
+        return null;
+    }
+
+    return normalized;
+}
+
 const roomNames = {
-    restaurant: (id) => `restaurant:${String(id)}`,
-    user: (id) => `user:${String(id)}`,
-    delivery: (id) => `delivery:${String(id)}`,
-    tracking: (orderId) => `tracking:${String(orderId)}`
+    restaurant: (id) => `restaurant:${resolveRoomOwnerId(id) || ''}`,
+    user: (id) => `user:${resolveRoomOwnerId(id) || ''}`,
+    delivery: (id) => `delivery:${resolveRoomOwnerId(id) || ''}`,
+    tracking: (orderId) => `tracking:${resolveRoomOwnerId(orderId) || ''}`,
 };
 
 /**
