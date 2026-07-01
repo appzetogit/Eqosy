@@ -249,6 +249,7 @@ export function canExposeOrderToRestaurant(orderLike) {
   return ["paid", "authorized", "captured", "settled"].includes(status);
 }
 
+
 export async function notifyRestaurantNewOrder(orderDoc) {
   try {
     if (!orderDoc || !canExposeOrderToRestaurant(orderDoc)) return;
@@ -266,8 +267,9 @@ export async function notifyRestaurantNewOrder(orderDoc) {
       io.to(rooms.restaurant(orderDoc.restaurantId)).emit("new_order", payload);
     }
 
+    const restaurantOwnerId = resolveRoomOwnerId(orderDoc.restaurantId);
     await notifyOwnersSafely(
-      [{ ownerType: "RESTAURANT", ownerId: resolveRoomOwnerId(orderDoc.restaurantId) }],
+      [{ ownerType: "RESTAURANT", ownerId: restaurantOwnerId }],
       {
         title: "New order received",
         body: `Order #${orderDoc.order_id || orderDoc._id} is waiting for review.`,
@@ -279,7 +281,7 @@ export async function notifyRestaurantNewOrder(orderDoc) {
         },
       },
     );
-  } catch {
+  } catch (notifyErr) {
     // Do not block order/payment flow if notification fails.
   }
 }

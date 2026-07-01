@@ -13,16 +13,6 @@ const sanitizeString = (value) => String(value ?? '').trim();
 const getServiceAccountFromEnv = () => {
     if (cachedServiceAccount) return cachedServiceAccount;
 
-    const rawJson = sanitizeString(config.firebaseServiceAccount);
-    if (rawJson) {
-        try {
-            cachedServiceAccount = JSON.parse(rawJson);
-            return cachedServiceAccount;
-        } catch (err) {
-            logger.error('Error parsing FIREBASE_SERVICE_ACCOUNT JSON:', err.message);
-        }
-    }
-
     const pathValue = sanitizeString(config.firebaseServiceAccountPath);
     if (pathValue) {
         const filePath = resolve(process.cwd(), pathValue);
@@ -33,6 +23,16 @@ const getServiceAccountFromEnv = () => {
             } catch (err) {
                 logger.error(`Error reading or parsing firebase service account file at ${filePath}:`, err.message);
             }
+        }
+    }
+
+    const rawJson = sanitizeString(config.firebaseServiceAccount);
+    if (rawJson) {
+        try {
+            cachedServiceAccount = JSON.parse(rawJson);
+            return cachedServiceAccount;
+        } catch (err) {
+            logger.error('Error parsing FIREBASE_SERVICE_ACCOUNT JSON:', err.message);
         }
     }
 

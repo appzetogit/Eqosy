@@ -84,12 +84,6 @@ const normalizePrivateKey = (key) => String(key || '').replace(/\\n/g, '\n').tri
 const getServiceAccountFromEnv = () => {
     if (cachedServiceAccount) return cachedServiceAccount;
 
-    const rawJson = sanitizeString(config.firebaseServiceAccount || process.env.FIREBASE_SERVICE_ACCOUNT);
-    if (rawJson) {
-        cachedServiceAccount = JSON.parse(rawJson);
-        return cachedServiceAccount;
-    }
-
     const pathValue = sanitizeString(config.firebaseServiceAccountPath || process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
     if (pathValue) {
         const filePath = resolve(process.cwd(), pathValue);
@@ -99,7 +93,13 @@ const getServiceAccountFromEnv = () => {
         }
     }
 
-    throw new Error('Firebase service account is not configured. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_SERVICE_ACCOUNT_PATH.');
+    const rawJson = sanitizeString(config.firebaseServiceAccount || process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (rawJson) {
+        cachedServiceAccount = JSON.parse(rawJson);
+        return cachedServiceAccount;
+    }
+
+    throw new Error('Firebase service account is not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT.');
 };
 
 const getFirebaseProjectId = () => {
@@ -400,11 +400,17 @@ export const sendPushNotification = async (tokens, payload = {}) => {
 
                 if (!response.ok) {
                     const errorJson = await parseFirebaseError(response);
+                    const errorMessage = errorJson?.error?.message || `FCM send failed (${response.status})`;
+                    if (String(errorMessage).toLowerCase().includes('senderid mismatch')) {
+                        logger.error(
+                            `[FCM] SenderId mismatch: device tokens were registered with a different Firebase project than FIREBASE_SERVICE_ACCOUNT. Align Backend FIREBASE_SERVICE_ACCOUNT with Frontend VITE_FIREBASE_PROJECT_ID (${getFirebaseProjectId()}).`,
+                        );
+                    }
                     return {
                         token,
                         ok: false,
                         remove: shouldRemoveTokenFromError(errorJson, response),
-                        error: errorJson?.error?.message || `FCM send failed (${response.status})`
+                        error: errorMessage
                     };
                 }
 
@@ -453,6 +459,7 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
 
     const tokens = await listOwnerTokens({ ownerType, ownerId, platform });
     if (!tokens.length) {
+        logger.warn(`FCM push skipped: no tokens for ${ownerType}:${resolveRoomOwnerId(ownerId)}`);
         return { successCount: 0, failureCount: 0, results: [] };
     }
     try {

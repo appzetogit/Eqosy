@@ -412,5 +412,7 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
   await order.save();
 
   await tryAutoAssign(order._id);
-  return { success: true };
+  const finalOrder = await FoodOrder.findById(order._id).select('dispatch.offeredTo').lean();
+  const notifiedCount = finalOrder?.dispatch?.offeredTo?.length || 0;
+  return { success: true, notifiedCount };
 }
