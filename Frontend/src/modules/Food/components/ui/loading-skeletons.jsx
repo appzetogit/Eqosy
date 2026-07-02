@@ -1,5 +1,6 @@
 import { Skeleton } from "@food/components/ui/skeleton"
 import { cn } from "@food/utils/utils"
+import { ArrowLeft } from "lucide-react"
 
 const DEFAULT_CARD_COUNT = 4
 
@@ -354,8 +355,89 @@ function AppShellSkeleton({ className }) {
   )
 }
 
+function CartPageSkeleton({ onBack, className }) {
+  return (
+    <LoadingSkeletonRegion
+      label="Loading cart"
+      className={cn("min-h-screen bg-slate-50 dark:bg-[#0a0a0a]", className)}
+    >
+      <div className="bg-white dark:bg-[#1a1a1a] border-b dark:border-gray-800 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto flex items-center gap-3 px-3 md:px-6 py-2 md:py-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex-1 min-w-0 space-y-2">
+            <Skeleton className="h-3 w-32 rounded-full" />
+            <Skeleton className="h-4 w-full max-w-sm rounded-full" />
+          </div>
+          <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 md:px-6 py-4 md:py-6 space-y-3 md:space-y-4 pb-44">
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl md:rounded-3xl border border-slate-100 dark:border-gray-800 p-4 md:p-5 space-y-4">
+          {Array.from({ length: 2 }, (_, index) => (
+            <div key={`cart-item-${index}`} className="flex items-start gap-3">
+              <Skeleton className="h-5 w-5 rounded-sm flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3 rounded-full" />
+                <Skeleton className="h-3 w-1/4 rounded-full" />
+              </div>
+              <Skeleton className="h-8 w-20 rounded-lg flex-shrink-0" />
+            </div>
+          ))}
+          <Skeleton className="h-4 w-28 rounded-full" />
+        </div>
+
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-slate-100 dark:border-gray-800 p-4 space-y-3">
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+        </div>
+
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-slate-100 dark:border-gray-800 p-4 flex items-center gap-3">
+          <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-40 rounded-full" />
+            <Skeleton className="h-3 w-24 rounded-full" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-slate-100 dark:border-gray-800 p-4 space-y-3">
+          <Skeleton className="h-4 w-28 rounded-full" />
+          <div className="flex gap-2">
+            {Array.from({ length: 3 }, (_, index) => (
+              <Skeleton key={`addr-tab-${index}`} className="h-8 w-16 rounded-full" />
+            ))}
+          </div>
+          <Skeleton className="h-24 w-full rounded-2xl" />
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 p-4 space-y-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-3 w-16 rounded-full" />
+              <Skeleton className="h-4 w-32 rounded-full" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
+        <Skeleton className="h-12 md:h-14 w-full max-w-3xl mx-auto rounded-2xl" />
+      </div>
+    </LoadingSkeletonRegion>
+  )
+}
+
 export {
   AppShellSkeleton,
+  CartPageSkeleton,
   CategoryChipRowSkeleton,
   ContentPageSkeleton,
   ExploreGridSkeleton,

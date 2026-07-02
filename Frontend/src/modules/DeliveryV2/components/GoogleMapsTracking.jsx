@@ -6,6 +6,7 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 import bikeLogo from '../../Food/assets/bikelogo.png'
+import eqosyDeliveryRider from '../../Food/assets/eqosy-delivery-rider.png'
 
 
 /**
@@ -37,16 +38,7 @@ import bikeLogo from '../../Food/assets/bikelogo.png'
  * - The component will automatically calculate and display the driving route polyline
  */
 
-// Use direct public path which is more reliable in this setup
-const getDeliveryIconUrl = () => {
-  try {
-    // Try to use delivery icon from public assets
-    return '/assets/deliveryboy/deliveryIcon.png'
-  } catch {
-    // Fallback to bikelogo if delivery icon not found
-    return bikeLogo
-  }
-}
+const getDeliveryIconUrl = () => eqosyDeliveryRider
 
 const mapContainerStyle = {
   width: '100%',

@@ -5,6 +5,10 @@ import { deliveryAPI } from '@food/api';
 import alertSound from '@food/assets/audio/alert.mp3';
 import originalSound from '@food/assets/audio/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
+import {
+  joinOrderTrackingRooms,
+  leaveAllOrderTrackingRooms,
+} from '@food/utils/orderTrackingRooms';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -189,6 +193,7 @@ export const useDeliveryNotifications = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
   const joinedDeliveryRoomRef = useRef(null);
+  const joinedTrackingRoomsRef = useRef(new Set());
   const ALERT_LOOP_INTERVAL_MS = 4500;
   const ALERT_LOOP_MAX_MS = 120000;
   const ALERT_DEDUPE_MS = 15000;
@@ -1034,11 +1039,23 @@ export const useDeliveryNotifications = () => {
 
   const emitLocation = useCallback((data) => {
     if (socketRef.current && socketRef.current.connected) {
-      // debugLog('? Emitting location via socket:', data);
       socketRef.current.emit('update-location', data);
       return true;
     }
     return false;
+  }, []);
+
+  const joinTrackingForOrder = useCallback((orderOrId, extraIds = []) => {
+    return joinOrderTrackingRooms(
+      socketRef.current,
+      orderOrId,
+      joinedTrackingRoomsRef.current,
+      extraIds,
+    );
+  }, []);
+
+  const leaveAllTrackingRooms = useCallback(() => {
+    leaveAllOrderTrackingRooms(socketRef.current, joinedTrackingRoomsRef.current);
   }, []);
 
   return {
@@ -1050,7 +1067,9 @@ export const useDeliveryNotifications = () => {
     clearOrderStatusUpdate,
     isConnected,
     playNotificationSound,
-    emitLocation
+    emitLocation,
+    joinTrackingForOrder,
+    leaveAllTrackingRooms,
   };
 };
 

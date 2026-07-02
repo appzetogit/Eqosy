@@ -150,6 +150,12 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
     const fromCoords = toPointFromGeoJSON(coords);
     if (fromCoords) return fromCoords;
 
+    const lat = Number(order?.address?.latitude ?? order?.address?.location?.latitude);
+    const lng = Number(order?.address?.longitude ?? order?.address?.location?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng };
+    }
+
     if (
       fallbackCustomerCoords &&
       Number.isFinite(fallbackCustomerCoords.lat) &&
@@ -286,6 +292,11 @@ const getCustomerCoordsFromApiOrder = (apiOrder, previousOrder = null) => {
   if (Array.isArray(flat) && flat.length >= 2) return flat
   const prev = previousOrder?.address?.coordinates || previousOrder?.address?.location?.coordinates
   if (Array.isArray(prev) && prev.length >= 2) return prev
+
+  const lat = Number(addr?.latitude ?? addr?.location?.latitude ?? previousOrder?.address?.latitude)
+  const lng = Number(addr?.longitude ?? addr?.location?.longitude ?? previousOrder?.address?.longitude)
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return [lng, lat]
+
   return null
 }
 

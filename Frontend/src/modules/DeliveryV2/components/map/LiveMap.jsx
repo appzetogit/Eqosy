@@ -10,6 +10,7 @@ import {
 import { useAppGoogleMapsLoader } from '@/modules/Taxi/modules/admin/utils/googleMaps';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { zoneAPI } from '@food/api';
+import bikeLogo from '@food/assets/bikelogo.png';
 
 const mapContainerStyle = {
   width: '100%',
@@ -83,6 +84,11 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
     return (Number.isFinite(lat) && Number.isFinite(lng)) ? { lat, lng } : null;
   }, [activeOrder, tripStatus]);
 
+  useEffect(() => {
+    setDirections(null);
+    setLastDirectionsAt(0);
+  }, [targetLocation?.lat, targetLocation?.lng, activeOrder?._id]);
+
   const parsedRiderLocation = useMemo(() => {
     if (!riderLocation) return null;
     const lat = parseFloat(riderLocation.lat || riderLocation.latitude);
@@ -95,19 +101,23 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
   const shouldUpdateRoute = useMemo(() => {
     const now = Date.now();
     if (!directions) return true;
-    let throttleMs = 20000;
-    if (parsedRiderLocation && targetLocation && window.google) {
-      try {
-        const p1 = new window.google.maps.LatLng(parsedRiderLocation.lat, parsedRiderLocation.lng);
-        const p2 = new window.google.maps.LatLng(targetLocation.lat, targetLocation.lng);
-        const dist = window.google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
-        if (dist > 2000) throttleMs = 60000;
-        else if (dist > 500) throttleMs = 20000;
-        else throttleMs = 5000;
-      } catch (e) {}
+
+    const elapsed = now - lastDirectionsAt;
+    if (elapsed < 15000) return false;
+
+    if (parsedRiderLocation && directions?.routes?.[0]?.overview_path?.length && window.google?.maps?.geometry) {
+      const fullPath = directions.routes[0].overview_path;
+      const riderPos = new window.google.maps.LatLng(parsedRiderLocation.lat, parsedRiderLocation.lng);
+      let minDist = Infinity;
+      for (let i = 0; i < fullPath.length; i++) {
+        const d = window.google.maps.geometry.spherical.computeDistanceBetween(riderPos, fullPath[i]);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist > 80) return true;
     }
-    return (now - lastDirectionsAt) >= throttleMs;
-  }, [lastDirectionsAt, directions, parsedRiderLocation, targetLocation]);
+
+    return elapsed >= 60000;
+  }, [lastDirectionsAt, directions, parsedRiderLocation]);
 
   useEffect(() => {
     if (directions && onPathReceived) {
@@ -178,14 +188,16 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
   const remainingPath = useMemo(() => {
     if (!directions || !parsedRiderLocation) return [];
     const fullPath = directions.routes[0].overview_path;
+    if (!fullPath?.length || !window.google?.maps?.geometry) return fullPath || [];
+
     let closestIndex = 0;
     let minDist = Infinity;
     const rPos = new window.google.maps.LatLng(parsedRiderLocation.lat, parsedRiderLocation.lng);
     for (let i = 0; i < fullPath.length; i++) {
-       const d = window.google.maps.geometry.spherical.computeDistanceBetween(rPos, fullPath[i]);
-       if (d < minDist) { minDist = d; closestIndex = i; }
+      const d = window.google.maps.geometry.spherical.computeDistanceBetween(rPos, fullPath[i]);
+      if (d < minDist) { minDist = d; closestIndex = i; }
     }
-    return [{ lat: parsedRiderLocation.lat, lng: parsedRiderLocation.lng }, ...fullPath.slice(closestIndex + 1)];
+    return fullPath.slice(closestIndex);
   }, [directions, parsedRiderLocation]);
 
   if (loadError) return <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-red-500 font-bold">Map Load Error</div>;
@@ -220,8 +232,13 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
 
         {parsedRiderLocation && (
           <OverlayView position={parsedRiderLocation} mapPaneName={OverlayView.MARKER_LAYER}>
-            <div style={{ transform: `translate(-50%, -50%) rotate(${parsedRiderLocation.heading || 0}deg)`, transition: 'transform 0.5s linear' }} className="relative w-[72px] h-[72px]">
-              <img src="/MapRider.png" alt="Rider" className="w-full h-full object-contain" />
+            <div style={{ transform: `translate(-50%, -50%) rotate(${parsedRiderLocation.heading || 0}deg)`, transition: 'transform 0.5s linear' }} className="relative w-[4.5rem] h-[4.5rem]">
+              <img
+                src="/MapRider.png"
+                alt="Delivery partner"
+                className="w-full h-full object-contain drop-shadow-2xl pointer-events-none select-none"
+                onError={(e) => { e.target.src = "/MapRider.png"; }}
+              />
             </div>
           </OverlayView>
         )}

@@ -81,7 +81,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const { isOnline, toggleOnline, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
   const { isWithinRange, distanceToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
-  const { newOrder, clearNewOrder, orderStatusUpdate, clearOrderStatusUpdate, isConnected: isSocketConnected, emitLocation } = useDeliveryNotifications();
+  const {
+    newOrder,
+    clearNewOrder,
+    orderStatusUpdate,
+    clearOrderStatusUpdate,
+    isConnected: isSocketConnected,
+    emitLocation,
+    joinTrackingForOrder,
+    leaveAllTrackingRooms,
+  } = useDeliveryNotifications();
   const companyName = useCompanyName();
   const { unreadCount: notificationUnreadCount } = useNotificationInbox("delivery", { limit: 20 });
 
@@ -158,6 +167,84 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [activePolyline, setActivePolyline] = useState(null);
   const mapRef = useRef(null);
 
+  // Refs so geolocation watchPosition always sees the current active order + emitters
+  const activeOrderRef = useRef(activeOrder);
+  const emitLocationRef = useRef(emitLocation);
+  const activePolylineRef = useRef(activePolyline);
+  const etaRef = useRef(eta);
+  const tripStatusRef = useRef(tripStatus);
+
+  useEffect(() => { activeOrderRef.current = activeOrder; }, [activeOrder]);
+  useEffect(() => { emitLocationRef.current = emitLocation; }, [emitLocation]);
+  useEffect(() => { activePolylineRef.current = activePolyline; }, [activePolyline]);
+  useEffect(() => { etaRef.current = eta; }, [eta]);
+  useEffect(() => { tripStatusRef.current = tripStatus; }, [tripStatus]);
+
+  const publishLiveRiderLocation = useCallback((lat, lng, heading = 0, speed = 0, accuracy = null) => {
+    const order = activeOrderRef.current;
+    const orderId = order?.orderId || order?._id;
+    const userId = order?.userId?._id || order?.userId || null;
+    const restaurantId = order?.restaurantId?._id || order?.restaurantId || null;
+
+    deliveryAPI.updateLocation(lat, lng, true, {
+      heading: heading || 0,
+      speed: speed || 0,
+      accuracy,
+    }).catch(() => {});
+
+    if (!orderId) return;
+
+    const payload = {
+      lat,
+      lng,
+      heading: heading || 0,
+      speed: speed || 0,
+      accuracy,
+      orderId,
+      userId,
+      restaurantId,
+      status: 'on_the_way',
+      polyline: activePolylineRef.current,
+    };
+
+    emitLocationRef.current?.(payload);
+
+    writeOrderTracking(orderId, {
+      lat,
+      lng,
+      heading: heading || 0,
+      polyline: activePolylineRef.current,
+      status: tripStatusRef.current,
+      eta: etaRef.current,
+    }).catch(() => {});
+  }, []);
+
+  // Join the same tracking rooms the customer uses when a trip becomes active
+  useEffect(() => {
+    if (!activeOrder) {
+      leaveAllTrackingRooms();
+      return;
+    }
+
+    if (!isSocketConnected) return;
+
+    joinTrackingForOrder(activeOrder);
+
+    const orderId = activeOrder.orderId || activeOrder._id;
+    const loc = useDeliveryStore.getState().riderLocation;
+    if (orderId && loc?.lat != null && loc?.lng != null) {
+      publishLiveRiderLocation(loc.lat, loc.lng, loc.heading || 0, 0, null);
+    }
+  }, [
+    activeOrder,
+    activeOrder?.orderId,
+    activeOrder?._id,
+    isSocketConnected,
+    joinTrackingForOrder,
+    leaveAllTrackingRooms,
+    publishLiveRiderLocation,
+  ]);
+
   const isLoggingOut = useRef(false);
   const handleLogout = useCallback(() => {
     if (isLoggingOut.current) return;
@@ -224,33 +311,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
             // Sync with backend every 2.5 seconds during simulation so customer sees it
             const now = Date.now();
-            if (now - lastSimUpdateSentAt.current >= 2000) { // Reduced to 2s to match backend throttle
+            if (now - lastSimUpdateSentAt.current >= 2000) {
               lastSimUpdateSentAt.current = now;
-              const payload = { 
-                lat, 
-                lng, 
-                heading, 
-                orderId: activeOrder?.orderId || activeOrder?._id,
-                status: 'on_the_way',
-                polyline: activePolyline // Include polyline in every stream update for resilience
-              };
-              // A. HTTP Backup
-              deliveryAPI.updateLocation(lat, lng, true, { heading }).catch(() => {});
-              
-              // B. SOCKET LIVE (SILKY SMOOTH)
-              if (payload.orderId) emitLocation(payload);
-
-              // C. FIREBASE REALTIME DB (Persistent Route for Customer Map)
-              if (payload.orderId) {
-                writeOrderTracking(payload.orderId, { 
-                  lat, 
-                  lng, 
-                  heading, 
-                  polyline: activePolyline,
-                  status: tripStatus,
-                  eta: eta // Publish live ETA to Firebase
-                }).catch(() => {});
-              }
+              publishLiveRiderLocation(lat, lng, heading, 0, null);
             }
           }
           return nextProgress;
@@ -258,7 +321,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       }, 50); // 20 FPS movement
     }
     return () => clearInterval(interval);
-  }, [isSimMode, simPath, simIndex, activeOrder, emitLocation, activePolyline, eta, tripStatus]);
+  }, [isSimMode, simPath, simIndex, activeOrder, publishLiveRiderLocation, setRiderLocation]);
 
   // Fetch Emergency numbers and Profile (Restored logic)
   useEffect(() => {
@@ -439,39 +502,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       if (distMoved >= 25 || (now - lastLocationSentAt.current >= 7000)) {
         lastLocationSentAt.current = now;
         lastCoordRef.current = { lat, lng };
-        
-        const payload = { 
-          lat, 
-          lng, 
-          heading: heading || 0,
-          speed: speed || 0,
-          accuracy: pos.coords.accuracy,
-          orderId: activeOrder?.orderId || activeOrder?._id,
-          status: 'on_the_way',
-          polyline: activePolyline
-        };
-
-        // A. HTTP Backup
-        deliveryAPI.updateLocation(lat, lng, true, { 
-          heading: heading || 0,
-          speed: speed || 0,
-          accuracy: pos.coords.accuracy 
-        }).catch(() => {});
-
-        // B. SOCKET LIVE (SILKY SMOOTH)
-        if (payload.orderId) emitLocation(payload);
-
-        // C. FIREBASE REALTIME DB (Persistent)
-        if (payload.orderId) {
-          writeOrderTracking(payload.orderId, {
-            lat,
-            lng,
-            heading: heading || 0,
-            polyline: activePolyline,
-            status: tripStatus,
-            eta: eta // Publish live ETA to Firebase for customer
-          }).catch(() => {});
-        }
+        publishLiveRiderLocation(lat, lng, heading || 0, speed || 0, pos.coords.accuracy);
       }
     }, () => toast.error('GPS Needed!'), { 
       enableHighAccuracy: true,
@@ -480,7 +511,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     });
     
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [isOnline, setRiderLocation, isSimMode]);
+  }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation]);
 
   // 3.5. Background Ping / Heartbeat
   // If watchPosition stops firing (e.g. app in background or device stationary),

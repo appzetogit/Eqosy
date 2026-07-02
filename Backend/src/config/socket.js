@@ -268,9 +268,9 @@ export const initSocket = async (server) => {
                 status: data.status || 'on_the_way',
             });
 
-            // Broadcast to tracking room (all users watching this order)
+            // Broadcast to tracking room (all users + driver watching this order)
             const trackingRoom = roomNames.tracking(data.orderId);
-            socket.to(trackingRoom).emit('location-update', payload);
+            io.to(trackingRoom).emit('location-update', payload);
 
             // Also emit to the specific user room if userId is provided
             if (data.userId) {

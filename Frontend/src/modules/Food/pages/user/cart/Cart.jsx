@@ -21,6 +21,7 @@ import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
+import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
@@ -214,6 +215,15 @@ export default function Cart() {
   // Restaurant and pricing state
   const [restaurantData, setRestaurantData] = useState(null)
   const [loadingRestaurant, setLoadingRestaurant] = useState(false)
+  const [restaurantFetchComplete, setRestaurantFetchComplete] = useState(false)
+
+  // Check if restaurant is offline
+  const isRestaurantOffline = useMemo(() => {
+    if (!restaurantData) return false
+    const status = getRestaurantAvailabilityStatus(restaurantData)
+    return !status.isOpen
+  }, [restaurantData])
+
   const [pricing, setPricing] = useState(null)
   const [loadingPricing, setLoadingPricing] = useState(false)
 
@@ -568,14 +578,19 @@ export default function Cart() {
     const fetchRestaurantData = async () => {
       if (cart.length === 0) {
         setRestaurantData(null)
+        setRestaurantFetchComplete(true)
+        setLoadingRestaurant(false)
         return
       }
 
       // If we already have restaurantData, don't fetch again
       if (restaurantData) {
+        setRestaurantFetchComplete(true)
+        setLoadingRestaurant(false)
         return
       }
 
+      setRestaurantFetchComplete(false)
       setLoadingRestaurant(true)
 
       // Strategy 1: Try using restaurantId from cart if available
@@ -615,6 +630,7 @@ export default function Cart() {
               });
               // Don't set restaurantData if IDs don't match - this prevents wrong restaurant assignment
               setLoadingRestaurant(false);
+              setRestaurantFetchComplete(true);
               return;
             }
 
@@ -635,6 +651,7 @@ export default function Cart() {
             })
             setRestaurantData(data)
             setLoadingRestaurant(false)
+            setRestaurantFetchComplete(true)
             return
           }
         } catch (error) {
@@ -678,6 +695,7 @@ export default function Cart() {
               });
               // Don't set restaurantData if names don't match - this prevents wrong restaurant assignment
               setLoadingRestaurant(false);
+              setRestaurantFetchComplete(true);
               return;
             }
 
@@ -690,6 +708,7 @@ export default function Cart() {
             })
             setRestaurantData(matchingRestaurant)
             setLoadingRestaurant(false)
+            setRestaurantFetchComplete(true)
             return
           } else {
             debugWarn("?? Restaurant not found even by name search. Searched in", restaurants.length, "restaurants")
@@ -705,6 +724,7 @@ export default function Cart() {
       // If all strategies fail, set to null
       setRestaurantData(null)
       setLoadingRestaurant(false)
+      setRestaurantFetchComplete(true)
     }
 
     fetchRestaurantData()
@@ -1419,6 +1439,11 @@ export default function Cart() {
 
 
   const handlePlaceOrder = async () => {
+    if (isRestaurantOffline) {
+      toast.error("Restaurant is offline. Cannot place order.")
+      return
+    }
+
     if (!hasSavedAddress) {
       toast.error("Please choose a delivery location to continue")
       openLocationSelector()
@@ -1911,6 +1936,15 @@ export default function Cart() {
     navigate(`/user/orders/${placedOrderId}?confirmed=true`)
   }
 
+  // While restaurant status is loading, show neutral skeleton (avoids colorful cart flash before offline state)
+  if (cart.length > 0 && !restaurantFetchComplete && !showOrderSuccess && !showPlacingOrder) {
+    return (
+      <AnimatedPage className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a]">
+        <CartPageSkeleton onBack={handleBack} />
+      </AnimatedPage>
+    )
+  }
+
   // Empty cart state - but don't show if order success or placing order modal is active
   if (cart.length === 0 && !showOrderSuccess && !showPlacingOrder) {
     return (
@@ -1943,7 +1977,10 @@ export default function Cart() {
   }
 
   return (
-    <div className="relative min-h-screen bg-slate-50 dark:bg-[#0a0a0a]">
+    <div 
+      className="relative min-h-screen bg-slate-50 dark:bg-[#0a0a0a]"
+      style={isRestaurantOffline ? { filter: "grayscale(100%)" } : {}}
+    >
       {/* Header - Sticky at top */}
       <div className="bg-white dark:bg-[#1a1a1a] border-b dark:border-gray-800 sticky top-0 z-20 flex-shrink-0">
         <div className="max-w-7xl mx-auto">
@@ -2038,6 +2075,13 @@ export default function Cart() {
                     </div>
                   ))}
                 </div>
+
+                {isRestaurantOffline && (
+                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl flex items-center gap-2 border border-red-100 dark:border-red-900/50">
+                    <div className="w-2 h-2 rounded-full bg-red-600 dark:bg-red-400 animate-pulse" />
+                    <span className="text-xs md:text-sm font-semibold">Restaurant is offline</span>
+                  </div>
+                )}
 
                 {/* Add more items */}
                 <button
@@ -2782,7 +2826,7 @@ export default function Cart() {
             {/* Place Order Button */}
             <button
               onClick={handlePlaceOrder}
-              disabled={isPlacingOrder || loadingPricing || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+              disabled={isPlacingOrder || loadingPricing || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline}
               className="w-full bg-gradient-to-r from-[#EB590E] to-[#E23744] hover:from-[#D94F0C] hover:to-[#CF2834] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#EB590E]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
@@ -2792,15 +2836,17 @@ export default function Cart() {
                 </div>
               )}
               <div className="flex items-center gap-1 mx-auto text-sm md:text-lg tracking-wide">
-                {isPlacingOrder
-                  ? "Processing..."
-                  : loadingPricing
-                    ? "Calculating Fees..."
-                    : !hasSavedAddress
-                      ? "Select Address"
-                      : !isPricingAvailable
-                        ? "Fees Unavailable"
-                        : "Place Order"}
+                {isRestaurantOffline
+                  ? "Restaurant Offline"
+                  : isPlacingOrder
+                    ? "Processing..."
+                    : loadingPricing
+                      ? "Calculating Fees..."
+                      : !hasSavedAddress
+                        ? "Select Address"
+                        : !isPricingAvailable
+                          ? "Fees Unavailable"
+                          : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
