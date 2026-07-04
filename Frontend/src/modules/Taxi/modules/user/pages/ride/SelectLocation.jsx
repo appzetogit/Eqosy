@@ -168,7 +168,10 @@ const SelectLocation = () => {
   const latestSearchRef = useRef(0);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const navigate = useNavigate();
-  const routePrefix = window.location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
+  // Must use React Router location (hash path in Flutter WebView), NOT window.location.pathname.
+  // HashRouter keeps pathname as "/" and the real route in the hash — using window.location
+  // made navigate go to "/ride/select-vehicle" which misses taxi routes and lands on /taxi/user.
+  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
   // All known locations â€” filtered live as user types
   const allResults = [
@@ -574,7 +577,18 @@ const SelectLocation = () => {
       lon: resolvedPickupCoords[0],
     });
 
-    navigate(`${routePrefix}/ride/select-vehicle`, {
+    const targetPath = `${routePrefix}/ride/select-vehicle`;
+    if (typeof window !== 'undefined' && (window.flutter_inappwebview || window.ReactNativeWebView)) {
+      console.info('[SelectLocation] navigate to vehicle', {
+        targetPath,
+        routerPathname: location.pathname,
+        windowPathname: window.location.pathname,
+        hash: window.location.hash,
+        routePrefix,
+      });
+    }
+
+    navigate(targetPath, {
       state: {
         pickup: finalPickup,
         drop: finalDrop,
