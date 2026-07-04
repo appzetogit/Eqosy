@@ -93,6 +93,12 @@ const deliveryPartnerSchema = new mongoose.Schema(
             enum: ['online', 'offline'],
             default: 'offline'
         },
+        onlineSelfie: {
+            imageUrl: { type: String, default: '', trim: true },
+            capturedAt: { type: Date, default: null },
+            uploadedAt: { type: Date, default: null },
+            forDate: { type: String, default: '' }
+        },
         lastLocation: {
             type: { type: String, enum: ['Point'] },
             coordinates: { type: [Number] }

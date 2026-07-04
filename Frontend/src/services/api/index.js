@@ -1759,16 +1759,24 @@ export const deliveryAPI = {
       contextModule: "delivery",
     }),
   /** PATCH /food/delivery/availability - set online/offline (and optional lat/lng). */
-  updateOnlineStatus: (isOnline) =>
+  updateOnlineStatus: (isOnline, selfieImageUrl = "") =>
     apiClient.patch(
       "/food/delivery/availability",
-      { status: isOnline ? "online" : "offline" },
+      {
+        status: isOnline ? "online" : "offline",
+        ...(selfieImageUrl ? { selfieImageUrl } : {}),
+      },
       { contextModule: "delivery" },
     ),
   updateLocation: (latitude, longitude, isOnline, extras = {}) =>
     apiClient.patch(
       "/food/delivery/availability",
-      { status: isOnline ? "online" : "offline", latitude, longitude, ...extras },
+      {
+        status: isOnline ? "online" : "offline",
+        latitude,
+        longitude,
+        ...extras,
+      },
       { contextModule: "delivery" },
     ),
   /** Orders */

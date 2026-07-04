@@ -11,6 +11,7 @@ import { API_BASE_URL } from '@food/api/config';
 import eqosyRestaurantPin from '@food/assets/eqosy-restaurant-pin.png';
 import { subscribeOrderTracking, subscribeDeliveryLocation } from '@food/realtimeTracking';
 import { collectOrderTrackingIds, joinOrderTrackingRooms } from '@food/utils/orderTrackingRooms';
+import { buildVisibleRouteFromRiderPosition } from '@food/utils/liveTrackingPolyline';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Navigation, Info, Circle } from 'lucide-react';
 
@@ -145,49 +146,25 @@ function ensurePathEndsAt(path, endpoint) {
   return path;
 }
 
-const slicePathFromPosition = (path, position, endpoint = null) => {
-  if (!path?.length || !position || !window.google?.maps?.geometry) {
-    return ensurePathEndsAt(path || [], endpoint);
-  }
-
-  let closestIndex = 0;
-  let minDist = Infinity;
-  const rPos = new window.google.maps.LatLng(position.lat, position.lng);
-  for (let i = 0; i < path.length; i++) {
-    const d = window.google.maps.geometry.spherical.computeDistanceBetween(rPos, path[i]);
-    if (d < minDist) { minDist = d; closestIndex = i; }
-  }
-
-  let sliced = path.slice(closestIndex).map((point) => pathPointToLatLng(point) || point);
-
-  // Start line from rider's exact GPS, not the nearest road node
-  const first = pathPointToLatLng(sliced[0]);
-  if (first && minDist > 3) {
-    sliced = [{ lat: position.lat, lng: position.lng }, ...sliced];
-  }
-
-  return ensurePathEndsAt(sliced, endpoint);
-};
-
-const ROUTE_MAP_MATCH_MAX_METERS = 50;
-const ARRIVAL_PIN_SNAP_METERS = 12;
-
-function nearestPointOnPath(position, path, maxSnapMeters = ROUTE_MAP_MATCH_MAX_METERS) {
+function findNearestProgressOnPath(position, path) {
   if (!path?.length || !position || !window.google?.maps?.geometry?.spherical) return null;
 
   const pos = new window.google.maps.LatLng(position.lat, position.lng);
   const points = path.map((point) => pathPointToLatLng(point)).filter(Boolean);
   if (!points.length) return null;
 
-  let best = null;
-  let bestDist = Infinity;
+  let best = {
+    lat: points[0].lat,
+    lng: points[0].lng,
+    nextIndex: 1,
+    distance: Infinity,
+  };
 
   for (let i = 0; i < points.length; i++) {
     const pt = new window.google.maps.LatLng(points[i].lat, points[i].lng);
     const d = window.google.maps.geometry.spherical.computeDistanceBetween(pos, pt);
-    if (d < bestDist) {
-      bestDist = d;
-      best = points[i];
+    if (d < best.distance) {
+      best = { lat: points[i].lat, lng: points[i].lng, nextIndex: i + 1, distance: d };
     }
   }
 
@@ -197,19 +174,84 @@ function nearestPointOnPath(position, path, maxSnapMeters = ROUTE_MAP_MATCH_MAX_
     const segLen = window.google.maps.geometry.spherical.computeDistanceBetween(a, b);
     if (segLen < 1) continue;
 
-    const steps = Math.max(2, Math.ceil(segLen / 5));
+    const steps = Math.max(4, Math.ceil(segLen / 3));
     for (let s = 0; s <= steps; s++) {
-      const sample = window.google.maps.geometry.spherical.interpolate(a, b, s / steps);
+      const frac = s / steps;
+      const sample = window.google.maps.geometry.spherical.interpolate(a, b, frac);
       const d = window.google.maps.geometry.spherical.computeDistanceBetween(pos, sample);
-      if (d < bestDist) {
-        bestDist = d;
-        best = { lat: sample.lat(), lng: sample.lng() };
+      if (d < best.distance) {
+        const nextIndex = frac >= 0.995 ? Math.min(i + 2, points.length) : i + 1;
+        best = {
+          lat: sample.lat(),
+          lng: sample.lng(),
+          nextIndex,
+          distance: d,
+        };
       }
     }
   }
 
-  if (!best || bestDist > maxSnapMeters) return null;
   return best;
+}
+
+const ROUTE_MAP_MATCH_MAX_METERS = 50;
+const ARRIVAL_PIN_SNAP_METERS = 12;
+
+function nearestPointOnPath(position, path, maxSnapMeters = ROUTE_MAP_MATCH_MAX_METERS) {
+  const progress = findNearestProgressOnPath(position, path);
+  if (!progress || progress.distance > maxSnapMeters) return null;
+  return { lat: progress.lat, lng: progress.lng };
+}
+
+function normalizeOverviewPath(path) {
+  return (path || []).map((point) => pathPointToLatLng(point)).filter(Boolean);
+}
+
+function buildRemainingRoutePath(fullPath, riderPosition, endpoint = null) {
+  const normalized = normalizeOverviewPath(fullPath);
+  if (!normalized.length) return [];
+
+  if (!riderPosition) {
+    return ensurePathEndsAt(normalized, endpoint);
+  }
+
+  if (normalized.length < 2) {
+    return ensurePathEndsAt(normalized, endpoint);
+  }
+
+  const { visiblePolyline, isOffRoute } = buildVisibleRouteFromRiderPosition(normalized, riderPosition);
+  // Product requirement: ONLY show driving-route polyline (no straight "displacement" connector).
+  // The shared utility prepends riderPosition when off-route; drop that segment to avoid a straight line.
+  let routeOnlyPolyline = visiblePolyline;
+  if (isOffRoute && Array.isArray(visiblePolyline) && visiblePolyline.length > 1) {
+    routeOnlyPolyline = visiblePolyline.slice(1);
+  }
+
+  return ensurePathEndsAt(routeOnlyPolyline, endpoint);
+}
+
+/** Imperatively syncs path on every rider tick — declarative Polyline alone often won't erase behind rider */
+function LiveRoutePolyline({ path, options }) {
+  const polylineRef = useRef(null);
+  const normalizedPath = useMemo(() => normalizeOverviewPath(path), [path]);
+
+  useEffect(() => {
+    if (!polylineRef.current || normalizedPath.length < 2) return;
+    polylineRef.current.setPath(normalizedPath);
+  }, [normalizedPath]);
+
+  if (normalizedPath.length < 2) return null;
+
+  return (
+    <Polyline
+      onLoad={(instance) => {
+        polylineRef.current = instance;
+        instance.setPath(normalizedPath);
+      }}
+      path={normalizedPath}
+      options={options}
+    />
+  );
 }
 
 const DeliveryTrackingMap = ({
@@ -482,9 +524,24 @@ const DeliveryTrackingMap = ({
   // Pickup leg = rider assigned and en route to / at restaurant (before delivery leg)
   const isPickupLeg = useMemo(() => {
     if (isDeliveryLeg || !hasAssignedRider) return false;
+    
     const pickupPhases = ['en_route_to_pickup', 'at_pickup'];
-    return pickupPhases.includes(deliveryPhase);
-  }, [isDeliveryLeg, hasAssignedRider, deliveryPhase]);
+    if (pickupPhases.includes(deliveryPhase)) return true;
+
+    const pickupStatuses = [
+      'accepted',
+      'preparing',
+      'ready',
+      'ready_for_pickup',
+      'arrived',
+      'reached_pickup',
+      'at_pickup',
+      'picking_up',
+    ];
+    if (pickupStatuses.includes(tripStatus)) return true;
+
+    return false;
+  }, [isDeliveryLeg, hasAssignedRider, deliveryPhase, tripStatus]);
 
   // Always use order delivery address for pin + routing (never conflate with viewer GPS)
   const destinationCoords = customerCoords;
@@ -642,29 +699,62 @@ const DeliveryTrackingMap = ({
     );
   }, [isDeliveryLeg, baselineDirections, deliveryLegDirections]);
 
-  const shouldUpdateRoute = useMemo(() => {
-    if (!isDeliveryLeg) return false;
-    if (restaurantToUserPath) return false;
+  const activeDeliveryPath = useMemo(() => {
+    if (!isDeliveryLeg) return null;
+    return deliveryLegDirections?.routes?.[0]?.overview_path || null;
+  }, [isDeliveryLeg, deliveryLegDirections]);
 
-    const activeDirections = deliveryLegDirections;
-    if (!activeDirections) return true;
+  const deliveryDirectionsOptions = useMemo(() => {
+    if (!isDeliveryLeg || !destinationCoords) return null;
+    const routeOrigin = riderLocation || displayRiderLocation;
+    if (routeOrigin) {
+      return {
+        origin: routeOrigin,
+        destination: destinationCoords,
+        travelMode: 'DRIVING',
+      };
+    }
+    if (restaurantCoords) {
+      return {
+        origin: restaurantCoords,
+        destination: destinationCoords,
+        travelMode: 'DRIVING',
+      };
+    }
+    return null;
+  }, [
+    isDeliveryLeg,
+    riderLocation?.lat,
+    riderLocation?.lng,
+    destinationCoords?.lat,
+    destinationCoords?.lng,
+    restaurantCoords?.lat,
+    restaurantCoords?.lng,
+  ]);
+
+  const shouldUpdateDeliveryRoute = useMemo(() => {
+    if (!isDeliveryLeg) return false;
+    if (!deliveryLegDirections) return true;
 
     const elapsed = Date.now() - lastDirectionsAt;
     if (elapsed < 15000) return false;
 
-    if (displayRiderLocation && activeDirections?.routes?.[0]?.overview_path?.length && window.google?.maps?.geometry) {
-      const fullPath = activeDirections.routes[0].overview_path;
+    if (
+      displayRiderLocation
+      && activeDeliveryPath?.length
+      && window.google?.maps?.geometry
+    ) {
       const riderPos = new window.google.maps.LatLng(displayRiderLocation.lat, displayRiderLocation.lng);
       let minDist = Infinity;
-      for (let i = 0; i < fullPath.length; i++) {
-        const d = window.google.maps.geometry.spherical.computeDistanceBetween(riderPos, fullPath[i]);
+      for (let i = 0; i < activeDeliveryPath.length; i++) {
+        const d = window.google.maps.geometry.spherical.computeDistanceBetween(riderPos, activeDeliveryPath[i]);
         if (d < minDist) minDist = d;
       }
       if (minDist > 80) return true;
     }
 
     return elapsed >= 60000;
-  }, [isDeliveryLeg, deliveryLegDirections, restaurantToUserPath, lastDirectionsAt, displayRiderLocation]);
+  }, [isDeliveryLeg, deliveryLegDirections, activeDeliveryPath, lastDirectionsAt, displayRiderLocation]);
 
   const cloudRemainingPath = useMemo(() => {
     if (!isDeliveryLeg || !cloudPolyline || !displayRiderLocation || !window.google?.maps?.geometry?.encoding) return [];
@@ -672,30 +762,32 @@ const DeliveryTrackingMap = ({
       const decoded = window.google.maps.geometry.encoding.decodePath(
         typeof cloudPolyline === 'string' ? cloudPolyline : (cloudPolyline.points || '')
       );
-      return slicePathFromPosition(decoded, displayRiderLocation, destinationCoords);
+      return buildRemainingRoutePath(decoded, displayRiderLocation, destinationCoords);
     } catch {
       return [];
     }
   }, [isDeliveryLeg, cloudPolyline, displayRiderLocation, destinationCoords]);
 
-  // After pickup: remaining restaurant → user route; covered path behind rider is erased
+  // Delivery leg: rider → customer route, trimmed live as rider moves forward
   const deliveryRemainingPath = useMemo(() => {
     if (!isDeliveryLeg) return [];
 
-    if (cloudRemainingPath.length > 0) return cloudRemainingPath;
-
-    const fullPath = restaurantToUserPath;
-    if (!fullPath?.length) return [];
-
-    if (!displayRiderLocation) {
-      return ensurePathEndsAt(
-        fullPath.map((point) => pathPointToLatLng(point) || point),
-        destinationCoords,
-      );
+    const routeSource = activeDeliveryPath || restaurantToUserPath;
+    if (routeSource?.length) {
+      return buildRemainingRoutePath(routeSource, displayRiderLocation, destinationCoords);
     }
 
-    return slicePathFromPosition(fullPath, displayRiderLocation, destinationCoords);
-  }, [isDeliveryLeg, restaurantToUserPath, displayRiderLocation, cloudRemainingPath, destinationCoords]);
+    if (cloudRemainingPath.length > 1) return cloudRemainingPath;
+
+    return [];
+  }, [
+    isDeliveryLeg,
+    activeDeliveryPath,
+    restaurantToUserPath,
+    displayRiderLocation,
+    cloudRemainingPath,
+    destinationCoords,
+  ]);
 
   const pickupDirectionsOptions = useMemo(() => {
     if (!isPickupLeg || !displayRiderLocation || !restaurantCoords) return null;
@@ -722,7 +814,7 @@ const DeliveryTrackingMap = ({
     if (!isPickupLeg || !displayRiderLocation) return [];
     const fullPath = pickupLegDirections?.routes?.[0]?.overview_path;
     if (!fullPath?.length) return [];
-    return slicePathFromPosition(fullPath, displayRiderLocation, restaurantCoords);
+    return buildRemainingRoutePath(fullPath, displayRiderLocation, restaurantCoords);
   }, [isPickupLeg, pickupLegDirections, displayRiderLocation, restaurantCoords]);
 
   // Rider icon: real GPS → map-match to route → pin snap only on arrival (Swiggy-style)
@@ -801,7 +893,7 @@ const DeliveryTrackingMap = ({
 
   // Fallback fetch for restaurant → user if baseline was not ready before pickup
   const deliveryBaselineDirectionsOptions = useMemo(() => {
-    if (!isDeliveryLeg || restaurantToUserPath) return null;
+    if (!isDeliveryLeg || baselineDirections || deliveryLegDirections || displayRiderLocation) return null;
     if (!restaurantCoords || !destinationCoords) return null;
     return {
       origin: restaurantCoords,
@@ -810,7 +902,9 @@ const DeliveryTrackingMap = ({
     };
   }, [
     isDeliveryLeg,
-    restaurantToUserPath,
+    baselineDirections,
+    deliveryLegDirections,
+    displayRiderLocation,
     restaurantCoords?.lat,
     restaurantCoords?.lng,
     destinationCoords?.lat,
@@ -869,33 +963,42 @@ const DeliveryTrackingMap = ({
           />
         )}
 
-        {isPickupLeg && pickupRemainingPath.length > 0 && (
-          <Polyline
+        {isPickupLeg && (
+          <LiveRoutePolyline
             path={pickupRemainingPath}
             options={{
               strokeColor: '#22c55e',
               strokeWeight: 6,
               strokeOpacity: 0.9,
+              geodesic: true,
               zIndex: 10,
             }}
           />
         )}
 
-        {/* Delivery leg — remaining restaurant → user path (erases behind rider) */}
-        {!cloudPolyline && deliveryBaselineDirectionsOptions && shouldUpdateRoute && (
+        {/* Delivery leg — rider → customer route, erases behind rider */}
+        {!cloudPolyline && deliveryDirectionsOptions && shouldUpdateDeliveryRoute && (
+          <DirectionsService
+            options={deliveryDirectionsOptions}
+            callback={directionsCallback}
+          />
+        )}
+
+        {!cloudPolyline && deliveryBaselineDirectionsOptions && (
           <DirectionsService
             options={deliveryBaselineDirectionsOptions}
             callback={directionsCallback}
           />
         )}
 
-        {isDeliveryLeg && deliveryRemainingPath.length > 0 && (
-          <Polyline
+        {isDeliveryLeg && (
+          <LiveRoutePolyline
             path={deliveryRemainingPath}
             options={{
               strokeColor: '#EB590E',
               strokeWeight: 6,
               strokeOpacity: 0.9,
+              geodesic: true,
               zIndex: 10,
             }}
           />

@@ -296,11 +296,32 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     if (!partner) {
         throw new ValidationError('Delivery partner not found');
     }
-    const { status, latitude, longitude } = payload || {};
+    const { status, latitude, longitude, selfieImageUrl } = payload || {};
     let validStatus = 'offline';
     if (status === 'online' || status === true) validStatus = 'online';
     else if (status === 'offline' || status === false) validStatus = 'offline';
-    
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    if (validStatus === 'online') {
+        const hasValidSelfie =
+            partner?.onlineSelfie?.forDate === todayKey &&
+            partner?.onlineSelfie?.imageUrl;
+
+        if (!hasValidSelfie && !String(selfieImageUrl || '').trim()) {
+            throw new ValidationError('A selfie is required before going online today');
+        }
+
+        if (String(selfieImageUrl || '').trim()) {
+            partner.onlineSelfie = {
+                imageUrl: selfieImageUrl.trim(),
+                capturedAt: new Date(),
+                uploadedAt: new Date(),
+                forDate: todayKey
+            };
+        }
+    }
+
     partner.availabilityStatus = validStatus;
     if (typeof latitude === 'number' && typeof longitude === 'number') {
         partner.lastLocation = {
@@ -312,7 +333,10 @@ export const updateDeliveryAvailability = async (userId, payload) => {
         partner.lastLocationAt = new Date();
     }
     await partner.save();
-    return { availabilityStatus: partner.availabilityStatus };
+    return {
+        availabilityStatus: partner.availabilityStatus,
+        onlineSelfie: partner.onlineSelfie || {}
+    };
 };
 
 // ----- Delivery partner wallet (Pocket / requests page) -----

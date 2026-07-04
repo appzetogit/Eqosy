@@ -501,7 +501,7 @@ export async function listOrdersUser(userId, query) {
     FoodOrder.find(filter)
       .populate(
         "restaurantId",
-        "restaurantName profileImage area city location rating totalRatings",
+        "restaurantName profileImage area city location rating totalRatings isActive isRestaurant zoneId status slug coverImages cuisines estimatedDeliveryTime pricingAttributes",
       )
       .populate("dispatch.deliveryPartnerId", "name phone rating totalRatings")
       .sort({ createdAt: -1 })

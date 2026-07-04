@@ -123,7 +123,7 @@ export const searchUnified = async (query = {}, options = {}) => {
             name: { $regex: regex }
         }).limit(limit * 2).lean();
 
-        const foodRestaurantIds = matchedFoods.map(f => f.restaurantId.toString());
+        const foodRestaurantIds = [...new Set(matchedFoods.map(f => f.restaurantId.toString()))];
         
         if (foodRestaurantIds.length > 0) {
             const unmatchedIds = foodRestaurantIds.filter(id => !restaurantIds.has(id));
@@ -135,15 +135,27 @@ export const searchUnified = async (query = {}, options = {}) => {
 
                 rsForFoods.forEach(r => {
                     restaurantIds.add(r._id.toString());
-                    restaurantDetailsMap.set(r._id.toString(), { 
-                        ...r, 
-                        matchType: 'food',
-                        matchedDish: matchedFoods.find(f => f.restaurantId.toString() === r._id.toString())?.name,
-                        matchedDishImage: matchedFoods.find(f => f.restaurantId.toString() === r._id.toString())?.image,
-                        matchedDishId: matchedFoods.find(f => f.restaurantId.toString() === r._id.toString())?._id
-                    });
+                    restaurantDetailsMap.set(r._id.toString(), { ...r });
                 });
             }
+
+            foodRestaurantIds.forEach((restaurantId) => {
+                const existing = restaurantDetailsMap.get(restaurantId);
+                if (!existing) return;
+
+                const foodMatch = matchedFoods.find(
+                    (food) => food.restaurantId.toString() === restaurantId,
+                );
+                if (!foodMatch) return;
+
+                restaurantDetailsMap.set(restaurantId, {
+                    ...existing,
+                    matchType: 'food',
+                    matchedDish: foodMatch.name,
+                    matchedDishImage: foodMatch.image,
+                    matchedDishId: foodMatch._id,
+                });
+            });
         }
     } else {
         // No search text -> List all restaurants matching filters (category/zone)

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X, ImageOff } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
@@ -12,6 +12,70 @@ const formatCurrency = (amount) => {
   const numericAmount = Number(amount)
   if (!Number.isFinite(numericAmount)) return "\u20B90.00"
   return `\u20B9${numericAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const formatSelfieDate = (value) => {
+  if (!value) return ""
+  try {
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+  } catch {
+    return ""
+  }
+}
+
+function LatestSelfieCell({ name, imageUrl, capturedAt }) {
+  const [broken, setBroken] = useState(false)
+  const url = String(imageUrl || "").trim()
+  const hasImage = Boolean(url) && !broken
+
+  if (!hasImage) {
+    return (
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-slate-300"
+          aria-hidden="true"
+        >
+          <ImageOff className="h-5 w-5" />
+        </div>
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+          Not uploaded
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+      className="group flex items-center gap-3 rounded-xl p-1 -m-1 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+      title="View latest selfie in full size"
+    >
+      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-200 shadow-sm ring-1 ring-slate-200/90 group-hover:ring-blue-300/80">
+        <img
+          src={url}
+          alt={`${name || "Delivery partner"} latest selfie`}
+          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+          onError={() => setBroken(true)}
+        />
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/0 opacity-0 transition-all group-hover:bg-slate-900/30 group-hover:opacity-100">
+          <ExternalLink className="h-4 w-4 text-white drop-shadow-md" />
+        </span>
+      </div>
+      <div className="flex min-w-0 flex-col gap-0.5 pr-1">
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          Captured
+        </span>
+        <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+          {formatSelfieDate(capturedAt) || "—"}
+        </span>
+      </div>
+    </button>
+  )
 }
 
 export default function DeliverymanList() {
@@ -36,6 +100,7 @@ export default function DeliverymanList() {
     cashInHand: true,
     remainingCashLimit: true,
     availabilityStatus: true,
+    latestImage: true,
     actions: true,
   })
 
@@ -220,6 +285,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
       cashInHand: true,
       remainingCashLimit: true,
       availabilityStatus: true,
+      latestImage: true,
       actions: true,
     })
   }
@@ -234,6 +300,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
     cashInHand: "Cash In Hand",
     remainingCashLimit: "Remaining Cash Limit",
     availabilityStatus: "Availability Status",
+    latestImage: "Latest Image",
     actions: "Actions",
   }
 
@@ -530,6 +597,11 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                         </div>
                       </th>
                     )}
+                    {visibleColumns.latestImage && (
+                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider min-w-[180px]">
+                        <span>Latest Image</span>
+                      </th>
+                    )}
                     {visibleColumns.actions && (
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>
                     )}
@@ -648,6 +720,15 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                                 Active Status: <span className={`${dm.status === 'Online' ? 'text-blue-600' : 'text-slate-600'} underline`}>{dm.status}</span>
                               </span>
                             </div>
+                          </td>
+                        )}
+                        {visibleColumns.latestImage && (
+                          <td className="px-6 py-4 align-middle">
+                            <LatestSelfieCell
+                              name={dm.name}
+                              imageUrl={dm.latestSelfieImage || dm.onlineSelfie?.imageUrl}
+                              capturedAt={dm.latestSelfieCapturedAt || dm.onlineSelfie?.capturedAt}
+                            />
                           </td>
                         )}
                         {visibleColumns.actions && (

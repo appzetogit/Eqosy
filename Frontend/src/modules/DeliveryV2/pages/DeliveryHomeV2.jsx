@@ -6,6 +6,7 @@ import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
 import { useDeliveryNotifications } from '@food/hooks/useDeliveryNotifications';
 import { writeOrderTracking } from '@food/realtimeTracking';
 import { deliveryAPI } from '@food/api';
+import { uploadService } from '@/modules/Taxi/shared/services/uploadService';
 import { toast } from 'sonner';
 
 // Components
@@ -26,7 +27,7 @@ import {
   Bell, HelpCircle, AlertTriangle, 
   Wallet, History, User as UserIcon, LayoutGrid,
   Plus, Minus, Navigation2, Navigation, Target, Play, CheckCircle2, Clock, ChevronDown, Phone,
-  Contact, Package
+  Contact, Package, Camera
 } from 'lucide-react';
 
 import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
@@ -72,13 +73,91 @@ function BottomPopup({ isOpen, onClose, title, children, maxHeight = "85vh" }) {
   );
 }
 
+const getTodaySelfieKey = () => new Date().toISOString().slice(0, 10);
+
+const hasSelfieForToday = (onlineSelfie = null) =>
+  String(onlineSelfie?.forDate || '').trim() === getTodaySelfieKey() &&
+  Boolean(String(onlineSelfie?.imageUrl || '').trim());
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read selected selfie'));
+    reader.readAsDataURL(file);
+  });
+
+const loadImageFromDataUrl = (dataUrl) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to process selected selfie'));
+    image.src = dataUrl;
+  });
+
+const dataUrlToBlob = async (dataUrl) => {
+  const response = await fetch(dataUrl);
+  return response.blob();
+};
+
+const compressSelfieForUpload = async (file) => {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  if (typeof document === 'undefined') return originalDataUrl;
+
+  const image = await loadImageFromDataUrl(originalDataUrl);
+  const maxSide = 960;
+  const largestSide = Math.max(image.width, image.height, 1);
+  const scale = largestSide > maxSide ? maxSide / largestSide : 1;
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return originalDataUrl;
+
+  context.drawImage(image, 0, 0, width, height);
+  let quality = 0.82;
+  let compressed = canvas.toDataURL('image/jpeg', quality);
+  while (compressed.length > 8_500_000 && quality > 0.45) {
+    quality -= 0.1;
+    compressed = canvas.toDataURL('image/jpeg', quality);
+  }
+  return compressed;
+};
+
+const compressSelfieDataUrl = async (dataUrl) => {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const maxSide = 960;
+  const largestSide = Math.max(image.width, image.height, 1);
+  const scale = largestSide > maxSide ? maxSide / largestSide : 1;
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return dataUrl;
+
+  context.drawImage(image, 0, 0, width, height);
+  let quality = 0.82;
+  let compressed = canvas.toDataURL('image/jpeg', quality);
+  while (compressed.length > 8_500_000 && quality > 0.45) {
+    quality -= 0.1;
+    compressed = canvas.toDataURL('image/jpeg', quality);
+  }
+  return compressed;
+};
+
 /**
  * DeliveryHomeV2 - Premium 1:1 Match with Original App UI.
  * Featuring logical tab switching for Feed, Pocket, History, and Profile.
  */
 export default function DeliveryHomeV2({ tab = 'feed' }) {
   const navigate = useNavigate();
-  const { isOnline, toggleOnline, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
+  const { isOnline, setOnline, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
   const { isWithinRange, distanceToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
   const {
@@ -105,6 +184,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [showVerification, setShowVerification] = useState(false);
   const [showEmergencyPopup, setShowEmergencyPopup] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [showOnlineSelfiePrompt, setShowOnlineSelfiePrompt] = useState(false);
+  const [showSelfieCameraCapture, setShowSelfieCameraCapture] = useState(false);
+  const [selfieUploading, setSelfieUploading] = useState(false);
+  const [selfieError, setSelfieError] = useState('');
+  const [onlineSelfie, setOnlineSelfie] = useState(null);
+  const [isTogglingDuty, setIsTogglingDuty] = useState(false);
   const [emergencyNumbers, setEmergencyNumbers] = useState({
     medicalEmergency: "",
     accidentHelpline: "",
@@ -173,6 +258,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const activePolylineRef = useRef(activePolyline);
   const etaRef = useRef(eta);
   const tripStatusRef = useRef(tripStatus);
+  const onlineSelfieRef = useRef(null);
+  const selfieCameraInputRef = useRef(null);
+  const selfieVideoRef = useRef(null);
+  const selfieStreamRef = useRef(null);
+
+  useEffect(() => { onlineSelfieRef.current = onlineSelfie; }, [onlineSelfie]);
 
   useEffect(() => { activeOrderRef.current = activeOrder; }, [activeOrder]);
   useEffect(() => { emitLocationRef.current = emitLocation; }, [emitLocation]);
@@ -190,6 +281,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       heading: heading || 0,
       speed: speed || 0,
       accuracy,
+      ...(onlineSelfieRef.current?.imageUrl
+        ? { selfieImageUrl: onlineSelfieRef.current.imageUrl }
+        : {}),
     }).catch(() => {});
 
     if (!orderId) return;
@@ -337,6 +431,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         if (profileRes?.data?.success && profileRes.data.data?.profile) {
           const profile = profileRes.data.data.profile;
           setProfileImage(profile.profileImage?.url || profile.documents?.photo || null);
+          setOnlineSelfie(profile.onlineSelfie || null);
         }
       } catch (err) { console.warn('Navbar Data Fetch Error:', err); }
     })();
@@ -444,10 +539,182 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }
   }, [distanceToTarget]);
 
-  // 2. Online/Offline Status Sync (Low Frequency)
+  const stopSelfieCameraStream = useCallback(() => {
+    if (selfieStreamRef.current) {
+      selfieStreamRef.current.getTracks().forEach((track) => track.stop());
+      selfieStreamRef.current = null;
+    }
+  }, []);
+
+  const goOnline = useCallback(async (selfieImageUrl = '') => {
+    setIsTogglingDuty(true);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 8000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      const cachedSelfieUrl = selfieImageUrl || onlineSelfieRef.current?.imageUrl || '';
+      const response = cachedSelfieUrl
+        ? await deliveryAPI.updateLocation(latitude, longitude, true, { selfieImageUrl: cachedSelfieUrl })
+        : await deliveryAPI.updateLocation(latitude, longitude, true);
+
+      const data = response?.data?.data || response?.data || {};
+      if (data.onlineSelfie) {
+        setOnlineSelfie(data.onlineSelfie);
+      }
+      setOnline(true);
+      toast.success('You are now online');
+    } catch (error) {
+      setOnline(false);
+      const message = error?.response?.data?.message || error?.message || 'Failed to go online';
+      toast.error(message);
+      if (String(message).toLowerCase().includes('selfie')) {
+        setShowOnlineSelfiePrompt(true);
+      }
+    } finally {
+      setIsTogglingDuty(false);
+    }
+  }, [setOnline]);
+
+  const goOffline = useCallback(async () => {
+    setIsTogglingDuty(true);
+    try {
+      await deliveryAPI.updateOnlineStatus(false);
+      setOnline(false);
+      toast('You are now offline');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || 'Failed to go offline');
+    } finally {
+      setIsTogglingDuty(false);
+    }
+  }, [setOnline]);
+
+  const handleDutyToggle = useCallback(async () => {
+    if (isTogglingDuty) return;
+
+    if (isOnline) {
+      await goOffline();
+      return;
+    }
+
+    if (hasSelfieForToday(onlineSelfie)) {
+      await goOnline();
+      return;
+    }
+
+    setSelfieError('');
+    setShowSelfieCameraCapture(false);
+    stopSelfieCameraStream();
+    setShowOnlineSelfiePrompt(true);
+  }, [goOffline, goOnline, isOnline, isTogglingDuty, onlineSelfie, stopSelfieCameraStream]);
+
+  const uploadSelfieDataUrl = useCallback(async (sourceDataUrl) => {
+    setSelfieUploading(true);
+    setSelfieError('');
+
+    try {
+      const compressedDataUrl = await compressSelfieDataUrl(sourceDataUrl);
+      const imageBlob = await dataUrlToBlob(compressedDataUrl);
+      const imageFile = new File([imageBlob], `selfie-${Date.now()}.jpg`, {
+        type: imageBlob.type || 'image/jpeg',
+      });
+
+      const uploadResult = await uploadService.uploadImageFile(imageFile, 'driver-online-selfies');
+      const selfieUrl = uploadResult?.url || uploadResult?.secureUrl || uploadResult?.data?.url || '';
+
+      if (!selfieUrl) {
+        throw new Error('Selfie upload did not return an image URL');
+      }
+
+      setOnlineSelfie({
+        imageUrl: selfieUrl,
+        capturedAt: new Date().toISOString(),
+        forDate: getTodaySelfieKey(),
+      });
+      setShowSelfieCameraCapture(false);
+      setShowOnlineSelfiePrompt(false);
+      stopSelfieCameraStream();
+      await goOnline(selfieUrl);
+    } catch (error) {
+      setSelfieError(error?.message || 'Failed to upload selfie');
+      setOnline(false);
+    } finally {
+      setSelfieUploading(false);
+      if (selfieCameraInputRef.current) {
+        selfieCameraInputRef.current.value = '';
+      }
+    }
+  }, [goOnline, stopSelfieCameraStream]);
+
+  const openSelfieCamera = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      selfieCameraInputRef.current?.click();
+      return;
+    }
+
+    try {
+      setSelfieError('');
+      stopSelfieCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+      selfieStreamRef.current = stream;
+      setShowSelfieCameraCapture(true);
+    } catch (error) {
+      setSelfieError(error?.message || 'Could not access the camera.');
+      selfieCameraInputRef.current?.click();
+    }
+  }, [stopSelfieCameraStream]);
+
+  const captureSelfieFromCamera = useCallback(async () => {
+    const video = selfieVideoRef.current;
+    if (!video) {
+      setSelfieError('Camera preview is not ready yet.');
+      return;
+    }
+
+    const width = video.videoWidth || 720;
+    const height = video.videoHeight || 1280;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setSelfieError('Could not capture selfie frame.');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, width, height);
+    await uploadSelfieDataUrl(canvas.toDataURL('image/jpeg', 0.9));
+  }, [uploadSelfieDataUrl]);
+
+  const handleSelfieSelected = useCallback(async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const base64Image = await compressSelfieForUpload(file);
+    await uploadSelfieDataUrl(base64Image);
+  }, [uploadSelfieDataUrl]);
+
   useEffect(() => {
-    deliveryAPI.updateOnlineStatus(isOnline).catch(() => {});
-  }, [isOnline]);
+    if (!showSelfieCameraCapture || !selfieVideoRef.current || !selfieStreamRef.current) return;
+    const video = selfieVideoRef.current;
+    video.srcObject = selfieStreamRef.current;
+    video.play().catch(() => {});
+  }, [showSelfieCameraCapture]);
+
+  useEffect(() => () => {
+    stopSelfieCameraStream();
+  }, [stopSelfieCameraStream]);
 
   // 3. Location logic (Smart Frequency Tracking)
   useEffect(() => {
@@ -529,7 +796,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           lastCoordRef.current.lat, 
           lastCoordRef.current.lng, 
           true, 
-          { heading: 0, speed: 0, accuracy: null }
+          {
+            heading: 0,
+            speed: 0,
+            accuracy: null,
+            ...(onlineSelfieRef.current?.imageUrl
+              ? { selfieImageUrl: onlineSelfieRef.current.imageUrl }
+              : {}),
+          }
         ).catch(() => {});
       }
     }, 10000); // Check every 10 seconds
@@ -656,19 +930,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 <img src={profileImage || "https://i.ibb.co/3m2Yh7r/Eqosy-Brand-Image.png"} alt="Profile" className="w-full h-full object-cover rounded-full" />
              </div>
              <button 
-               onClick={async () => {
-                 const nextState = !isOnline;
-                 toggleOnline(); // Store action
-                 if (nextState) {
-                    // Try to get location and sync immediately so we are visible for dispatch right away
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                        deliveryAPI.updateLocation(pos.coords.latitude, pos.coords.longitude, true).catch(() => {});
-                    }, (err) => console.warn('Online sync position failed:', err), { enableHighAccuracy: true });
-                 } else {
-                    deliveryAPI.updateOnlineStatus(false).catch(() => {});
-                 }
-               }}
-               className={`relative w-[92px] h-8 rounded-full p-1 transition-all duration-500 flex items-center ${isOnline ? 'bg-green-500 shadow-lg shadow-green-500/20' : 'bg-gray-400'}`}
+               onClick={handleDutyToggle}
+               disabled={isTogglingDuty}
+               className={`relative w-[92px] h-8 rounded-full p-1 transition-all duration-500 flex items-center ${isOnline ? 'bg-green-500 shadow-lg shadow-green-500/20' : 'bg-gray-400'} ${isTogglingDuty ? 'opacity-70' : ''}`}
              >
                <div className={`flex items-center justify-between w-full px-2 text-[8.5px] font-black uppercase tracking-widest text-white`}>
                  <span>{isOnline ? 'Online' : ''}</span>
@@ -1024,6 +1288,96 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
            ))}
          </div>
       </BottomPopup>
+
+      <AnimatePresence>
+        {showOnlineSelfiePrompt && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[650] bg-black/60 backdrop-blur-sm"
+              onClick={() => !selfieUploading && setShowOnlineSelfiePrompt(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              className="fixed left-1/2 top-1/2 z-[660] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.22)]"
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-500">Daily check-in</p>
+              <h3 className="mt-2 text-[20px] font-black tracking-tight text-slate-950">Upload today&apos;s selfie</h3>
+              <p className="mt-2 text-[13px] font-semibold leading-relaxed text-slate-500">
+                Before going online, submit a fresh selfie for today.
+              </p>
+
+              {selfieError ? (
+                <p className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600">
+                  {selfieError}
+                </p>
+              ) : null}
+
+              {showSelfieCameraCapture ? (
+                <div className="mt-4 overflow-hidden rounded-[20px] border border-slate-200 bg-slate-950">
+                  <video
+                    ref={selfieVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-64 w-full object-cover"
+                  />
+                </div>
+              ) : null}
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={selfieUploading}
+                  onClick={() => {
+                    stopSelfieCameraStream();
+                    setShowSelfieCameraCapture(false);
+                    setShowOnlineSelfiePrompt(false);
+                  }}
+                  className="h-12 rounded-[16px] border border-slate-200 bg-slate-50 text-[11px] font-black uppercase tracking-[0.08em] text-slate-500 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                {showSelfieCameraCapture ? (
+                  <button
+                    type="button"
+                    disabled={selfieUploading}
+                    onClick={captureSelfieFromCamera}
+                    className="h-12 rounded-[16px] bg-emerald-500 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-[0_14px_28px_rgba(16,185,129,0.28)] disabled:opacity-60"
+                  >
+                    {selfieUploading ? 'Uploading...' : 'Capture'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={selfieUploading}
+                    onClick={openSelfieCamera}
+                    className="relative h-12 rounded-[16px] bg-emerald-500 text-[10px] font-black uppercase tracking-[0.08em] text-white shadow-[0_14px_28px_rgba(16,185,129,0.28)] disabled:opacity-60 overflow-hidden"
+                  >
+                    <span className="flex items-center justify-center gap-1.5 w-full">
+                      <Camera size={14} className="shrink-0" />
+                      <span className="truncate">Take New Selfie</span>
+                    </span>
+                    <input
+                      ref={selfieCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      disabled={selfieUploading}
+                      className="absolute inset-0 h-full w-full opacity-0 pointer-events-none"
+                      onChange={handleSelfieSelected}
+                    />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Floating Minimize/Restore Toggle - Above navbar */}
       {isModalMinimized && (activeOrder || incomingOrder || showVerification) && (

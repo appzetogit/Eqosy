@@ -159,6 +159,11 @@ export default function ProfessionalSearch() {
     localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(newHistory))
   }
 
+  const clearHistory = () => {
+    setHistory([])
+    localStorage.removeItem(SEARCH_HISTORY_KEY)
+  }
+
   const performSearch = useCallback(async (searchTerm, catId) => {
     if (hasEffectiveCoordinates && (zoneLoading || zoneStatus === "loading")) {
       return
@@ -253,6 +258,13 @@ export default function ProfessionalSearch() {
     navigate(-1)
   }
 
+  const buildStoreLink = (restaurant, dishId) => {
+    const slug = restaurant.slug || restaurant._id
+    const base = `/food/user/restaurants/${slug}`
+    if (!dishId) return base
+    return `${base}?dish=${encodeURIComponent(String(dishId))}`
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950">
       {/* Header */}
@@ -334,7 +346,16 @@ export default function ProfessionalSearch() {
         {/* Recent History */}
         {!query && !loading && history.length > 0 && (
           <div className="mb-8">
-             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Recently Searched</h3>
+             <div className="flex items-center justify-between mb-2 px-1">
+               <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recently Searched</h3>
+               <button
+                 type="button"
+                 onClick={clearHistory}
+                 className="text-xs font-semibold text-rose-500 hover:text-rose-600 uppercase tracking-wider"
+               >
+                 Clear
+               </button>
+             </div>
              <div className="flex flex-wrap gap-2">
                 {history.map((term, i) => (
                   <button 
@@ -365,10 +386,16 @@ export default function ProfessionalSearch() {
                 </div>
                 <div className="grid gap-4">
                   {results.dishes.map((r) => (
-                    <Link to={`/user/restaurants/${r.slug || r._id}${r.matchedDishId ? `?dish=${r.matchedDishId}` : ''}`} key={r._id} className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800 hover:shadow-md transition-shadow group">
+                    <Link
+                      to={buildStoreLink(r, r.matchedDishId)}
+                      key={`${r._id}-${r.matchedDishId || "dish"}`}
+                      onClick={() => addToHistory(query)}
+                      className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800 hover:shadow-md transition-shadow group"
+                    >
                        <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
                            <img 
                             src={getMediaUrl(r.matchedDishImage || r.profileImage || r.image || (Array.isArray(r.images) && r.images[0]))} 
+                            alt={r.matchedDish || r.restaurantName}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                             onError={(e) => (e.target.src = "/placeholder-dish.jpg")}
                           />
@@ -389,10 +416,19 @@ export default function ProfessionalSearch() {
                                 <span className="font-semibold text-slate-700 dark:text-white">{r.rating || "New"}</span>
                              </div>
                              <span>•</span>
-                             <span>{r.estimatedDeliveryTime || "30-40 mins"}</span>
-                             <span>•</span>
-                             <span className="line-clamp-1">{r.cuisines?.slice(0, 2).join(", ")}</span>
+                             <span>{r.estimatedDeliveryTime || r.estimatedDeliveryTimeMinutes ? `${r.estimatedDeliveryTimeMinutes} mins` : "30-40 mins"}</span>
+                             {r.cuisines?.length > 0 && (
+                               <>
+                                 <span>•</span>
+                                 <span className="line-clamp-1">{r.cuisines.slice(0, 2).join(", ")}</span>
+                               </>
+                             )}
                           </div>
+                          {isGrocerySearch && (
+                            <span className="mt-2 inline-flex w-fit rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                              Open now
+                            </span>
+                          )}
                        </div>
                     </Link>
                   ))}
@@ -411,7 +447,7 @@ export default function ProfessionalSearch() {
                 </div>
                 <div className="grid gap-6">
                   {results.restaurants.map((r) => (
-                    <Link to={`/user/restaurants/${r._id}`} key={r._id} className="block group">
+                    <Link to={buildStoreLink(r)} key={r._id} className="block group">
                       <div className="relative rounded-3xl overflow-hidden aspect-[16/9] mb-3 bg-slate-200">
                          <img 
                           src={getMediaUrl(r.profileImage || r.image || (Array.isArray(r.images) && r.images[0]))} 

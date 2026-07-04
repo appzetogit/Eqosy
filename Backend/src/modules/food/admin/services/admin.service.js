@@ -3795,7 +3795,15 @@ export async function getDeliveryPartners(query) {
         vehicleType: doc.vehicleType || '',
         status: doc.status,
         profilePhoto: doc.profilePhoto || null,
-        profileImage: doc.profilePhoto ? { url: doc.profilePhoto } : null
+        profileImage: doc.profilePhoto ? { url: doc.profilePhoto } : null,
+        onlineSelfie: doc.onlineSelfie || {
+            imageUrl: '',
+            capturedAt: null,
+            uploadedAt: null,
+            forDate: ''
+        },
+        latestSelfieImage: String(doc.onlineSelfie?.imageUrl || '').trim() || null,
+        latestSelfieCapturedAt: doc.onlineSelfie?.capturedAt || null,
     }));
 
     return {

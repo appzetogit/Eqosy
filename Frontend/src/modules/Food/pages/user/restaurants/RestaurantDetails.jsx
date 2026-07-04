@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component, useMemo } from "react"
+import { useState, useEffect, useRef, Component, useMemo, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
@@ -81,7 +81,7 @@ function RestaurantDetailsContent() {
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
-  const { zoneId, zone, loading: loadingZone, isOutOfService } = useZone(userLocation) // Get user's zone for zone-based filtering
+  const { zoneId, isOutOfService } = useZone(userLocation) // Get user's zone for zone-based filtering
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [highlightIndex, setHighlightIndex] = useState(0)
   const [quantities, setQuantities] = useState({})
@@ -109,6 +109,25 @@ function RestaurantDetailsContent() {
   const [loadingMenuItems, setLoadingMenuItems] = useState(true)
   const [selectedMenuCategory, setSelectedMenuCategory] = useState("all")
   const dishCardRefs = useRef({})
+
+  const getMenuItemKey = useCallback(
+    (item) => String(item?.id || item?._id || "").trim(),
+    [],
+  )
+
+  const registerDishCardRef = useCallback(
+    (item, sectionIndex, isRecommended) => (node) => {
+      const itemKey = getMenuItemKey(item)
+      if (!itemKey) return
+      const refKey = isRecommended ? `rec-${itemKey}` : `sec-${sectionIndex}-${itemKey}`
+      if (node) {
+        dishCardRefs.current[refKey] = node
+      } else {
+        delete dishCardRefs.current[refKey]
+      }
+    },
+    [getMenuItemKey],
+  )
 
   const getLineItemIdForDish = (item, variant = null) =>
     buildCartLineId(item?.id || item?._id || "", variant?.id || variant?._id || "")
@@ -170,8 +189,25 @@ function RestaurantDetailsContent() {
   const [restaurant, setRestaurant] = useState(null)
   const [loadingRestaurant, setLoadingRestaurant] = useState(true)
   const [restaurantError, setRestaurantError] = useState(null)
-  const fetchedRestaurantRef = useRef(false) // Track if restaurant has been fetched for current slug
-  const fetchedSlugRef = useRef(null)
+  const [isContentReady, setIsContentReady] = useState(false)
+
+  const getDishHighlightClass = useCallback(
+    (item, isRecommended) => {
+      if (isRecommended) return ""
+      const itemKey = getMenuItemKey(item)
+      if (!highlightedDishId || itemKey !== highlightedDishId) return ""
+      const isGroceryStore = restaurant?.isRestaurant === false
+      return isGroceryStore
+        ? "bg-emerald-50 ring-2 ring-[#1A9E5C] ring-inset dark:bg-emerald-950/20"
+        : "bg-orange-50 ring-2 ring-[#EB590E] ring-inset dark:bg-orange-950/20"
+    },
+    [getMenuItemKey, highlightedDishId, restaurant?.isRestaurant],
+  )
+
+  // One completed load per slug — prevents zone/location updates from re-spamming APIs.
+  const loadedSlugRef = useRef(null)
+  const inflightSlugRef = useRef(null)
+  const restaurantRef = useRef(restaurant)
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -182,24 +218,56 @@ function RestaurantDetailsContent() {
   }, [])
 
   useEffect(() => {
+    restaurantRef.current = restaurant
+  }, [restaurant])
+
+  useEffect(() => {
     setSelectedMenuCategory("all")
+    setHighlightedDishId(null)
+    if (loadedSlugRef.current !== slug) {
+      setIsContentReady(false)
+      setLoadingRestaurant(true)
+      setLoadingMenuItems(true)
+      setRestaurant(null)
+      setRestaurantError(null)
+    }
   }, [slug])
 
-  // Fetch restaurant data from API
+  // Fetch restaurant data from API — only once per slug (not on zoneId/location churn).
   useEffect(() => {
-    const fetchRestaurant = async () => {
-      if (!slug) return
+    if (!slug) return
 
-      // Prevent re-fetching for the same slug. Mobile location/zone updates can
-      // trigger transient refetch failures that clear already-rendered content.
-      if (fetchedRestaurantRef.current && fetchedSlugRef.current === slug && restaurant) {
-        return
+    if (loadedSlugRef.current === slug && restaurantRef.current) {
+      setLoadingRestaurant(false)
+      setLoadingMenuItems(false)
+      setIsContentReady(true)
+      return
+    }
+
+    if (inflightSlugRef.current === slug) {
+      return
+    }
+
+    let cancelled = false
+    inflightSlugRef.current = slug
+    setIsContentReady(false)
+    setLoadingRestaurant(true)
+    setLoadingMenuItems(true)
+    setRestaurantError(null)
+
+    const finishFetch = (success) => {
+      if (cancelled || inflightSlugRef.current !== slug) return
+      inflightSlugRef.current = null
+      if (success) {
+        loadedSlugRef.current = slug
       }
+      setLoadingRestaurant(false)
+      setLoadingMenuItems(false)
+      setIsContentReady(true)
+    }
 
+    const fetchRestaurant = async () => {
       try {
-        // Keep the existing page visible on background retries.
-        setLoadingRestaurant(!fetchedRestaurantRef.current && !restaurant)
-        setRestaurantError(null)
 
         debugLog('Fetching restaurant with slug:', slug)
         let response = null
@@ -567,22 +635,26 @@ function RestaurantDetailsContent() {
             debugError('? No restaurant ID found! Cannot fetch menu.')
           }
 
-          setRestaurant(transformedRestaurant)
-          fetchedRestaurantRef.current = true // Mark as fetched
-          fetchedSlugRef.current = slug
+          if (cancelled) return
 
           // Load outlet timings from public endpoint (source of truth for daily opening slots)
+          let resolvedOutletTimings = transformedRestaurant.outletTimings || null
           try {
             const outletRestaurantId = transformedRestaurant.mongoId || actualRestaurant?._id || apiRestaurant?._id
             if (outletRestaurantId) {
               const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(outletRestaurantId, { noCache: true })
               const outletTimingsData = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings
               if (outletTimingsData) {
-                setRestaurant((prev) => ({ ...prev, outletTimings: outletTimingsData }))
+                resolvedOutletTimings = outletTimingsData
               }
             }
           } catch (outletError) {
             debugWarn("Outlet timings fetch failed, falling back to delivery timings:", outletError?.message)
+          }
+
+          let nextRestaurant = {
+            ...transformedRestaurant,
+            outletTimings: resolvedOutletTimings,
           }
 
           // Fetch menu and inventory for this restaurant
@@ -608,13 +680,11 @@ function RestaurantDetailsContent() {
                 if (matchingRestaurant) {
                   restaurantIdForMenu = matchingRestaurant._id || matchingRestaurant.restaurantId || matchingRestaurant.id
                   debugLog('? Found matching restaurant by name, ID:', restaurantIdForMenu)
-
-                  // Update the restaurant ID in state
-                  setRestaurant(prev => ({
-                    ...prev,
+                  nextRestaurant = {
+                    ...nextRestaurant,
                     id: restaurantIdForMenu,
-                    restaurantId: restaurantIdForMenu
-                  }))
+                    restaurantId: restaurantIdForMenu,
+                  }
                   break
                 }
               }
@@ -662,35 +732,16 @@ function RestaurantDetailsContent() {
                   ].map(normalize).filter(Boolean)
                 )
 
-                const FETCH_LIMIT = 100
-                const firstResponse = await orderAPI.getOrders({ limit: FETCH_LIMIT, page: 1 })
+                // Single lightweight page — only used to decide "Recommended for you".
+                const firstResponse = await orderAPI.getOrders({ limit: 30, page: 1 })
                 let allOrders = []
-                let totalPages = 1
 
                 if (firstResponse?.data?.success && firstResponse?.data?.data?.orders) {
                   allOrders = firstResponse.data.data.orders || []
-                  totalPages = firstResponse.data.data?.pagination?.pages || 1
                 } else if (firstResponse?.data?.orders) {
                   allOrders = firstResponse.data.orders || []
-                  totalPages = firstResponse.data?.pagination?.pages || 1
                 } else if (Array.isArray(firstResponse?.data?.data)) {
                   allOrders = firstResponse.data.data || []
-                }
-
-                if (totalPages > 1) {
-                  const pagePromises = []
-                  for (let p = 2; p <= totalPages; p += 1) {
-                    pagePromises.push(orderAPI.getOrders({ limit: FETCH_LIMIT, page: p }))
-                  }
-
-                  const pageResponses = await Promise.all(pagePromises)
-                  const remainingOrders = pageResponses.flatMap((resp) => {
-                    if (resp?.data?.success && resp?.data?.data?.orders) return resp.data.data.orders || []
-                    if (resp?.data?.orders) return resp.data.orders || []
-                    if (Array.isArray(resp?.data?.data)) return resp.data.data || []
-                    return []
-                  })
-                  allOrders = [...allOrders, ...remainingOrders]
                 }
 
                 hasPreviousOrderForRestaurant = allOrders.some((order) => {
@@ -834,46 +885,36 @@ function RestaurantDetailsContent() {
                 })))
 
                 // Dynamically inject the specifically searched dish at the very top if targetDishId is present
-                let searchedDishSection = null
-                if (targetDishId) {
-                  const allItemsInMenu = []
-                  menuSections.forEach(s => {
-                    if (s.items) allItemsInMenu.push(...s.items)
-                    if (s.subsections) {
-                      s.subsections.forEach(ss => {
-                        if (ss.items) allItemsInMenu.push(...ss.items)
-                      })
-                    }
-                  })
-                  const matchedItem = allItemsInMenu.find(item => String(item.id || item._id || "").trim() === targetDishId)
-                  if (matchedItem) {
-                    searchedDishSection = { 
-                      name: "Result for your search", 
-                      items: [matchedItem], 
-                      subsections: [],
-                      isSearchResult: true 
-                    }
-                  }
-                }
-
-                let finalMenuSections = [...menuSections]
+                let finalMenuSections = menuSections.filter((section) => {
+                  const sectionName = String(section?.name || section?.title || "").trim().toLowerCase()
+                  return sectionName !== "recommended for you"
+                })
                 if (recommendedItems.length > 0) {
-                  finalMenuSections = [{ name: "Recommended for you", items: recommendedItems, subsections: [] }, ...finalMenuSections]
-                }
-                if (searchedDishSection) {
-                  finalMenuSections = [searchedDishSection, ...finalMenuSections]
+                  const seenRecommendedIds = new Set()
+                  const uniqueRecommendedItems = recommendedItems.filter((item) => {
+                    const itemKey = String(item.id || item._id || "").trim()
+                    if (!itemKey || seenRecommendedIds.has(itemKey)) return false
+                    seenRecommendedIds.add(itemKey)
+                    return true
+                  })
+                  finalMenuSections = [
+                    { name: "Recommended for you", items: uniqueRecommendedItems, subsections: [] },
+                    ...finalMenuSections,
+                  ]
                 }
 
-                setRestaurant(prev => ({
-                  ...prev,
+                nextRestaurant = {
+                  ...nextRestaurant,
                   menuSections: finalMenuSections,
-                }))
+                }
 
                 // Set first 3 sections (Recommended, Starters, Main Course) as expanded by default
                 const defaultExpandedSections = new Set(
                   Array.from({ length: Math.min(3, finalMenuSections.length) }, (_, idx) => idx)
                 )
-                setExpandedSections(defaultExpandedSections)
+                if (!cancelled) {
+                  setExpandedSections(defaultExpandedSections)
+                }
 
                 debugLog('Fetched menu sections with recommended items:', finalMenuSections)
               }
@@ -883,8 +924,6 @@ function RestaurantDetailsContent() {
               } else {
                 debugError('? Error fetching menu:', menuError)
               }
-            } finally {
-              setLoadingMenuItems(false)
             }
 
             try {
@@ -933,10 +972,10 @@ function RestaurantDetailsContent() {
                   order: category.order !== undefined ? category.order : index,
                 }))
 
-                setRestaurant(prev => ({
-                  ...prev,
+                nextRestaurant = {
+                  ...nextRestaurant,
                   inventory: normalizedInventory,
-                }))
+                }
                 debugLog('? Fetched and normalized inventory categories:', normalizedInventory)
               }
             } catch (inventoryError) {
@@ -947,17 +986,24 @@ function RestaurantDetailsContent() {
               }
             }
           }
-          else {
-            setLoadingMenuItems(false)
-          }
+
+          if (cancelled) return
+          setRestaurant(nextRestaurant)
+          restaurantRef.current = nextRestaurant
         } else {
           debugError('? No restaurant data found in API response')
           debugError('? Response:', response)
           debugError('? apiRestaurant:', apiRestaurant)
-          if (!fetchedRestaurantRef.current) {
+          if (!cancelled) {
             setRestaurantError('Restaurant not found')
             setRestaurant(null)
           }
+          finishFetch(false)
+          return
+        }
+
+        if (!cancelled) {
+          finishFetch(true)
         }
       } catch (error) {
         // Check if it's a network error (backend not running)
@@ -966,46 +1012,39 @@ function RestaurantDetailsContent() {
         // Check if it's a 404 error (restaurant doesn't exist)
         const is404Error = error.response?.status === 404
 
+        if (cancelled) return
+
         if (isNetworkError) {
           // Network error - backend is not running
           // Don't show "Restaurant not found" for network errors
           // The axios interceptor will show a toast notification
           debugError('Network error fetching restaurant (backend may not be running):', error)
-          if (!fetchedRestaurantRef.current) {
-            setRestaurantError('Backend server is not connected. Please make sure the backend is running.')
-            setRestaurant(null)
-          }
+          setRestaurantError('Backend server is not connected. Please make sure the backend is running.')
+          setRestaurant(null)
         } else if (is404Error) {
           // 404 error - restaurant doesn't exist in database
           debugLog(`Restaurant "${slug}" not found in database`)
-          if (!fetchedRestaurantRef.current) {
-            setRestaurantError('Restaurant not found')
-            setRestaurant(null)
-          }
+          setRestaurantError('Restaurant not found')
+          setRestaurant(null)
         } else {
           // Other errors
           debugError('Error fetching restaurant:', error)
-          if (!fetchedRestaurantRef.current) {
-            setRestaurantError(error.message || 'Failed to load restaurant')
-            setRestaurant(null)
-          }
+          setRestaurantError(error.message || 'Failed to load restaurant')
+          setRestaurant(null)
         }
-      } finally {
-        setLoadingRestaurant(false)
-        setLoadingMenuItems(false)
+        finishFetch(false)
       }
     }
 
-    // Reset fetched flag only when URL slug changes.
-    // Do not compare with restaurant.slug because canonical API slug may differ
-    // from route slug (e.g. "restaurant-2513"), causing refetch loops.
-    if (fetchedRestaurantRef.current && fetchedSlugRef.current !== slug) {
-      fetchedRestaurantRef.current = false
-      fetchedSlugRef.current = null
-    }
-
     fetchRestaurant()
-  }, [slug, zoneId, restaurant])
+
+    return () => {
+      cancelled = true
+      if (inflightSlugRef.current === slug) {
+        inflightSlugRef.current = null
+      }
+    }
+  }, [slug])
 
   // Track previous values to prevent unnecessary recalculations
   const prevCoordsRef = useRef({ userLat: null, userLng: null, restaurantLat: null, restaurantLng: null })
@@ -1283,7 +1322,7 @@ function RestaurantDetailsContent() {
     const sectionName = section?.name || section?.title || ""
     if (typeof sectionName !== "string") return false
     const name = sectionName.trim().toLowerCase()
-    return name === "recommended for you" || name === "result for your search"
+    return name === "recommended for you"
   }
 
   const isRecommendedItem = (item) => {
@@ -1852,9 +1891,12 @@ function RestaurantDetailsContent() {
     if (!restaurant?.menuSections || !targetDishId) return
 
     let matchedItem = null
+    let matchedSectionIndex = null
     const sectionKeysToExpand = new Set()
 
     restaurant.menuSections.forEach((section, originalIndex) => {
+      if (isRecommendedSection(section)) return
+
       const sectionItems = toRenderableArray(section?.items)
       const matchedSectionItem = sectionItems.find(
         (item) => String(item?.id || item?._id || "").trim() === targetDishId,
@@ -1862,6 +1904,7 @@ function RestaurantDetailsContent() {
 
       if (matchedSectionItem && !matchedItem) {
         matchedItem = matchedSectionItem
+        matchedSectionIndex = originalIndex
         sectionKeysToExpand.add(originalIndex)
       }
 
@@ -1874,37 +1917,41 @@ function RestaurantDetailsContent() {
 
         if (matchedSubsectionItem && !matchedItem) {
           matchedItem = matchedSubsectionItem
+          matchedSectionIndex = originalIndex
           sectionKeysToExpand.add(originalIndex)
           sectionKeysToExpand.add(`${originalIndex}-${subIndex}`)
         }
       })
     })
 
-    if (!matchedItem) return
+    if (!matchedItem || matchedSectionIndex === null) return
+
+    const highlightId = getMenuItemKey(matchedItem)
+    if (!highlightId) return
 
     setExpandedSections((prev) => {
       const next = new Set(prev)
       sectionKeysToExpand.forEach((key) => next.add(key))
       return next
     })
-    setHighlightedDishId(targetDishId)
+    setHighlightedDishId(highlightId)
 
     const scrollTimer = window.setTimeout(() => {
-      const targetNode = dishCardRefs.current[targetDishId]
+      const targetNode = dishCardRefs.current[`sec-${matchedSectionIndex}-${highlightId}`]
       if (targetNode) {
         targetNode.scrollIntoView({ behavior: "smooth", block: "center" })
       }
     }, 250)
 
     const highlightTimer = window.setTimeout(() => {
-      setHighlightedDishId((current) => (current === targetDishId ? null : current))
-    }, 2600)
+      setHighlightedDishId((current) => (current === highlightId ? null : current))
+    }, 3500)
 
     return () => {
       window.clearTimeout(scrollTimer)
       window.clearTimeout(highlightTimer)
     }
-  }, [restaurant, targetDishId])
+  }, [restaurant?.menuSections, targetDishId, getMenuItemKey])
 
   // Highlight offers/texts for the blue offer line
   const highlightOffers = [
@@ -1935,8 +1982,16 @@ function RestaurantDetailsContent() {
     return () => clearInterval(interval)
   }, [highlightOffers.length])
 
-  // Show loading state
-  if (loadingRestaurant) {
+  const handleBack = useCallback(() => {
+    if (restaurant?.isRestaurant === false) {
+      navigate("/food/user?vertical=grocery")
+      return
+    }
+    goBack()
+  }, [restaurant?.isRestaurant, navigate, goBack])
+
+  // Show loading state until the current slug fetch fully completes
+  if (!isContentReady) {
     return <RestaurantDetailSkeleton />
   }
 
@@ -1989,7 +2044,10 @@ function RestaurantDetailsContent() {
 
   const availabilityStatus = getRestaurantAvailabilityStatus(restaurant, new Date(availabilityTick))
   const isRestaurantOffline = !availabilityStatus.isOpen
-  const shouldShowGrayscale = isOutOfService || isRestaurantOffline
+  // Page-wide grayscale is ONLY for a store that is actually offline/closed.
+  // Never use zone status here — zone starts as OUT_OF_SERVICE while GPS resolves and was
+  // painting the fully-loaded menu in black-and-white until zone detection finished.
+  const shouldShowGrayscale = isContentReady && isRestaurantOffline
 
   return (
     <AnimatedPage
@@ -2005,7 +2063,7 @@ function RestaurantDetailsContent() {
             variant="outline"
             size="icon"
             className="rounded-full h-10 w-10 border-gray-200 dark:border-gray-800 shadow-sm bg-white dark:bg-[#1a1a1a]"
-            onClick={goBack}
+            onClick={handleBack}
           >
             <ArrowLeft className="h-5 w-5 text-gray-900 dark:text-white" />
           </Button>
@@ -2392,14 +2450,8 @@ function RestaurantDetailsContent() {
                         return (
                           <div
                             key={item.id}
-                            ref={(node) => {
-                              if (node) {
-                                dishCardRefs.current[item.id] = node
-                              } else {
-                                delete dishCardRefs.current[item.id]
-                              }
-                            }}
-                            className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${highlightedDishId === item.id ? "bg-orange-50 ring-2 ring-[#EB590E] ring-inset dark:bg-orange-950/20" : ""}`}
+                            ref={registerDishCardRef(item, originalIndex, isRecommended)}
+                            className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${getDishHighlightClass(item, isRecommended)}`}
                             onClick={() => handleItemClick(item)}
                           >
                             {/* Left Side - Details */}
@@ -2613,14 +2665,8 @@ function RestaurantDetailsContent() {
                                   return (
                                     <div
                                       key={item.id}
-                                      ref={(node) => {
-                                        if (node) {
-                                          dishCardRefs.current[item.id] = node
-                                        } else {
-                                          delete dishCardRefs.current[item.id]
-                                        }
-                                      }}
-                                      className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${highlightedDishId === item.id ? "bg-orange-50 ring-2 ring-[#EB590E] ring-inset dark:bg-orange-950/20" : ""}`}
+                                      ref={registerDishCardRef(item, originalIndex, false)}
+                                      className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${getDishHighlightClass(item, false)}`}
                                       onClick={() => handleItemClick(item)}
                                     >
                                       {/* Left Side - Details */}

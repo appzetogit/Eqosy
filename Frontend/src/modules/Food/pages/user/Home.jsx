@@ -2141,14 +2141,24 @@ export default function Home() {
     fetchRestaurants(appliedFilters);
   }, [appliedFilters, fetchRestaurants]);
 
-  // Load previously ordered restaurants on mount if user is authenticated
+  // Load previously ordered restaurants — only active food restaurants in the user's zone.
   useEffect(() => {
     let active = true;
     const fetchPreviouslyOrdered = async () => {
       const isAuthenticated =
         localStorage.getItem("user_authenticated") === "true" ||
         !!localStorage.getItem("user_accessToken");
-      if (!isAuthenticated) return;
+      if (!isAuthenticated) {
+        setPreviouslyOrderedRestaurants([]);
+        return;
+      }
+
+      // Match home listing: no zone yet → nothing to show for this section.
+      if (!zoneId) {
+        setPreviouslyOrderedRestaurants([]);
+        setLoadingPreviouslyOrdered(false);
+        return;
+      }
 
       try {
         setLoadingPreviouslyOrdered(true);
@@ -2158,53 +2168,69 @@ export default function Home() {
         if (response?.data?.success && response?.data?.data?.orders) {
           const orders = response.data.data.orders;
           const uniqueMap = new Map();
+          const userZoneId = String(zoneId);
 
           orders.forEach((order) => {
             const rest = order.restaurantId;
-            if (rest && rest._id && !uniqueMap.has(rest._id)) {
-              // Extract and normalize images using existing functions
-              const coverImages = extractImages([
-                ...(Array.isArray(rest.coverImages) ? rest.coverImages : [rest.coverImages]).filter(Boolean),
-                rest.coverImage,
-              ]);
+            if (!rest || !rest._id || uniqueMap.has(rest._id)) return;
 
-              const profileImageCandidates = extractImages([
-                ...buildRestaurantImageCandidates(rest.profileImage),
-                ...buildRestaurantImageCandidates(rest.onboarding?.step2?.profileImageUrl),
-                ...buildRestaurantImageCandidates(rest.image),
-                ...buildRestaurantImageCandidates(rest.imageUrl),
-              ]);
-              const profileImageUrl = profileImageCandidates[0] || "";
+            // Food restaurants only (exclude grocery / isRestaurant: false)
+            if (rest.isRestaurant === false) return;
 
-              const allImages = Array.from(
-                new Set(
-                  [
-                    ...coverImages,
-                    ...profileImageCandidates,
-                  ].filter(Boolean),
-                ),
-              );
+            // Active only
+            if (rest.isActive === false) return;
 
-              const image = allImages[0] || profileImageUrl || "";
+            // Approved only (when status is present on the populated doc)
+            if (rest.status && rest.status !== "approved") return;
 
-              uniqueMap.set(rest._id, {
-                id: rest._id,
-                mongoId: rest._id,
-                name: rest.restaurantName || rest.name || order.restaurantName || "Restaurant",
-                slug: rest.slug || (rest.restaurantName || rest.name || "restaurant").toLowerCase().replace(/\s+/g, "-"),
-                coverImages: rest.coverImages || null,
-                profileImage: rest.profileImage || null,
-                image: image,
-                images: allImages,
-                rating: Number(rest.rating) || 0,
-                cuisines: Array.isArray(rest.cuisines) ? rest.cuisines : [],
-                cuisine: Array.isArray(rest.cuisines) && rest.cuisines.length > 0 ? rest.cuisines[0] : "Multi-cuisine",
-                estimatedDeliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
-                deliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
-                location: rest.location || {},
-                pricingAttributes: Array.isArray(rest.pricingAttributes) ? rest.pricingAttributes : [],
-              });
-            }
+            // Must belong to the user's current zone
+            const restZoneId = rest.zoneId?._id || rest.zoneId;
+            if (!restZoneId || String(restZoneId) !== userZoneId) return;
+
+            // Extract and normalize images using existing functions
+            const coverImages = extractImages([
+              ...(Array.isArray(rest.coverImages) ? rest.coverImages : [rest.coverImages]).filter(Boolean),
+              rest.coverImage,
+            ]);
+
+            const profileImageCandidates = extractImages([
+              ...buildRestaurantImageCandidates(rest.profileImage),
+              ...buildRestaurantImageCandidates(rest.onboarding?.step2?.profileImageUrl),
+              ...buildRestaurantImageCandidates(rest.image),
+              ...buildRestaurantImageCandidates(rest.imageUrl),
+            ]);
+            const profileImageUrl = profileImageCandidates[0] || "";
+
+            const allImages = Array.from(
+              new Set(
+                [
+                  ...coverImages,
+                  ...profileImageCandidates,
+                ].filter(Boolean),
+              ),
+            );
+
+            const image = allImages[0] || profileImageUrl || "";
+
+            uniqueMap.set(rest._id, {
+              id: rest._id,
+              mongoId: rest._id,
+              name: rest.restaurantName || rest.name || order.restaurantName || "Restaurant",
+              slug: rest.slug || (rest.restaurantName || rest.name || "restaurant").toLowerCase().replace(/\s+/g, "-"),
+              coverImages: rest.coverImages || null,
+              profileImage: rest.profileImage || null,
+              image: image,
+              images: allImages,
+              rating: Number(rest.rating) || 0,
+              cuisines: Array.isArray(rest.cuisines) ? rest.cuisines : [],
+              cuisine: Array.isArray(rest.cuisines) && rest.cuisines.length > 0 ? rest.cuisines[0] : "Multi-cuisine",
+              estimatedDeliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
+              deliveryTime: rest.estimatedDeliveryTime || rest.deliveryTime || "25-30 mins",
+              location: rest.location || {},
+              pricingAttributes: Array.isArray(rest.pricingAttributes) ? rest.pricingAttributes : [],
+              isRestaurant: rest.isRestaurant !== false,
+              isActive: rest.isActive !== false,
+            });
           });
 
           setPreviouslyOrderedRestaurants(Array.from(uniqueMap.values()));
@@ -2222,7 +2248,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [extractImages, buildRestaurantImageCandidates]);
+  }, [zoneId, extractImages, buildRestaurantImageCandidates]);
 
   // Recalculate distances when user location updates
   useEffect(() => {

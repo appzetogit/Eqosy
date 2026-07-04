@@ -63,7 +63,7 @@ const getSmsIndiaHubConfig = () => {
   const templateId = readValue(
     env.sms?.indiaHub?.dltTemplateId,
     process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID,
-    '1007801291964877107',
+    '1007745618568056426',
   );
 
   return {
