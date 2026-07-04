@@ -710,8 +710,15 @@ const SelectLocation = () => {
     }
   };
 
+  const dismissKeyboard = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.blur();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans relative overflow-hidden pb-6">
+    <div className="h-[100dvh] min-h-0 bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans relative overflow-hidden flex flex-col">
       <div className="absolute -top-20 right-[-40px] h-48 w-48 rounded-full bg-orange-100/55 blur-3xl pointer-events-none" />
       <div className="absolute top-56 left-[-60px] h-56 w-56 rounded-full bg-emerald-100/50 blur-3xl pointer-events-none" />
       <div className="absolute bottom-16 right-[-40px] h-44 w-44 rounded-full bg-blue-100/50 blur-3xl pointer-events-none" />
@@ -852,8 +859,10 @@ const SelectLocation = () => {
         )}
       </AnimatePresence>
 
+      {/* Sticky top: header, location inputs, and action pills */}
+      <div className="relative z-30 shrink-0 bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_100%)]">
       {/* Header */}
-      <header className="sticky top-0 z-30">
+      <header>
         <div className="bg-white/70 backdrop-blur-md border-b border-white/70 shadow-[0_10px_20px_rgba(15,23,42,0.05)]">
           <div className="px-5 py-4 flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 -ml-2 active:scale-95 transition-all rounded-full">
@@ -1026,9 +1035,14 @@ const SelectLocation = () => {
           </div>
         </div>
       )}
+      </div>
 
-      {/* Search Results */}
-      <div className="relative z-10 px-5 mb-4">
+      {/* Scrollable search results / popular locations — dismisses keypad on scroll */}
+      <div
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6"
+        onScroll={dismissKeyboard}
+        onTouchMove={dismissKeyboard}
+      >
         <h2 className="text-[14px] font-bold text-slate-400 mb-3 ml-1 uppercase tracking-widest">
           {query.trim().length > 0 ? 'Search Results' : 'Popular Locations'}
         </h2>
@@ -1096,26 +1110,6 @@ const SelectLocation = () => {
           </div>
         )}
       </div>
-
-      {/* Persistent Confirm Button */}
-      <AnimatePresence>
-        {pickup && drop && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            className="fixed bottom-6 left-5 right-5 z-40"
-          >
-            <button
-              onClick={() => handleConfirmNavigate()}
-              className="w-full bg-[#f8e001] py-4 rounded-3xl text-slate-900 font-bold text-[16px] shadow-[0_8px_30px_rgba(248,224,1,0.3)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-            >
-              Confirm & Proceed
-              <ChevronRight size={18} strokeWidth={3} className="opacity-60" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
