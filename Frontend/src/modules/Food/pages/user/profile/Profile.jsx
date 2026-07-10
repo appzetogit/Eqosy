@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -56,9 +56,9 @@ const USER_SESSION_PREFERENCE_KEYS = ["userVegMode", "food-under-250-filters"];
 
 import { registerWebPushForCurrentModule } from "@food/utils/firebaseMessaging";
 import {
-  applyTheme,
   getFoodUserTheme,
   saveFoodUserTheme,
+  THEME_CHANGE_EVENT,
 } from "@/shared/utils/theme.js";
 import DeleteAccountModal from "@food/components/DeleteAccountModal";
 
@@ -101,19 +101,23 @@ export default function Profile() {
   };
 
   // Settings states
-  const [appearance, setAppearance] = useState(() => {
-    return getFoodUserTheme();
-  });
-  const appearanceBootstrapped = useRef(false);
+  const [appearance, setAppearance] = useState(() => getFoodUserTheme());
 
   useEffect(() => {
-    if (!appearanceBootstrapped.current) {
-      appearanceBootstrapped.current = true;
-      applyTheme(appearance);
-      return;
-    }
-    saveFoodUserTheme(appearance);
-  }, [appearance]);
+    const handleThemeChange = (event) => {
+      const theme = event?.detail?.theme ?? getFoodUserTheme();
+      setAppearance(theme);
+    };
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  }, []);
+
+  const handleAppearanceSelect = (theme) => {
+    setAppearance(theme);
+    saveFoodUserTheme(theme);
+    setAppearanceOpen(false);
+  };
 
   // Get first letter of name for avatar
   const avatarInitial =
@@ -1120,10 +1124,7 @@ export default function Profile() {
           </DialogHeader>
           <div className="space-y-2 px-5 pb-5">
             <button
-              onClick={() => {
-                setAppearance("light");
-                setAppearanceOpen(false);
-              }}
+              onClick={() => handleAppearanceSelect("light")}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${appearance === "light"
                   ? "border-blue-600 bg-blue-50 dark:border-blue-500 dark:bg-blue-900/20"
                   : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
@@ -1148,10 +1149,7 @@ export default function Profile() {
               </div>
             </button>
             <button
-              onClick={() => {
-                setAppearance("dark");
-                setAppearanceOpen(false);
-              }}
+              onClick={() => handleAppearanceSelect("dark")}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${appearance === "dark"
                   ? "border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                   : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"

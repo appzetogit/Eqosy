@@ -230,25 +230,85 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const [center, setCenter] = useState(coordPairToLatLng(initialCoords));
   const [selectedAddress, setSelectedAddress] = useState(value || formatCoordLabel(initialCoords));
+  const [addressInput, setAddressInput] = useState(value || formatCoordLabel(initialCoords));
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
   const mapRef = useRef(null);
   const draggingRef = useRef(false);
   const geocodeTimerRef = useRef(null);
+  const addressSearchTimerRef = useRef(null);
+  const autocompleteServiceRef = useRef(null);
+  const isAddressEditingRef = useRef(false);
+
+  const getAutocompleteService = () => {
+    if (!window.google?.maps?.places?.AutocompleteService) {
+      return null;
+    }
+
+    if (!autocompleteServiceRef.current) {
+      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+    }
+
+    return autocompleteServiceRef.current;
+  };
+
+  const panMapToCoords = (nextCenter) => {
+    setCenter(nextCenter);
+    if (mapRef.current) {
+      mapRef.current.panTo(nextCenter);
+      mapRef.current.setZoom(16);
+    }
+  };
+
+  const resolveAddressToMap = (addressText, placeId = '') => {
+    if (!window.google?.maps?.Geocoder) {
+      return;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+    const request = placeId ? { placeId } : { address: String(addressText || '').trim() };
+
+    geocoder.geocode(request, (results, status) => {
+      if (status !== 'OK' || !results?.[0]?.geometry?.location) {
+        return;
+      }
+
+      const location = results[0].geometry.location;
+      const formattedAddress = results[0].formatted_address || addressText;
+      isAddressEditingRef.current = false;
+      setSelectedAddress(formattedAddress);
+      setAddressInput(formattedAddress);
+      setShowAddressSuggestions(false);
+      panMapToCoords({
+        lat: location.lat(),
+        lng: location.lng(),
+      });
+    });
+  };
 
   useEffect(() => {
     if (!open) return undefined;
 
     const resetTimer = setTimeout(() => {
+      const nextAddress = value || formatCoordLabel(initialCoords);
+      isAddressEditingRef.current = false;
       setCenter(coordPairToLatLng(initialCoords));
-      setSelectedAddress(value || formatCoordLabel(initialCoords));
+      setSelectedAddress(nextAddress);
+      setAddressInput(nextAddress);
+      setAddressSuggestions([]);
+      setShowAddressSuggestions(false);
     }, 0);
 
     return () => clearTimeout(resetTimer);
   }, [initialCoords, open, value]);
 
   useEffect(() => {
-    if (!open || !isLoaded || !window.google?.maps?.Geocoder) return undefined;
+    if (!open || !isLoaded || !window.google?.maps?.Geocoder || isAddressEditingRef.current) {
+      return undefined;
+    }
 
     clearTimeout(geocodeTimerRef.current);
     geocodeTimerRef.current = setTimeout(() => {
@@ -260,15 +320,77 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
 
         if (status === 'OK' && results?.[0]?.formatted_address) {
           setSelectedAddress(results[0].formatted_address);
+          setAddressInput(results[0].formatted_address);
           return;
         }
 
-        setSelectedAddress(formatLatLngLabel(center));
+        const fallbackLabel = formatLatLngLabel(center);
+        setSelectedAddress(fallbackLabel);
+        setAddressInput(fallbackLabel);
       });
     }, 450);
 
     return () => clearTimeout(geocodeTimerRef.current);
   }, [center, isLoaded, open]);
+
+  useEffect(() => () => clearTimeout(addressSearchTimerRef.current), []);
+
+  const handleAddressInputChange = (event) => {
+    const nextValue = event.target.value;
+    isAddressEditingRef.current = true;
+    setAddressInput(nextValue);
+    setSelectedAddress(nextValue);
+    setShowAddressSuggestions(true);
+
+    clearTimeout(addressSearchTimerRef.current);
+
+    if (nextValue.trim().length < 3 || !HAS_VALID_GOOGLE_MAPS_KEY || !isLoaded) {
+      setAddressSuggestions([]);
+      setIsSearchingAddress(false);
+      return;
+    }
+
+    addressSearchTimerRef.current = setTimeout(() => {
+      const autocompleteService = getAutocompleteService();
+      if (!autocompleteService) {
+        return;
+      }
+
+      setIsSearchingAddress(true);
+      autocompleteService.getPlacePredictions(
+        {
+          input: nextValue.trim(),
+          componentRestrictions: { country: 'in' },
+        },
+        (predictions, status) => {
+          setIsSearchingAddress(false);
+          const nextSuggestions = status === 'OK'
+            ? predictions.slice(0, 5).map((prediction) => ({
+              title: prediction.structured_formatting?.main_text || prediction.description,
+              address: prediction.description,
+              placeId: prediction.place_id,
+            }))
+            : [];
+
+          setAddressSuggestions(nextSuggestions);
+        },
+      );
+    }, 300);
+  };
+
+  const handleAddressSuggestionSelect = (suggestion) => {
+    resolveAddressToMap(suggestion.address, suggestion.placeId);
+  };
+
+  const handleAddressInputKeyDown = (event) => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    setShowAddressSuggestions(false);
+    resolveAddressToMap(addressInput);
+  };
 
   const commitMapCenter = () => {
     if (!mapRef.current) return;
@@ -295,6 +417,7 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
           lng: position.coords.longitude,
         };
 
+        isAddressEditingRef.current = false;
         setIsLocating(false);
         setCenter(next);
         if (mapRef.current) {
@@ -346,6 +469,7 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
                 }}
                 onDragStart={() => {
                   draggingRef.current = true;
+                  isAddressEditingRef.current = false;
                 }}
                 onDragEnd={() => {
                   draggingRef.current = false;
@@ -369,12 +493,46 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
               </div>
             )}
 
-            <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4">
-              <div className="rounded-[22px] border border-white bg-white/92 px-4 py-4 shadow-xl backdrop-blur-md">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4">
+              <div className="pointer-events-auto rounded-[22px] border border-white bg-white/92 px-4 py-4 shadow-xl backdrop-blur-md">
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
                   {isResolvingAddress ? 'Resolving address...' : 'Selected location'}
                 </p>
-                <p className="mt-1 text-[13px] font-semibold text-slate-700">{selectedAddress}</p>
+                <input
+                  type="text"
+                  value={addressInput}
+                  onChange={handleAddressInputChange}
+                  onKeyDown={handleAddressInputKeyDown}
+                  onFocus={() => setShowAddressSuggestions(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setShowAddressSuggestions(false), 180);
+                  }}
+                  placeholder="Search or edit address"
+                  className="mt-1 w-full bg-transparent text-[13px] font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                />
+                {showAddressSuggestions && (isSearchingAddress || addressSuggestions.length > 0) ? (
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-lg">
+                    {isSearchingAddress ? (
+                      <p className="px-3 py-2 text-[12px] font-semibold text-slate-400">Searching...</p>
+                    ) : (
+                      addressSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.placeId || suggestion.address}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleAddressSuggestionSelect(suggestion)}
+                          className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2.5 text-left last:border-none hover:bg-slate-50"
+                        >
+                          <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                          <span className="min-w-0">
+                            <span className="block text-[12px] font-bold text-slate-800">{suggestion.title}</span>
+                            <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-500">{suggestion.address}</span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -397,7 +555,7 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
           <div className="bg-white px-5 pb-8 pt-5">
             <button
               type="button"
-              onClick={() => onConfirm(latLngToCoordPair(center), selectedAddress)}
+              onClick={() => onConfirm(latLngToCoordPair(center), addressInput.trim() || selectedAddress)}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-[20px] bg-slate-900 text-sm font-black text-white shadow-[0_14px_28px_rgba(15,23,42,0.18)]"
             >
               {confirmLabel}

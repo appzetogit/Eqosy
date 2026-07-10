@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare,
@@ -17,6 +17,7 @@ import {
     ArrowLeft,
     Clock3,
     MapPinned,
+    Navigation,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
@@ -34,6 +35,10 @@ const MAP_CONTAINER_STYLE = {
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const DEFAULT_DRIVER_COORDS = [75.8577, 22.7196];
 const ARRIVAL_RADIUS_METERS = 100;
+const MIN_ROUTE_POLYLINE_METERS = 1;
+const ROUTE_DEVIATION_METERS = 100;
+const ROUTE_REFRESH_INTERVAL_MS = 30000;
+const ROUTE_WATCH_INTERVAL_MS = 5000;
 
 const mapStyles = [
     { elementType: 'geometry', stylers: [{ color: '#f8fafc' }] },
@@ -134,7 +139,6 @@ const getTripTitle = (type) => {
 
 const cleanPhoneNumber = (phone) => String(phone || '').replace(/[^\d+]/g, '');
 
-const buildFallbackRoute = (origin, destination) => [origin, destination];
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 const hexToRgba = (hex, alpha = 1) => {
     const sanitized = String(hex || '').replace('#', '');
@@ -498,6 +502,61 @@ const getDistanceMeters = (from, to) => {
     return earthRadiusMeters * c;
 };
 
+const getDestinationRouteKey = (destination) => (
+    `${Number(destination?.lat ?? 0).toFixed(6)}:${Number(destination?.lng ?? 0).toFixed(6)}`
+);
+
+const getClosestPointOnSegment = (point, start, end) => {
+    const startLat = Number(start?.lat);
+    const startLng = Number(start?.lng);
+    const endLat = Number(end?.lat);
+    const endLng = Number(end?.lng);
+    const pointLat = Number(point?.lat);
+    const pointLng = Number(point?.lng);
+
+    if (![startLat, startLng, endLat, endLng, pointLat, pointLng].every(Number.isFinite)) {
+        return start || point;
+    }
+
+    const deltaLng = endLng - startLng;
+    const deltaLat = endLat - startLat;
+    const lengthSquared = (deltaLng * deltaLng) + (deltaLat * deltaLat);
+
+    if (lengthSquared <= 0) {
+        return { lat: startLat, lng: startLng };
+    }
+
+    const projection = (
+        ((pointLng - startLng) * deltaLng) + ((pointLat - startLat) * deltaLat)
+    ) / lengthSquared;
+    const clampedProjection = Math.max(0, Math.min(1, projection));
+
+    return {
+        lat: startLat + (deltaLat * clampedProjection),
+        lng: startLng + (deltaLng * clampedProjection),
+    };
+};
+
+const getDistanceToPolylineMeters = (position, path = []) => {
+    if (!position || path.length < 2) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    return path.slice(0, -1).reduce((minDistance, start, index) => {
+        const end = path[index + 1];
+        const closestPoint = getClosestPointOnSegment(position, start, end);
+        const segmentDistance = getDistanceMeters(position, closestPoint);
+        return Math.min(minDistance, segmentDistance);
+    }, Number.POSITIVE_INFINITY);
+};
+
+const mapDirectionsOverviewPath = (result) => (
+    result?.routes?.[0]?.overview_path?.map((point) => ({
+        lat: point.lat(),
+        lng: point.lng(),
+    })) || []
+);
+
 const formatDistanceLabel = (meters) => {
     const distance = Number(meters || 0);
 
@@ -521,6 +580,44 @@ const formatTimerClock = (totalSeconds) => {
 
 const formatWholeMinutes = (value) => `${Math.max(0, Math.floor(Number(value) || 0))} min`;
 
+const computePickupWaitingCharge = ({
+    arrivedAt = '',
+    startedAt = '',
+    freeWaitingBeforeMinutes = 0,
+    waitingChargePerMinute = 0,
+} = {}) => {
+    if (!arrivedAt || !startedAt) {
+        return {
+            waitingSeconds: 0,
+            chargeableMinutes: 0,
+            waitingChargeTotal: 0,
+        };
+    }
+
+    const arrivedTime = new Date(arrivedAt).getTime();
+    const startedTime = new Date(startedAt).getTime();
+
+    if (!Number.isFinite(arrivedTime) || !Number.isFinite(startedTime) || startedTime <= arrivedTime) {
+        return {
+            waitingSeconds: 0,
+            chargeableMinutes: 0,
+            waitingChargeTotal: 0,
+        };
+    }
+
+    const waitingSeconds = Math.max(0, Math.floor((startedTime - arrivedTime) / 1000));
+    const safeFreeMinutes = Math.max(0, Number(freeWaitingBeforeMinutes) || 0);
+    const safeRate = Math.max(0, Number(waitingChargePerMinute) || 0);
+    const chargeableMinutes = Math.max(0, Math.ceil(waitingSeconds / 60) - safeFreeMinutes);
+    const waitingChargeTotal = Math.round(chargeableMinutes * safeRate * 100) / 100;
+
+    return {
+        waitingSeconds,
+        chargeableMinutes,
+        waitingChargeTotal,
+    };
+};
+
 const buildPersistedTripState = (job = {}, overrides = {}) => {
     const mergedJob = {
         ...job,
@@ -539,6 +636,7 @@ const buildPersistedTripState = (job = {}, overrides = {}) => {
         phase: mergedJob.phase || '',
         otp: mergedJob.otp || '',
         arrivedAt: mergedJob.arrivedAt || '',
+        startedAt: mergedJob.startedAt || '',
         paymentMethod: mergedJob.paymentMethod || 'Cash',
         pricingSnapshot: mergedJob.pricingSnapshot || null,
         currentDriverCoords: mergedJob.lastDriverLocation?.coordinates || mergedJob.driverLocation?.coordinates || null,
@@ -787,6 +885,7 @@ const ActiveTrip = () => {
     const [isGeneratingPaymentQr, setIsGeneratingPaymentQr] = useState(false);
     const [arrivalGuardError, setArrivalGuardError] = useState('');
     const [localArrivedAt, setLocalArrivedAt] = useState('');
+    const [localDestinationArrivedAt, setLocalDestinationArrivedAt] = useState('');
     const [waitingNow, setWaitingNow] = useState(Date.now());
     const [map, setMap] = useState(null);
     const [driverPosition, setDriverPosition] = useState(initialDriverPosition);
@@ -803,6 +902,18 @@ const ActiveTrip = () => {
     const hasResolvedLivePositionRef = React.useRef(false);
     const hasHydratedUiStateRef = React.useRef(false);
     const mapFrameKeyRef = React.useRef('');
+    const directionsServiceRef = React.useRef(null);
+    const routeRequestVersionRef = React.useRef(0);
+    const lastRouteFetchAtRef = React.useRef(0);
+    const lastRouteDestinationKeyRef = React.useRef('');
+    const lastRoutePhaseRef = React.useRef('');
+    const routePathRef = React.useRef([]);
+    const driverPositionRef = React.useRef(initialDriverPosition);
+    const activeDestinationRef = React.useRef(null);
+    const phaseRef = React.useRef(phase);
+    const isSimulationRunningRef = React.useRef(false);
+    const isRouteFetchInFlightRef = React.useRef(false);
+    const simulationRouteFetchDoneRef = React.useRef(false);
 
     const activeDestination = useMemo(
         () => (phase === 'to_pickup' || phase === 'otp_verification' ? pickupPosition : dropPosition),
@@ -820,6 +931,185 @@ const ActiveTrip = () => {
         () => formatDistanceLabel(pickupDistanceMeters),
         [pickupDistanceMeters],
     );
+
+    useEffect(() => {
+        driverPositionRef.current = driverPosition;
+    }, [driverPosition]);
+
+    useEffect(() => {
+        activeDestinationRef.current = activeDestination;
+    }, [activeDestination]);
+
+    useEffect(() => {
+        phaseRef.current = phase;
+    }, [phase]);
+
+    useEffect(() => {
+        routePathRef.current = routePath;
+    }, [routePath]);
+
+    useEffect(() => {
+        isSimulationRunningRef.current = isSimulationRunning;
+    }, [isSimulationRunning]);
+
+    const requestRouteRecalculation = useCallback((options = {}) => {
+        const { force = false, destinationChanged = false } = options;
+
+        if (isSimulationRunningRef.current) {
+            return;
+        }
+
+        const origin = driverPositionRef.current;
+        const destination = activeDestinationRef.current;
+
+        if (!origin || !destination) {
+            return;
+        }
+
+        const routeDistanceMeters = getDistanceMeters(origin, destination);
+
+        if (routeDistanceMeters < MIN_ROUTE_POLYLINE_METERS) {
+            const overlapPath = [origin];
+            routePathRef.current = overlapPath;
+            setRoutePath(overlapPath);
+            setRouteError('');
+            return;
+        }
+
+        if (destinationChanged) {
+            routePathRef.current = [];
+            setRoutePath([]);
+        }
+
+        if (!isLoaded || !window.google?.maps?.DirectionsService) {
+            return;
+        }
+
+        if (isRouteFetchInFlightRef.current && !force && !destinationChanged) {
+            return;
+        }
+
+        if (!directionsServiceRef.current) {
+            directionsServiceRef.current = new window.google.maps.DirectionsService();
+        }
+
+        const requestVersion = routeRequestVersionRef.current + 1;
+        routeRequestVersionRef.current = requestVersion;
+        isRouteFetchInFlightRef.current = true;
+        lastRouteFetchAtRef.current = Date.now();
+        lastRouteDestinationKeyRef.current = getDestinationRouteKey(destination);
+        lastRoutePhaseRef.current = phaseRef.current;
+
+        directionsServiceRef.current.route(
+            {
+                origin,
+                destination,
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                provideRouteAlternatives: false,
+            },
+            (result, status) => {
+                isRouteFetchInFlightRef.current = false;
+
+                if (requestVersion !== routeRequestVersionRef.current) {
+                    return;
+                }
+
+                if (isSimulationRunningRef.current) {
+                    return;
+                }
+
+                if (status === 'OK') {
+                    const nextPath = mapDirectionsOverviewPath(result);
+
+                    if (nextPath.length > 1) {
+                        routePathRef.current = nextPath;
+                        setRoutePath(nextPath);
+                        setRouteError('');
+                        return;
+                    }
+                }
+            },
+        );
+    }, [isLoaded]);
+
+    const shouldRecalculateRoute = useCallback(() => {
+        if (isSimulationRunningRef.current) {
+            return false;
+        }
+
+        const destination = activeDestinationRef.current;
+        const destinationKey = getDestinationRouteKey(destination);
+        const currentPhase = phaseRef.current;
+        const now = Date.now();
+        const routeDistanceMeters = getDistanceMeters(
+            driverPositionRef.current,
+            destination,
+        );
+
+        if (routeDistanceMeters < MIN_ROUTE_POLYLINE_METERS) {
+            return false;
+        }
+
+        if (destinationKey !== lastRouteDestinationKeyRef.current) {
+            return true;
+        }
+
+        if (currentPhase !== lastRoutePhaseRef.current) {
+            return true;
+        }
+
+        if (routePathRef.current.length < 2) {
+            return true;
+        }
+
+        if (now - lastRouteFetchAtRef.current >= ROUTE_REFRESH_INTERVAL_MS) {
+            return true;
+        }
+
+        const deviationMeters = getDistanceToPolylineMeters(
+            driverPositionRef.current,
+            routePathRef.current,
+        );
+
+        return deviationMeters > ROUTE_DEVIATION_METERS;
+    }, []);
+
+    const evaluateRouteRefresh = useCallback(() => {
+        if (!shouldRecalculateRoute()) {
+            return;
+        }
+
+        const destinationKey = getDestinationRouteKey(activeDestinationRef.current);
+        const destinationChanged = destinationKey !== lastRouteDestinationKeyRef.current;
+
+        requestRouteRecalculation({
+            force: destinationChanged,
+            destinationChanged,
+        });
+    }, [requestRouteRecalculation, shouldRecalculateRoute]);
+
+    useEffect(() => {
+        if (isSimulationRunning) {
+            return;
+        }
+
+        requestRouteRecalculation({
+            force: true,
+            destinationChanged: true,
+        });
+    }, [activeDestination, isLoaded, isSimulationRunning, phase, requestRouteRecalculation, rideId]);
+
+    useEffect(() => {
+        if (isSimulationRunning) {
+            return undefined;
+        }
+
+        const intervalId = window.setInterval(() => {
+            evaluateRouteRefresh();
+        }, ROUTE_WATCH_INTERVAL_MS);
+
+        return () => window.clearInterval(intervalId);
+    }, [evaluateRouteRefresh, isSimulationRunning]);
 
     useEffect(() => {
         const currentStatus = String(
@@ -948,6 +1238,10 @@ const ActiveTrip = () => {
         if (typeof storedUiState.localArrivedAt === 'string') {
             setLocalArrivedAt(storedUiState.localArrivedAt);
         }
+
+        if (typeof storedUiState.localDestinationArrivedAt === 'string') {
+            setLocalDestinationArrivedAt(storedUiState.localDestinationArrivedAt);
+        }
     }, [rideId]);
 
     useEffect(() => {
@@ -962,8 +1256,9 @@ const ActiveTrip = () => {
             paymentQrError,
             selectedRating,
             localArrivedAt,
+            localDestinationArrivedAt,
         });
-    }, [driverPaymentStatus, localArrivedAt, paymentQr, paymentQrError, rideId, selectedPaymentMode, selectedRating]);
+    }, [driverPaymentStatus, localArrivedAt, localDestinationArrivedAt, paymentQr, paymentQrError, rideId, selectedPaymentMode, selectedRating]);
 
     useEffect(() => {
         if (!rideId || !effectiveState) {
@@ -996,7 +1291,8 @@ const ActiveTrip = () => {
             phase,
             liveStatus: derivedLiveStatus,
             status: derivedStatus,
-            arrivedAt: phase === 'otp_verification' ? (localArrivedAt || rawJob?.arrivedAt || '') : '',
+            arrivedAt: localArrivedAt || rawJob?.arrivedAt || '',
+            startedAt: rawJob?.startedAt || '',
         });
         if (nextPersistedState) {
             writeStoredActiveTripSnapshot(nextPersistedState);
@@ -1163,14 +1459,27 @@ const ActiveTrip = () => {
         : 0;
     const freeWaitingRemainingSeconds = Math.max(0, freeWaitingBeforeMinutes * 60 - waitingElapsedSeconds);
     const waitingChargeableMinutes = Math.max(0, Math.ceil(waitingElapsedSeconds / 60) - freeWaitingBeforeMinutes);
+    const liveWaitingChargeTotal = Math.round(waitingChargeableMinutes * waitingChargePerMinute * 100) / 100;
     const canMarkArrived = pickupDistanceMeters <= ARRIVAL_RADIUS_METERS;
     const canDeliverParcel = dropDistanceMeters <= ARRIVAL_RADIUS_METERS;
     const isWaitingForOtp = phase === 'otp_verification' && Boolean(waitingStartedAt);
     const pickupContact = isParcel ? tripData.sender : tripData.user;
     const destinationContact = isParcel ? tripData.receiver : tripData.user;
+    const pickupArrivedAt = liveRaw?.arrivedAt || liveRequest?.raw?.arrivedAt || effectiveState?.arrivedAt || localArrivedAt || '';
     const tripStartedAt = liveRaw?.startedAt || liveRequest?.raw?.startedAt || effectiveState?.startedAt || '';
-    const tripArrivedAt = localArrivedAt || liveRaw?.arrivedAt || liveRequest?.raw?.arrivedAt || effectiveState?.arrivedAt || '';
-    const tripDurationLabel = formatDurationLabel(tripStartedAt, tripArrivedAt || Date.now());
+    const tripDestinationArrivedAt = localDestinationArrivedAt || '';
+    const pickupWaitingSummary = useMemo(
+        () => computePickupWaitingCharge({
+            arrivedAt: pickupArrivedAt,
+            startedAt: tripStartedAt,
+            freeWaitingBeforeMinutes,
+            waitingChargePerMinute,
+        }),
+        [freeWaitingBeforeMinutes, pickupArrivedAt, tripStartedAt, waitingChargePerMinute],
+    );
+    const totalFareAmount = fareAmount + pickupWaitingSummary.waitingChargeTotal;
+    const tripArrivedAt = tripDestinationArrivedAt;
+    const tripDurationLabel = formatDurationLabel(tripStartedAt, tripDestinationArrivedAt || Date.now());
     const tripSummaryTitle = isParcel ? 'Delivery Summary' : 'Ride Summary';
     const tripSummarySubtitle = isParcel ? 'Review the delivery details before you close the order.' : 'Review the trip details before you close the ride.';
     const destinationRoleLabel = isParcel ? 'Receiver' : 'Rider';
@@ -1178,11 +1487,12 @@ const ActiveTrip = () => {
         ? (selectedPaymentMode === 'cash' ? 'Cash' : 'Online')
         : (effectiveState?.paymentMethod || liveRequest?.payment || tripData.payment || 'Pending');
     const commissionSummary = computeCommissionSummary({
-        fare: fareAmount,
+        fare: totalFareAmount,
         pricingSnapshot: waitingPricing,
         explicitCommissionAmount: liveRaw?.commissionAmount ?? effectiveState?.commissionAmount,
         explicitDriverEarnings: liveRaw?.driverEarnings ?? effectiveState?.driverEarnings,
     });
+    const collectibleFareLabel = formatCurrencyAmount(totalFareAmount);
     const paymentCollectionLabel = isParcel ? 'receiver' : 'rider';
     const routeStrokeColor = '#000000';
     const routeAccentSoft = hexToRgba(routeStrokeColor, 0.08);
@@ -1228,6 +1538,15 @@ const ActiveTrip = () => {
                 },
             },
         });
+    };
+
+    const openGoogleMapsNavigation = () => {
+        if (activeDestination && activeDestination.lat && activeDestination.lng) {
+            const url = `https://www.google.com/maps/dir/?api=1&destination=${activeDestination.lat},${activeDestination.lng}&travelmode=driving`;
+            window.open(url, '_blank');
+        } else {
+            window.alert('Destination coordinates are not available.');
+        }
     };
 
     const openSupportChat = () => {
@@ -1359,8 +1678,13 @@ const ActiveTrip = () => {
     };
 
     const startSimulation = () => {
+        if (!simulationRouteFetchDoneRef.current) {
+            simulationRouteFetchDoneRef.current = true;
+            requestRouteRecalculation({ force: true });
+        }
+
         const nextPath = getSimulationPath({
-            routePath,
+            routePath: routePathRef.current.length > 1 ? routePathRef.current : routePath,
             from: driverPosition,
             to: activeDestination,
         });
@@ -1399,17 +1723,20 @@ const ActiveTrip = () => {
     const resetSimulation = () => {
         stopSimulationTimer();
         simulationPathRef.current = [];
+        simulationRouteFetchDoneRef.current = false;
         setIsSimulationEnabled(false);
         setIsSimulationRunning(false);
         setSimulationStep(0);
         setDriverPosition(initialDriverPosition);
+        driverPositionRef.current = initialDriverPosition;
         const nextHeading = calculateBearing(initialDriverPosition, activeDestination, displayDriverHeading);
         setDriverHeading(nextHeading);
         publishDriverLocation(initialDriverPosition, nextHeading);
+        requestRouteRecalculation({ force: true, destinationChanged: true });
     };
 
     const generatePaymentQr = async () => {
-        if (!rideId || !fareAmount) {
+        if (!rideId || !totalFareAmount) {
             setPaymentQrError('Ride fare is missing.');
             return;
         }
@@ -1421,7 +1748,7 @@ const ActiveTrip = () => {
         try {
             const response = await api.post('/drivers/payments/qr', {
                 rideId,
-                amount: fareAmount,
+                amount: totalFareAmount,
             });
             const qr = response?.data?.data || response?.data || {};
 
@@ -1516,7 +1843,7 @@ const ActiveTrip = () => {
             liveStatus: 'started',
             status: 'ongoing',
             startedAt: startedAtIso,
-            arrivedAt: '',
+            arrivedAt: rawJobForSnapshot?.arrivedAt || localArrivedAt || '',
         });
 
         if (optimisticSnapshot) {
@@ -1575,6 +1902,8 @@ const ActiveTrip = () => {
                         publishDriverLocation(position, nextHeading);
                         return position;
                     });
+                    driverPositionRef.current = position;
+                    evaluateRouteRefresh();
                 }
             })
             .catch(() => {});
@@ -1611,6 +1940,8 @@ const ActiveTrip = () => {
                             speed: pos.coords.speed,
                         });
                     }
+                    driverPositionRef.current = nextPosition;
+                    evaluateRouteRefresh();
                     return nextPosition;
                 });
             },
@@ -1628,7 +1959,7 @@ const ActiveTrip = () => {
                 navigator.geolocation.clearWatch(watchId);
             }
         };
-    }, [rideId]);
+    }, [evaluateRouteRefresh, rideId]);
 
     useEffect(() => {
         stopSimulationTimer();
@@ -1669,63 +2000,6 @@ const ActiveTrip = () => {
     }, [isSimulationRunning, map, rideId]);
 
     useEffect(() => () => stopSimulationTimer(), []);
-
-    useEffect(() => {
-        if (isSimulationEnabled) {
-            return;
-        }
-
-        if (!isLoaded || !window.google?.maps?.DirectionsService) {
-            setRoutePath(buildFallbackRoute(driverPosition, activeDestination));
-            setRouteError('');
-            return;
-        }
-
-        if (arePositionsNearlyEqual(driverPosition, activeDestination)) {
-            setRoutePath((currentPath) => (
-                currentPath.length === 1 && arePositionsNearlyEqual(currentPath[0], driverPosition)
-                    ? currentPath
-                    : [driverPosition]
-            ));
-            setRouteError('');
-            return;
-        }
-
-        let active = true;
-        const directionsService = new window.google.maps.DirectionsService();
-
-        directionsService.route(
-            {
-                origin: driverPosition,
-                destination: activeDestination,
-                travelMode: window.google.maps.TravelMode.DRIVING,
-                provideRouteAlternatives: false,
-            },
-            (result, status) => {
-                if (!active) {
-                    return;
-                }
-
-                if (status === 'OK' && result?.routes?.[0]?.overview_path?.length) {
-                    setRoutePath(
-                        result.routes[0].overview_path.map((point) => ({
-                            lat: point.lat(),
-                            lng: point.lng(),
-                        })),
-                    );
-                    setRouteError('');
-                    return;
-                }
-
-                setRoutePath(buildFallbackRoute(driverPosition, activeDestination));
-                setRouteError(status || 'Directions unavailable');
-            },
-        );
-
-        return () => {
-            active = false;
-        };
-    }, [activeDestination, driverPosition, isLoaded, isSimulationEnabled]);
 
     useEffect(() => {
         if (!map || !window.google?.maps) {
@@ -2041,6 +2315,7 @@ const ActiveTrip = () => {
                                 </div>
                             <div className="flex gap-2">
                                     <button onClick={openTripChat} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={18} strokeWidth={2.5} /></button>
+                                    <button onClick={openGoogleMapsNavigation} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Navigate to destination"><Navigation size={18} strokeWidth={2.5} /></button>
                                     <button onClick={() => callContact(pickupContact?.phone)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center active:scale-95 transition-transform" style={{ color: routeStrokeColor }} aria-label="Call contact"><Phone size={18} strokeWidth={2.5} /></button>
                                 </div>
                             </div>
@@ -2049,7 +2324,9 @@ const ActiveTrip = () => {
                                     <div>
                                         <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Arrival Radius</p>
                                         <p className="mt-1 text-[12px] font-black text-slate-900">
-                                            {Math.round(pickupDistanceMeters)} m away from pickup
+                                            {pickupDistanceMeters >= 1000
+                                                ? `${parseFloat((pickupDistanceMeters / 1000).toFixed(2))} km away from pickup`
+                                                : `${Math.round(pickupDistanceMeters)} m away from pickup`}
                                         </p>
                                     </div>
                                     <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${canMarkArrived ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
@@ -2123,7 +2400,9 @@ const ActiveTrip = () => {
                                             <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Waiting Charge</p>
                                             <p className="mt-1 text-[13px] font-black text-slate-900">
                                                 Rs {waitingChargePerMinute}/min
-                                                {waitingChargeableMinutes > 0 ? ` • ${waitingChargeableMinutes} billable` : ''}
+                                                {waitingChargeableMinutes > 0
+                                                    ? ` • ${waitingChargeableMinutes} billable • Rs ${liveWaitingChargeTotal}`
+                                                    : ''}
                                             </p>
                                         </div>
                                     </div>
@@ -2235,6 +2514,7 @@ const ActiveTrip = () => {
                                     }
 
                                     setArrivalGuardError('');
+                                    setLocalDestinationArrivedAt(new Date().toISOString());
                                     publishRideStatus('arrived');
                                     setSelectedPaymentMode('');
                                     setPaymentQr(null);
@@ -2276,9 +2556,11 @@ const ActiveTrip = () => {
                                             <p className="text-[10px] font-black uppercase tracking-[0.24em]" style={{ color: routeStrokeColor }}>
                                                 {tripSummaryTitle}
                                             </p>
-                                            <p className="mt-2 text-[24px] font-black tracking-tight text-slate-900">{displayFare}</p>
+                                            <p className="mt-2 text-[24px] font-black tracking-tight text-slate-900">{collectibleFareLabel}</p>
                                             <p className="text-[11px] font-semibold text-slate-500">
-                                                {isParcel ? 'Parcel delivered and awaiting payment confirmation.' : 'Passenger reached destination and ready to complete.'}
+                                                {pickupWaitingSummary.waitingChargeTotal > 0
+                                                    ? `Includes Rs ${pickupWaitingSummary.waitingChargeTotal} waiting charge.`
+                                                    : (isParcel ? 'Parcel delivered and awaiting payment confirmation.' : 'Passenger reached destination and ready to complete.')}
                                             </p>
                                         </div>
                                         <div className="rounded-2xl px-3 py-2 text-right" style={{ backgroundColor: routeAccentSoft }}>
@@ -2304,6 +2586,31 @@ const ActiveTrip = () => {
                                     </div>
                                     <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                                         <div className="flex items-center gap-2 text-slate-500">
+                                            <Clock3 size={14} strokeWidth={2.5} />
+                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Waiting Time</p>
+                                        </div>
+                                        <p className="mt-2 text-[13px] font-bold leading-5 text-slate-900">
+                                            {pickupWaitingSummary.waitingSeconds > 0
+                                                ? formatTimerClock(pickupWaitingSummary.waitingSeconds)
+                                                : '--'}
+                                        </p>
+                                        {pickupWaitingSummary.chargeableMinutes > 0 && (
+                                            <p className="mt-1 text-[10px] font-semibold text-amber-600">
+                                                {pickupWaitingSummary.chargeableMinutes} billable min
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                                        <div className="flex items-center gap-2 text-slate-500">
+                                            <Banknote size={14} strokeWidth={2.5} />
+                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Your Earnings</p>
+                                        </div>
+                                        <p className="mt-2 text-[13px] font-bold leading-5 text-slate-900">{formatCurrencyAmount(commissionSummary.driverEarnings)}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 px-5 pb-4">
+                                    <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                                        <div className="flex items-center gap-2 text-slate-500">
                                             <ArrowUpRight size={14} strokeWidth={2.5} />
                                             <p className="text-[9px] font-black uppercase tracking-[0.2em]">Trip Duration</p>
                                         </div>
@@ -2312,9 +2619,16 @@ const ActiveTrip = () => {
                                     <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                                         <div className="flex items-center gap-2 text-slate-500">
                                             <Banknote size={14} strokeWidth={2.5} />
-                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Your Earnings</p>
+                                            <p className="text-[9px] font-black uppercase tracking-[0.2em]">Waiting Charge</p>
                                         </div>
-                                        <p className="mt-2 text-[13px] font-bold leading-5 text-slate-900">{formatCurrencyAmount(commissionSummary.driverEarnings)}</p>
+                                        <p className="mt-2 text-[13px] font-bold leading-5 text-slate-900">
+                                            {pickupWaitingSummary.waitingChargeTotal > 0
+                                                ? formatCurrencyAmount(pickupWaitingSummary.waitingChargeTotal)
+                                                : formatCurrencyAmount(0)}
+                                        </p>
+                                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                                            Free {formatWholeMinutes(freeWaitingBeforeMinutes)}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="border-t border-slate-100 px-5 py-4">
@@ -2355,11 +2669,17 @@ const ActiveTrip = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-3 border-t border-slate-100 px-5 py-4">
+                                <div className={`grid gap-3 border-t border-slate-100 px-5 py-4 ${pickupWaitingSummary.waitingChargeTotal > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                                     <div className="rounded-2xl bg-white px-4 py-3 text-center shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
                                         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Trip Fare</p>
                                         <p className="mt-2 text-[14px] font-black text-slate-900">{formatCurrencyAmount(fareAmount)}</p>
                                     </div>
+                                    {pickupWaitingSummary.waitingChargeTotal > 0 && (
+                                        <div className="rounded-2xl bg-white px-4 py-3 text-center shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+                                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Waiting</p>
+                                            <p className="mt-2 text-[14px] font-black text-slate-900">{formatCurrencyAmount(pickupWaitingSummary.waitingChargeTotal)}</p>
+                                        </div>
+                                    )}
                                     <div className="rounded-2xl bg-white px-4 py-3 text-center shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
                                         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Admin Cut</p>
                                         <p className="mt-2 text-[14px] font-black text-slate-900">{formatCurrencyAmount(commissionSummary.commissionAmount)}</p>
@@ -2403,7 +2723,7 @@ const ActiveTrip = () => {
                                         <Banknote size={24} strokeWidth={2.5} />
                                     </div>
                                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Cash Selected</p>
-                                    <p className="mt-2 text-[16px] font-black text-slate-900">Collect {displayFare} from the {paymentCollectionLabel}</p>
+                                    <p className="mt-2 text-[16px] font-black text-slate-900">Collect {collectibleFareLabel} from the {paymentCollectionLabel}</p>
                                     <p className="mt-1 text-[11px] font-bold text-slate-500">
                                         Once you have the cash in hand, tap below to close this {isParcel ? 'delivery' : 'ride'}.
                                     </p>
@@ -2482,8 +2802,8 @@ const ActiveTrip = () => {
                                             key={score}
                                             size={28}
                                             onClick={() => setSelectedRating(score)}
-                                            className={`transition-all ${score <= selectedRating ? '' : 'text-slate-100'}`}
-                                            style={score <= selectedRating ? { color: routeStrokeColor } : undefined}
+                                            className={`transition-all ${score <= selectedRating ? '' : 'text-slate-300'}`}
+                                            style={score <= selectedRating ? { color: selectedRating <= 2 ? '#ef4444' : selectedRating <= 4 ? '#eab308' : '#22c55e' } : undefined}
                                             fill={score <= selectedRating ? 'currentColor' : 'transparent'}
                                             strokeWidth={2}
                                         />

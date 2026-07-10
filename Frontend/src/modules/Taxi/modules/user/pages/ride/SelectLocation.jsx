@@ -6,6 +6,13 @@ import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import api from '../../../../shared/api/axiosInstance';
 import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
+import {
+  fetchActiveRideZones,
+  getBoundsFromPaths,
+  getZonePathsFromZones,
+  isCoordsInZones,
+  resolveServiceLocationIdFromCoords,
+} from '../../services/rideZoneUtils';
 
 const LOCATION_COORDS = {
   'Pipaliyahana, Indore': [75.9048, 22.7039],
@@ -30,112 +37,6 @@ const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[titl
 const DEFAULT_COORDS = [75.8577, 22.7196];
 const sanitizeLocationInput = (value) => String(value || '').replace(/^\s+/g, '').replace(/\s{2,}/g, ' ');
 
-const unwrapResults = (response) => {
-  const payload = response?.data?.data || response?.data || response;
-  return payload?.results || payload?.zones || (Array.isArray(payload) ? payload : []);
-};
-
-const getZoneServiceLocationId = (zone) =>
-  zone?.service_location_id?._id
-  || zone?.service_location_id?.id
-  || zone?.service_location_id
-  || zone?.service_location?._id
-  || zone?.service_location?.id
-  || zone?.service_location
-  || '';
-
-const isZoneActive = (zone) => zone?.active !== false && Number(zone?.status ?? 1) !== 0;
-
-const toZonePoint = (point) => {
-  if (Array.isArray(point) && point.length >= 2) {
-    const [lng, lat] = point;
-    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
-      return { lat: Number(lat), lng: Number(lng) };
-    }
-  }
-
-  if (point && typeof point === 'object') {
-    const lat = Number(point.lat ?? point.latitude);
-    const lng = Number(point.lng ?? point.longitude ?? point.lon);
-
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      return { lat, lng };
-    }
-  }
-
-  return null;
-};
-
-const normalizeZonePath = (zone) => {
-  const source = Array.isArray(zone?.coordinates?.[0]) && Array.isArray(zone?.coordinates?.[0]?.[0])
-    ? zone.coordinates[0]
-    : zone?.coordinates;
-
-  if (!Array.isArray(source)) {
-    return [];
-  }
-
-  return source.map(toZonePoint).filter(Boolean);
-};
-
-const getBoundsFromPaths = (paths) => {
-  if (!paths.length) {
-    return null;
-  }
-
-  let north = -90;
-  let south = 90;
-  let east = -180;
-  let west = 180;
-
-  paths.forEach((path) => {
-    path.forEach((point) => {
-      north = Math.max(north, point.lat);
-      south = Math.min(south, point.lat);
-      east = Math.max(east, point.lng);
-      west = Math.min(west, point.lng);
-    });
-  });
-
-  if (![north, south, east, west].every(Number.isFinite)) {
-    return null;
-  }
-
-  return { north, south, east, west };
-};
-
-const isPointInPolygon = (point, polygon) => {
-  if (!point || polygon.length < 3) {
-    return false;
-  }
-
-  let inside = false;
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lng;
-    const yi = polygon[i].lat;
-    const xj = polygon[j].lng;
-    const yj = polygon[j].lat;
-
-    const intersects = ((yi > point.lat) !== (yj > point.lat))
-      && (point.lng < ((xj - xi) * (point.lat - yi)) / ((yj - yi) || Number.EPSILON) + xi);
-
-    if (intersects) {
-      inside = !inside;
-    }
-  }
-
-  return inside;
-};
-
-const isPointInAnyZone = (point, zonePaths) => {
-  if (!zonePaths.length) {
-    return true;
-  }
-
-  return zonePaths.some((path) => isPointInPolygon(point, path));
-};
-
 const SelectLocation = () => {
   const location = useLocation();
   const routeState = location.state || {};
@@ -155,9 +56,13 @@ const SelectLocation = () => {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  const [zonePaths, setZonePaths] = useState([]);
+  const [activeZones, setActiveZones] = useState([]);
+  const [isLoadingZones, setIsLoadingZones] = useState(true);
+  const zonePaths = useMemo(() => getZonePathsFromZones(activeZones), [activeZones]);
   const [remoteResults, setRemoteResults] = useState([]);
+  const [popularLocations, setPopularLocations] = useState([]);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [isLoadingPopularLocations, setIsLoadingPopularLocations] = useState(false);
   const mapInstanceRef = useRef(null);
   const lastCenterRef = useRef(INDIA_CENTER);
   const geocoderRef = useRef(null);
@@ -165,6 +70,7 @@ const SelectLocation = () => {
   const placesServiceRef = useRef(null);
   const autocompleteSessionTokenRef = useRef(null);
   const searchCacheRef = useRef(new Map());
+  const popularLocationsCacheRef = useRef(new Map());
   const latestSearchRef = useRef(0);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const navigate = useNavigate();
@@ -173,24 +79,17 @@ const SelectLocation = () => {
   // made navigate go to "/ride/select-vehicle" which misses taxi routes and lands on /taxi/user.
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
-  // All known locations â€” filtered live as user types
-  const allResults = [
-    { title: 'Vijay Nagar', address: 'Vijay Nagar, Indore, Madhya Pradesh' },
-    { title: 'Vijay Nagar Square', address: 'Vijay Nagar Square, Bhagyashree Colony, Indore' },
-    { title: 'Vijayawada', address: 'Vijayawada, Andhra Pradesh, India' },
-    { title: 'Vijay Nagar Police Station', address: 'Vijay Nagar Police Station, Sector D, Indore' },
-    { title: 'Rajwada', address: 'Rajwada, Old Palasia, Indore, MP' },
-    { title: 'Bhawarkua', address: 'Bhawarkua, Indore, Madhya Pradesh' },
-    { title: 'MG Road', address: 'MG Road, Indore, Madhya Pradesh' },
-    { title: 'Palasia Square', address: 'Palasia Square, AB Road, Indore' },
-    { title: 'LIG Colony', address: 'LIG Colony, Indore, Madhya Pradesh' },
-    { title: 'Scheme No 54', address: 'Scheme No 54, Vijay Nagar, Indore' },
-    { title: 'Bhangadh', address: 'Bhangadh, Indore, Madhya Pradesh' },
-    { title: 'AB Road', address: 'AB Road, Indore, Madhya Pradesh' },
-    { title: 'Geeta Bhawan', address: 'Geeta Bhawan, Indore, Madhya Pradesh' },
-    { title: 'Sapna Sangeeta', address: 'Sapna Sangeeta Road, Indore, MP' },
-    { title: 'Mahalaxmi Nagar', address: 'Mahalaxmi Nagar, Indore, Madhya Pradesh' },
-  ];
+  const popularAnchorCoords = useMemo(() => {
+    if (Array.isArray(pickupCoords) && pickupCoords.length === 2) {
+      return pickupCoords;
+    }
+
+    if (savedPickupCoords) {
+      return savedPickupCoords;
+    }
+
+    return DEFAULT_COORDS;
+  }, [pickupCoords, savedPickupCoords]);
 
   const zoneBounds = useMemo(() => getBoundsFromPaths(zonePaths), [zonePaths]);
 
@@ -198,26 +97,22 @@ const SelectLocation = () => {
     let active = true;
 
     const loadZones = async () => {
-      if (!serviceLocationId) {
-        setZonePaths([]);
-        return;
-      }
+      setIsLoadingZones(true);
 
       try {
-        const response = await api.get('/admin/zones');
+        const zones = await fetchActiveRideZones(api, serviceLocationId);
         if (!active) {
           return;
         }
 
-        const matchingPaths = unwrapResults(response)
-          .filter((zone) => isZoneActive(zone) && String(getZoneServiceLocationId(zone)) === String(serviceLocationId))
-          .map(normalizeZonePath)
-          .filter((path) => path.length >= 3);
-
-        setZonePaths(matchingPaths);
+        setActiveZones(zones);
       } catch {
         if (active) {
-          setZonePaths([]);
+          setActiveZones([]);
+        }
+      } finally {
+        if (active) {
+          setIsLoadingZones(false);
         }
       }
     };
@@ -399,14 +294,11 @@ const SelectLocation = () => {
   };
 
   const validateZoneSelection = (coords) => {
-    if (!Array.isArray(coords) || coords.length !== 2) {
-      return false;
+    if (!activeZones.length) {
+      return !isLoadingZones;
     }
 
-    const [lng, lat] = coords;
-    const point = { lat: Number(lat), lng: Number(lng) };
-
-    return isPointInAnyZone(point, zonePaths);
+    return isCoordsInZones(coords, activeZones);
   };
 
   const getQuery = () => {
@@ -417,17 +309,77 @@ const SelectLocation = () => {
   };
 
   const query = getQuery();
-  const localSearchResults = useMemo(
-    () =>
-      query.trim().length >= 1
-        ? allResults.filter(
-          (result) =>
-            result.title.toLowerCase().includes(query.toLowerCase())
-            || result.address.toLowerCase().includes(query.toLowerCase()),
-        )
-        : allResults.slice(0, 6),
-    [query],
-  );
+  const localSearchResults = useMemo(() => {
+    if (query.trim().length >= 3) {
+      return [];
+    }
+
+    if (query.trim().length >= 1) {
+      return popularLocations.filter(
+        (result) =>
+          result.title.toLowerCase().includes(query.toLowerCase())
+          || result.address.toLowerCase().includes(query.toLowerCase()),
+      );
+    }
+
+    return popularLocations;
+  }, [query, popularLocations]);
+
+  useEffect(() => {
+    if (!isLoaded || !HAS_VALID_GOOGLE_MAPS_KEY) {
+      return undefined;
+    }
+
+    const [lng, lat] = popularAnchorCoords;
+    const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+    const cached = popularLocationsCacheRef.current.get(cacheKey);
+
+    if (cached) {
+      setPopularLocations(cached);
+      setIsLoadingPopularLocations(false);
+      return undefined;
+    }
+
+    const placesService = getPlacesService();
+    if (!placesService) {
+      return undefined;
+    }
+
+    setIsLoadingPopularLocations(true);
+    const anchor = new window.google.maps.LatLng(lat, lng);
+
+    placesService.nearbySearch(
+      {
+        location: anchor,
+        radius: 8000,
+      },
+      (results, status) => {
+        setIsLoadingPopularLocations(false);
+
+        if (status !== window.google.maps.places.PlacesServiceStatus.OK || !Array.isArray(results)) {
+          setPopularLocations([]);
+          return;
+        }
+
+        const nextResults = results
+          .slice(0, 8)
+          .map((place) => ({
+            title: place.name || '',
+            address: place.vicinity || place.formatted_address || '',
+            placeId: place.place_id,
+            coords: place.geometry?.location
+              ? [place.geometry.location.lng(), place.geometry.location.lat()]
+              : null,
+          }))
+          .filter((result) => result.title);
+
+        popularLocationsCacheRef.current.set(cacheKey, nextResults);
+        setPopularLocations(nextResults);
+      },
+    );
+
+    return undefined;
+  }, [isLoaded, popularAnchorCoords]);
 
   useEffect(() => {
     if (!query.trim() || query.trim().length < 3 || !HAS_VALID_GOOGLE_MAPS_KEY || !autocompleteServiceRef.current) {
@@ -566,8 +518,21 @@ const SelectLocation = () => {
     const resolvedPickupCoords = pickupCoords || await resolveCoords(finalPickup);
     const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
 
+    if (isLoadingZones) {
+      window.alert('Service zones are still loading. Please try again in a moment.');
+      return;
+    }
+
     if (!validateZoneSelection(resolvedPickupCoords) || !validateZoneSelection(resolvedDropCoords)) {
       window.alert('Please choose pickup and drop locations inside the active service zone.');
+      return;
+    }
+
+    const resolvedServiceLocationId = serviceLocationId
+      || resolveServiceLocationIdFromCoords(resolvedPickupCoords, activeZones);
+
+    if (!resolvedServiceLocationId) {
+      window.alert('Could not determine the service zone for this pickup location.');
       return;
     }
 
@@ -595,7 +560,7 @@ const SelectLocation = () => {
         stops: stops.filter(s => s.trim().length > 0),
         pickupCoords: resolvedPickupCoords,
         dropCoords: resolvedDropCoords,
-        service_location_id: serviceLocationId,
+        service_location_id: resolvedServiceLocationId,
       },
     });
   };
@@ -1061,7 +1026,12 @@ const SelectLocation = () => {
           {query.trim().length > 0 ? 'Search Results' : 'Popular Locations'}
         </h2>
 
-        {searchResults.length > 0 ? (
+        {isLoadingPopularLocations && query.trim().length === 0 ? (
+          <div className="text-center py-12">
+            <LoaderCircle size={28} className="mx-auto animate-spin text-slate-400" />
+            <p className="mt-3 text-[15px] font-semibold text-slate-600">Loading nearby places...</p>
+          </div>
+        ) : searchResults.length > 0 ? (
           <div className="bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 overflow-hidden shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
             {/* Quick Go to Current Location */}
             <motion.button
@@ -1107,9 +1077,17 @@ const SelectLocation = () => {
               —
             </div>
             <p className="mt-3 text-[15px] font-semibold text-slate-600">
-              No results for <span className="text-slate-900">"{query}"</span>
+              {query.trim().length > 0 ? (
+                <>
+                  No results for <span className="text-slate-900">"{query}"</span>
+                </>
+              ) : (
+                'No nearby places found for your selected location'
+              )}
             </p>
-            <p className="text-[13px] font-medium text-slate-400 mt-1">Try a different search term</p>
+            <p className="text-[13px] font-medium text-slate-400 mt-1">
+              {query.trim().length > 0 ? 'Try a different search term' : 'Try searching or move the map to update suggestions'}
+            </p>
           </div>
         )}
         {query.trim().length >= 3 && (

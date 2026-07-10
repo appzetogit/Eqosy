@@ -157,7 +157,7 @@ const SetPrices = ({ mode }) => {
 
     (Array.isArray(transportTypes) ? transportTypes : []).forEach((item) => {
       const value = normalizeTransportType(item?.name || item?.transport_type || item?.id || '');
-      if (!value) return;
+      if (!value || value === 'pooling') return;
 
       normalized.set(value, {
         id: item?.id || item?._id || value,

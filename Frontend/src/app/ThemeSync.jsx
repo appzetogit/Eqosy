@@ -3,42 +3,45 @@ import { useLocation } from "react-router-dom";
 import {
   FOOD_USER_THEME_KEY,
   THEME_CHANGE_EVENT,
+  cancelScheduledFoodThemeReassert,
+  reassertFoodUserTheme,
   scheduleFoodThemeReassert,
   syncThemeForPath,
 } from "../shared/utils/theme.js";
 
-function applyThemeForLocation(pathname) {
-  syncThemeForPath(pathname);
-
-  if (pathname.startsWith("/food/")) {
-    scheduleFoodThemeReassert();
-  }
-}
-
 export default function ThemeSync() {
   const location = useLocation();
+  const pathname = location.pathname;
 
   useLayoutEffect(() => {
-    applyThemeForLocation(location.pathname);
-  }, [location.pathname]);
+    cancelScheduledFoodThemeReassert();
+    syncThemeForPath(pathname);
+
+    if (pathname.startsWith("/food/")) {
+      scheduleFoodThemeReassert(pathname);
+    }
+  }, [pathname]);
 
   useEffect(() => {
-    applyThemeForLocation(location.pathname);
-
     const handlePageshow = () => {
-      applyThemeForLocation(location.pathname);
+      cancelScheduledFoodThemeReassert();
+      syncThemeForPath(pathname);
+
+      if (pathname.startsWith("/food/")) {
+        scheduleFoodThemeReassert(pathname);
+      }
     };
 
     const handleThemeChange = () => {
-      if (location.pathname.startsWith("/food/")) {
-        scheduleFoodThemeReassert();
+      if (pathname.startsWith("/food/")) {
+        scheduleFoodThemeReassert(pathname);
       }
     };
 
     const handleStorage = (event) => {
       if (event.key && event.key !== FOOD_USER_THEME_KEY) return;
-      if (location.pathname.startsWith("/food/")) {
-        scheduleFoodThemeReassert();
+      if (pathname.startsWith("/food/")) {
+        reassertFoodUserTheme();
       }
     };
 
@@ -51,7 +54,7 @@ export default function ThemeSync() {
       window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [location.pathname]);
+  }, [pathname]);
 
   return null;
 }

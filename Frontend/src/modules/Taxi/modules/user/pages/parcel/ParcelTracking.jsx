@@ -244,14 +244,14 @@ const ParcelTracking = () => {
 
   useEffect(() => {
     const feedback = rideRealtime?.feedback || state.feedback || null;
-    if (!feedback) {
+    if (!feedback || !feedback.submittedAt) {
       return;
     }
 
     setRating(Number(feedback.rating || 0));
     setComment(feedback.comment || '');
     setSelectedTip(Number(feedback.tipAmount || 0));
-    setIsFeedbackSubmitted(Boolean(feedback.submittedAt));
+    setIsFeedbackSubmitted(true);
   }, [rideRealtime?.feedback, state.feedback]);
 
   useEffect(() => {

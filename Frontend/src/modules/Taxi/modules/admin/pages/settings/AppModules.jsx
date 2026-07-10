@@ -489,9 +489,11 @@ const AppModules = ({ mode: propMode }) => {
               <label className={labelClass}>Transport Type *</label>
               <select name="transport_type" value={formData.transport_type} onChange={handleInputChange} className={selectClass}>
                 <option value="">Choose Transport Type</option>
-                {transportTypes.map(t => (
-                  <option key={t.id || t._id} value={t.name}>{t.display_name || t.name}</option>
-                ))}
+                {transportTypes
+                  .filter((t) => String(t?.name || t?.value || t?.id || '').toLowerCase() !== 'pooling')
+                  .map((t) => (
+                    <option key={t.id || t._id} value={t.name}>{t.display_name || t.name}</option>
+                  ))}
               </select>
             </div>
 

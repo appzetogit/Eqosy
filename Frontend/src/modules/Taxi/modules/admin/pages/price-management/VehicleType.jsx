@@ -156,7 +156,6 @@ const DELIVERY_CATEGORY_OPTIONS = [
 const TRANSPORT_TYPE_OPTIONS = [
   { id: 'taxi', name: 'taxi', display_name: 'Ride' },
   { id: 'delivery', name: 'delivery', display_name: 'Delivery' },
-  { id: 'pooling', name: 'pooling', display_name: 'Pooling' },
   { id: 'both', name: 'both', display_name: 'Both' },
 ];
 
@@ -270,7 +269,7 @@ const VehicleType = ({ mode: propMode }) => {
 
     [...TRANSPORT_TYPE_OPTIONS, ...(Array.isArray(transportTypes) ? transportTypes : [])].forEach((item) => {
       const value = normalizeTransportType(item?.name || item?.transport_type || item?.id || '');
-      if (!value) return;
+      if (!value || value === 'pooling') return;
 
       normalized.set(value, {
         id: item?.id || item?._id || value,

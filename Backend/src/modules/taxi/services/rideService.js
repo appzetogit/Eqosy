@@ -1667,6 +1667,23 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
     ride.completedAt = new Date();
+
+    const arrivedAt = ride.arrivedAt;
+    const startedAt = ride.startedAt;
+    const waitingChargeRate = Number(ride.pricingSnapshot?.waiting_charge ?? 0);
+    const freeWaitingBefore = Number(ride.pricingSnapshot?.free_waiting_before ?? 0);
+
+    if (arrivedAt && startedAt && waitingChargeRate > 0) {
+      const arrivedTime = new Date(arrivedAt).getTime();
+      const startedTime = new Date(startedAt).getTime();
+      const waitingSeconds = Math.max(0, Math.floor((startedTime - arrivedTime) / 1000));
+      const chargeableMinutes = Math.max(0, Math.ceil(waitingSeconds / 60) - freeWaitingBefore);
+      const waitingChargeTotal = Math.round(chargeableMinutes * waitingChargeRate * 100) / 100;
+
+      if (waitingChargeTotal > 0) {
+        ride.fare = Number(ride.fare || 0) + waitingChargeTotal;
+      }
+    }
   }
 
   await ride.save();

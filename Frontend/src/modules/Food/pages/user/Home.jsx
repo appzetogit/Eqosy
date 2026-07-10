@@ -98,10 +98,12 @@ import OptimizedImage from "@food/components/OptimizedImage";
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability";
 import HomeHeader from "@food/components/user/home/HomeHeader";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
-import { scheduleFoodThemeReassert } from "@/shared/utils/theme.js";
+import { syncThemeForPath } from "@/shared/utils/theme.js";
 import GrocerySection from "@food/components/user/home/QuickSection";
 import PromoRow from "@food/components/user/home/PromoRow";
 import PromotionBannerCarousel from "@food/components/user/home/PromotionBannerCarousel";
+import OutOfServiceView from "@food/components/user/OutOfServiceView";
+
 
 
 // Explore More Icons
@@ -589,15 +591,14 @@ export default function Home() {
   const handleVerticalChange = useCallback(
     (id) => {
       if (id === "food") {
-        scheduleFoodThemeReassert();
         setSearchParams({}, { replace: true });
         return;
       }
       if (id === "taxi") {
+        syncThemeForPath("/taxi/user");
         navigate("/taxi/user", { replace: true });
         return;
       }
-      scheduleFoodThemeReassert();
       setSearchParams({ vertical: id }, { replace: true });
     },
     [navigate, setSearchParams],
@@ -3030,7 +3031,23 @@ export default function Home() {
       />
 
       <AnimatePresence mode="wait">
-        {superAppVertical === "food" && (
+        {zoneLoading && (
+          <div key="zone-loading" className="flex items-center justify-center min-h-[50vh]">
+            <Loader2 className="w-10 h-10 animate-spin text-primary-orange" />
+          </div>
+        )}
+        {!zoneLoading && isOutOfService && (
+          <motion.div
+            key="out-of-service-panel"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <OutOfServiceView />
+          </motion.div>
+        )}
+        {!zoneLoading && !isOutOfService && superAppVertical === "food" && (
           <motion.div
             key="food-panel"
             initial={{ opacity: 0, y: 6 }}
@@ -4648,7 +4665,7 @@ export default function Home() {
           </motion.div>
         )}
 
-        {superAppVertical === "grocery" && (
+        {!zoneLoading && !isOutOfService && superAppVertical === "grocery" && (
           <motion.div
             key="grocery-panel"
             initial={{ opacity: 0, y: 6 }}

@@ -10,6 +10,7 @@ import { Input } from "@food/components/ui/input"
 import { useSearchOverlay, useLocationSelector } from "@food/components/user/UserLayout"
 import { useLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
+import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { useProfile } from "@food/context/ProfileContext"
 import { useCart } from "@food/context/CartContext"
 import PageNavbar from "@food/components/user/PageNavbar"
@@ -998,8 +999,12 @@ export default function Under250() {
         </div>
       </div>
 
-      {/* Dynamic Switch 99 Hero Banner Section */}
-      <div
+      {isOutOfService ? (
+        <OutOfServiceView />
+      ) : (
+        <>
+          {/* Dynamic Switch 99 Hero Banner Section */}
+          <div
         ref={bannerShellRef}
         data-banner-shell="true"
         className="relative w-full overflow-hidden h-[clamp(240px,40vw,520px)] bg-white"
@@ -1682,6 +1687,9 @@ export default function Under250() {
           </>
         )}
       </AnimatePresence>
+
+        </>
+      )}
 
       {/* Add to Cart Animation */}
       <AddToCartAnimation dynamicBottom={viewCartButtonBottom} />

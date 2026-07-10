@@ -146,16 +146,28 @@ const Activity = () => {
                 limit: AGGREGATE_FETCH_LIMIT,
                 page: 1,
               },
+            }).catch((err) => {
+              console.error('Failed to load rides:', err);
+              return { results: [] };
             }),
             userService.getMyRentalBookings({
               page: 1,
               limit: AGGREGATE_FETCH_LIMIT,
+            }).catch((err) => {
+              console.error('Failed to load rental bookings:', err);
+              return { results: [] };
             }),
             userBusService.getMyBookings({
               page: 1,
               limit: AGGREGATE_FETCH_LIMIT,
+            }).catch((err) => {
+              console.error('Failed to load bus bookings:', err);
+              return { results: [] };
             }),
-            userService.getMyPoolingBookings(),
+            userService.getMyPoolingBookings().catch((err) => {
+              console.error('Failed to load pooling bookings:', err);
+              return [];
+            }),
           ]);
 
           const ridePayload = getPayload(ridesResponse);
@@ -211,7 +223,7 @@ const Activity = () => {
           return;
         }
 
-        setError(loadError?.message || 'Could not load your ride history.');
+        setError(loadError?.error || loadError?.message || 'Could not load your ride history.');
         setActivities([]);
         setPagination({
           page: 1,

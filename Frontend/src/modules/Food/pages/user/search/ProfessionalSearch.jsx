@@ -11,6 +11,7 @@ import { Input } from "@food/components/ui/input"
 import { useProfile } from "@food/context/ProfileContext"
 import { useLocation as useGeoLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
+import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { searchAPI } from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -83,7 +84,7 @@ export default function ProfessionalSearch() {
 
     return useSavedAddress ? defaultSavedAddressLocation : userCoords
   }, [deliveryAddressMode, defaultSavedAddressLocation, userCoords])
-  const { zoneId, zoneStatus, loading: zoneLoading } = useZone(effectiveLocation)
+  const { zoneId, zoneStatus, isOutOfService, loading: zoneLoading } = useZone(effectiveLocation)
   const hasEffectiveCoordinates = useMemo(
     () =>
       Number.isFinite(effectiveLocation?.latitude) &&
@@ -298,7 +299,10 @@ export default function ProfessionalSearch() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto p-4">
+      {isOutOfService ? (
+        <OutOfServiceView />
+      ) : (
+        <div className="max-w-3xl mx-auto p-4">
         {/* Categories (Admin only) */}
         {!query && !loading && (
           <div className="mb-8">
@@ -507,7 +511,8 @@ export default function ProfessionalSearch() {
 
           </div>
         )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

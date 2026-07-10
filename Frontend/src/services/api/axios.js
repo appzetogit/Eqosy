@@ -107,10 +107,12 @@ function isTokenForModule(token, module) {
   if (!payload) return false;
   const role = String(payload.role || "").toLowerCase();
 
-  if (module === "user") return role === "user" && Boolean(payload.userId);
-  if (module === "admin") return role === "admin" && Boolean(payload.userId);
-  if (module === "restaurant") return role === "restaurant" && Boolean(payload.userId);
-  if (module === "delivery") return ["delivery_partner", "delivery"].includes(role) && Boolean(payload.userId);
+  const hasUserId = Boolean(payload.userId || payload.sub);
+
+  if (module === "user") return role === "user" && hasUserId;
+  if (module === "admin") return role === "admin" && hasUserId;
+  if (module === "restaurant") return role === "restaurant" && hasUserId;
+  if (module === "delivery") return ["delivery_partner", "delivery"].includes(role) && hasUserId;
 
   return true;
 }

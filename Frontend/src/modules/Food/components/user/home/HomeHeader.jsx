@@ -14,7 +14,7 @@ import hotelIcon from "@food/assets/category-icons/hotel.png";
 import { useCart } from "@food/context/CartContext";
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
-import { scheduleFoodThemeReassert } from "@/shared/utils/theme.js";
+import { syncThemeForPath } from "@/shared/utils/theme.js";
 
 const ICON_MAP = {
   CheckCircle2,
@@ -241,15 +241,14 @@ export default function HomeHeader({
       return;
     }
     if (verticalId === 'food') {
-      scheduleFoodThemeReassert();
       navigate('/food/user');
       return;
     }
     if (verticalId === 'taxi') {
+      syncThemeForPath('/taxi/user');
       navigate('/taxi/user');
       return;
     }
-    scheduleFoodThemeReassert();
     navigate(`/food/user?vertical=${verticalId}`);
   }, [isControlled, onVerticalChange, navigate]);
 

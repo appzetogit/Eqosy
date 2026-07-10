@@ -183,10 +183,12 @@ const RideComplete = () => {
           return;
         }
 
-        setRating(Number(feedback.rating || 0));
-        setComment(feedback.comment || '');
-        setSelectedTip(Number(feedback.tipAmount || 0));
-        setIsSubmitted(Boolean(feedback.submittedAt));
+        if (feedback.submittedAt) {
+          setRating(Number(feedback.rating || 0));
+          setComment(feedback.comment || '');
+          setSelectedTip(Number(feedback.tipAmount || 0));
+          setIsSubmitted(true);
+        }
       } catch (rideError) {
         console.error('Failed to refresh completed ride receipt:', rideError);
       }

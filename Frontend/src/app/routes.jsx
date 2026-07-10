@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Suspense, lazy, useEffect, useLayoutEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { AppShellSkeleton } from '@food/components/ui/loading-skeletons'
-import { scheduleFoodThemeReassert } from '../shared/utils/theme.js'
 import {
   NATIVE_LAST_ROUTE_KEY,
   syncActiveModule,
@@ -17,10 +16,6 @@ const PageLoader = () => <AppShellSkeleton />
 const FoodAppWrapper = () => {
   const location = useLocation()
   const vertical = new URLSearchParams(location.search).get('vertical')
-
-  useLayoutEffect(() => {
-    scheduleFoodThemeReassert()
-  }, [location.pathname])
 
   // Taxi lives under /taxi/* only — never embed it on /food/user.
   if (
