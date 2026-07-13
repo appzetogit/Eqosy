@@ -584,6 +584,13 @@ const AdminLayout = () => {
   const userMenuRef = useRef(null);
   const notificationsMenuRef = useRef(null);
   const [adminProfile, setAdminProfile] = useState(() => readAdminProfile());
+  const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
+                       adminProfile.adminLevel === "food_superadmin" || 
+                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "food");
+
+  const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
+                       adminProfile.adminLevel === "taxi_superadmin" || 
+                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
 
   const appName = settings.general?.app_name || 'App';
   useEffect(() => {
@@ -1332,29 +1339,33 @@ const AdminLayout = () => {
           )}
 
           {/* Module Switcher Tabs */}
-          {!isCollapsed && (
+          {!isCollapsed && (showFoodTab || showTaxiTab) && (
             <div className="px-4 mb-4">
               <div className="flex p-1 bg-neutral-900/60 backdrop-blur-sm rounded-xl border border-white/5 shadow-inner">
-                <button
-                  onClick={() => navigate("/admin/food")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
-                    "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
-                  )}
-                >
-                  <UtensilsCrossed className="w-3.5 h-3.5 text-neutral-500" />
-                  Food
-                </button>
-                <button
-                  onClick={() => navigate("/taxi/admin/dashboard")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
-                    "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
-                  )}
-                >
-                  <Truck className="w-3.5 h-3.5 text-black" />
-                  Taxi
-                </button>
+                {showFoodTab && (
+                  <button
+                    onClick={() => navigate("/admin/food")}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
+                      "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
+                    )}
+                  >
+                    <UtensilsCrossed className="w-3.5 h-3.5 text-neutral-500" />
+                    Food
+                  </button>
+                )}
+                {showTaxiTab && (
+                  <button
+                    onClick={() => navigate("/taxi/admin/dashboard")}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
+                      "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
+                    )}
+                  >
+                    <Truck className="w-3.5 h-3.5 text-black" />
+                    Taxi
+                  </button>
+                )}
               </div>
             </div>
           )}

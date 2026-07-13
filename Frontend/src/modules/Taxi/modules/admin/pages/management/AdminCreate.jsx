@@ -267,16 +267,16 @@ const AdminCreate = () => {
               <div className="space-y-5">
                 <div>
                   <label className={labelClass}>Admin Type</label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
-                      { key: 'superadmin', label: 'Superadmin' },
-                      { key: 'subadmin', label: 'Subadmin' },
+                      { key: 'superadmin', label: 'Super Admin' },
+                      { key: 'subadmin', label: 'Sub Admin' },
                     ].map((option) => (
                       <button
                         key={option.key}
                         type="button"
                         onClick={() => setField('admin_type', option.key)}
-                        className={`rounded-2xl border px-4 py-3 text-sm font-black uppercase tracking-[0.14em] transition-all ${
+                        className={`w-full min-w-0 rounded-2xl border px-4 py-3 text-center text-sm font-bold transition-all ${
                           form.admin_type === option.key
                             ? 'border-blue-200 bg-blue-50 text-blue-700'
                             : 'border-slate-200 bg-white text-slate-500'

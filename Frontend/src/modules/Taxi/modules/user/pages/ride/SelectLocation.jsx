@@ -37,6 +37,25 @@ const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[titl
 const DEFAULT_COORDS = [75.8577, 22.7196];
 const sanitizeLocationInput = (value) => String(value || '').replace(/^\s+/g, '').replace(/\s{2,}/g, ' ');
 
+const calculateHaversineDistance = (coords1, coords2) => {
+  if (!coords1 || !coords2) return null;
+  const [lon1, lat1] = coords1;
+  const [lon2, lat2] = coords2;
+
+  const R = 6371; // Radius of the earth in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d;
+};
+
 const SelectLocation = () => {
   const location = useLocation();
   const routeState = location.state || {};
@@ -389,7 +408,9 @@ const SelectLocation = () => {
     }
 
     const normalizedQuery = query.trim().toLowerCase();
-    const cached = searchCacheRef.current.get(normalizedQuery);
+    const [pickupLng, pickupLat] = pickupCoords || [0, 0];
+    const cacheKey = `${normalizedQuery}|${pickupLat.toFixed(3)},${pickupLng.toFixed(3)}`;
+    const cached = searchCacheRef.current.get(cacheKey);
     if (cached) {
       setRemoteResults(cached);
       setIsSearchingLocations(false);
@@ -411,6 +432,10 @@ const SelectLocation = () => {
         request.bounds = zoneBounds;
       }
 
+      if (window.google?.maps?.LatLng && Array.isArray(pickupCoords) && pickupCoords.length === 2) {
+        request.origin = new window.google.maps.LatLng(pickupCoords[1], pickupCoords[0]);
+      }
+
       autocompleteServiceRef.current.getPlacePredictions(request, (predictions = [], status) => {
         if (latestSearchRef.current !== requestId) {
           return;
@@ -421,10 +446,11 @@ const SelectLocation = () => {
             title: prediction.structured_formatting?.main_text || prediction.description,
             address: prediction.description,
             placeId: prediction.place_id,
+            distance: prediction.distance_meters ? prediction.distance_meters / 1000 : null,
           }))
           : [];
 
-        searchCacheRef.current.set(normalizedQuery, nextResults);
+        searchCacheRef.current.set(cacheKey, nextResults);
         setRemoteResults(nextResults);
         setIsSearchingLocations(false);
       });
@@ -433,13 +459,13 @@ const SelectLocation = () => {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [query, zoneBounds]);
+  }, [query, zoneBounds, pickupCoords]);
 
   const searchResults = useMemo(() => {
     const merged = [...remoteResults, ...localSearchResults];
     const seen = new Set();
 
-    return merged.filter((result) => {
+    const unique = merged.filter((result) => {
       const key = `${String(result.title || '').trim().toLowerCase()}|${String(result.address || '').trim().toLowerCase()}`;
       if (!key || seen.has(key)) {
         return false;
@@ -448,7 +474,30 @@ const SelectLocation = () => {
       seen.add(key);
       return true;
     });
-  }, [localSearchResults, remoteResults]);
+
+    const getResultDistance = (res) => {
+      if (res.distance !== undefined && res.distance !== null) {
+        return res.distance;
+      }
+      if (res.coords && pickupCoords) {
+        return calculateHaversineDistance(pickupCoords, res.coords);
+      }
+      return null;
+    };
+
+    const withDistance = unique.map((res) => {
+      const dist = getResultDistance(res);
+      return { ...res, computedDistance: dist };
+    });
+
+    withDistance.sort((a, b) => {
+      if (a.computedDistance === null || a.computedDistance === undefined) return 1;
+      if (b.computedDistance === null || b.computedDistance === undefined) return -1;
+      return a.computedDistance - b.computedDistance;
+    });
+
+    return withDistance;
+  }, [localSearchResults, remoteResults, pickupCoords]);
 
   const showMapToast = () => {
     // Reset map center to pickup or current location before opening
@@ -1061,10 +1110,17 @@ const SelectLocation = () => {
                 onClick={() => handleSelectResult(result)}
                 className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/70 last:border-none hover:bg-white/60 transition-colors"
               >
-                <div className="mt-0.5 w-10 h-10 rounded-2xl bg-white/70 border border-white/80 shadow-sm flex items-center justify-center shrink-0 text-slate-500">
-                  <MapPin size={18} strokeWidth={2.6} />
+                <div className="flex flex-col items-center shrink-0 gap-1.5 min-w-[40px] pt-1">
+                  <MapPin size={20} className="text-slate-700" strokeWidth={2.5} />
+                  {result.computedDistance !== undefined && result.computedDistance !== null && (
+                    <span className="text-[10px] md:text-[11px] font-bold text-slate-400 leading-none text-center">
+                      {result.computedDistance < 1
+                        ? `${Math.round(result.computedDistance * 1000)} m`
+                        : `${result.computedDistance.toFixed(result.computedDistance >= 10 ? 0 : 1)} km`}
+                    </span>
+                  )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1 pt-0.5">
                   <h4 className="text-[15px] font-semibold text-slate-900 leading-tight">{result.title}</h4>
                   <p className="text-[13px] text-slate-500 font-medium mt-1 line-clamp-1">{result.address}</p>
                 </div>

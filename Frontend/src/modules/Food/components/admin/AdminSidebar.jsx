@@ -50,6 +50,8 @@ import {
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
+import { filterFoodSidebarMenu } from "@food/constants/foodAdminAccess"
+import { getCurrentUser } from "@food/utils/auth"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import quickSpicyLogo from "@food/assets/eqosy-logo.png"
 const debugLog = (...args) => { }
@@ -107,6 +109,15 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
+                       adminProfile.adminLevel === "food_superadmin" || 
+                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "food");
+
+  const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
+                       adminProfile.adminLevel === "taxi_superadmin" || 
+                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
+
 
   useEffect(() => {
     const fetchBadges = async () => {
@@ -229,7 +240,9 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     // Generate defaults if empty
     const state = {}
     adminSidebarMenu.forEach((item) => {
-      if (item.type === "section") {
+      if (item.type === "expandable") {
+        state[item.label.toLowerCase().replace(/\s+/g, "")] = false
+      } else if (item.type === "section") {
         item.items.forEach((subItem) => {
           if (subItem.type === "expandable") {
             state[subItem.label.toLowerCase().replace(/\s+/g, "")] = false
@@ -270,19 +283,36 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   // expandedSections state is initialized above in getInitialStates consolidation
 
 
-  // Filter menu items based on search query
+  // Filter menu items based on search query and admin permissions
+  const permissionFilteredMenu = useMemo(() => {
+    const adminProfile = getCurrentUser("admin") || {}
+    return filterFoodSidebarMenu(adminSidebarMenu, adminProfile)
+  }, [])
+
   const filteredMenuData = useMemo(() => {
     if (!searchQuery.trim()) {
-      return adminSidebarMenu
+      return permissionFilteredMenu
     }
 
     const query = searchQuery.toLowerCase().trim()
     const filtered = []
 
-    adminSidebarMenu.forEach((item) => {
+    permissionFilteredMenu.forEach((item) => {
       if (item.type === "link") {
         if (item.label.toLowerCase().includes(query)) {
           filtered.push(item)
+        }
+      } else if (item.type === "expandable") {
+        const matchesLabel = item.label.toLowerCase().includes(query)
+        const matchingSubItems = item.subItems?.filter(
+          (si) => si.label.toLowerCase().includes(query)
+        ) || []
+
+        if (matchesLabel || matchingSubItems.length > 0) {
+          filtered.push({
+            ...item,
+            subItems: matchesLabel ? item.subItems : matchingSubItems,
+          })
         }
       } else if (item.type === "section") {
         const filteredItems = []
@@ -317,7 +347,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     })
 
     return filtered
-  }, [searchQuery])
+  }, [searchQuery, permissionFilteredMenu])
 
   // Auto-expand sections with matches when searching
   useEffect(() => {
@@ -328,6 +358,18 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
         const newExpandedState = { ...prev }
 
         adminSidebarMenu.forEach((item) => {
+          if (item.type === "expandable") {
+            const matchesLabel = item.label.toLowerCase().includes(query)
+            const hasMatchingSubItems = item.subItems?.some(
+              (si) => si.label.toLowerCase().includes(query)
+            )
+
+            if (matchesLabel || hasMatchingSubItems) {
+              const sectionKey = item.label.toLowerCase().replace(/\s+/g, "")
+              newExpandedState[sectionKey] = true
+            }
+          }
+
           if (item.type === "section") {
             item.items.forEach((subItem) => {
               if (subItem.type === "expandable") {
@@ -385,6 +427,12 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     }
   }, [expandedSections])
 
+  useEffect(() => {
+    if (location.pathname.startsWith("/admin/food/management")) {
+      setExpandedSections((prev) => ({ ...prev, adminmanagement: true }))
+    }
+  }, [location.pathname])
+
   const toggleSection = (sectionKey) => {
     setExpandedSections((prev) => {
       const isCurrentlyOpen = Boolean(prev[sectionKey])
@@ -399,9 +447,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
         }
       }
 
-      const next = {}
+      const next = {
+        [sectionKey]: true
+      }
       Object.keys(prev).forEach((key) => {
-        next[key] = key === sectionKey
+        if (key !== sectionKey) {
+          next[key] = false
+        }
       })
       return next
     })
@@ -705,44 +757,48 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           )}
 
           {/* Module Switcher Tabs */}
-          {!isCollapsed && (
+          {!isCollapsed && (showFoodTab || showTaxiTab) && (
             <div className="flex p-1 bg-neutral-800/40 backdrop-blur-sm rounded-xl mb-4 border border-white/5 shadow-inner animate-[slideIn_0.4s_ease-out_0.15s_both]">
-              <button
-                onClick={() => navigate("/admin/food")}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
-                  location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
-                    ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
-                    : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
-                )}
-              >
-                <UtensilsCrossed
+              {showFoodTab && (
+                <button
+                  onClick={() => navigate("/admin/food")}
                   className={cn(
-                    "w-3.5 h-3.5",
+                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
                     location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
-                      ? "text-black"
-                      : "text-neutral-500"
+                      ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
                   )}
-                />
-                Food
-              </button>
-              <button
-                onClick={() => navigate("/taxi/admin/dashboard")}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
-                  location.pathname.startsWith("/taxi")
-                    ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
-                    : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
-                )}
-              >
-                <Truck
+                >
+                  <UtensilsCrossed
+                    className={cn(
+                      "w-3.5 h-3.5",
+                      location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
+                        ? "text-black"
+                        : "text-neutral-500"
+                    )}
+                  />
+                  Food
+                </button>
+              )}
+              {showTaxiTab && (
+                <button
+                  onClick={() => navigate("/taxi/admin/dashboard")}
                   className={cn(
-                    "w-3.5 h-3.5",
-                    location.pathname.startsWith("/taxi") ? "text-black" : "text-neutral-500"
+                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
+                    location.pathname.startsWith("/taxi")
+                      ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
                   )}
-                />
-                Taxi
-              </button>
+                >
+                  <Truck
+                    className={cn(
+                      "w-3.5 h-3.5",
+                      location.pathname.startsWith("/taxi") ? "text-black" : "text-neutral-500"
+                    )}
+                  />
+                  Taxi
+                </button>
+              )}
             </div>
           )}
 
@@ -782,7 +838,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             </div>
           ) : (
             filteredMenuData.map((item, index) => {
-              if (item.type === "link") {
+              if (item.type === "link" || item.type === "expandable") {
                 return renderMenuItem(item, index)
               }
 

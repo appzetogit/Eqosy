@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
+import FoodAdminPermissionRoute from "./FoodAdminPermissionRoute";
 import AdminLayout from "./AdminLayout";
 import Loader from "@food/components/Loader";
 
@@ -127,6 +128,14 @@ const EditRestaurant = lazy(() => import("@food/pages/admin/restaurant/EditResta
 const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"));
 const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"));
 const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"));
+const FoodSubadmins = lazy(() => import("@food/pages/admin/management/FoodSubadmins"));
+const FoodSubadminCreate = lazy(() => import("@food/pages/admin/management/FoodSubadminCreate"));
+
+const FoodPermissionOutlet = () => (
+  <FoodAdminPermissionRoute>
+    <Outlet />
+  </FoodAdminPermissionRoute>
+);
 
 export default function AdminRouter() {
   return (
@@ -150,7 +159,7 @@ export default function AdminRouter() {
           <Route path="/" element={<Navigate to="food" replace />} />
 
           {/* FOOD ADMIN - All food related routes nested here */}
-          <Route path="food/*">
+          <Route path="food/*" element={<FoodPermissionOutlet />}>
             <Route index element={<AdminHome />} />
             <Route path="point-of-sale" element={<PointOfSale />} />
             <Route path="profile" element={<AdminProfile />} />
@@ -294,6 +303,25 @@ export default function AdminRouter() {
             <Route path="hero-banner-management" element={<LandingPageManagement />} />
             <Route path="dining-management" element={<DiningManagement />} />
             <Route path="dining-list" element={<DiningList />} />
+
+            {/* ADMIN MANAGEMENT */}
+            <Route path="management/admins" element={<FoodSubadmins />} />
+            <Route
+              path="management/admins/create"
+              element={
+                <FoodAdminPermissionRoute resource="subadmins" action="write">
+                  <FoodSubadminCreate />
+                </FoodAdminPermissionRoute>
+              }
+            />
+            <Route
+              path="management/admins/edit/:id"
+              element={
+                <FoodAdminPermissionRoute resource="subadmins" action="write">
+                  <FoodSubadminCreate />
+                </FoodAdminPermissionRoute>
+              }
+            />
           </Route>
 
           {/* TAXI ADMIN - Redirect to integrated taxi admin */}

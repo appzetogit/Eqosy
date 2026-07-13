@@ -2,6 +2,8 @@ import crypto from "crypto";
 import ms from "ms";
 import { FoodUser } from "../users/user.model.js";
 import { FoodAdmin } from "../admin/admin.model.js";
+import { ADMIN_LEVELS } from "../admin/adminHierarchy.constants.js";
+import { serializeAdminContext } from "../admin/adminHierarchy.service.js";
 import { AdminResetOtp } from "../admin/adminResetOtp.model.js";
 import { FoodRestaurant } from "../../modules/food/restaurant/models/restaurant.model.js";
 import { FoodDeliveryPartner } from "../../modules/food/delivery/models/deliveryPartner.model.js";
@@ -299,6 +301,10 @@ export const adminLogin = async (email, password) => {
       password: DEFAULT_CREDENTIALS.adminPassword,
       name: "Eqosy Admin",
       isActive: true,
+      active: true,
+      adminLevel: ADMIN_LEVELS.PLATFORM_SUPERADMIN,
+      admin_type: "superadmin",
+      permissions: ["*"],
       servicesAccess: ["food", "quickCommerce", "taxi"],
     });
   }
@@ -312,7 +318,7 @@ export const adminLogin = async (email, password) => {
     throw new AuthError("Invalid credentials");
   }
 
-  const payload = { userId: admin._id.toString(), role: admin.role };
+  const payload = { userId: admin._id.toString(), role: "ADMIN" };
 
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
@@ -328,7 +334,14 @@ export const adminLogin = async (email, password) => {
 
   const userObj = admin.toObject();
   delete userObj.password;
-  return { accessToken, refreshToken, user: userObj };
+  return {
+    accessToken,
+    refreshToken,
+    user: {
+      ...userObj,
+      ...serializeAdminContext(userObj),
+    },
+  };
 };
 
 export const requestRestaurantOtp = async (phone) => {

@@ -10,6 +10,8 @@ import * as diningAdminController from '../../dining/controllers/diningAdmin.con
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { getAdminPageController, upsertAdminPageController } from '../controllers/pageContent.controller.js';
 import { upload } from '../../../../middleware/upload.js';
+import { attachFoodAdminContext, requireFoodResourceAccess } from '../middlewares/foodAdmin.middleware.js';
+import * as foodAdminManagementController from '../controllers/foodAdminManagement.controller.js';
 
 const router = express.Router();
 
@@ -25,6 +27,16 @@ const requireAdmin = (req, _res, next) => {
 };
 
 router.use(requireAdmin);
+router.use(attachFoodAdminContext);
+
+// ----- Admin Management (Subadmins) -----
+router.get('/admin-management/permissions', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.getFoodAdminPermissions);
+router.get('/admin-management/assignable-zones', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.getAssignableFoodZones);
+router.get('/admin-management/admins', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.getFoodAdmins);
+router.get('/admin-management/admins/:id', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.getFoodAdminById);
+router.post('/admin-management/admins', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.createFoodAdminAccount);
+router.patch('/admin-management/admins/:id', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.updateFoodAdminAccount);
+router.delete('/admin-management/admins/:id', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.deleteFoodAdminAccount);
 
 // ----- Broadcast Notifications -----
 router.post('/notifications/broadcast', notificationBroadcastController.createBroadcastNotificationController);
@@ -32,9 +44,9 @@ router.get('/notifications/broadcast', notificationBroadcastController.getBroadc
 router.delete('/notifications/broadcast/:id', notificationBroadcastController.deleteBroadcastNotificationController);
 
 // ----- Customers -----
-router.get('/customers', adminController.getCustomers);
-router.get('/customers/:id', adminController.getCustomerById);
-router.patch('/customers/:id/status', adminController.updateCustomerStatus);
+router.get('/customers', requireFoodResourceAccess('customers', 'customers'), adminController.getCustomers);
+router.get('/customers/:id', requireFoodResourceAccess('customers', 'customers'), adminController.getCustomerById);
+router.patch('/customers/:id/status', requireFoodResourceAccess('customers', 'customers'), adminController.updateCustomerStatus);
 
 // ----- Safety / Emergency Reports -----
 router.get('/safety-emergency-reports', adminController.getSafetyEmergencyReports);
@@ -184,11 +196,11 @@ router.patch('/delivery/:id/approve', adminController.approveDeliveryPartner);
 router.patch('/delivery/:id/reject', adminController.rejectDeliveryPartner);
 
 // ----- Zones -----
-router.get('/zones', adminController.getZones);
-router.get('/zones/:id', adminController.getZoneById);
-router.post('/zones', adminController.createZone);
-router.patch('/zones/:id', adminController.updateZone);
-router.delete('/zones/:id', adminController.deleteZone);
+router.get('/zones', requireFoodResourceAccess('zones', 'zones'), adminController.getZones);
+router.get('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.getZoneById);
+router.post('/zones', requireFoodResourceAccess('zones', 'zones'), adminController.createZone);
+router.patch('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.updateZone);
+router.delete('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.deleteZone);
 
 // ----- Dining -----
 router.get('/dining/categories', diningAdminController.getDiningCategories);
@@ -199,9 +211,9 @@ router.get('/dining/restaurants', diningAdminController.getDiningRestaurants);
 router.patch('/dining/restaurants/:restaurantId', diningAdminController.updateDiningRestaurant);
 
 // ----- Orders -----
-router.get('/orders', orderController.listOrdersAdminController);
-router.get('/orders/:orderId', orderController.getOrderByIdAdminController);
-router.delete('/orders/:orderId', orderController.deleteOrderAdminController);
+router.get('/orders', requireFoodResourceAccess('orders', 'orders'), orderController.listOrdersAdminController);
+router.get('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.getOrderByIdAdminController);
+router.delete('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.deleteOrderAdminController);
 
 // ----- CMS Pages (About + legal) -----
 router.get('/pages-social-media/:key', getAdminPageController);

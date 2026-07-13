@@ -71,6 +71,19 @@ import {
   normalizeAdminPermissions,
   normalizeAdminType,
 } from './adminAccessService.js';
+import {
+  ADMIN_LEVELS,
+  ADMIN_MODULES,
+} from '../../../../core/admin/adminHierarchy.constants.js';
+import {
+  assertCanCreateAdmin,
+  assertCanManageTargetAdmin,
+  buildDescendantAdminQuery,
+  resolveAdminLevel,
+  resolveAdminModule,
+  isSuperAdminLike,
+} from '../../../../core/admin/adminHierarchy.service.js';
+import { assertPermissionsSubset, assertIdSubset } from '../../../../core/admin/adminAccess.util.js';
 
 const PUBLIC_VEHICLE_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 let publicVehicleCatalogCache = {
@@ -140,7 +153,13 @@ const getAdminScope = (admin = {}) => ({
   zoneIds: normalizeObjectIdList(admin.zone_ids),
 });
 
-const isSuperAdmin = (admin = {}) => getAdminScope(admin).adminType === 'superadmin';
+const isSuperAdmin = (admin = {}) => {
+  const level = resolveAdminLevel(admin);
+  if (level === ADMIN_LEVELS.TAXI_SUPERADMIN || level === ADMIN_LEVELS.PLATFORM_SUPERADMIN) {
+    return true;
+  }
+  return getAdminScope(admin).adminType === 'superadmin';
+};
 
 const buildNoAccessQuery = (field) => ({ [field]: { $in: [] } });
 
@@ -251,6 +270,9 @@ const serializeAdminSummary = (admin, serviceLocationMap = new Map(), zoneMap = 
     email: admin.email || '',
     phone: admin.phone || '',
     role: admin.role || '',
+    adminLevel: resolveAdminLevel(admin),
+    module: resolveAdminModule(admin),
+    parentAdminId: admin.parentAdminId ? String(admin.parentAdminId) : null,
     admin_type: normalizeAdminType(admin.admin_type || admin.role),
     permissions: normalizeAdminPermissions(admin.permissions || []),
     service_location_ids: serviceLocationIds,
@@ -2501,10 +2523,14 @@ const syncDefaultAdminRecord = async () => {
         email: DEFAULT_ADMIN_EMAIL,
         phone: '9999999999',
         role: 'superadmin',
+        adminLevel: ADMIN_LEVELS.TAXI_SUPERADMIN,
+        module: ADMIN_MODULES.TAXI,
         admin_type: 'superadmin',
         permissions: ['*'],
+        servicesAccess: ['taxi'],
         active: true,
         status: 'active',
+        isActive: true,
         ...(nextPassword ? { password: nextPassword } : {}),
         updatedAt: now,
       },
@@ -2939,7 +2965,8 @@ export const listAdminPermissions = async () =>
 export const listAdmins = async (currentAdmin) => {
   assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
 
-  const admins = await Admin.find()
+  const descendantQuery = await buildDescendantAdminQuery(Admin, currentAdmin);
+  const admins = await Admin.find(descendantQuery)
     .select('-resetPasswordOtp -resetPasswordExpires')
     .sort({ createdAt: -1 })
     .lean();
@@ -2947,8 +2974,18 @@ export const listAdmins = async (currentAdmin) => {
   return enrichAdminSummaries(admins);
 };
 
-const validateSubadminPayload = async (payload = {}, existingAdminId = null) => {
-  const adminType = normalizeAdminType(payload.admin_type || payload.role);
+const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existingAdminId = null) => {
+  const targetLevel = String(payload.adminLevel || payload.admin_level || ADMIN_LEVELS.SUBADMIN).trim().toLowerCase();
+  const isCreatingModuleSuperAdmin =
+    targetLevel === ADMIN_LEVELS.FOOD_SUPERADMIN || targetLevel === ADMIN_LEVELS.TAXI_SUPERADMIN;
+
+  let adminType = normalizeAdminType(payload.admin_type || payload.role);
+  if (isCreatingModuleSuperAdmin || targetLevel === ADMIN_LEVELS.TAXI_SUPERADMIN) {
+    adminType = 'superadmin';
+  } else if (targetLevel === ADMIN_LEVELS.SUBADMIN) {
+    adminType = 'subadmin';
+  }
+
   const name = String(payload.name || '').trim();
   const email = String(payload.email || '').trim().toLowerCase();
   const phone = String(payload.phone || '').trim();
@@ -2980,12 +3017,30 @@ const validateSubadminPayload = async (payload = {}, existingAdminId = null) => 
     throw new ApiError(409, 'Admin email already exists');
   }
 
+  if (!existingAdminId) {
+    try {
+      assertCanCreateAdmin(currentAdmin, payload);
+    } catch (error) {
+      throw new ApiError(403, error.message);
+    }
+  }
+
   if (adminType === 'subadmin' && permissions.length === 0) {
     throw new ApiError(400, 'Select at least one permission for the subadmin');
   }
 
   if (adminType === 'subadmin' && serviceLocationIds.length === 0) {
     throw new ApiError(400, 'Assign at least one service location to the subadmin');
+  }
+
+  if (!isSuperAdminLike(currentAdmin)) {
+    try {
+      assertPermissionsSubset(currentAdmin.permissions || [], permissions);
+      assertIdSubset(currentAdmin.service_location_ids || [], serviceLocationIds, 'service locations');
+      assertIdSubset(currentAdmin.zone_ids || [], zoneIds, 'zones');
+    } catch (error) {
+      throw new ApiError(403, error.message);
+    }
   }
 
   if (serviceLocationIds.length > 0) {
@@ -3009,7 +3064,16 @@ const validateSubadminPayload = async (payload = {}, existingAdminId = null) => 
     }
   }
 
+  const module = isCreatingModuleSuperAdmin
+    ? targetLevel === ADMIN_LEVELS.TAXI_SUPERADMIN
+      ? ADMIN_MODULES.TAXI
+      : ADMIN_MODULES.FOOD
+    : ADMIN_MODULES.TAXI;
+
   return {
+    adminLevel: isCreatingModuleSuperAdmin ? targetLevel : ADMIN_LEVELS.SUBADMIN,
+    module,
+    parentAdminId: existingAdminId ? undefined : currentAdmin?.id || currentAdmin?._id || null,
     admin_type: adminType,
     name,
     email,
@@ -3018,8 +3082,10 @@ const validateSubadminPayload = async (payload = {}, existingAdminId = null) => 
     permissions,
     service_location_ids: adminType === 'superadmin' ? [] : serviceLocationIds,
     zone_ids: adminType === 'superadmin' ? [] : zoneIds,
+    servicesAccess: isCreatingModuleSuperAdmin ? [module] : undefined,
     active,
     status,
+    isActive: active,
   };
 };
 
@@ -3037,9 +3103,17 @@ export const createAdminAccount = async (currentAdmin, payload = {}) => {
     throw new ApiError(400, 'Passwords do not match');
   }
 
-  const validated = await validateSubadminPayload(payload);
+  const validated = await validateSubadminPayload(currentAdmin, payload);
+  const createPayload = { ...validated };
+  if (createPayload.parentAdminId) {
+    createPayload.parentAdminId = toObjectId(createPayload.parentAdminId);
+  }
+  if (createPayload.servicesAccess === undefined) {
+    delete createPayload.servicesAccess;
+  }
+
   const created = await Admin.create({
-    ...validated,
+    ...createPayload,
     password: await hashPassword(password),
   });
 
@@ -3055,12 +3129,15 @@ export const updateAdminAccount = async (currentAdmin, id, payload = {}) => {
     throw new ApiError(404, 'Admin account not found');
   }
 
-  if (String(admin._id) === String(currentAdmin?.id || '')) {
-    throw new ApiError(400, 'Use your profile flow to update your own admin account');
+  try {
+    await assertCanManageTargetAdmin(Admin, currentAdmin, admin);
+  } catch (error) {
+    throw new ApiError(403, error.message);
   }
 
-  const validated = await validateSubadminPayload(payload, admin._id);
-  Object.assign(admin, validated);
+  const validated = await validateSubadminPayload(currentAdmin, payload, admin._id);
+  const { parentAdminId, ...updateFields } = validated;
+  Object.assign(admin, updateFields);
 
   if (payload.password) {
     const password = String(payload.password || '').trim();
@@ -3087,8 +3164,14 @@ export const deleteAdminAccount = async (currentAdmin, id) => {
     throw new ApiError(404, 'Admin account not found');
   }
 
-  if (String(admin._id) === String(currentAdmin?.id || '')) {
-    throw new ApiError(400, 'You cannot delete your own admin account');
+  try {
+    await assertCanManageTargetAdmin(Admin, currentAdmin, admin);
+  } catch (error) {
+    throw new ApiError(403, error.message);
+  }
+
+  if (normalizeAdminType(admin.admin_type) === 'superadmin' && resolveAdminLevel(admin) !== ADMIN_LEVELS.SUBADMIN) {
+    throw new ApiError(400, 'Super admin accounts cannot be deleted through this endpoint');
   }
 
   await Admin.deleteOne({ _id: admin._id });

@@ -2,6 +2,8 @@
 import { useNavigate, useLocation } from "react-router-dom"
 import { adminAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
+import { normalizeFoodAdminProfile } from "@food/constants/foodAdminAccess"
+import { setUnifiedAdminSession } from "../../../../Taxi/modules/admin/services/adminSession"
 import { loadBusinessSettings } from "@food/utils/businessSettings"
 import { Button } from "@food/components/ui/button"
 import {
@@ -110,7 +112,9 @@ export default function AdminLogin() {
       if (!refreshToken) {
         throw new Error("Invalid response from server: missing refresh token")
       }
-      setAuthData("admin", accessToken, adminUser, refreshToken)
+      const normalizedAdmin = normalizeFoodAdminProfile(adminUser)
+      setAuthData("admin", accessToken, normalizedAdmin, refreshToken)
+      setUnifiedAdminSession({ token: accessToken, user: normalizedAdmin, refreshToken })
       navigate("/admin/food", { replace: true })
     } catch (err) {
       const message =

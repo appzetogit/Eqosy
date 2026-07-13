@@ -1,4 +1,17 @@
-export const SUPERADMIN_PERMISSION = '*';
+import {
+  SUPERADMIN_PERMISSION,
+  normalizeAdminPermissions,
+  normalizeAdminType,
+} from '../../../../core/admin/adminAccess.util.js';
+import {
+  hasAdminPermission as hasHierarchyAdminPermission,
+  isSuperAdminLike,
+  resolveAdminLevel,
+  resolveAdminModule,
+} from '../../../../core/admin/adminHierarchy.service.js';
+import { ADMIN_MODULES } from '../../../../core/admin/adminHierarchy.constants.js';
+
+export { SUPERADMIN_PERMISSION, normalizeAdminPermissions, normalizeAdminType };
 
 export const ADMIN_PERMISSIONS = [
   'dashboard.view',
@@ -30,32 +43,14 @@ export const ADMIN_PERMISSIONS = [
   'settings.view',
 ];
 
-export const normalizeAdminType = (value = '') =>
-  String(value || '').trim().toLowerCase() === 'subadmin' ? 'subadmin' : 'superadmin';
+export const hasAdminPermission = (admin, permission) =>
+  hasHierarchyAdminPermission(admin, permission, { module: ADMIN_MODULES.TAXI });
 
-export const normalizeAdminPermissions = (permissions = []) => {
-  if (!Array.isArray(permissions)) {
-    return [];
-  }
+export const isTaxiSuperAdmin = (admin = {}) =>
+  isSuperAdminLike(admin) && hasHierarchyAdminPermission(admin, '*', { module: ADMIN_MODULES.TAXI });
 
-  const normalized = permissions
-    .map((permission) => String(permission || '').trim())
-    .filter(Boolean);
-
-  if (normalized.includes(SUPERADMIN_PERMISSION)) {
-    return [SUPERADMIN_PERMISSION];
-  }
-
-  return [...new Set(normalized)];
-};
-
-export const hasAdminPermission = (admin, permission) => {
-  const adminType = normalizeAdminType(admin?.admin_type || admin?.role);
-  const permissions = normalizeAdminPermissions(admin?.permissions || []);
-
-  if (adminType === 'superadmin') {
-    return true;
-  }
-
-  return permissions.includes(SUPERADMIN_PERMISSION) || permissions.includes(permission);
-};
+export const getTaxiAdminContext = (admin = {}) => ({
+  ...admin,
+  adminLevel: resolveAdminLevel(admin),
+  module: resolveAdminModule(admin) || ADMIN_MODULES.TAXI,
+});

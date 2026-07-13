@@ -207,6 +207,20 @@ export const adminAPI = {
       { currentPassword, newPassword },
       { contextModule: "admin" },
     ),
+  getFoodAdminPermissions: () =>
+    apiClient.get("/food/admin/admin-management/permissions", { contextModule: "admin" }),
+  getAssignableFoodZones: () =>
+    apiClient.get("/food/admin/admin-management/assignable-zones", { contextModule: "admin" }),
+  getFoodAdmins: () =>
+    apiClient.get("/food/admin/admin-management/admins", { contextModule: "admin" }),
+  getFoodAdminById: (id) =>
+    apiClient.get(`/food/admin/admin-management/admins/${id}`, { contextModule: "admin" }),
+  createFoodAdminAccount: (payload) =>
+    apiClient.post("/food/admin/admin-management/admins", payload, { contextModule: "admin" }),
+  updateFoodAdminAccount: (id, payload) =>
+    apiClient.patch(`/food/admin/admin-management/admins/${id}`, payload, { contextModule: "admin" }),
+  deleteFoodAdminAccount: (id) =>
+    apiClient.delete(`/food/admin/admin-management/admins/${id}`, { contextModule: "admin" }),
   logout: (refreshToken) => {
     const token =
       refreshToken ||
@@ -558,12 +572,16 @@ export const adminAPI = {
     apiClient.post("/food/admin/restaurants", body ?? {}, {
       contextModule: "admin",
     }),
-  /** List delivery zones. Query: limit, page, isActive, search */
-  getZones: (params = {}) =>
-    apiClient.get("/food/admin/zones", {
-      params: { limit: 1000, ...params },
+  /** List delivery zones. Query: limit, page, isActive, search, picker (lightweight id/name only) */
+  getZones: (params = {}) => {
+    const isPicker = params.picker === 1 || params.picker === "1" || params.picker === true;
+    return apiClient.get("/food/admin/zones", {
+      params: isPicker
+        ? { picker: 1, limit: 500, ...params }
+        : { limit: 1000, ...params },
       contextModule: "admin",
-    }),
+    });
+  },
   /** Restaurant report (admin). */
   getRestaurantReport: (params = {}) =>
     apiClient.get("/food/admin/reports/restaurants", {

@@ -4608,7 +4608,8 @@ export async function rejectDeliveryPartner(id, reason) {
 
 // ----- Zones CRUD -----
 export async function getZones(query) {
-    const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);
+    const isPicker = query.picker === 'true' || query.picker === '1' || query.picker === true;
+    const limit = Math.min(Math.max(parseInt(query.limit, 10) || (isPicker ? 500 : 100), 1), isPicker ? 500 : 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
     const isActive = query.isActive;
@@ -4625,6 +4626,20 @@ export async function getZones(query) {
             { serviceLocation: { $regex: search, $options: 'i' } },
             { country: { $regex: search, $options: 'i' } }
         ];
+    }
+
+    if (isPicker) {
+        const [zones, total] = await Promise.all([
+            FoodZone.find(filter)
+                .select('_id name zoneName isActive')
+                .sort({ name: 1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            FoodZone.countDocuments(filter),
+        ]);
+
+        return { zones, total, page, limit };
     }
 
     const [zones, total, countByZone] = await Promise.all([

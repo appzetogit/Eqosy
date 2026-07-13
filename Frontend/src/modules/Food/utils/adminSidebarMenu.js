@@ -1,5 +1,18 @@
 export const adminSidebarMenu = [
   {
+    type: "expandable",
+    label: "Admin Management",
+    icon: "UserCog",
+    resource: "subadmins",
+    subItems: [
+      {
+        label: "Admins",
+        path: "/admin/food/management/admins",
+        resource: "subadmins",
+      },
+    ],
+  },
+  {
     type: "link",
     label: "Dashboard",
     path: "/admin/food",
