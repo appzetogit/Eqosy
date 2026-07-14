@@ -84,7 +84,7 @@ function LocationSelectorProvider({ children }) {
   const openLocationSelector = () => {
     // Navigate to the standalone address selector page
     // Provide current pathname to state so back button returns here accurately
-    navigate("/food/user/cart/address-selector", { state: { backTo: location.pathname } })
+    navigate("/food/user/cart/address-selector", { state: { backTo: location.pathname + location.search } })
   }
 
   const closeLocationSelector = () => { }

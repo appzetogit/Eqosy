@@ -1,5 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import {
+  FOOD_ADMIN_HOME,
+  TAXI_ADMIN_HOME,
+  prefetchFoodAdmin,
+} from '@/shared/utils/activeModule.js';
 import { socketService } from '../../../shared/api/socket';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
@@ -593,6 +598,18 @@ const AdminLayout = () => {
                        (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
 
   const appName = settings.general?.app_name || 'App';
+
+  useEffect(() => {
+    if (showFoodTab) prefetchFoodAdmin();
+  }, [showFoodTab]);
+
+  const switchAdminModule = (path) => {
+    if (path === FOOD_ADMIN_HOME) prefetchFoodAdmin();
+    startTransition(() => {
+      navigate(path);
+    });
+  };
+
   useEffect(() => {
     const syncAdminProfile = () => setAdminProfile(readAdminProfile());
     window.addEventListener('storage', syncAdminProfile);
@@ -1344,7 +1361,10 @@ const AdminLayout = () => {
               <div className="flex p-1 bg-neutral-900/60 backdrop-blur-sm rounded-xl border border-white/5 shadow-inner">
                 {showFoodTab && (
                   <button
-                    onClick={() => navigate("/admin/food")}
+                    type="button"
+                    onClick={() => switchAdminModule(FOOD_ADMIN_HOME)}
+                    onMouseEnter={prefetchFoodAdmin}
+                    onFocus={prefetchFoodAdmin}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
                       "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
@@ -1356,7 +1376,8 @@ const AdminLayout = () => {
                 )}
                 {showTaxiTab && (
                   <button
-                    onClick={() => navigate("/taxi/admin/dashboard")}
+                    type="button"
+                    onClick={() => switchAdminModule(TAXI_ADMIN_HOME)}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
                       "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"

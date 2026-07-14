@@ -3019,7 +3019,7 @@ export default function Home() {
         savedAddressText={headerSavedAddressText}
         locationTitle={headerLocationTitle}
         locationSubtitle={headerLocationSubtitle}
-        handleLocationClick={superAppVertical === "food" ? handleLocationClick : undefined}
+        handleLocationClick={handleLocationClick}
         handleSearchFocus={superAppVertical === "food" ? handleSearchFocus : undefined}
         placeholderIndex={superAppVertical === "food" ? placeholderIndex : undefined}
         placeholders={superAppVertical === "food" ? placeholders : undefined}

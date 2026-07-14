@@ -1,6 +1,9 @@
 export const ACTIVE_MODULE_KEY = 'eqosy_active_module'
 export const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
 
+export const FOOD_ADMIN_HOME = '/admin/food'
+export const TAXI_ADMIN_HOME = '/taxi/admin/dashboard'
+
 export function getModuleFromPath(pathname = '') {
   const path = String(pathname || '')
   if (path.startsWith('/taxi/')) return 'taxi'
@@ -24,6 +27,23 @@ export function syncActiveModule(pathname = '') {
     localStorage.setItem(ACTIVE_MODULE_KEY, module)
   }
   return module
+}
+
+/** Warm Food admin chunks so Food ↔ Taxi admin tab switches stay SPA-smooth. */
+export function prefetchFoodAdmin() {
+  return Promise.all([
+    import('../../modules/Food/components/admin/AdminRouter.jsx'),
+    import('../../modules/Food/pages/admin/AdminHome.jsx'),
+  ]).catch(() => {})
+}
+
+/** Warm Taxi admin chunks so Food ↔ Taxi admin tab switches stay SPA-smooth. */
+export function prefetchTaxiAdmin() {
+  return Promise.all([
+    import('../../modules/Taxi/TaxiApp.jsx'),
+    import('../../modules/Taxi/modules/admin/components/AdminLayout.jsx'),
+    import('../../modules/Taxi/modules/admin/pages/dashboard/MainDashboard.jsx'),
+  ]).catch(() => {})
 }
 
 /**

@@ -1,5 +1,10 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, startTransition } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
+import {
+  FOOD_ADMIN_HOME,
+  TAXI_ADMIN_HOME,
+  prefetchTaxiAdmin,
+} from "@/shared/utils/activeModule.js"
 import {
   Search,
   FileText,
@@ -118,6 +123,16 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                        adminProfile.adminLevel === "taxi_superadmin" || 
                        (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
 
+  useEffect(() => {
+    if (showTaxiTab) prefetchTaxiAdmin()
+  }, [showTaxiTab])
+
+  const switchAdminModule = (path) => {
+    if (path === TAXI_ADMIN_HOME) prefetchTaxiAdmin()
+    startTransition(() => {
+      navigate(path)
+    })
+  }
 
   useEffect(() => {
     const fetchBadges = async () => {
@@ -761,7 +776,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             <div className="flex p-1 bg-neutral-800/40 backdrop-blur-sm rounded-xl mb-4 border border-white/5 shadow-inner animate-[slideIn_0.4s_ease-out_0.15s_both]">
               {showFoodTab && (
                 <button
-                  onClick={() => navigate("/admin/food")}
+                  type="button"
+                  onClick={() => switchAdminModule(FOOD_ADMIN_HOME)}
                   className={cn(
                     "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
                     location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
@@ -782,7 +798,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               )}
               {showTaxiTab && (
                 <button
-                  onClick={() => navigate("/taxi/admin/dashboard")}
+                  type="button"
+                  onClick={() => switchAdminModule(TAXI_ADMIN_HOME)}
+                  onMouseEnter={prefetchTaxiAdmin}
+                  onFocus={prefetchTaxiAdmin}
                   className={cn(
                     "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
                     location.pathname.startsWith("/taxi")
