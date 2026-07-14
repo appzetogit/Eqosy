@@ -104,6 +104,19 @@ export default function SignupStep2() {
   const [activePicker, setActivePicker] = useState(null) // { docType: string, title: string, ref: any }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploading, setUploading] = useState({})
+  const [vehicleType] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("deliverySignupDetails")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return parsed.vehicleType || "bike"
+      }
+    } catch (e) {
+      debugError("Error parsing signup details in step 2:", e)
+    }
+    return "bike"
+  })
+  const isBicycle = vehicleType === "bicycle";
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" })
@@ -203,7 +216,8 @@ export default function SignupStep2() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!documents.profilePhoto || !documents.aadharPhoto || !documents.panPhoto || !documents.drivingLicensePhoto) {
+    const hasDrivingLicense = isBicycle || documents.drivingLicensePhoto;
+    if (!documents.profilePhoto || !documents.aadharPhoto || !documents.panPhoto || !hasDrivingLicense) {
       toast.error("Please upload all required documents")
       return
     }
@@ -245,7 +259,9 @@ export default function SignupStep2() {
     formData.append("profilePhoto", documents.profilePhoto)
     formData.append("aadharPhoto", documents.aadharPhoto)
     formData.append("panPhoto", documents.panPhoto)
-    formData.append("drivingLicensePhoto", documents.drivingLicensePhoto)
+    if (!isBicycle && documents.drivingLicensePhoto) {
+      formData.append("drivingLicensePhoto", documents.drivingLicensePhoto)
+    }
 
     // Try to get FCM token before registering
     let fcmToken = null;
@@ -425,13 +441,13 @@ export default function SignupStep2() {
           <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
           <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
           <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
-          <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />
+          {!isBicycle && <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />}
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto}
-            className={`w-full py-4 rounded-xl font-bold text-white text-base transition-all mt-6 shadow-md ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto
+            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)}
+            className={`w-full py-4 rounded-xl font-bold text-white text-base transition-all mt-6 shadow-md ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-[#1A1A1A] hover:bg-black hover:shadow-lg"
               }`}

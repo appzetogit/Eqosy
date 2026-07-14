@@ -26,19 +26,30 @@ export function syncActiveModule(pathname = '') {
   return module
 }
 
+/**
+ * Post-login destination for the consumer (/login) auth flow only.
+ * Must never send users to admin/restaurant/delivery panels — those have
+ * their own login screens. Leftover `eqosy_active_module=admin` or
+ * `native_last_route=/admin/...` from an earlier admin visit must not
+ * override a normal user login.
+ */
 export function resolvePostLoginRoute() {
   if (typeof localStorage === 'undefined') return '/food/user'
 
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
   if (storedRoute.startsWith('/taxi/')) return '/taxi/user'
   if (storedRoute.startsWith('/food/user')) return '/food/user'
-  if (storedRoute.startsWith('/food/')) return storedRoute.split('?')[0]
-  if (storedRoute.startsWith('/admin')) return storedRoute.split('?')[0]
+  if (
+    storedRoute.startsWith('/food/') &&
+    !storedRoute.startsWith('/food/restaurant') &&
+    !storedRoute.startsWith('/food/delivery') &&
+    !storedRoute.startsWith('/food/admin')
+  ) {
+    return storedRoute.split('?')[0]
+  }
 
   const activeModule = String(localStorage.getItem(ACTIVE_MODULE_KEY) || '').trim()
   if (activeModule === 'taxi') return '/taxi/user'
-  if (activeModule === 'food') return '/food/user'
-  if (activeModule === 'admin') return '/admin'
-
+  // food (or anything else, including stale "admin") → consumer home
   return '/food/user'
 }
