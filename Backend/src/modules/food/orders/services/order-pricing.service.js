@@ -77,6 +77,17 @@ async function resolveDistanceRule(distanceKm) {
   return lowerRule || sorted[0] || null;
 }
 
+/** Active base slab (minDistance <= 0). Flat user fee source matches base-slab pricing. */
+async function resolveBaseDistanceSlab() {
+  const rules = await FoodDeliveryCommissionRule.find({ status: { $ne: false } }).lean();
+  if (!rules.length) return null;
+  return (
+    [...rules]
+      .filter((r) => Number(r.minDistance || 0) <= 0)
+      .sort((a, b) => Number(a.minDistance || 0) - Number(b.minDistance || 0))[0] || null
+  );
+}
+
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
     .select("status zoneId location")
@@ -154,12 +165,34 @@ export async function calculateOrderPricing(userId, dto) {
     const userDeliveryFee = Math.round((Number(distanceRule.commissionPerKm || 0) * 100)) / 100;
     const perKmRate = Number(distanceRule.commissionPerKm || 0);
     const fixedPayout = Math.round((Number(distanceRule.basePayout || 0) * 100)) / 100;
+    let baseSlabFlatFee = 0;
+    let baseSlabMaxKm = null;
+    let excessDistanceKm = 0;
 
     if (isBaseSlab) {
-      deliveryFee = userDeliveryFee > 0 ? userDeliveryFee : 0;
+      // Base slab (user): DB base pay + per-km × full distance
+      const distanceLeg = Math.round(Math.max(0, perKmRate * Number(distanceKm || 0)) * 100) / 100;
+      deliveryFee = Math.round(Math.max(0, fixedPayout + distanceLeg) * 100) / 100;
+      baseSlabFlatFee = fixedPayout;
+      baseSlabMaxKm = distanceRule.maxDistance == null ? null : Number(distanceRule.maxDistance);
+      excessDistanceKm = Math.round(Number(distanceKm || 0) * 100) / 100;
     } else {
-      const chargeableDistanceKm = Number(distanceKm || 0);
-      deliveryFee = Math.round(Math.max(0, perKmRate * chargeableDistanceKm) * 100) / 100;
+      // Non-base (Option A): base slab user per-km rate as flat + matched per-km × excess beyond base max
+      const baseSlab = await resolveBaseDistanceSlab();
+      baseSlabFlatFee = baseSlab
+        ? Math.round((Number(baseSlab.commissionPerKm || 0) * 100)) / 100
+        : 0;
+      baseSlabMaxKm =
+        baseSlab && baseSlab.maxDistance != null && Number.isFinite(Number(baseSlab.maxDistance))
+          ? Number(baseSlab.maxDistance)
+          : null;
+      // If base max is missing, fall back to full trip distance for the per-km leg
+      excessDistanceKm =
+        baseSlabMaxKm == null
+          ? Math.max(0, Number(distanceKm || 0))
+          : Math.max(0, Number(distanceKm || 0) - baseSlabMaxKm);
+      const distanceLeg = Math.round(Math.max(0, perKmRate * excessDistanceKm) * 100) / 100;
+      deliveryFee = Math.round(Math.max(0, baseSlabFlatFee + distanceLeg) * 100) / 100;
     }
 
     adminDeliveryCommissionEnabled = adminCommissionRow?.isEnabled === true;
@@ -178,8 +211,17 @@ export async function calculateOrderPricing(userId, dto) {
       },
       orderValue: subtotal,
       appliedDeliveryFee: Number(deliveryFee || 0),
-      feeComputation: isBaseSlab ? 'base_slab_commission_per_km_source' : 'commission_per_km_x_total_distance',
+      feeComputation: isBaseSlab
+        ? 'base_payout_plus_commission_per_km_x_distance'
+        : 'base_slab_flat_plus_commission_per_km_x_excess_distance',
       userDeliveryFee,
+      baseSlabFlatFee: isBaseSlab ? fixedPayout : baseSlabFlatFee,
+      baseSlabMaxKm: isBaseSlab
+        ? (distanceRule.maxDistance == null ? null : Number(distanceRule.maxDistance))
+        : baseSlabMaxKm,
+      excessDistanceKm: isBaseSlab
+        ? Math.round(Number(distanceKm || 0) * 100) / 100
+        : Math.round(excessDistanceKm * 100) / 100,
       basePayout: fixedPayout,
       commissionPerKm: perKmRate,
       adminDeliveryCommissionPercent,
