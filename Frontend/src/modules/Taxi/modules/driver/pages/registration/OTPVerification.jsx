@@ -12,6 +12,7 @@ import {
     verifyDriverLoginOtp,
     verifyDriverOtp,
 } from '../../services/registrationService';
+import { RENTAL_ENABLED } from '../../../../shared/featureFlags';
 
 const unwrap = (response) => response?.data?.data || response?.data || response;
 const normalizeDriverRole = (role) => {
@@ -49,7 +50,7 @@ const getPostLoginRoute = (role, driver, routePrefix) => {
     const normalizedRole = normalizeDriverRole(role);
 
     if (normalizedRole === 'service_center' || normalizedRole === 'service_center_staff') {
-        return '/taxi/driver/service-center';
+        return RENTAL_ENABLED ? '/taxi/driver/service-center' : '/taxi/driver/home';
     }
 
     if (normalizedRole === 'bus_driver') {
@@ -191,6 +192,8 @@ const OTPVerification = () => {
             const nextState = saveDriverRegistrationSession({
                 ...session,
                 otpVerified: true,
+                role: normalizeDriverRole(payload?.session?.role || session.role || role),
+                registrationId: payload?.session?.registrationId || registrationId || session.registrationId,
                 otpSession: payload?.session || null,
             });
 

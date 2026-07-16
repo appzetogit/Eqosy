@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { userService } from '../services/userService';
+import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 import toast from 'react-hot-toast';
 
 const ServiceTile = ({ icon, label, description, path, accentClass, loading }) => {
@@ -54,7 +55,7 @@ const ServiceGrid = () => {
 
   const getPath = (module) => {
     if (module.transport_type === 'delivery') return '/taxi/user/parcel/type';
-    if (module.service_type === 'rental') return '/taxi/user/rental';
+    if (RENTAL_ENABLED && module.service_type === 'rental') return '/taxi/user/rental';
     if (module.service_type === 'outstation') return '/taxi/user/intercity';
     if (module.service_type === 'pooling' || module.name.toLowerCase().includes('pooling')) {
       return '/taxi/user/pooling';
@@ -88,17 +89,21 @@ const ServiceGrid = () => {
         // Extract results: res could be { results: [] } or { data: { results: [] } } depending on service
         const results = res?.results || res?.data?.results || [];
         
-        // Only show active modules
-        const activeModules = results.filter(m => m.active);
-        
+        // Only show active modules (rental tile parked when RENTAL_ENABLED is false)
+        const activeModules = results.filter((m) => {
+          if (!m.active) return false;
+          if (!RENTAL_ENABLED && m.service_type === 'rental') return false;
+          return true;
+        });
+
         const mapped = activeModules.map((m, idx) => ({
           icon: m.mobile_menu_icon,
           label: m.name,
           description: m.short_description,
           path: getPath(m),
           accentClass: getAccent(idx)
-        }));
-        
+        })).filter((item) => Boolean(item.path));
+
         setServices(mapped);
       } catch (err) {
         console.error('Failed to load services:', err);

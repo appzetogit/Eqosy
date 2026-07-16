@@ -684,7 +684,26 @@ export const saveDriverVehicle = async ({
     throw new ApiError(400, 'A valid service location is required');
   }
 
-  const isOwner = String(session.role || '').toLowerCase() === 'owner';
+  const hasValue = (value) =>
+    Array.isArray(value) ? value.length > 0 : Boolean(String(value || '').trim());
+
+  // Heal role drift: owner UI submits company profile with empty vehicle fields,
+  // but DB session may still be "driver" (local role/path out of sync with OTP start).
+  const hasCompanyProfile =
+    hasValue(companyName) &&
+    hasValue(companyAddress) &&
+    hasValue(city) &&
+    hasValue(postalCode) &&
+    hasValue(taxNumber);
+  const hasVehicleIdentity =
+    hasValue(vehicleTypeId) || hasValue(make) || hasValue(number) || hasValue(model) || hasValue(color);
+
+  let isOwner = String(session.role || '').toLowerCase() === 'owner';
+  if (!isOwner && hasCompanyProfile && !hasVehicleIdentity) {
+    session.role = 'owner';
+    isOwner = true;
+  }
+
   const requiredFieldMap = await getRequiredVehicleFieldMap(session.role);
   const normalizedYear = String(year || '').trim();
   const normalizedNumber = String(number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -703,8 +722,6 @@ export const saveDriverVehicle = async ({
     acc[normalizedKey] = String(value || '').trim();
     return acc;
   }, {});
-  const hasValue = (value) =>
-    Array.isArray(value) ? value.length > 0 : Boolean(String(value || '').trim());
   const requireField = (fieldKey, value, fallbackMessage) => {
     const config = requiredFieldMap[fieldKey];
     if (config?.is_required && !hasValue(value)) {

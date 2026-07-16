@@ -11,6 +11,9 @@ import {
 const StepReferral = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const routePrefix = location.pathname.startsWith('/taxi/owner')
+        ? '/taxi/owner'
+        : '/taxi/driver';
     const session = {
         ...getStoredDriverRegistrationSession(),
         ...(location.state || {}),
@@ -36,14 +39,21 @@ const StepReferral = () => {
                 phone: session.phone,
                 referralCode: skip ? '' : referral,
             });
+            const payload = response?.data?.data || response?.data || response;
+            const syncedRole =
+                String(payload?.session?.role || '').toLowerCase() === 'owner' ||
+                String(session.role || '').toLowerCase() === 'owner'
+                    ? 'owner'
+                    : 'driver';
 
             const nextState = saveDriverRegistrationSession({
                 ...session,
                 referralCode: skip ? '' : referral,
-                referralSession: response?.data?.session || null,
+                role: syncedRole,
+                referralSession: payload?.session || null,
             });
 
-            navigate('/taxi/driver/step-vehicle', { state: nextState });
+            navigate(`${routePrefix}/step-vehicle`, { state: nextState });
         } catch (err) {
             setError(err?.message || 'Unable to save referral code');
         } finally {
@@ -61,7 +71,7 @@ const StepReferral = () => {
                     <div className="flex items-center justify-between">
                          <motion.button
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => navigate('/taxi/driver/step-personal', { state: session })}
+                            onClick={() => navigate(`${routePrefix}/step-personal`, { state: session })}
                             className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-900 shadow-sm transition-all"
                         >
                             <ArrowLeft size={18} strokeWidth={2.5} />

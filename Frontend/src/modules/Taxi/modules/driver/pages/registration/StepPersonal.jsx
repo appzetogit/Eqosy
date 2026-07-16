@@ -25,7 +25,9 @@ const StepPersonal = () => {
     const registrationId = session.registrationId || '';
     const role = routePrefix === '/taxi/owner'
         ? 'owner'
-        : (session.role || 'driver');
+        : (String(session.personalSession?.role || session.otpSession?.role || session.role || 'driver').toLowerCase() === 'owner'
+            ? 'owner'
+            : 'driver');
     const isOwner = role === 'owner';
 
     const [formData, setFormData] = useState({
@@ -76,14 +78,19 @@ const StepPersonal = () => {
                     phone,
                     ...normalizedFormData,
                 });
+                const payload = response?.data?.data || response?.data || response;
+                const serverRole = String(payload?.session?.role || '').toLowerCase();
+                const syncedRole = serverRole === 'owner' || String(role).toLowerCase() === 'owner'
+                    ? 'owner'
+                    : 'driver';
 
                 const nextState = saveDriverRegistrationSession({
                     ...session,
                     registrationId,
                     phone,
-                    role,
+                    role: syncedRole,
                     ...normalizedFormData,
-                    personalSession: response?.data?.session || null,
+                    personalSession: payload?.session || null,
                 });
 
                 navigate(`${routePrefix}/step-referral`, { state: nextState });

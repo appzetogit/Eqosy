@@ -5,6 +5,7 @@ import {
   TAXI_ADMIN_HOME,
   prefetchFoodAdmin,
 } from '@/shared/utils/activeModule.js';
+import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 import { socketService } from '../../../shared/api/socket';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
@@ -729,18 +730,22 @@ const AdminLayout = () => {
               { label: 'Airport', path: '/taxi/admin/pricing/airport', permission: 'airports.view' },
               { label: 'App Modules', path: '/taxi/admin/pricing/app-modules', permission: 'settings.view' },
               { label: 'Vehicle Type', path: '/taxi/admin/pricing/vehicle-type', permission: 'vehicle_types.view' },
-              {
-                label: 'Rental',
-                subItems: [
-                  { label: 'Service Stores', path: '/taxi/admin/pricing/service-stores', permission: 'service_stores.view' },
-                  { label: 'Rental Vehicles', path: '/taxi/admin/pricing/rental-vehicles', permission: 'rental.view' },
-                  { label: 'Track Vehicles', path: '/taxi/admin/pricing/rental-tracking', permission: 'rental.view' },
-                  { label: 'Rental Requests', path: '/taxi/admin/pricing/rental-requests', permission: 'rental.view' },
-                  { label: 'Rental Quote Requests', path: '/taxi/admin/pricing/rental-quotes', permission: 'rental.view' },
-                  { label: 'Rental Package Types', path: '/taxi/admin/pricing/rental-packages', permission: 'rental.view' },
-                  { label: 'Package Pricing', path: '/taxi/admin/pricing/package-pricing', permission: 'rental.view' },
-                ],
-              },
+              ...(RENTAL_ENABLED
+                ? [
+                    {
+                      label: 'Rental',
+                      subItems: [
+                        { label: 'Service Stores', path: '/taxi/admin/pricing/service-stores', permission: 'service_stores.view' },
+                        { label: 'Rental Vehicles', path: '/taxi/admin/pricing/rental-vehicles', permission: 'rental.view' },
+                        { label: 'Track Vehicles', path: '/taxi/admin/pricing/rental-tracking', permission: 'rental.view' },
+                        { label: 'Rental Requests', path: '/taxi/admin/pricing/rental-requests', permission: 'rental.view' },
+                        { label: 'Rental Quote Requests', path: '/taxi/admin/pricing/rental-quotes', permission: 'rental.view' },
+                        { label: 'Rental Package Types', path: '/taxi/admin/pricing/rental-packages', permission: 'rental.view' },
+                        { label: 'Package Pricing', path: '/taxi/admin/pricing/package-pricing', permission: 'rental.view' },
+                      ],
+                    },
+                  ]
+                : []),
               { label: 'Set Price', path: '/taxi/admin/pricing/set-price', permission: 'set_prices.view' },
               { label: 'Goods Types', path: '/taxi/admin/pricing/goods-types', permission: 'goods_types.view' },
             ],

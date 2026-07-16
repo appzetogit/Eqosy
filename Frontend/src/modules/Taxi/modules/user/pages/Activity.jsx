@@ -15,8 +15,10 @@ import api from '../../../shared/api/axiosInstance';
 import userBusService from '../services/busService';
 import { userService } from '../services/userService';
 import { normalizeBusBooking, normalizePoolingBooking, normalizeRentalBooking, normalizeRide, PAGE_SIZE, TABS } from '../components/activity/activityHelpers';
+import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 
 const AGGREGATE_FETCH_LIMIT = 60;
+const ACTIVITY_TABS = RENTAL_ENABLED ? TABS : TABS.filter((tab) => tab !== 'Rental');
 
 const getPayload = (response) => response?.data?.data || response?.data || response || {};
 
@@ -112,14 +114,26 @@ const Activity = () => {
         let nextPagination = null;
 
         if (activeTab === 'Rental') {
-          const response = await userService.getMyRentalBookings({
-            page: currentPage,
-            limit: PAGE_SIZE,
-          });
-          const payload = getPayload(response);
-          const bookings = Array.isArray(payload?.results) ? payload.results : [];
-          nextActivities = bookings.map(normalizeRentalBooking).filter((item) => item.id);
-          nextPagination = payload?.pagination || null;
+          if (!RENTAL_ENABLED) {
+            nextActivities = [];
+            nextPagination = {
+              page: 1,
+              limit: PAGE_SIZE,
+              total: 0,
+              totalPages: 1,
+              hasNextPage: false,
+              hasPrevPage: false,
+            };
+          } else {
+            const response = await userService.getMyRentalBookings({
+              page: currentPage,
+              limit: PAGE_SIZE,
+            });
+            const payload = getPayload(response);
+            const bookings = Array.isArray(payload?.results) ? payload.results : [];
+            nextActivities = bookings.map(normalizeRentalBooking).filter((item) => item.id);
+            nextPagination = payload?.pagination || null;
+          }
         } else if (activeTab === 'Bus') {
           const response = await userBusService.getMyBookings({
             page: currentPage,
@@ -150,13 +164,15 @@ const Activity = () => {
               console.error('Failed to load rides:', err);
               return { results: [] };
             }),
-            userService.getMyRentalBookings({
-              page: 1,
-              limit: AGGREGATE_FETCH_LIMIT,
-            }).catch((err) => {
-              console.error('Failed to load rental bookings:', err);
-              return { results: [] };
-            }),
+            RENTAL_ENABLED
+              ? userService.getMyRentalBookings({
+                  page: 1,
+                  limit: AGGREGATE_FETCH_LIMIT,
+                }).catch((err) => {
+                  console.error('Failed to load rental bookings:', err);
+                  return { results: [] };
+                })
+              : Promise.resolve({ results: [] }),
             userBusService.getMyBookings({
               page: 1,
               limit: AGGREGATE_FETCH_LIMIT,
@@ -175,7 +191,7 @@ const Activity = () => {
           const busPayload = getPayload(busResponse);
           const poolingPayload = getPayload(poolingResponse);
           const rides = Array.isArray(ridePayload?.results) ? ridePayload.results : [];
-          const rentalBookings = Array.isArray(rentalPayload?.results) ? rentalPayload.results : [];
+          const rentalBookings = RENTAL_ENABLED && Array.isArray(rentalPayload?.results) ? rentalPayload.results : [];
           const bookings = Array.isArray(busPayload?.results) ? busPayload.results : [];
           const poolingBookings = Array.isArray(poolingPayload)
             ? poolingPayload
@@ -255,6 +271,7 @@ const Activity = () => {
     if (item.type === 'bus') {
       navigate(`${routePrefix}/profile/bus-bookings/${item.id}`);
     } else if (item.type === 'rental') {
+      if (!RENTAL_ENABLED) return;
       navigate('/rental/confirmed', { state: buildRentalActivityState(item.booking) });
     } else if (item.type === 'pooling') {
       navigate(`${routePrefix}/pooling`);
@@ -269,7 +286,7 @@ const Activity = () => {
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col bg-slate-50 font-sans pb-28">
       <ActivityHeader helperText={helperText} onBack={() => navigate(-1)} />
-      <ActivityTabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      <ActivityTabs tabs={ACTIVITY_TABS} activeTab={activeTab} onChange={setActiveTab} />
 
       <div className="flex-1 px-4 py-4">
         {activeTab === 'Support' ? (

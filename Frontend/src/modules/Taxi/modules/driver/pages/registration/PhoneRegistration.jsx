@@ -11,6 +11,7 @@ import {
 } from '../../services/registrationService';
 
 import { useSettings } from '../../../../shared/context/SettingsContext';
+import { RENTAL_ENABLED } from '../../../../shared/featureFlags';
 import loginBg from '../../../../assets/images/driver-login-bg.png';
 
 const PhoneRegistration = () => {
@@ -37,15 +38,29 @@ const PhoneRegistration = () => {
             return 'driver';
         };
 
+        if (location.pathname.startsWith('/taxi/owner')) {
+            return 'owner';
+        }
+
         const stateRole = String(location.state?.role || '').toLowerCase();
-        if (stateRole) return normalizePortalRole(stateRole);
+        if (stateRole) {
+            const normalized = normalizePortalRole(stateRole);
+            if (!RENTAL_ENABLED && (normalized === 'service_center' || normalized === 'service_center_staff')) {
+                return 'driver';
+            }
+            return normalized;
+        }
 
         if (sharedReferralCode && location.pathname.startsWith('/taxi/driver')) {
             return 'driver';
         }
 
         const savedRole = String(storedSession.role || '').toLowerCase();
-        return normalizePortalRole(savedRole);
+        const normalizedSaved = normalizePortalRole(savedRole);
+        if (!RENTAL_ENABLED && (normalizedSaved === 'service_center' || normalizedSaved === 'service_center_staff')) {
+            return 'driver';
+        }
+        return normalizedSaved;
     });
     const [agreed, setAgreed] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -61,8 +76,12 @@ const PhoneRegistration = () => {
             { id: 'driver', label: 'Driver', Icon: UserRound },
             { id: 'owner', label: 'Owner', Icon: Briefcase },
             { id: 'bus_driver', label: 'Bus', Icon: ShieldCheck },
-            { id: 'service_center', label: 'Center', Icon: Building2 },
-            { id: 'service_center_staff', label: 'Staff', Icon: UserRound },
+            ...(RENTAL_ENABLED
+              ? [
+                  { id: 'service_center', label: 'Center', Icon: Building2 },
+                  { id: 'service_center_staff', label: 'Staff', Icon: UserRound },
+                ]
+              : []),
         ]
         : [
             { id: 'driver', label: 'Driver', Icon: UserRound },

@@ -73,6 +73,23 @@ const getPrimaryRegisterFor = (serviceCategories = [], fallback = 'taxi') => {
     return String(fallback || 'taxi').trim().toLowerCase() || 'taxi';
 };
 
+const resolveOnboardingRole = (session = {}) => {
+    const candidates = [
+        session?.role,
+        session?.referralSession?.role,
+        session?.personalSession?.role,
+        session?.otpSession?.role,
+    ];
+
+    for (const candidate of candidates) {
+        if (String(candidate || '').toLowerCase() === 'owner') {
+            return 'owner';
+        }
+    }
+
+    return 'driver';
+};
+
 const defaultVehicleFieldConfigs = [
     { field_key: 'locationId', name: 'Operating City', account_type: 'both', is_required: true, active: true, sort_order: 10, placeholder: '', help_text: '' },
     { field_key: 'serviceCategories', name: 'Service Category', account_type: 'individual', is_required: true, active: true, sort_order: 20, placeholder: '', help_text: '' },
@@ -97,8 +114,9 @@ const StepVehicle = () => {
         ...getStoredDriverRegistrationSession(),
         ...(location.state || {}),
     };
-    const role = session.role || 'driver';
+    const role = resolveOnboardingRole(session);
     const isOwner = role === 'owner';
+    const routePrefix = location.pathname.startsWith('/taxi/owner') ? '/taxi/owner' : '/taxi/driver';
 
     const [locations, setLocations] = useState([]);
     const [locationsLoading, setLocationsLoading] = useState(true);
@@ -330,14 +348,20 @@ const StepVehicle = () => {
                     customFields: formData.customFields,
                 });
 
+                const payload = response?.data?.data || response?.data || response;
+                const syncedRole = String(payload?.session?.role || role || 'driver').toLowerCase() === 'owner'
+                    ? 'owner'
+                    : 'driver';
+
                 const nextState = saveDriverRegistrationSession({
                     ...session,
                     ...formData,
                     number: normalizedNumber,
-                    vehicleSession: response?.data?.session || null,
+                    role: syncedRole,
+                    vehicleSession: payload?.session || null,
                 });
 
-                navigate('/taxi/driver/step-documents', { state: nextState });
+                navigate(`${routePrefix}/step-documents`, { state: nextState });
             } catch (err) {
                 setError(err?.message || 'Unable to save vehicle details');
             } finally {

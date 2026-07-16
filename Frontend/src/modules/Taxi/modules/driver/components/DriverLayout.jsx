@@ -7,6 +7,7 @@ import {
     getLocalDriverToken,
     getStoredDriverRole,
 } from '../services/registrationService';
+import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 import DriverRideRequestListener from './DriverRideRequestListener';
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response;
@@ -82,9 +83,9 @@ const getAuthenticatedRole = () => String(getAuthenticatedDriverRole() || 'drive
 const getAuthenticatedDriverHome = (pathname = '') => (
     getAuthenticatedRole() === 'owner'
         ? `${getPortalPrefix(pathname, 'owner')}/dashboard`
-        : getAuthenticatedRole() === 'service_center'
+        : RENTAL_ENABLED && getAuthenticatedRole() === 'service_center'
             ? '/taxi/driver/service-center'
-        : getAuthenticatedRole() === 'service_center_staff'
+        : RENTAL_ENABLED && getAuthenticatedRole() === 'service_center_staff'
             ? '/taxi/driver/service-center'
         : getAuthenticatedRole() === 'bus_driver'
             ? '/taxi/driver/bus-home'
@@ -155,7 +156,10 @@ const DriverLayout = () => {
 
         if (
             isServiceCenterRoute(currentPath)
-            && !['service_center', 'service_center_staff'].includes(authenticatedRole)
+            && (
+              !RENTAL_ENABLED
+              || !['service_center', 'service_center_staff'].includes(authenticatedRole)
+            )
         ) {
             setIsAllowed(false);
             navigate(authenticatedHome, { replace: true });

@@ -17,6 +17,7 @@ import { syncUpcomingRideReminders } from './modules/user/utils/upcomingRideRemi
 import { getAuthenticatedDriverRole, getLocalDriverToken } from './modules/driver/services/registrationService';
 import { installBrowserFcmRegistration } from './shared/push/browserFcmRegistration';
 import { installNativeFcmBridge } from './shared/push/nativeFcmBridge';
+import { RENTAL_ENABLED } from './shared/featureFlags';
 import './App.css';
 
 
@@ -364,8 +365,7 @@ const MainLayout = ({ children }) => {
   const isAdminPath =
     location.pathname.startsWith('/taxi/admin') ||
     location.pathname.startsWith('/taxi/user-import') ||
-    location.pathname.startsWith('/taxi/driver-import') ||
-    location.pathname.startsWith('/taxi/owner');
+    location.pathname.startsWith('/taxi/driver-import');
 
   if (isAdminPath) {
     return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
@@ -633,9 +633,9 @@ const DriverEntryRedirect = () => {
       to={
         role === 'owner'
           ? '/taxi/owner/dashboard'
-          : role === 'service_center'
+          : RENTAL_ENABLED && role === 'service_center'
             ? '/taxi/driver/service-center'
-            : role === 'service_center_staff'
+            : RENTAL_ENABLED && role === 'service_center_staff'
               ? '/taxi/driver/service-center'
               : role === 'bus_driver'
                 ? '/taxi/driver/bus-home'
@@ -655,7 +655,7 @@ function TaxiApp() {
   return (
     <>
       <SettingsProvider>
-        <RentalLocationTracker />
+        {RENTAL_ENABLED ? <RentalLocationTracker /> : null}
         <AppAutoUpdater />
         <ScrollToTop />
         <UserAccountInvalidationListener />
@@ -715,12 +715,16 @@ function TaxiApp() {
                 <Route path="parcel/detail/:id" element={<RideDetail />} />
 
                 {/* New Service Routes — Real pages replacing ComingSoon */}
-                <Route path="rental" element={<BikeRentalHome />} />
-                <Route path="rental/vehicle" element={<RentalVehicleDetail />} />
-                <Route path="rental/schedule" element={<RentalSchedule />} />
-                <Route path="rental/kyc" element={<RentalKYC />} />
-                <Route path="rental/deposit" element={<RentalDeposit />} />
-                <Route path="rental/confirmed" element={<RentalConfirmed />} />
+                {RENTAL_ENABLED ? (
+                  <>
+                    <Route path="rental" element={<BikeRentalHome />} />
+                    <Route path="rental/vehicle" element={<RentalVehicleDetail />} />
+                    <Route path="rental/schedule" element={<RentalSchedule />} />
+                    <Route path="rental/kyc" element={<RentalKYC />} />
+                    <Route path="rental/deposit" element={<RentalDeposit />} />
+                    <Route path="rental/confirmed" element={<RentalConfirmed />} />
+                  </>
+                ) : null}
                 <Route path="intercity" element={<IntercityHome />} />
                 <Route path="intercity/vehicle" element={<IntercityVehicle />} />
                 <Route path="intercity/details" element={<IntercityDetails />} />
@@ -844,24 +848,28 @@ function TaxiApp() {
                 <Route path="user/pooling/list" element={<UserPoolingList />} />
                 <Route path="user/pooling/seats/:id" element={<UserPoolingSeats />} />
                 <Route path="user/pooling/confirm" element={<UserPoolingConfirm />} />
-                <Route path="user/rental" element={<BikeRentalHome />} />
-                <Route
-                  path="user/rental/vehicle"
-                  element={<RentalVehicleDetail />}
-                />
-                <Route
-                  path="user/rental/schedule"
-                  element={<RentalSchedule />}
-                />
-                <Route path="user/rental/kyc" element={<RentalKYC />} />
-                <Route
-                  path="user/rental/deposit"
-                  element={<RentalDeposit />}
-                />
-                <Route
-                  path="user/rental/confirmed"
-                  element={<RentalConfirmed />}
-                />
+                {RENTAL_ENABLED ? (
+                  <>
+                    <Route path="user/rental" element={<BikeRentalHome />} />
+                    <Route
+                      path="user/rental/vehicle"
+                      element={<RentalVehicleDetail />}
+                    />
+                    <Route
+                      path="user/rental/schedule"
+                      element={<RentalSchedule />}
+                    />
+                    <Route path="user/rental/kyc" element={<RentalKYC />} />
+                    <Route
+                      path="user/rental/deposit"
+                      element={<RentalDeposit />}
+                    />
+                    <Route
+                      path="user/rental/confirmed"
+                      element={<RentalConfirmed />}
+                    />
+                  </>
+                ) : null}
                 <Route path="user/intercity" element={<IntercityHome />} />
                 <Route
                   path="user/intercity/vehicle"
@@ -992,9 +1000,13 @@ function TaxiApp() {
                 <Route path="chat" element={<Chat />} />
                 <Route path="wallet" element={<DriverWallet />} />
                 <Route path="profile" element={<DriverProfile />} />
-                <Route path="service-center" element={<ServiceCenterDashboard />} />
-                <Route path="service-center/vehicles/new" element={<ServiceCenterVehicleDetails />} />
-                <Route path="service-center/vehicles/:vehicleId" element={<ServiceCenterVehicleDetails />} />
+                {RENTAL_ENABLED ? (
+                  <>
+                    <Route path="service-center" element={<ServiceCenterDashboard />} />
+                    <Route path="service-center/vehicles/new" element={<ServiceCenterVehicleDetails />} />
+                    <Route path="service-center/vehicles/:vehicleId" element={<ServiceCenterVehicleDetails />} />
+                  </>
+                ) : null}
                 <Route path="history" element={<RideRequests />} />
                 <Route path="incentives" element={<DriverIncentives />} />
 
@@ -1363,18 +1375,22 @@ function TaxiApp() {
                     path="service-location/edit/:id"
                     element={<AdminServiceLocation mode="edit" />}
                   />
-                  <Route
-                    path="service-stores"
-                    element={<AdminServiceStores />}
-                  />
-                  <Route
-                    path="service-stores/add"
-                    element={<AdminServiceStores mode="create" />}
-                  />
-                  <Route
-                    path="service-stores/edit/:id"
-                    element={<AdminServiceStores mode="edit" />}
-                  />
+                  {RENTAL_ENABLED ? (
+                    <>
+                      <Route
+                        path="service-stores"
+                        element={<AdminServiceStores />}
+                      />
+                      <Route
+                        path="service-stores/add"
+                        element={<AdminServiceStores mode="create" />}
+                      />
+                      <Route
+                        path="service-stores/edit/:id"
+                        element={<AdminServiceStores mode="edit" />}
+                      />
+                    </>
+                  ) : null}
                   <Route path="app-modules" element={<AdminAppModules />} />
                   <Route
                     path="app-modules/create"
@@ -1411,50 +1427,54 @@ function TaxiApp() {
                     path="vehicle-type/edit/:id"
                     element={<AdminVehicleType mode="edit" />}
                   />
-                  <Route
-                    path="rental-vehicles"
-                    element={<AdminRentalVehicleTypes />}
-                  />
-                  <Route
-                    path="rental-vehicles/create"
-                    element={<AdminRentalVehicleTypes mode="create" />}
-                  />
-                  <Route
-                    path="rental-vehicles/edit/:id"
-                    element={<AdminRentalVehicleTypes mode="edit" />}
-                  />
-                  <Route
-                    path="rental-vehicles/view/:id"
-                    element={<AdminRentalVehicleTypes mode="view" />}
-                  />
-                  <Route
-                    path="rental-tracking"
-                    element={<AdminRentalTracking />}
-                  />
-                  <Route
-                    path="rental-tracking/:id"
-                    element={<AdminRentalTrackingDetail />}
-                  />
-                  <Route
-                    path="rental-requests"
-                    element={<AdminRentalBookingRequests />}
-                  />
-                  <Route
-                    path="rental-quotes"
-                    element={<AdminRentalQuoteRequests />}
-                  />
-                  <Route
-                    path="rental-packages"
-                    element={<AdminRentalPackageTypes />}
-                  />
-                  <Route
-                    path="rental-packages/create"
-                    element={<AdminRentalPackageTypes mode="create" />}
-                  />
-                  <Route
-                    path="rental-packages/edit/:id"
-                    element={<AdminRentalPackageTypes mode="edit" />}
-                  />
+                  {RENTAL_ENABLED ? (
+                    <>
+                      <Route
+                        path="rental-vehicles"
+                        element={<AdminRentalVehicleTypes />}
+                      />
+                      <Route
+                        path="rental-vehicles/create"
+                        element={<AdminRentalVehicleTypes mode="create" />}
+                      />
+                      <Route
+                        path="rental-vehicles/edit/:id"
+                        element={<AdminRentalVehicleTypes mode="edit" />}
+                      />
+                      <Route
+                        path="rental-vehicles/view/:id"
+                        element={<AdminRentalVehicleTypes mode="view" />}
+                      />
+                      <Route
+                        path="rental-tracking"
+                        element={<AdminRentalTracking />}
+                      />
+                      <Route
+                        path="rental-tracking/:id"
+                        element={<AdminRentalTrackingDetail />}
+                      />
+                      <Route
+                        path="rental-requests"
+                        element={<AdminRentalBookingRequests />}
+                      />
+                      <Route
+                        path="rental-quotes"
+                        element={<AdminRentalQuoteRequests />}
+                      />
+                      <Route
+                        path="rental-packages"
+                        element={<AdminRentalPackageTypes />}
+                      />
+                      <Route
+                        path="rental-packages/create"
+                        element={<AdminRentalPackageTypes mode="create" />}
+                      />
+                      <Route
+                        path="rental-packages/edit/:id"
+                        element={<AdminRentalPackageTypes mode="edit" />}
+                      />
+                    </>
+                  ) : null}
                   <Route path="set-price" element={<AdminSetPrices />} />
                   <Route
                     path="set-price/create"
@@ -1476,18 +1496,22 @@ function TaxiApp() {
                     path="set-price/packages/edit/:packageId"
                     element={<AdminCreatePackagePrice mode="edit" />}
                   />
-                  <Route
-                    path="package-pricing"
-                    element={<AdminSetPackagePrices />}
-                  />
-                  <Route
-                    path="package-pricing/create"
-                    element={<AdminCreatePackagePrice mode="create" />}
-                  />
-                  <Route
-                    path="package-pricing/edit/:packageId"
-                    element={<AdminCreatePackagePrice mode="edit" />}
-                  />
+                  {RENTAL_ENABLED ? (
+                    <>
+                      <Route
+                        path="package-pricing"
+                        element={<AdminSetPackagePrices />}
+                      />
+                      <Route
+                        path="package-pricing/create"
+                        element={<AdminCreatePackagePrice mode="create" />}
+                      />
+                      <Route
+                        path="package-pricing/edit/:packageId"
+                        element={<AdminCreatePackagePrice mode="edit" />}
+                      />
+                    </>
+                  ) : null}
                   <Route
                     path="set-price/incentive/:id"
                     element={<AdminDriverIncentive />}

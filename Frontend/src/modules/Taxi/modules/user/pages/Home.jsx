@@ -17,6 +17,7 @@ import deliveryIcon from '../../../assets/icons/Delivery.png';
 import api from '../../../shared/api/axiosInstance';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { userService } from '../services/userService';
+import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
   getCurrentRide,
@@ -194,6 +195,10 @@ const Home = ({ embedded = false }) => {
 
   const [currentRide, setCurrentRide] = useState(() => {
     const ride = getCurrentRide();
+    if (!RENTAL_ENABLED && String(ride?.serviceType || '').toLowerCase() === 'rental') {
+      clearCurrentRide();
+      return null;
+    }
     return isActiveCurrentRide(ride) ? ride : null;
   });
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -302,6 +307,11 @@ const Home = ({ embedded = false }) => {
     const refreshCurrentRide = () => {
       const ride = getCurrentRide();
       if (String(ride?.serviceType || '').toLowerCase() === 'rental') {
+        if (!RENTAL_ENABLED) {
+          clearCurrentRide();
+          setCurrentRide(null);
+          return;
+        }
         const normalizedRentalRide = normalizeRentalCurrentRideSnapshot(ride, currentRideRef.current || {});
         setCurrentRide(isActiveCurrentRide(normalizedRentalRide) ? normalizedRentalRide : null);
         return;
@@ -378,6 +388,13 @@ const Home = ({ embedded = false }) => {
         }
 
       try {
+        if (!RENTAL_ENABLED) {
+          if (cancelled) return;
+          persistCurrentRide(null);
+          currentRideRef.current = null;
+          return;
+        }
+
         const rentalResponse = await userService.getActiveRentalBooking();
         const rentalRide = rentalResponse?.id ? rentalResponse : (rentalResponse?.data || null);
 
@@ -639,7 +656,7 @@ const Home = ({ embedded = false }) => {
         )}
         
         {/* Active Rental Dashboard - Only visible during active rentals */}
-        {serviceType === 'rental' && (
+        {RENTAL_ENABLED && serviceType === 'rental' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
