@@ -15,10 +15,14 @@ import api from '../../../shared/api/axiosInstance';
 import userBusService from '../services/busService';
 import { userService } from '../services/userService';
 import { normalizeBusBooking, normalizePoolingBooking, normalizeRentalBooking, normalizeRide, PAGE_SIZE, TABS } from '../components/activity/activityHelpers';
-import { RENTAL_ENABLED } from '../../../shared/featureFlags';
+import { POOLING_ENABLED, RENTAL_ENABLED } from '../../../shared/featureFlags';
 
 const AGGREGATE_FETCH_LIMIT = 60;
-const ACTIVITY_TABS = RENTAL_ENABLED ? TABS : TABS.filter((tab) => tab !== 'Rental');
+const ACTIVITY_TABS = TABS.filter((tab) => {
+  if (!RENTAL_ENABLED && tab === 'Rental') return false;
+  if (!POOLING_ENABLED && tab === 'Pooling') return false;
+  return true;
+});
 
 const getPayload = (response) => response?.data?.data || response?.data || response || {};
 
@@ -144,15 +148,27 @@ const Activity = () => {
           nextActivities = bookings.map(normalizeBusBooking).filter((item) => item.id);
           nextPagination = payload?.pagination || null;
         } else if (activeTab === 'Pooling') {
-          const response = await userService.getMyPoolingBookings();
-          const payload = getPayload(response);
-          const bookings = Array.isArray(payload) ? payload : Array.isArray(payload?.results) ? payload.results : [];
-          const localPage = buildLocalPagination(
-            sortLatestFirst(bookings.map(normalizePoolingBooking).filter((item) => item.id)),
-            currentPage,
-          );
-          nextActivities = localPage.results;
-          nextPagination = localPage.pagination;
+          if (!POOLING_ENABLED) {
+            nextActivities = [];
+            nextPagination = {
+              page: 1,
+              limit: PAGE_SIZE,
+              total: 0,
+              totalPages: 1,
+              hasNextPage: false,
+              hasPrevPage: false,
+            };
+          } else {
+            const response = await userService.getMyPoolingBookings();
+            const payload = getPayload(response);
+            const bookings = Array.isArray(payload) ? payload : Array.isArray(payload?.results) ? payload.results : [];
+            const localPage = buildLocalPagination(
+              sortLatestFirst(bookings.map(normalizePoolingBooking).filter((item) => item.id)),
+              currentPage,
+            );
+            nextActivities = localPage.results;
+            nextPagination = localPage.pagination;
+          }
         } else if (activeTab === 'All') {
           const [ridesResponse, rentalResponse, busResponse, poolingResponse] = await Promise.all([
             api.get('/rides', {
@@ -180,10 +196,12 @@ const Activity = () => {
               console.error('Failed to load bus bookings:', err);
               return { results: [] };
             }),
-            userService.getMyPoolingBookings().catch((err) => {
-              console.error('Failed to load pooling bookings:', err);
-              return [];
-            }),
+            POOLING_ENABLED
+              ? userService.getMyPoolingBookings().catch((err) => {
+                  console.error('Failed to load pooling bookings:', err);
+                  return [];
+                })
+              : Promise.resolve([]),
           ]);
 
           const ridePayload = getPayload(ridesResponse);
@@ -193,11 +211,13 @@ const Activity = () => {
           const rides = Array.isArray(ridePayload?.results) ? ridePayload.results : [];
           const rentalBookings = RENTAL_ENABLED && Array.isArray(rentalPayload?.results) ? rentalPayload.results : [];
           const bookings = Array.isArray(busPayload?.results) ? busPayload.results : [];
-          const poolingBookings = Array.isArray(poolingPayload)
-            ? poolingPayload
-            : Array.isArray(poolingPayload?.results)
-              ? poolingPayload.results
-              : [];
+          const poolingBookings = POOLING_ENABLED
+            ? (Array.isArray(poolingPayload)
+              ? poolingPayload
+              : Array.isArray(poolingPayload?.results)
+                ? poolingPayload.results
+                : [])
+            : [];
           const merged = sortLatestFirst([
             ...rides.map(normalizeRide).filter((item) => item.id),
             ...rentalBookings.map(normalizeRentalBooking).filter((item) => item.id),
@@ -274,6 +294,7 @@ const Activity = () => {
       if (!RENTAL_ENABLED) return;
       navigate('/rental/confirmed', { state: buildRentalActivityState(item.booking) });
     } else if (item.type === 'pooling') {
+      if (!POOLING_ENABLED) return;
       navigate(`${routePrefix}/pooling`);
     } else if (item.type === 'parcel') {
       navigate(`${routePrefix}/parcel/detail/${item.id}`);

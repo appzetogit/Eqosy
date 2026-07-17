@@ -17,8 +17,14 @@ import {
     getDriverVehicleTypes,
     getDriverVehicleFieldTemplates,
 } from '../../services/registrationService';
+import { POOLING_ENABLED } from '../../../../shared/featureFlags';
 
 const VEHICLE_NUMBER_REGEX = /^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$/;
+const getAllowedServiceCategories = () => (
+  POOLING_ENABLED
+    ? ['taxi', 'outstation', 'delivery', 'pooling']
+    : ['taxi', 'outstation', 'delivery']
+);
 const getCurrentVehicleYear = () => new Date().getFullYear();
 const normalizeVehicleNumber = (value = '') => String(value).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 11);
 const normalizePostalCode = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
@@ -46,7 +52,7 @@ const normalizeServiceCategories = (value, registerFor = 'taxi') => {
         rawValues
             .map((item) => String(item || '').trim().toLowerCase())
             .flatMap((item) => item === 'both' ? ['taxi', 'outstation'] : item ? [item] : [])
-            .filter((item) => ['taxi', 'outstation', 'delivery', 'pooling'].includes(item)),
+            .filter((item) => getAllowedServiceCategories().includes(item)),
     )];
 
     if (normalized.length > 0) {
@@ -58,7 +64,7 @@ const normalizeServiceCategories = (value, registerFor = 'taxi') => {
         return ['taxi', 'outstation'];
     }
 
-    return ['taxi', 'outstation', 'delivery', 'pooling'].includes(fallback) ? [fallback] : ['taxi'];
+    return getAllowedServiceCategories().includes(fallback) ? [fallback] : ['taxi'];
 };
 
 const getPrimaryRegisterFor = (serviceCategories = [], fallback = 'taxi') => {
@@ -68,7 +74,7 @@ const getPrimaryRegisterFor = (serviceCategories = [], fallback = 'taxi') => {
     if (normalized.includes('taxi')) return 'taxi';
     if (normalized.includes('outstation')) return 'outstation';
     if (normalized.includes('delivery')) return 'delivery';
-    if (normalized.includes('pooling')) return 'pooling';
+    if (POOLING_ENABLED && normalized.includes('pooling')) return 'pooling';
 
     return String(fallback || 'taxi').trim().toLowerCase() || 'taxi';
 };

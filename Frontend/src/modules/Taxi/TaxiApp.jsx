@@ -17,7 +17,7 @@ import { syncUpcomingRideReminders } from './modules/user/utils/upcomingRideRemi
 import { getAuthenticatedDriverRole, getLocalDriverToken } from './modules/driver/services/registrationService';
 import { installBrowserFcmRegistration } from './shared/push/browserFcmRegistration';
 import { installNativeFcmBridge } from './shared/push/nativeFcmBridge';
-import { RENTAL_ENABLED } from './shared/featureFlags';
+import { POOLING_ENABLED, RENTAL_ENABLED } from './shared/featureFlags';
 import './App.css';
 
 
@@ -533,7 +533,9 @@ const UserUpcomingRideReminderBootstrap = () => {
       try {
         const [busResult, poolingResult, scheduledRideResult] = await Promise.all([
           userBusService.getMyBookings({ page: 1, limit: 20, tripState: 'upcoming' }),
-          userService.getMyPoolingBookings(),
+          POOLING_ENABLED
+            ? userService.getMyPoolingBookings()
+            : Promise.resolve([]),
           api.get('/rides', {
             params: {
               page: 1,
@@ -551,42 +553,48 @@ const UserUpcomingRideReminderBootstrap = () => {
         const poolingPayload = getResponsePayload(poolingResult);
         const scheduledRidePayload = getResponsePayload(scheduledRideResult);
 
-        const rawPoolingBookings = Array.isArray(poolingPayload)
-          ? poolingPayload
-          : Array.isArray(poolingPayload?.results)
-            ? poolingPayload.results
-            : [];
-        const routeIds = [...new Set(rawPoolingBookings.map((booking) => String(booking?.route?._id || '')).filter(Boolean))];
-        const routeDetailsEntries = await Promise.all(
-          routeIds.map(async (routeId) => {
-            try {
-              const routeResponse = await userService.getPoolingRouteDetails(routeId);
-              return [routeId, getResponsePayload(routeResponse)];
-            } catch {
-              return [routeId, null];
-            }
-          }),
-        );
+        const rawPoolingBookings = POOLING_ENABLED
+          ? (Array.isArray(poolingPayload)
+            ? poolingPayload
+            : Array.isArray(poolingPayload?.results)
+              ? poolingPayload.results
+              : [])
+          : [];
+        let poolingBookings = [];
 
-        if (cancelled) {
-          return;
+        if (POOLING_ENABLED && rawPoolingBookings.length > 0) {
+          const routeIds = [...new Set(rawPoolingBookings.map((booking) => String(booking?.route?._id || '')).filter(Boolean))];
+          const routeDetailsEntries = await Promise.all(
+            routeIds.map(async (routeId) => {
+              try {
+                const routeResponse = await userService.getPoolingRouteDetails(routeId);
+                return [routeId, getResponsePayload(routeResponse)];
+              } catch {
+                return [routeId, null];
+              }
+            }),
+          );
+
+          if (cancelled) {
+            return;
+          }
+
+          const routeDetailsMap = new Map(routeDetailsEntries);
+          poolingBookings = rawPoolingBookings.map((booking) => {
+            const routeId = String(booking?.route?._id || '');
+            const routeDetails = routeDetailsMap.get(routeId);
+
+            return routeDetails
+              ? {
+                ...booking,
+                route: {
+                  ...(booking.route || {}),
+                  ...routeDetails,
+                },
+              }
+              : booking;
+          });
         }
-
-        const routeDetailsMap = new Map(routeDetailsEntries);
-        const poolingBookings = rawPoolingBookings.map((booking) => {
-          const routeId = String(booking?.route?._id || '');
-          const routeDetails = routeDetailsMap.get(routeId);
-
-          return routeDetails
-            ? {
-              ...booking,
-              route: {
-                ...(booking.route || {}),
-                ...routeDetails,
-              },
-            }
-            : booking;
-        });
 
         syncUpcomingRideReminders({
           busBookings: Array.isArray(busPayload?.results) ? busPayload.results : [],
@@ -844,10 +852,14 @@ function TaxiApp() {
                   element={<RideDetail />}
                 />
 
-                <Route path="user/pooling" element={<UserPoolingHome />} />
-                <Route path="user/pooling/list" element={<UserPoolingList />} />
-                <Route path="user/pooling/seats/:id" element={<UserPoolingSeats />} />
-                <Route path="user/pooling/confirm" element={<UserPoolingConfirm />} />
+                {POOLING_ENABLED ? (
+                  <>
+                    <Route path="user/pooling" element={<UserPoolingHome />} />
+                    <Route path="user/pooling/list" element={<UserPoolingList />} />
+                    <Route path="user/pooling/seats/:id" element={<UserPoolingSeats />} />
+                    <Route path="user/pooling/confirm" element={<UserPoolingConfirm />} />
+                  </>
+                ) : null}
                 {RENTAL_ENABLED ? (
                   <>
                     <Route path="user/rental" element={<BikeRentalHome />} />
@@ -1112,31 +1124,35 @@ function TaxiApp() {
                 <Route path="bus-service/commission" element={<AdminBusCommissionManager />} />
                 <Route path="bus-service/bookings" element={<AdminBusBookingManager />} />
                 <Route path="bus-service/:id" element={<AdminBusServiceDetails />} />
-                <Route path="pooling" element={<Navigate to="/taxi/admin/pooling/routes" replace />} />
-                <Route path="pooling/routes" element={<AdminPoolingManager />} />
-                <Route
-                  path="pooling/create"
-                  element={<AdminPoolingManager mode="create" />}
-                />
-                <Route
-                  path="pooling/edit/:id"
-                  element={<AdminPoolingManager mode="edit" />}
-                />
-                <Route path="pooling/vehicles" element={<AdminPoolingVehicles />} />
-                <Route path="pooling/commission" element={<AdminPoolingCommissionManager />} />
-                <Route
-                  path="pooling/vehicles/create"
-                  element={<AdminPoolingVehicleForm />}
-                />
-                <Route
-                  path="pooling/vehicles/edit/:id"
-                  element={<AdminPoolingVehicleForm />}
-                />
-                <Route
-                  path="pooling/vehicles/view/:id"
-                  element={<AdminPoolingVehicleForm mode="view" />}
-                />
-                <Route path="pooling/bookings" element={<AdminPoolingBookings />} />
+                {POOLING_ENABLED ? (
+                  <>
+                    <Route path="pooling" element={<Navigate to="/taxi/admin/pooling/routes" replace />} />
+                    <Route path="pooling/routes" element={<AdminPoolingManager />} />
+                    <Route
+                      path="pooling/create"
+                      element={<AdminPoolingManager mode="create" />}
+                    />
+                    <Route
+                      path="pooling/edit/:id"
+                      element={<AdminPoolingManager mode="edit" />}
+                    />
+                    <Route path="pooling/vehicles" element={<AdminPoolingVehicles />} />
+                    <Route path="pooling/commission" element={<AdminPoolingCommissionManager />} />
+                    <Route
+                      path="pooling/vehicles/create"
+                      element={<AdminPoolingVehicleForm />}
+                    />
+                    <Route
+                      path="pooling/vehicles/edit/:id"
+                      element={<AdminPoolingVehicleForm />}
+                    />
+                    <Route
+                      path="pooling/vehicles/view/:id"
+                      element={<AdminPoolingVehicleForm mode="view" />}
+                    />
+                    <Route path="pooling/bookings" element={<AdminPoolingBookings />} />
+                  </>
+                ) : null}
                 <Route path="wallet/payment" element={<AdminWalletPayment />} />
                 <Route path="users" element={<AdminUserList />} />
                 <Route path="users/create" element={<AdminUserCreate />} />

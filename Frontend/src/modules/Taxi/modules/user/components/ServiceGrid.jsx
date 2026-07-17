@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { userService } from '../services/userService';
-import { RENTAL_ENABLED } from '../../../shared/featureFlags';
+import { POOLING_ENABLED, RENTAL_ENABLED } from '../../../shared/featureFlags';
 import toast from 'react-hot-toast';
 
 const ServiceTile = ({ icon, label, description, path, accentClass, loading }) => {
@@ -57,7 +57,7 @@ const ServiceGrid = () => {
     if (module.transport_type === 'delivery') return '/taxi/user/parcel/type';
     if (RENTAL_ENABLED && module.service_type === 'rental') return '/taxi/user/rental';
     if (module.service_type === 'outstation') return '/taxi/user/intercity';
-    if (module.service_type === 'pooling' || module.name.toLowerCase().includes('pooling')) {
+    if (POOLING_ENABLED && (module.service_type === 'pooling' || module.name.toLowerCase().includes('pooling'))) {
       return '/taxi/user/pooling';
     }
     
@@ -93,6 +93,9 @@ const ServiceGrid = () => {
         const activeModules = results.filter((m) => {
           if (!m.active) return false;
           if (!RENTAL_ENABLED && m.service_type === 'rental') return false;
+          if (!POOLING_ENABLED && (m.service_type === 'pooling' || String(m.name || '').toLowerCase().includes('pooling'))) {
+            return false;
+          }
           return true;
         });
 

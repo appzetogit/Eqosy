@@ -5,7 +5,7 @@ import {
   TAXI_ADMIN_HOME,
   prefetchFoodAdmin,
 } from '@/shared/utils/activeModule.js';
-import { RENTAL_ENABLED } from '../../../shared/featureFlags';
+import { POOLING_ENABLED, RENTAL_ENABLED } from '../../../shared/featureFlags';
 import { socketService } from '../../../shared/api/socket';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
@@ -759,16 +759,20 @@ const AdminLayout = () => {
               { label: 'Bus Bookings', path: '/taxi/admin/bus-service/bookings', permission: 'bus_service.view' },
             ],
           },
-          {
-            icon: Share2,
-            label: 'Car Pooling',
-            subItems: [
-              { label: 'Pooling Vehicles', path: '/taxi/admin/pooling/vehicles', permission: 'pooling.view' },
-              { label: 'Pooling Commission', path: '/taxi/admin/pooling/commission', permission: 'pooling.view' },
-              { label: 'Routes & Stops', path: '/taxi/admin/pooling/routes', permission: 'pooling.view' },
-              { label: 'Pooling Bookings', path: '/taxi/admin/pooling/bookings', permission: 'pooling.view' },
-            ],
-          },
+          ...(POOLING_ENABLED
+            ? [
+                {
+                  icon: Share2,
+                  label: 'Car Pooling',
+                  subItems: [
+                    { label: 'Pooling Vehicles', path: '/taxi/admin/pooling/vehicles', permission: 'pooling.view' },
+                    { label: 'Pooling Commission', path: '/taxi/admin/pooling/commission', permission: 'pooling.view' },
+                    { label: 'Routes & Stops', path: '/taxi/admin/pooling/routes', permission: 'pooling.view' },
+                    { label: 'Pooling Bookings', path: '/taxi/admin/pooling/bookings', permission: 'pooling.view' },
+                  ],
+                },
+              ]
+            : []),
           {
             icon: MapPin,
             label: 'Geofencing',
