@@ -49,6 +49,7 @@ const transactionLabel = (type = '') => {
         commission_deduction: 'Cash ride commission',
         top_up: 'Wallet top-up',
         adjustment: 'Wallet adjustment',
+        ride_tip: 'Tip from rider',
     };
 
     return labels[type] || String(type || 'Wallet transaction').replace(/_/g, ' ');
@@ -89,6 +90,12 @@ const transactionHint = (tx = {}) => {
 
     if (tx.type === 'ride_earning') {
         return `${payment === 'online' ? 'Online' : 'Ride'} payout after admin commission`;
+    }
+
+    if (tx.type === 'ride_tip') {
+        const mode = String(tx.metadata?.paymentMode || '').toLowerCase();
+        const tipAmt = tx.metadata?.tipAmount;
+        return `${mode === 'online' ? 'Online' : 'Cash'} tip${tipAmt ? ` of ${money(tipAmt)}` : ''} from rider`;
     }
 
     if (tx.type === 'adjustment' && source === 'user_wallet_transfer') {
@@ -136,6 +143,7 @@ const WALLET_FILTERS = [
     { id: 'all', label: 'All' },
     { id: 'ride_earning', label: 'Online rides' },
     { id: 'commission_deduction', label: 'Cash commission' },
+    { id: 'ride_tip', label: 'Tips' },
     { id: 'top_up', label: 'Top-ups' },
     { id: 'adjustment', label: 'Adjustments' },
 ];
@@ -284,13 +292,16 @@ const DriverWallet = () => {
         const cashRideCommission = transactions
             .filter((tx) => tx.type === 'commission_deduction')
             .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
+        const tipEarnings = transactions
+            .filter((tx) => tx.type === 'ride_tip')
+            .reduce((sum, tx) => sum + Math.max(Number(tx.amount || 0), 0), 0);
         const totalAppEarnings = transactions
-            .filter((tx) => ['ride_earning', 'adjustment'].includes(tx.type))
+            .filter((tx) => ['ride_earning', 'adjustment', 'ride_tip'].includes(tx.type))
             .reduce((sum, tx) => {
                 const amount = Number(tx.amount || 0);
                 const source = String(tx.metadata?.source || tx.metadata?.category || '').toLowerCase();
 
-                if (tx.type === 'ride_earning') {
+                if (tx.type === 'ride_earning' || tx.type === 'ride_tip') {
                     return sum + Math.max(amount, 0);
                 }
 
@@ -301,6 +312,7 @@ const DriverWallet = () => {
             totalAppEarnings,
             onlineRideEarnings,
             cashRideCommission,
+            tipEarnings,
         };
     }, [transactions]);
 
@@ -767,6 +779,9 @@ const DriverWallet = () => {
                                 <StatPill label="Online earnings" value={money(walletSummary.onlineRideEarnings)} tone="good" />
                                 <StatPill label="Cash commission" value={money(walletSummary.cashRideCommission)} tone="warn" />
                             </div>
+                            {walletSummary.tipEarnings > 0 && (
+                                <StatPill label="Tips received" value={money(walletSummary.tipEarnings)} tone="good" />
+                            )}
                         </section>
 
                         <section className="space-y-3">

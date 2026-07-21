@@ -82,6 +82,7 @@ const RideComplete = () => {
   const [rating, setRating] = useState(() => Number(state.feedback?.rating || 0));
   const [comment, setComment] = useState(() => state.feedback?.comment || '');
   const [selectedTip, setSelectedTip] = useState(() => Number(state.feedback?.tipAmount || 0));
+  const [tipPaymentMode, setTipPaymentMode] = useState('cash'); // 'cash' or 'online'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(Boolean(state.feedback?.submittedAt));
   const [showSubmittedOverlay, setShowSubmittedOverlay] = useState(false);
@@ -329,6 +330,75 @@ const RideComplete = () => {
       setIsSubmitting(true);
       setError('');
 
+      // ── STEP 1: Handle tip payment (online tip goes through Razorpay tip API) ──
+      if (tipsEnabled && Number(selectedTip || 0) > 0 && tipPaymentMode === 'online') {
+        // Online tip: open Razorpay tip order first, then submit feedback
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          throw new Error('Razorpay SDK failed to load');
+        }
+
+        const tipOrderResponse = await api.post(`/rides/${rideId}/tip/razorpay/order`, {
+          tipAmount: selectedTip,
+        });
+        const tipOrder = tipOrderResponse?.data?.data || tipOrderResponse?.data || tipOrderResponse || {};
+
+        if (!tipOrder.keyId || !tipOrder.orderId) {
+          throw new Error('Unable to start tip payment');
+        }
+
+        let userInfo = {};
+        try { userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}'); } catch { userInfo = {}; }
+
+        await new Promise((resolve, reject) => {
+          const rzp = new window.Razorpay({
+            key: tipOrder.keyId,
+            amount: tipOrder.amount,
+            currency: tipOrder.currency || 'INR',
+            name: appName,
+            description: `Tip for ${driver.name || 'driver'}`,
+            order_id: tipOrder.orderId,
+            prefill: {
+              name: userInfo?.name || '',
+              email: userInfo?.email || '',
+              contact: userInfo?.phone ? `+91${userInfo.phone}` : '',
+            },
+            modal: { ondismiss: () => reject(new Error('Tip payment was cancelled')) },
+            handler: async (paymentResponse) => {
+              try {
+                const verifyResponse = await api.post(`/rides/${rideId}/tip/razorpay/verify`, {
+                  ...paymentResponse,
+                  rating,
+                  comment,
+                  tipAmount: selectedTip,
+                });
+                const payload = verifyResponse?.data?.data || verifyResponse?.data || verifyResponse;
+                if (payload?.feedback) {
+                  setRating(Number(payload.feedback.rating || rating));
+                  setComment(payload.feedback.comment || comment);
+                  setSelectedTip(Number(payload.feedback.tipAmount || 0));
+                }
+                resolve(verifyResponse);
+              } catch (verifyError) {
+                reject(new Error(verifyError?.message || 'Tip payment verification failed'));
+              }
+            },
+            theme: { color: '#f97316' },
+          });
+          rzp.on('payment.failed', (event) => {
+            reject(new Error(event?.error?.description || 'Tip payment failed'));
+          });
+          rzp.open();
+        });
+
+        // Online tip already submitted feedback via /tip/razorpay/verify
+        setIsSubmitted(true);
+        setShowSubmittedOverlay(true);
+        clearCurrentRide();
+        return;
+      }
+
+      // ── STEP 2: Handle ride fare payment ──
       let response;
 
       if (Number(payableNow || 0) > 0 && selectedPaymentMethod === 'online') {
@@ -402,10 +472,11 @@ const RideComplete = () => {
           tipAmount: selectedTip || 0,
         });
       } else {
+        // Cash payment or no payment due — submit feedback with cash tip
         response = await api.patch(`/rides/${rideId}/feedback`, {
           rating,
           comment,
-          tipAmount: 0,
+          tipAmount: selectedTip || 0, // cash tip credited to driver wallet on backend
         });
       }
 
@@ -622,6 +693,42 @@ const RideComplete = () => {
                   </button>
                 ))}
               </div>
+
+              {/* Rapido-style: Tip payment mode selector shown only when tip > 0 */}
+              {tipsEnabled && selectedTip > 0 && (
+                <div className="mt-4 rounded-[16px] border border-orange-100 bg-orange-50/60 px-4 py-3">
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-orange-700">How will you pay the tip?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTipPaymentMode('cash')}
+                      className={`flex-1 rounded-[12px] border py-2.5 text-[11px] font-black transition-all ${
+                        tipPaymentMode === 'cash'
+                          ? 'border-orange-500 bg-orange-500 text-white shadow-[0_6px_14px_rgba(249,115,22,0.22)]'
+                          : 'border-slate-200 bg-white text-slate-700'
+                      }`}
+                    >
+                      💵 Cash
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTipPaymentMode('online')}
+                      className={`flex-1 rounded-[12px] border py-2.5 text-[11px] font-black transition-all ${
+                        tipPaymentMode === 'online'
+                          ? 'border-orange-500 bg-orange-500 text-white shadow-[0_6px_14px_rgba(249,115,22,0.22)]'
+                          : 'border-slate-200 bg-white text-slate-700'
+                      }`}
+                    >
+                      💳 Online
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] font-bold text-orange-600">
+                    {tipPaymentMode === 'cash'
+                      ? 'Hand cash tip directly to your driver after the ride.'
+                      : 'Pay tip securely via UPI, card or Razorpay.'}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -674,12 +781,14 @@ const RideComplete = () => {
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-[16px] bg-slate-900 py-3.5 text-[14px] font-black text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] disabled:opacity-60"
           >
             {isSubmitting
-              ? 'Saving your feedback...'
+              ? (tipsEnabled && selectedTip > 0 && tipPaymentMode === 'online' ? 'Processing tip payment...' : 'Saving your feedback...')
               : isSubmitted
                 ? 'Feedback already saved'
                 : !isRideFinalized
                   ? 'Waiting for driver to finalize trip'
-                : 'Submit rating'}
+                  : tipsEnabled && selectedTip > 0 && tipPaymentMode === 'online'
+                    ? `Pay Rs ${selectedTip} tip online & submit`
+                    : 'Submit rating'}
             <ChevronRight size={16} />
           </button>
 

@@ -15,6 +15,7 @@ import { getRideRoom, resolveSetPriceForRide } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
+import { processRideCancellation } from './cancellationService.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;
@@ -335,7 +336,7 @@ const emitToSocket = (socketId, event, payload) => {
   }
 };
 
-const emitToRoom = (room, event, payload) => {
+export const emitToRoom = (room, event, payload) => {
   if (ioInstance) {
     ioInstance.to(room).emit(event, payload);
   }
@@ -642,12 +643,12 @@ export const cancelRideByAdmin = async (rideId) => {
   return ride;
 };
 
-export const cancelRideByUser = async ({ rideId, userId }) => {
+export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
   const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId);
   const session = await mongoose.startSession();
   let ride = null;
-  let cancellationSettlement = null;
+  let cancellationBill = null;
 
   try {
     session.startTransaction();
@@ -668,7 +669,13 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
       return ride;
     }
 
-    cancellationSettlement = await settleUserCancellationFee(ride, session);
+    cancellationBill = await processRideCancellation({
+      ride,
+      cancelledBy: 'user',
+      reason,
+      cancellerId: userId,
+      session,
+    });
 
     ride.status = RIDE_STATUS.CANCELLED;
     ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
@@ -698,18 +705,23 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
     session.endSession();
   }
 
-  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+  const cancelPayload = {
     rideId: String(ride._id),
     room: getRideRoom(ride._id),
-    reason: 'You cancelled the ride',
-  });
+    reason: reason || 'You cancelled the ride',
+    cancellationBill,
+  };
+
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', cancelPayload);
 
   if (ride.driverId) {
     emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
       rideId: String(ride._id),
       reason: 'user-cancelled',
       message: 'User cancelled the ride.',
+      cancellationBill,
     });
+    emitToRoom(getDriverRoom(ride.driverId), 'rideCancelled', cancelPayload);
   }
 
   for (const driverId of dispatchState.notifiedDriverIds) {
@@ -720,11 +732,7 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
     });
   }
 
-  emitToRoom(getRideRoom(ride._id), 'rideCancelled', {
-    rideId: String(ride._id),
-    room: getRideRoom(ride._id),
-    reason: 'User cancelled the ride',
-  });
+  emitToRoom(getRideRoom(ride._id), 'rideCancelled', cancelPayload);
 
   emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
     rideId: String(ride._id),
@@ -736,30 +744,18 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
     rideId: String(ride._id),
     status: ride.status,
     liveStatus: ride.liveStatus,
+    cancellationBill,
   });
-
-  if (cancellationSettlement?.driverWalletResult?.transaction) {
-    emitToDriver(ride.driverId, 'driver:wallet:updated', {
-      wallet: cancellationSettlement.driverWalletResult.wallet,
-      transaction: cancellationSettlement.driverWalletResult.transaction,
-      notification: {
-        id: `ride-cancel-credit-${String(ride._id)}`,
-        title: 'Cancellation fee received',
-        body: `Rs ${Number(cancellationSettlement.feeAmount || 0).toFixed(2)} credited for rider cancellation.`,
-        sentAt: new Date().toISOString(),
-      },
-    });
-  }
 
   return ride;
 };
 
-export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
+export const cancelScheduledRideByDriver = async ({ rideId, driverId, reason = '' }) => {
   const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId);
   const session = await mongoose.startSession();
   let ride = null;
-  let cancellationSettlement = null;
+  let cancellationBill = null;
 
   try {
     session.startTransaction();
@@ -771,13 +767,6 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
       return null;
     }
 
-    const scheduledAt = ride?.scheduledAt ? new Date(ride.scheduledAt) : null;
-    const isScheduledRide = scheduledAt && Number.isFinite(scheduledAt.getTime()) && scheduledAt.getTime() > Date.now();
-
-    if (!isScheduledRide) {
-      throw new Error('Only upcoming scheduled rides can be cancelled by the driver');
-    }
-
     if (ride.status === RIDE_STATUS.COMPLETED || ride.liveStatus === RIDE_LIVE_STATUS.COMPLETED) {
       throw new Error('Completed rides cannot be cancelled');
     }
@@ -787,7 +776,13 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
       return ride;
     }
 
-    cancellationSettlement = await settleDriverCancellationFee(ride, session);
+    cancellationBill = await processRideCancellation({
+      ride,
+      cancelledBy: 'driver',
+      reason,
+      cancellerId: driverId,
+      session,
+    });
 
     ride.status = RIDE_STATUS.CANCELLED;
     ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
@@ -817,26 +812,32 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
     session.endSession();
   }
 
-  const cancelReason = 'Your scheduled ride was cancelled by the driver.';
+  const cancelReason = reason || 'Your ride was cancelled by the driver.';
 
-  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+  const cancelPayload = {
     rideId: String(ride._id),
     room: getRideRoom(ride._id),
     reason: cancelReason,
-  });
+    cancellationBill,
+  };
+
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', cancelPayload);
 
   emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
     rideId: String(ride._id),
     reason: 'driver-cancelled',
     message: cancelReason,
+    cancellationBill,
   });
 
   if (ride.driverId) {
     emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
       rideId: String(ride._id),
       reason: 'driver-cancelled',
-      message: 'Scheduled ride cancelled.',
+      message: 'Ride cancelled.',
+      cancellationBill,
     });
+    emitToRoom(getDriverRoom(ride.driverId), 'rideCancelled', cancelPayload);
   }
 
   for (const notifiedDriverId of dispatchState.notifiedDriverIds) {
@@ -851,24 +852,12 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
     rideId: String(ride._id),
     status: ride.status,
     liveStatus: ride.liveStatus,
+    cancellationBill,
   });
-
-  if (cancellationSettlement?.driverWalletResult?.transaction) {
-    emitToDriver(ride.driverId, 'driver:wallet:updated', {
-      wallet: cancellationSettlement.driverWalletResult.wallet,
-      transaction: cancellationSettlement.driverWalletResult.transaction,
-      notification: {
-        id: `ride-cancel-debit-${String(ride._id)}`,
-        title: 'Cancellation fee charged',
-        body: `Rs ${Number(cancellationSettlement.feeAmount || 0).toFixed(2)} deducted for scheduled ride cancellation.`,
-        sentAt: new Date().toISOString(),
-      },
-    });
-  }
 
   sendPushNotificationToEntities({
     userIds: [String(ride.userId)],
-    title: 'Scheduled ride cancelled',
+    title: 'Ride cancelled',
     body: cancelReason,
     data: {
       type: 'ride_cancelled_by_driver',
@@ -876,7 +865,7 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
       serviceType: ride.serviceType || 'ride',
     },
   }).catch((error) => {
-    console.error('Failed to send user scheduled-ride cancellation push notification', error);
+    console.error('Failed to send user ride cancellation push notification', error);
   });
 
   return ride;

@@ -235,6 +235,18 @@ const setPriceSchema = new mongoose.Schema(
       default: 'admin',
       trim: true,
     },
+    cancellation_policy: {
+      enable_cancellation_charge: { type: Boolean, default: true },
+      free_cancellation_time_mins: { type: Number, default: 2 },
+      fixed_cancellation_charge: { type: Number, default: 50 },
+      percentage_cancellation_charge: { type: Number, default: 0 },
+      max_cancellation_fee: { type: Number, default: 150 },
+      charge_after_driver_accepted: { type: Boolean, default: true },
+      charge_after_driver_arrived: { type: Boolean, default: true },
+      driver_cancellation_penalty: { type: Number, default: 30 },
+      driver_compensation_percentage: { type: Number, default: 0 },
+      cancellation_grace_period_driver_arrived: { type: Number, default: 5 },
+    },
     enable_ride_sharing: {
       type: Boolean,
       default: false,

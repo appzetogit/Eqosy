@@ -30,6 +30,7 @@ import {
   signAccessToken,
 } from "../services/authService.js";
 import { cancelScheduledRideByDriver, emitToDriver } from "../../services/dispatchService.js";
+import { calculateCancellationBill } from "../../services/cancellationService.js";
 import { notifyLateAvailableDriver } from "../../services/dispatchService.js";
 import { findZoneByPickup } from "../services/locationService.js";
 import { listDriverServiceLocations } from "../services/serviceLocationService.js";
@@ -2581,6 +2582,7 @@ export const getDriverScheduledRides = async (req, res) => {
 
 export const cancelDriverScheduledRide = async (req, res) => {
   const rideId = toCleanString(req.params?.rideId);
+  const reason = String(req.body?.reason || req.query?.reason || "").trim();
 
   if (!rideId) {
     throw new ApiError(400, "Ride id is required");
@@ -2589,19 +2591,27 @@ export const cancelDriverScheduledRide = async (req, res) => {
   const ride = await cancelScheduledRideByDriver({
     rideId,
     driverId: req.auth.sub,
+    reason,
   });
 
   if (!ride) {
     throw new ApiError(404, "Scheduled ride not found for this driver");
   }
 
+  const cancellationBill = await calculateCancellationBill({
+    ride,
+    cancelledBy: 'driver',
+    reason,
+  });
+
   res.json({
     success: true,
-    message: "Scheduled ride cancelled successfully",
+    message: "Ride cancelled successfully",
     data: {
       rideId: String(ride._id || ""),
       status: ride.status || RIDE_STATUS.CANCELLED,
       liveStatus: ride.liveStatus || RIDE_LIVE_STATUS.CANCELLED,
+      cancellationBill,
     },
   });
 };

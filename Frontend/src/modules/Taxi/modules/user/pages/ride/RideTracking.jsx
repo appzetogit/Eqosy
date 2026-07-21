@@ -13,6 +13,7 @@ import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
 import deliveryIcon from '../../../../assets/icons/Delivery.png';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+// Cancellation receipt removed per requirements - user should not see bill on cancel
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
@@ -327,6 +328,7 @@ const RideTracking = () => {
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
   const [arrivalClockFallbackAt, setArrivalClockFallbackAt] = useState('');
   const [waitingNow, setWaitingNow] = useState(Date.now());
+
   const { settings } = useSettings();
   const appName = settings.general?.app_name || 'App';
   const navigate = useNavigate();
@@ -348,6 +350,9 @@ const RideTracking = () => {
   const scheduledCountdown = getScheduledCountdownLabel(scheduledAt, waitingNow);
   const scheduledDateLabel = formatScheduledDateTime(scheduledAt);
   const fare = rideRealtime?.fare || state.fare || 22;
+  const previousCancellationFee = Number(rideRealtime?.previousCancellationFee || state?.previousCancellationFee || 0);
+  const baseRideFare = Number(rideRealtime?.baseRideFare || state?.baseRideFare || (previousCancellationFee > 0 ? fare - previousCancellationFee : fare));
+  const displayFare = previousCancellationFee > 0 ? baseRideFare + previousCancellationFee : fare;
   const paymentMethod = rideRealtime?.paymentMethod || state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
     () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },
@@ -465,17 +470,17 @@ const RideTracking = () => {
     lastMapPanPositionRef.current = null;
   }, [rideId, tripStatus, activeDestination.lat, activeDestination.lng]);
 
-  const handleCancelRide = async () => {
+const handleCancelRide = async () => {
     try {
+      setShowCancelConfirm(false);
       if (rideId) {
-        await api.patch(`/rides/${rideId}/cancel`);
+        await api.patch(`/rides/${rideId}/cancel`, { reason: 'User requested cancellation' });
       }
     } catch (_error) {
-      // If the ride has already advanced or ended, we still clear the local state below.
-    } finally {
-      clearCurrentRide();
-      navigate('/taxi/user');
+      // Ignore errors - just clear ride state and navigate home
     }
+    clearCurrentRide();
+    navigate('/taxi/user');
   };
 
   useEffect(() => {
@@ -1429,21 +1434,35 @@ const RideTracking = () => {
           </div>
 
           {/* Footer: Fare & Cancellation Section */}
-          <div className="flex items-end justify-between pt-2 border-t border-slate-50">
-            <div className="space-y-0.5">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] leading-none mb-1">Total Fare</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[19px] font-black text-slate-950 tracking-tight leading-none">Rs {fare}.00</span>
-                <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg uppercase tracking-wider border border-slate-200/50 shadow-sm">{paymentMethod}</span>
+          <div className="space-y-3 pt-2 border-t border-slate-50">
+            {previousCancellationFee > 0 && (
+              <div className="rounded-[16px] border border-amber-200 bg-amber-50/80 p-3 shadow-sm text-slate-800 space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                  <span>Trip Fare:</span>
+                  <span>Rs {baseRideFare}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-bold text-amber-800">
+                  <span>Previous Cancellation Fee:</span>
+                  <span>+ Rs {previousCancellationFee}</span>
+                </div>
               </div>
+            )}
+            <div className="flex items-end justify-between">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] leading-none mb-1">Total Payable</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[19px] font-black text-slate-950 tracking-tight leading-none">Rs {displayFare}.00</span>
+                  <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg uppercase tracking-wider border border-slate-200/50 shadow-sm">{paymentMethod}</span>
+                </div>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setShowCancelConfirm(true)}
+                className="bg-white border-2 border-slate-50 text-red-500 font-black text-[11px] uppercase tracking-[0.16em] px-5 py-3 rounded-[18px] shadow-[0_8px_20px_rgba(239,68,68,0.08)] active:shadow-none hover:bg-red-50/10 transition-all"
+              >
+                Cancel
+              </motion.button>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setShowCancelConfirm(true)}
-              className="bg-white border-2 border-slate-50 text-red-500 font-black text-[11px] uppercase tracking-[0.16em] px-5 py-3 rounded-[18px] shadow-[0_8px_20px_rgba(239,68,68,0.08)] active:shadow-none hover:bg-red-50/10 transition-all"
-            >
-              Cancel
-            </motion.button>
           </div>
         </div>
       </motion.div>
@@ -1488,6 +1507,7 @@ const RideTracking = () => {
           </>
         )}
       </AnimatePresence>
+
     </div>
   );
 };

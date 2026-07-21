@@ -86,6 +86,7 @@ const togglePaymentType = (currentValue, targetValue) => {
 
 const StatusToggle = ({ active, onToggle }) => (
   <button
+    type="button"
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
     className={`w-11 h-6 rounded-full transition-colors relative flex items-center ${active ? 'bg-[#00BFA5]' : 'bg-gray-200'}`}
   >
@@ -132,6 +133,16 @@ const initialFormState = {
   driver_cancellation_fee: '',
   driver_cancellation_fee_type: 'percentage',
   cancellation_fee_goes_to: 'admin',
+  // Cancellation Policy
+  enable_cancellation_charge: true,
+  free_cancellation_time_mins: 2,
+  fixed_cancellation_charge: 50,
+  percentage_cancellation_charge: 0,
+  max_cancellation_fee: 150,
+  charge_after_driver_accepted: true,
+  charge_after_driver_arrived: true,
+  driver_compensation_percentage: 0,
+  cancellation_grace_period_driver_arrived: 5,
   status: 'active',
   active: 1
 };
@@ -213,6 +224,16 @@ const SetPrices = ({ mode }) => {
           payment_type: normalizePaymentTypes(pData.payment_type).length ? normalizePaymentTypes(pData.payment_type) : ['cash'],
           user_cancellation_fee_type: pData.user_cancellation_fee_type || 'percentage',
           driver_cancellation_fee_type: pData.driver_cancellation_fee_type || 'percentage',
+          // Cancellation Policy from cancellation_policy nested field
+          enable_cancellation_charge: pData.cancellation_policy?.enable_cancellation_charge ?? pData.enable_cancellation_charge ?? true,
+          free_cancellation_time_mins: pData.cancellation_policy?.free_cancellation_time_mins ?? pData.free_cancellation_time_mins ?? 2,
+          fixed_cancellation_charge: pData.cancellation_policy?.fixed_cancellation_charge ?? pData.fixed_cancellation_charge ?? 50,
+          percentage_cancellation_charge: pData.cancellation_policy?.percentage_cancellation_charge ?? pData.percentage_cancellation_charge ?? 0,
+          max_cancellation_fee: pData.cancellation_policy?.max_cancellation_fee ?? pData.max_cancellation_fee ?? 150,
+          charge_after_driver_accepted: pData.cancellation_policy?.charge_after_driver_accepted ?? pData.charge_after_driver_accepted ?? true,
+          charge_after_driver_arrived: pData.cancellation_policy?.charge_after_driver_arrived ?? pData.charge_after_driver_arrived ?? true,
+          driver_compensation_percentage: pData.cancellation_policy?.driver_compensation_percentage ?? pData.driver_compensation_percentage ?? 0,
+          cancellation_grace_period_driver_arrived: pData.cancellation_policy?.cancellation_grace_period_driver_arrived ?? pData.cancellation_grace_period_driver_arrived ?? 5,
         });
       }
     } else if (mode === 'create') {
@@ -270,6 +291,17 @@ const SetPrices = ({ mode }) => {
         transport_type: normalizeTransportType(formData.transport_type),
         payment_type: normalizePaymentTypes(formData.payment_type).length ? normalizePaymentTypes(formData.payment_type) : ['cash'],
         ride_surge_amount: Number(formData.ride_surge_amount || 0),
+        cancellation_policy: {
+          enable_cancellation_charge: Boolean(formData.enable_cancellation_charge),
+          free_cancellation_time_mins: Number(formData.free_cancellation_time_mins ?? 2),
+          fixed_cancellation_charge: Number(formData.fixed_cancellation_charge ?? 50),
+          percentage_cancellation_charge: Number(formData.percentage_cancellation_charge ?? 0),
+          max_cancellation_fee: Number(formData.max_cancellation_fee ?? 150),
+          charge_after_driver_accepted: Boolean(formData.charge_after_driver_accepted),
+          charge_after_driver_arrived: Boolean(formData.charge_after_driver_arrived),
+          driver_compensation_percentage: Number(formData.driver_compensation_percentage ?? 0),
+          cancellation_grace_period_driver_arrived: Number(formData.cancellation_grace_period_driver_arrived ?? 5),
+        },
       };
 
       if (!editingId && formData.zone_id === ALL_ZONES_OPTION) {
@@ -723,10 +755,72 @@ const SetPrices = ({ mode }) => {
                      )}
                   </div>
 
-                  {/* Section: Cancellation Fee */}
-                  <div className="space-y-6 pt-6 border-t border-gray-100">
-                     <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Cancellation Fee</h2>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                  {/* Section: Cancellation Policy */}
+                   <div className="space-y-6 pt-6 border-t border-gray-100">
+                     <div className="flex items-center justify-between">
+                       <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Cancellation Policy</h2>
+                       <div className="flex items-center gap-3">
+                         <span className="text-[12px] font-semibold text-slate-500">{formData.enable_cancellation_charge ? 'Charges Enabled' : 'No Charges'}</span>
+                         <StatusToggle active={formData.enable_cancellation_charge} onToggle={() => setFormData(p => ({...p, enable_cancellation_charge: !p.enable_cancellation_charge}))} />
+                       </div>
+                     </div>
+
+                     {formData.enable_cancellation_charge && (
+                       <>
+                         {/* When to charge */}
+                         <div className="rounded-xl bg-amber-50 border border-amber-100 p-4 space-y-3">
+                           <p className="text-[11px] font-black uppercase tracking-widest text-amber-700">When to Apply Charge</p>
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-200 bg-white p-3 hover:border-indigo-300 transition-all">
+                               <input type="checkbox" className="mt-0.5 w-4 h-4 accent-indigo-600" checked={formData.charge_after_driver_accepted} onChange={e => setFormData(p => ({...p, charge_after_driver_accepted: e.target.checked}))} />
+                               <div>
+                                 <p className="text-[13px] font-bold text-slate-800">After Driver Accepts</p>
+                                 <p className="text-[10px] font-medium text-slate-400">Charge user if they cancel after driver accepts (beyond free window)</p>
+                               </div>
+                             </label>
+                             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-200 bg-white p-3 hover:border-indigo-300 transition-all">
+                               <input type="checkbox" className="mt-0.5 w-4 h-4 accent-indigo-600" checked={formData.charge_after_driver_arrived} onChange={e => setFormData(p => ({...p, charge_after_driver_arrived: e.target.checked}))} />
+                               <div>
+                                 <p className="text-[13px] font-bold text-slate-800">After Driver Arrives at Pickup</p>
+                                 <p className="text-[10px] font-medium text-slate-400">Charge user if they cancel after driver has reached pickup point</p>
+                               </div>
+                             </label>
+                           </div>
+                         </div>
+
+                         {/* Fee amounts */}
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                           <div>
+                             <label className={labelClass}>Fixed Cancellation Charge (Rs) <span className="text-rose-500">*</span></label>
+                             <input type="number" min="0" className={inputClass} placeholder="e.g. 50" value={formData.fixed_cancellation_charge} onChange={e => setFormData(p => ({...p, fixed_cancellation_charge: e.target.value}))} />
+                             <p className="mt-1 text-[10px] font-medium text-slate-400">Fixed flat fee charged on cancellation (e.g. Rs 50)</p>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Max Cancellation Fee Cap (Rs)</label>
+                             <input type="number" min="0" className={inputClass} placeholder="e.g. 150" value={formData.max_cancellation_fee} onChange={e => setFormData(p => ({...p, max_cancellation_fee: e.target.value}))} />
+                             <p className="mt-1 text-[10px] font-medium text-slate-400">Maximum limit — fee will not exceed this amount</p>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Free Cancellation Window (Minutes)</label>
+                             <input type="number" min="0" className={inputClass} placeholder="e.g. 2" value={formData.free_cancellation_time_mins} onChange={e => setFormData(p => ({...p, free_cancellation_time_mins: e.target.value}))} />
+                             <p className="mt-1 text-[10px] font-medium text-slate-400">No charge if user cancels within this many minutes of driver accepting</p>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Driver Arrive Grace Period (Minutes)</label>
+                             <input type="number" min="0" className={inputClass} placeholder="e.g. 5" value={formData.cancellation_grace_period_driver_arrived} onChange={e => setFormData(p => ({...p, cancellation_grace_period_driver_arrived: e.target.value}))} />
+                             <p className="mt-1 text-[10px] font-medium text-slate-400">After driver arrives, wait this many minutes before marking as no-show</p>
+                           </div>
+                           <div>
+                             <label className={labelClass}>Driver Compensation (%)</label>
+                             <input type="number" min="0" max="100" className={inputClass} placeholder="e.g. 0" value={formData.driver_compensation_percentage} onChange={e => setFormData(p => ({...p, driver_compensation_percentage: e.target.value}))} />
+                             <p className="mt-1 text-[10px] font-medium text-slate-400">% of cancellation fee that goes to driver (0% = all to Admin)</p>
+                           </div>
+                         </div>
+                       </>
+                     )}
+
+                     {/* Legacy fee fields */}
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 pt-2 border-t border-gray-100">
                         <div>
                            <label className={labelClass}>Cancellation Fee for User <span className="text-rose-500">*</span></label>
                            <div className="flex border border-gray-200 rounded-md overflow-hidden focus-within:border-indigo-500">

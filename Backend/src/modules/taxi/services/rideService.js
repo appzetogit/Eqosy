@@ -19,6 +19,7 @@ import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '
 import { applyPromoToRideInTransaction } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
+import { emitToRoom, getDriverRoom } from './dispatchService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -1001,6 +1002,21 @@ export const createRideRecord = async ({
 
   const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
   const normalizedScheduledAt = normalizeScheduledAt(scheduledAt);
+
+  // Fetch pending cancellation dues for user
+  const pendingDueRides = await Ride.find({
+    userId,
+    'cancellation.payment_status': 'added_to_next_ride_due',
+    'cancellation.cancellation_charge': { $gt: 0 },
+  }).select('_id cancellation').lean();
+
+  const previousCancellationFee = pendingDueRides.reduce(
+    (sum, r) => sum + Number(r.cancellation?.cancellation_charge || 0),
+    0,
+  );
+  const carriedCancellationRideIds = pendingDueRides.map((r) => r._id);
+  const totalStartingFare = effectiveStartingFare + previousCancellationFee;
+
   const applicableSubscription = primaryVehicleTypeId
     ? await resolveApplicableUserSubscription({
         userId,
@@ -1025,7 +1041,7 @@ export const createRideRecord = async ({
         providerMode: 'subscription_wallet',
         source: 'user_subscription',
         status: 'paid',
-        amount: effectiveStartingFare,
+        amount: totalStartingFare,
         currency: 'INR',
         linkUrl: '',
         paidAt: new Date(),
@@ -1067,8 +1083,11 @@ export const createRideRecord = async ({
       pickupAddress: normalizeAddress(pickupAddress),
       dropLocation: toPoint(dropCoords, 'drop'),
       dropAddress: normalizeAddress(dropAddress),
-      fare: effectiveStartingFare,
+      fare: totalStartingFare,
       baseFare: effectiveStartingFare,
+      baseRideFare: effectiveStartingFare,
+      previousCancellationFee,
+      carriedCancellationRideIds,
       bookingMode: effectiveBookingMode,
       pricingNegotiationMode,
       biddingStatus: pricingNegotiationMode === 'driver_bid' ? 'open' : 'none',
@@ -1122,8 +1141,11 @@ export const createRideRecord = async ({
             pickupAddress: normalizeAddress(pickupAddress),
             dropLocation: toPoint(dropCoords, 'drop'),
             dropAddress: normalizeAddress(dropAddress),
-            fare: effectiveStartingFare,
+            fare: totalStartingFare,
             baseFare: effectiveStartingFare,
+            baseRideFare: effectiveStartingFare,
+            previousCancellationFee,
+            carriedCancellationRideIds,
             bookingMode: effectiveBookingMode,
             pricingNegotiationMode,
             biddingStatus: pricingNegotiationMode === 'driver_bid' ? 'open' : 'none',
@@ -1223,6 +1245,8 @@ export const serializeRideRealtime = (ride) => ({
   liveStatus: ride.liveStatus,
   fare: ride.fare,
   baseFare: Number(ride.baseFare || ride.fare || 0),
+  baseRideFare: Number(ride.baseRideFare || (ride.fare - (ride.previousCancellationFee || 0)) || ride.baseFare || 0),
+  previousCancellationFee: Number(ride.previousCancellationFee || 0),
   bookingMode: ride.bookingMode || 'normal',
   pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
   biddingStatus: ride.biddingStatus || 'none',
@@ -2146,6 +2170,33 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
   driver.rating = Number((driver.totalRatingScore / driver.ratingCount).toFixed(1));
 
   await Promise.all([ride.save(), driver.save()]);
+
+  if (numericTip > 0) {
+    try {
+      await applyDriverWalletAdjustment({
+        driverId: ride.driverId,
+        rideId: ride._id,
+        amount: numericTip,
+        type: 'ride_tip',
+        description: `Tip of Rs ${numericTip} received from rider (cash)`,
+        metadata: { source: 'ride_tip', tipAmount: numericTip, paymentMode: 'cash' },
+      });
+    } catch (walletErr) {
+      console.warn('Failed to credit tip to driver wallet:', walletErr?.message);
+    }
+
+    try {
+      emitToRoom(getDriverRoom(ride.driverId), 'ride:tip:received', {
+        rideId: String(ride._id),
+        tipAmount: numericTip,
+        rating: numericRating,
+        comment: String(comment || '').trim(),
+        message: `You received a tip of Rs ${numericTip} from passenger!`,
+      });
+    } catch (socketErr) {
+      console.warn('Failed to emit tip socket event:', socketErr?.message);
+    }
+  }
 
   return populateRideRealtime(ride._id);
 };

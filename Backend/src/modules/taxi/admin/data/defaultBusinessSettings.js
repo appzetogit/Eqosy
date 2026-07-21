@@ -84,6 +84,18 @@ export const createDefaultBusinessSettings = () => ({
     max_dist_secondary_ride: '2',
     enable_my_route_booking_feature: '0',
     how_many_times_a_driver_can_enable_the_my_route_booking_per_day: '1',
+    cancellation_policy: {
+      enable_cancellation_charge: true,
+      free_cancellation_time_mins: 2,
+      fixed_cancellation_charge: 50,
+      percentage_cancellation_charge: 0,
+      max_cancellation_fee: 150,
+      charge_after_driver_accepted: true,
+      charge_after_driver_arrived: true,
+      driver_cancellation_penalty: 30,
+      driver_compensation_percentage: 0,
+      cancellation_grace_period_driver_arrived: 5,
+    },
   },
   bid_ride: {
     bidding_low_percentage: '10',

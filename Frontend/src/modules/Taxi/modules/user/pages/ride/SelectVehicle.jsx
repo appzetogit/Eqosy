@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
@@ -1159,6 +1159,24 @@ const SelectVehicle = () => {
     };
   }, [dropCoords, dropPosition, isMapLoaded, mapLoadError, pickupCoords, pickupPosition, stops]);
 
+  const [pendingCancellationFee, setPendingCancellationFee] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const fetchPendingDues = async () => {
+      try {
+        const response = await api.get('/rides/pending-cancellation-dues');
+        if (!active) return;
+        const totalDue = Number(response?.data?.data?.totalDueAmount || response?.data?.totalDueAmount || 0);
+        setPendingCancellationFee(totalDue);
+      } catch (_err) {
+        if (active) setPendingCancellationFee(0);
+      }
+    };
+    fetchPendingDues();
+    return () => { active = false; };
+  }, []);
+
   const pricedVehicles = useMemo(
     () =>
       vehicles.map((vehicle) => {
@@ -1169,18 +1187,22 @@ const SelectVehicle = () => {
           transportType: vehicle.transportType || routeState.transport_type || routeState.transportType || 'taxi',
         });
 
+        const baseCalculatedPrice = calculateEstimatedFare({
+          vehicle,
+          pricingRule,
+          distanceMeters: tripMetrics.distanceMeters,
+          durationMinutes: tripMetrics.durationMinutes,
+        });
+
         return {
           ...vehicle,
           pricingRule,
-          price: calculateEstimatedFare({
-            vehicle,
-            pricingRule,
-            distanceMeters: tripMetrics.distanceMeters,
-            durationMinutes: tripMetrics.durationMinutes,
-          }),
+          basePrice: baseCalculatedPrice,
+          previousCancellationFee: pendingCancellationFee,
+          price: baseCalculatedPrice + pendingCancellationFee,
         };
       }),
-    [pricingRules, effectiveServiceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles],
+    [pricingRules, effectiveServiceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles, pendingCancellationFee],
   );
 
   const isFarePending = isResolvingTripMetrics || isLoadingPricingRules;
@@ -1821,6 +1843,20 @@ const SelectVehicle = () => {
               </div>
             )}
 
+            {pendingCancellationFee > 0 && (
+              <div className="mb-3 rounded-[16px] border border-amber-200 bg-amber-50/90 p-3 shadow-sm flex items-center justify-between text-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 shrink-0">
+                    <AlertTriangle size={16} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black text-amber-900 leading-tight">Previous Cancellation Charge (+Rs {pendingCancellationFee}) Added</p>
+                    <p className="text-[10px] font-semibold text-amber-700">This fee is added to your ride fare by admin policy.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!isLoadingVehicles && !vehicleLoadError && displayedVehicles.map((v, i) => {
               const isSelected = selected === v.id;
               const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
@@ -1886,6 +1922,11 @@ const SelectVehicle = () => {
                           <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
                             {v.sublabel}
                           </p>
+                          {v.previousCancellationFee > 0 && (
+                            <p className="mt-0.5 text-[10px] font-bold text-amber-700">
+                              Fare Rs {v.basePrice} + Prev Fee Rs {v.previousCancellationFee}
+                            </p>
+                          )}
                         </div>
                         <div className="shrink-0 text-right">
                           <span className={`block text-[20px] font-semibold leading-none ${isUnavailable && rideMode !== 'schedule' ? 'text-slate-300' : 'text-slate-900'}`}>

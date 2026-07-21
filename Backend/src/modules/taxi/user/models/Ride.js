@@ -635,6 +635,75 @@ const rideSchema = new mongoose.Schema(
         default: null,
       },
     },
+    previousCancellationFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    baseRideFare: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    carriedCancellationRideIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiRide',
+      },
+    ],
+    cancellation: {
+      cancelled_by: {
+        type: String,
+        enum: ['user', 'driver', 'admin', 'system', ''],
+        default: '',
+      },
+      canceller_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null,
+      },
+      reason: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      stage: {
+        type: String,
+        enum: ['searching', 'accepted', 'arrived', 'started', ''],
+        default: '',
+      },
+      cancelled_at: {
+        type: Date,
+        default: null,
+      },
+      is_fee_applied: {
+        type: Boolean,
+        default: false,
+      },
+      fee_waived_reason: {
+        type: String,
+        default: '',
+      },
+      cancellation_charge: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      driver_compensation_amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      driver_penalty_amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      payment_status: {
+        type: String,
+        enum: ['not_applicable', 'paid_online', 'added_to_next_ride_due', 'paid_in_next_ride', 'waived'],
+        default: 'not_applicable',
+      },
+    },
   },
   { timestamps: true },
 );

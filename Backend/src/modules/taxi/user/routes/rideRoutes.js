@@ -5,12 +5,14 @@ import {
   acceptRideBid,
   createRazorpayRideCompletionOrder,
   cancelRide,
+  getCancellationBillReceipt,
   createRazorpayRideTipOrder,
   createRide,
   getRideBids,
   getRideAppTipSettings,
   getMyActiveRide,
   getRideById,
+  getPendingCancellationDues,
   listMyRides,
   listAvailableDrivers,
   payRideCompletionWithWallet,
@@ -25,10 +27,13 @@ export const rideRouter = Router();
 
 rideRouter.post('/', authenticateOrResolveUser(['user']), asyncHandler(createRide));
 rideRouter.get('/', authenticateOrResolveUser(['user', 'driver']), asyncHandler(listMyRides));
+rideRouter.get('/pending-cancellation-dues', authenticate(['user']), asyncHandler(getPendingCancellationDues));
 rideRouter.get('/app-settings/tip', asyncHandler(getRideAppTipSettings));
 rideRouter.get('/available-drivers', asyncHandler(listAvailableDrivers));
 rideRouter.get('/active/me', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));
+rideRouter.post('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));
+rideRouter.get('/:rideId/cancellation-bill', authenticateOrResolveUser(['user', 'driver', 'admin']), asyncHandler(getCancellationBillReceipt));
 rideRouter.get('/:rideId/bids', authenticate(['user']), asyncHandler(getRideBids));
 rideRouter.patch('/:rideId/bids/ceiling', authenticate(['user']), asyncHandler(updateRideBidCeiling));
 rideRouter.post('/:rideId/bids/:bidId/accept', authenticate(['user']), asyncHandler(acceptRideBid));

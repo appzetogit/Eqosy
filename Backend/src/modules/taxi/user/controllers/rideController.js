@@ -25,12 +25,15 @@ import {
 import {
   cancelRideByUser,
   emitToDriver,
+  emitToRoom,
+  getDriverRoom,
   notifyRideAccepted,
   notifyRideBiddingUpdated,
   restartRideDispatchWithLatestFare,
   startDispatchFlow,
 } from '../../services/dispatchService.js';
 import { getTipSettings } from '../../services/appSettingsService.js';
+import { calculateCancellationBill } from '../../services/cancellationService.js';
 import { Ride } from '../models/Ride.js';
 import { UserWallet } from '../models/UserWallet.js';
 
@@ -878,10 +881,11 @@ export const verifyRazorpayRideTip = async (req, res) => {
         driverId: ride.driverId,
         rideId: ride._id,
         amount: verifiedTipAmount,
-        type: 'adjustment',
-        description: 'Ride tip credited from rider',
+        type: 'ride_tip',
+        description: 'Ride tip credited from rider (online)',
         metadata: {
           source: 'ride_tip',
+          paymentMode: 'online',
           provider: 'razorpay',
           providerOrderId: orderId,
           providerPaymentId: paymentId,
@@ -919,6 +923,16 @@ export const verifyRazorpayRideTip = async (req, res) => {
     });
   }
 
+  try {
+    emitToRoom(getDriverRoom(ride.driverId), 'ride:tip:received', {
+      rideId: String(ride._id),
+      tipAmount: verifiedTipAmount,
+      rating,
+      comment: comment.trim(),
+      message: `You received a tip of Rs ${verifiedTipAmount} from passenger!`,
+    });
+  } catch (_e) {}
+
   const populatedRide = await getRideDetails(ride._id);
 
   res.json({
@@ -939,14 +953,22 @@ export const getRideAppTipSettings = async (_req, res) => {
 };
 
 export const cancelRide = async (req, res) => {
+  const reason = req.body?.reason || req.query?.reason || '';
   const ride = await cancelRideByUser({
     rideId: req.params.rideId,
     userId: req.auth.sub,
+    reason,
   });
 
   if (!ride) {
     throw new ApiError(404, 'Ride not found');
   }
+
+  const cancellationBill = await calculateCancellationBill({
+    ride,
+    cancelledBy: 'user',
+    reason,
+  });
 
   res.json({
     success: true,
@@ -954,7 +976,31 @@ export const cancelRide = async (req, res) => {
       rideId: String(ride._id),
       status: ride.status,
       liveStatus: ride.liveStatus,
+      cancellationBill,
     },
+  });
+};
+
+export const getCancellationBillReceipt = async (req, res) => {
+  const { rideId } = req.params;
+  const ride = await Ride.findById(rideId);
+
+  if (!ride) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  const cancelledBy = ride.cancellation?.cancelled_by || 'user';
+  const reason = ride.cancellation?.reason || '';
+
+  const cancellationBill = await calculateCancellationBill({
+    ride,
+    cancelledBy,
+    reason,
+  });
+
+  res.json({
+    status: true,
+    data: cancellationBill,
   });
 };
 
@@ -1088,5 +1134,32 @@ export const updateRideBidCeiling = async (req, res) => {
   res.json({
     success: true,
     data: ride,
+  });
+};
+
+export const getPendingCancellationDues = async (req, res) => {
+  const userId = req.auth.sub;
+  const pendingDueRides = await Ride.find({
+    userId,
+    'cancellation.payment_status': 'added_to_next_ride_due',
+    'cancellation.cancellation_charge': { $gt: 0 },
+  }).select('_id cancellation createdAt').lean();
+
+  const totalDueAmount = pendingDueRides.reduce(
+    (sum, r) => sum + Number(r.cancellation?.cancellation_charge || 0),
+    0,
+  );
+
+  res.json({
+    success: true,
+    data: {
+      totalDueAmount,
+      pendingCount: pendingDueRides.length,
+      rides: pendingDueRides.map((r) => ({
+        rideId: String(r._id),
+        cancellationFee: Number(r.cancellation?.cancellation_charge || 0),
+        cancelledAt: r.cancellation?.cancelled_at || r.createdAt,
+      })),
+    },
   });
 };

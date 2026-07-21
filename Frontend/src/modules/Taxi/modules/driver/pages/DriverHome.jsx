@@ -22,7 +22,7 @@ import {
     Mail,
     BarChart2
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import toast from 'react-hot-toast';
 import LowBalanceModal from './LowBalanceModal';
@@ -574,6 +574,7 @@ const mapStyles = [
 
 const DriverHome = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { settings } = useSettings();
     const appName = settings.general?.app_name || 'App';
     const appLogo = settings.general?.logo || settings.customization?.logo;
@@ -589,6 +590,16 @@ const DriverHome = () => {
     const [map, setMap] = useState(null);
     const [driverCoords, setDriverCoords] = useState(() => readStoredDriverCoords());
     const [statusMessage, setStatusMessage] = useState('');
+
+    useEffect(() => {
+        if (location.state?.statusMessage) {
+            setStatusMessage(location.state.statusMessage);
+            const timer = setTimeout(() => {
+                setStatusMessage('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [location.state]);
     const [socketStatus, setSocketStatus] = useState('offline');
     const [notificationCount, setNotificationCount] = useState(0);
     const [scheduledRideCount, setScheduledRideCount] = useState(0);
@@ -957,6 +968,24 @@ const DriverHome = () => {
 
         return driver;
     }, []);
+
+    useEffect(() => {
+        const socket = socketService.connect({ role: 'driver' });
+        const onTipReceived = (data) => {
+            if (data?.tipAmount) {
+                toast.success(`🎉 Tip Received: Rs ${data.tipAmount} from passenger!`, { duration: 6000 });
+                refreshTodaySummary().catch(() => {});
+            }
+        };
+        if (socket) {
+            socketService.on('ride:tip:received', onTipReceived);
+        }
+        return () => {
+            if (socket) {
+                socketService.off('ride:tip:received', onTipReceived);
+            }
+        };
+    }, [refreshTodaySummary]);
 
     const expiredDocumentNames = useMemo(() => {
         const flattenedTemplates = Array.isArray(documentTemplates)

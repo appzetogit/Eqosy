@@ -315,8 +315,10 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     }
 
     const fare = normalizeAmount(ride.fare || 0, 'fare');
+    const previousCancellationFee = Math.max(0, normalizeAmount(ride.previousCancellationFee || 0, 'previousCancellationFee'));
+    const baseRideFare = Math.max(0, normalizeAmount(ride.baseRideFare || (fare - previousCancellationFee), 'baseRideFare'));
     const surgeAmount = Math.max(0, normalizeAmount(ride?.pricingSnapshot?.ride_surge_amount || 0, 'surgeAmount'));
-    const commissionableFare = Math.max(0, normalizeAmount(fare - surgeAmount, 'commissionableFare'));
+    const commissionableFare = Math.max(0, normalizeAmount(baseRideFare - surgeAmount, 'commissionableFare'));
     const commissionConfig = await resolveCommissionConfigForRide(ride, session);
     const commissionAmount = computeCommissionAmount({
       fare: commissionableFare,
@@ -324,8 +326,10 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       value: commissionConfig.value,
     });
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
-    const driverEarnings = Math.max(Math.round((fare - commissionAmount) * 100) / 100, 0);
-    const amount = paymentMethod === 'cash' ? -commissionAmount : driverEarnings;
+    const driverEarnings = Math.max(Math.round((baseRideFare - commissionAmount) * 100) / 100, 0);
+    const amount = paymentMethod === 'cash'
+      ? -Math.round((commissionAmount + previousCancellationFee) * 100) / 100
+      : driverEarnings;
     const type = paymentMethod === 'cash' ? 'commission_deduction' : 'ride_earning';
 
     ride.paymentMethod = paymentMethod;
@@ -340,6 +344,15 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     };
     await ride.save({ session });
 
+    // Mark previous cancellation dues as paid in next ride
+    if (Array.isArray(ride.carriedCancellationRideIds) && ride.carriedCancellationRideIds.length > 0) {
+      await Ride.updateMany(
+        { _id: { $in: ride.carriedCancellationRideIds } },
+        { $set: { 'cancellation.payment_status': 'paid_in_next_ride' } },
+        { session }
+      );
+    }
+
     if (!amount) {
       await session.commitTransaction();
       return null;
@@ -351,10 +364,14 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       amount,
       type,
       description: paymentMethod === 'cash'
-        ? 'Commission deducted for cash ride'
+        ? (previousCancellationFee > 0
+            ? 'Commission & collected cancellation fee deducted'
+            : 'Commission deducted for cash ride')
         : 'Driver earning credited for online ride',
       metadata: {
         fare,
+        baseRideFare,
+        previousCancellationFee,
         surgeAmount,
         commissionableFare,
         commissionAmount,
