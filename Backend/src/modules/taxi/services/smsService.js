@@ -4,8 +4,8 @@ import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 
 const SMS_INDIA_HUB_ENDPOINT = 'http://cloud.smsindiahub.in/api/mt/SendSMS';
 const DLT_TEMPLATE_TEXT =
-  'Welcome to ##var## Powered by IIDMTB. Use OTP ##var## to verify your login.';
-const DEFAULT_BRAND_NAME = 'App';
+  'Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC';
+const DEFAULT_BRAND_NAME = 'Eqosy';
 
 const isTruthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 
@@ -59,11 +59,12 @@ const getSmsIndiaHubConfig = () => {
     process.env.SMS_INDIA_HUB_API_KEY_OVERRIDE,
     process.env.SMS_INDIA_HUB_API_KEY,
   );
-  const senderId = readValue(env.sms?.indiaHub?.senderId, process.env.SMS_INDIA_HUB_SENDER_ID);
+  const senderId = readValue(env.sms?.indiaHub?.senderId, process.env.SMS_INDIA_HUB_SENDER_ID, 'BGADEC');
+  const peId = readValue(env.sms?.indiaHub?.peId, process.env.SMS_INDIA_HUB_PE_ID, '1001164203633432409');
   const templateId = readValue(
     env.sms?.indiaHub?.dltTemplateId,
     process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID,
-    '1007745618568056426',
+    '1007282516644508833',
   );
 
   return {
@@ -71,6 +72,7 @@ const getSmsIndiaHubConfig = () => {
     password,
     apiKey,
     senderId,
+    peId,
     templateId,
   };
 };
@@ -182,6 +184,7 @@ const buildSmsPayload = ({ phone, otp, appName, authMode = 'apiKey' }) => {
     number: normalizedPhone,
     text: renderOtpMessage({ appName, otp }),
     TemplateId: config.templateId,
+    PEID: config.peId || '1001164203633432409',
   });
 
   if (useApiKey) {

@@ -1,4 +1,4 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 import ms from 'ms';
 import { FoodOtp } from './otp.model.js';
 import { config } from '../../config/env.js';
@@ -35,13 +35,13 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
 
         // EXACT DLT TEMPLATE provided by user:
-        // "Welcome to the ##var## powered by SMSINDIAHUB. Your OTP for registration is ##var##"
-        const message = `Welcome to the Eqosy powered by SMSINDIAHUB. Your OTP for registration is ${otp}`;
+        // "Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC"
+        const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 
-        // SMS India Hub HTTP GET API â€” query param names are case-sensitive per SOP
+        // SMS India Hub HTTP GET API — query param names are case-sensitive per SOP
         const url = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
         url.searchParams.append('APIKey', config.smsApiKey);
-        url.searchParams.append('sid', config.smsSenderId);
+        url.searchParams.append('sid', config.smsSenderId || 'BGADEC');
         url.searchParams.append('msisdn', msisdn);
         url.searchParams.append('msg', message);
         url.searchParams.append('gwid', '2');
@@ -49,12 +49,15 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         if (config.smsIndiaHubUsername) {
             url.searchParams.append('uname', config.smsIndiaHubUsername);
         }
-        if (config.smsDltTemplateId) {
-            url.searchParams.append('DLT_TE_ID', config.smsDltTemplateId);
+        if (config.smsDltTemplateId || '1007282516644508833') {
+            url.searchParams.append('DLT_TE_ID', config.smsDltTemplateId || '1007282516644508833');
+        }
+        if (config.smsPeId || '1001164203633432409') {
+            url.searchParams.append('PEID', config.smsPeId || '1001164203633432409');
         }
 
         logger.info(`[SMS] Sending OTP to ${msisdn} via SMS India Hub...`);
-        const response = await fetch(url.toString());
+        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(7000) });
         const resultText = await response.text();
         logger.info(`[SMS] Raw response for ${msisdn}: ${resultText}`);
 
