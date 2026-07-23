@@ -367,6 +367,9 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     gst: apiOrder?.pricing?.tax || apiOrder?.pricing?.gst || apiOrder?.gst || apiOrder?.tax || previousOrder?.gst || 0,
     packagingFee: apiOrder?.pricing?.packagingFee || apiOrder?.packagingFee || 0,
     platformFee: apiOrder?.pricing?.platformFee || apiOrder?.platformFee || 0,
+    surgeAmount: apiOrder?.pricing?.surgeAmount || apiOrder?.surgeAmount || previousOrder?.surgeAmount || 0,
+    surgeTitle: apiOrder?.pricing?.surgeTitle || apiOrder?.surgeTitle || previousOrder?.surgeTitle || "Surge Charge",
+    deliveryPartnerTip: apiOrder?.pricing?.deliveryPartnerTip || apiOrder?.deliveryPartnerTip || apiOrder?.tip || previousOrder?.deliveryPartnerTip || 0,
     discount: apiOrder?.pricing?.discount || apiOrder?.discount || 0,
     subtotal: apiOrder?.pricing?.subtotal || apiOrder?.subtotal || 0,
     paymentMethod: apiOrder?.paymentMethod || apiOrder?.payment?.method || previousOrder?.paymentMethod || null,
@@ -485,6 +488,7 @@ export default function OrderTracking({ isSharedView = false }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showOrderDetails, setShowOrderDetails] = useState(false)
+  const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
   const [cancellationReason, setCancellationReason] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
   const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false)
@@ -1619,6 +1623,66 @@ export default function OrderTracking({ isSharedView = false }) {
               </div>
             ))}
           </div>
+
+          {/* Bill Summary Breakdown */}
+          <div className="border-t border-dashed border-gray-200 dark:border-zinc-800 my-4 pt-4 space-y-2.5 text-xs md:text-sm">
+            <div className="flex justify-between text-gray-600 dark:text-gray-400">
+              <span>Item Total</span>
+              <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{(order.subtotal || order.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0) || 0).toFixed(2)}</span>
+            </div>
+            {Number(order.deliveryFee || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>Delivery Charge</span>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.deliveryFee).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.platformFee || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400 items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowPlatformFeeModal(true)}
+                  className="hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+                >
+                  Platform Fee
+                </button>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.platformFee).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.packagingFee || order.pricing?.packagingFee || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>Restaurant Packaging Fee</span>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.packagingFee || order.pricing?.packagingFee).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.deliveryPartnerTip || order.tip || order.pricing?.deliveryPartnerTip || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>Delivery partner tip</span>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.deliveryPartnerTip || order.tip || order.pricing?.deliveryPartnerTip).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.surgeAmount || order.pricing?.surgeAmount || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>{order.surgeTitle || order.pricing?.surgeTitle || "Surge Charge"}</span>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.surgeAmount || order.pricing?.surgeAmount).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.gst || order.tax || 0) > 0 && (
+              <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>GST and Restaurant Charges</span>
+                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.gst || order.tax).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(order.discount || 0) > 0 && (
+              <div className="flex justify-between text-[#EB590E] font-medium">
+                <span>Coupon Discount</span>
+                <span>-{"\u20B9"}{Number(order.discount).toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-sm md:text-base text-gray-900 dark:text-white pt-2.5 border-t border-gray-100 dark:border-zinc-800">
+              <span>To Pay</span>
+              <span>{"\u20B9"}{Number(order.totalAmount || order.total || 0).toFixed(2)}</span>
+            </div>
+          </div>
           
           {!isDeliveredOrder && (
             <>
@@ -1725,6 +1789,28 @@ export default function OrderTracking({ isSharedView = false }) {
               className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold h-12 rounded-xl border-none"
             >
               {isUpdatingInstructions ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Save Instructions"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Platform Fee Dialog */}
+      <Dialog open={showPlatformFeeModal} onOpenChange={setShowPlatformFeeModal}>
+        <DialogContent className="sm:max-w-sm w-[90vw] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-[#18181b] z-[200]">
+          <DialogHeader className="relative flex items-center justify-center pb-4 border-b border-gray-100 dark:border-zinc-800">
+            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white text-center">
+              Platform Fee
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 text-center space-y-6">
+            <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+              This small fee helps us pay the bills so that we can keep {companyName || "Eqosy"} running
+            </p>
+            <Button
+              onClick={() => setShowPlatformFeeModal(false)}
+              className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+            >
+              OKAY
             </Button>
           </div>
         </DialogContent>

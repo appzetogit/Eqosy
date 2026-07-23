@@ -226,6 +226,7 @@ export default function Cart() {
 
   const [pricing, setPricing] = useState(null)
   const [loadingPricing, setLoadingPricing] = useState(false)
+  const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
 
   // Addons state
   const [addons, setAddons] = useState([])
@@ -1007,6 +1008,7 @@ export default function Cart() {
   const deliveryFee = Number(pricing?.deliveryFee ?? 0)
   const platformFee = Number(pricing?.platformFee ?? 0)
   const surgeAmount = Number(pricing?.surgeAmount || 0)
+  const surgeTitle = pricing?.surgeTitle || "Surge Charge"
   const gstCharges = Number(pricing?.tax ?? 0)
   const discount = pricing?.discount ?? (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount
@@ -2726,14 +2728,19 @@ export default function Cart() {
                     </div>
                     <div className="flex justify-between text-sm items-center">
                       <span className="text-gray-600 dark:text-gray-400">
-                        Delivery partner fee for {pricing?.deliveryFeeBreakdown?.distanceKm || 0} km
+                        Delivery Charge
                       </span>
                       <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                         {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : ""}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
+                    <div className="flex justify-between text-sm items-center">
+                      <button
+                        onClick={() => setShowPlatformFeeModal(true)}
+                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+                      >
+                        Platform Fee
+                      </button>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{isPricingAvailable ? `${RUPEE_SYMBOL}${platformFee.toFixed(2)}` : "-"}</span>
                     </div>
                     {deliveryPartnerTip > 0 && (
@@ -2744,7 +2751,7 @@ export default function Cart() {
                     )}
                     {surgeAmount > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Surge Amount</span>
+                        <span className="text-gray-600 dark:text-gray-400">{surgeTitle}</span>
                         <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{surgeAmount.toFixed(2)}</span>
                       </div>
                     )}
@@ -3500,29 +3507,17 @@ export default function Cart() {
                 >
                   <div className="px-5 py-5 space-y-4">
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 pb-4">
-                      Delivery partner Fee for {pricing?.deliveryFeeBreakdown?.distanceKm || 0} km
+                      Delivery Charge
                     </p>
 
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-700 dark:text-gray-300">Base fee for 1 km</span>
-                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.baseDeliveryFee || 23).toFixed(0)}</span>
+                        <span className="text-gray-700 dark:text-gray-300">Total Delivery Charge</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-bold">{RUPEE_SYMBOL}{(deliveryFee || 0).toFixed(2)}</span>
                       </div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-[-8px]">
-                        {RUPEE_SYMBOL}21 per order plus {RUPEE_SYMBOL}2 per km
-                      </div>
-                      {pricing?.deliveryFeeBreakdown?.smallOrderFee > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-700 dark:text-gray-300">Small order fee</span>
-                          <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.smallOrderFee || 0).toFixed(0)}</span>
-                        </div>
-                      )}
-                      {pricing?.deliveryFeeBreakdown?.discountAmount > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[#009b4d] dark:text-[#00c562]">Zomato's discount on delivery fee</span>
-                          <span className="text-[#009b4d] dark:text-[#00c562] font-medium">- {RUPEE_SYMBOL}{(pricing?.deliveryFeeBreakdown?.discountAmount || 0).toFixed(0)}</span>
-                        </div>
-                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        100% of the delivery charge goes directly to your delivery partner.
+                      </p>
                     </div>
                   </div>
 
@@ -3530,6 +3525,60 @@ export default function Cart() {
                     <button
                       onClick={() => setShowDeliveryFeeModal(false)}
                       className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Platform Fee Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showPlatformFeeModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowPlatformFeeModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#18181b] rounded-3xl shadow-2xl overflow-hidden p-6"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="relative flex items-center justify-center pb-4 border-b border-gray-100 dark:border-zinc-800">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Platform Fee
+                    </h3>
+                    <button
+                      onClick={() => setShowPlatformFeeModal(false)}
+                      className="absolute right-0 top-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="py-6 text-center">
+                    <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                      This small fee helps us pay the bills so that we can keep {companyName || "Eqosy"} running
+                    </p>
+                  </div>
+
+                  <div>
+                    <button
+                      onClick={() => setShowPlatformFeeModal(false)}
+                      className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
                     >
                       OKAY
                     </button>

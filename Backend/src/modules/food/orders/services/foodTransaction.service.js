@@ -125,7 +125,8 @@ export async function createInitialTransaction(order) {
         Math.round((riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
 
     let restaurantNet = subtotal + packagingFee - restaurantCommission;
-    let platformNetProfit = platformFee + deliveryFee + surgeAmount + restaurantCommission - riderShare;
+    // Admin ONLY gets platform fee + restaurant commission (delivery fee, surge & tip go 100% directly to delivery partner)
+    let platformNetProfit = platformFee + restaurantCommission;
 
     // Handle discount attribution
     const couponCode = order.pricing?.couponCode;

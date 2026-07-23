@@ -461,6 +461,27 @@ export const registerRestaurant = async (payload, files) => {
     try {
         const latNum = toFiniteNumber(latitude);
         const lngNum = toFiniteNumber(longitude);
+
+        let resolvedZoneId = zoneId && mongoose.Types.ObjectId.isValid(String(zoneId).trim())
+            ? new mongoose.Types.ObjectId(String(zoneId).trim())
+            : undefined;
+
+        if (!resolvedZoneId && latNum !== null && lngNum !== null) {
+            try {
+                const activeZones = await FoodZone.find({ isActive: true })
+                    .select('_id coordinates')
+                    .lean();
+                const matchedZone = activeZones.find((zone) =>
+                    isPointInZonePolygon(latNum, lngNum, zone?.coordinates)
+                );
+                if (matchedZone?._id) {
+                    resolvedZoneId = new mongoose.Types.ObjectId(String(matchedZone._id));
+                }
+            } catch {
+                // ignore zone auto-detect error
+            }
+        }
+
         const restaurant = await FoodRestaurant.create({
             restaurantName,
             restaurantNameNormalized,
@@ -473,9 +494,7 @@ export const registerRestaurant = async (payload, files) => {
             primaryContactNumber,
             pureVegRestaurant: pureVegRestaurant === true,
             pricingAttributes: Array.isArray(pricingAttributes) ? pricingAttributes : [],
-            zoneId: zoneId && mongoose.Types.ObjectId.isValid(String(zoneId).trim())
-                ? new mongoose.Types.ObjectId(String(zoneId).trim())
-                : undefined,
+            zoneId: resolvedZoneId,
             // Store unified location object (geo + address).
             location: {
                 type: 'Point',
@@ -1441,15 +1460,39 @@ export const listApprovedRestaurants = async (query = {}) => {
 
     // Zone filter for user listing:
     // If zoneId is provided, return restaurants mapped to that zone,
+    // restaurants matching the zone's service location (e.g. Indore),
     // as well as restaurants with unassigned/global zone status (zoneId null/undefined).
     const zoneIdRaw = String(query.zoneId || '').trim();
     if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
         const targetZoneId = new mongoose.Types.ObjectId(zoneIdRaw);
-        filter.$or = [
+        const zoneMatchConditions = [
             { zoneId: targetZoneId },
             { zoneId: { $exists: false } },
             { zoneId: null }
         ];
+
+        try {
+            const targetZone = await FoodZone.findById(targetZoneId).select('name zoneName serviceLocation').lean();
+            const locationName = targetZone?.serviceLocation || targetZone?.name || targetZone?.zoneName;
+            if (locationName && typeof locationName === 'string' && locationName.trim()) {
+                const locRx = { $regex: escapeRegex(locationName.trim()), $options: 'i' };
+                zoneMatchConditions.push(
+                    { city: locRx },
+                    { 'location.city': locRx },
+                    { area: locRx },
+                    { 'location.area': locRx }
+                );
+            }
+        } catch {
+            // ignore lookup error
+        }
+
+        if (filter.$or) {
+            filter.$and = [...(filter.$and || []), { $or: filter.$or }, { $or: zoneMatchConditions }];
+            delete filter.$or;
+        } else {
+            filter.$or = zoneMatchConditions;
+        }
     }
 
     const lat = toFiniteNumber(query.lat);

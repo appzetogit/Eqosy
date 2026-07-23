@@ -27,6 +27,7 @@ const feeSettingsUpsertSchema = z.object({
     deliveryPartnerIncentiveRule: deliveryPartnerIncentiveRuleSchema.optional(),
     freeDeliveryThreshold: z.number().min(0).nullable().optional(),
     platformFee: z.number().min(0).nullable().optional(),
+    surgeTitle: z.string().optional(),
     gstRate: z.number().min(0).max(100).nullable().optional(),
     codLimit: z.number().min(0).nullable().optional(),
     isActive: z.boolean().optional()
@@ -82,6 +83,8 @@ export const validateFeeSettingsUpsertDto = (body) => {
                     : undefined,
         platformFee:
             body?.platformFee === null ? null : body?.platformFee !== undefined ? Number(body.platformFee) : undefined,
+        surgeTitle:
+            body?.surgeTitle !== undefined ? String(body.surgeTitle).trim() : undefined,
         gstRate:
             body?.gstRate === null ? null : body?.gstRate !== undefined ? Number(body.gstRate) : undefined,
         codLimit:

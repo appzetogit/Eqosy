@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useEffect, useRef, useCallback } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { ChevronLeft, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, Search } from "lucide-react"
 import { Button } from "@food/components/ui/button"
@@ -636,18 +636,31 @@ export default function AddressSelectorPage() {
 
   const handleAddressFormSubmit = async (e) => {
     e.preventDefault()
-    if (!addressFormData.street || !addressFormData.city) {
-      toast.error("Please fill required fields")
+    const street = String(addressFormData.street || "").trim()
+    const city = String(addressFormData.city || "").trim()
+    const state = String(addressFormData.state || "").trim()
+    if (!street || !city || !state) {
+      toast.error("Please fill Street, City and State")
       return
     }
     setLoadingAddress(true)
     try {
+      const lat = Number(mapPosition[0])
+      const lng = Number(mapPosition[1])
+      const validGeo = Number.isFinite(lat) && Number.isFinite(lng)
       const payload = {
         ...addressFormData,
         label: addressFormData.label === "Work" ? "Office" : addressFormData.label,
-        location: { type: "Point", coordinates: [mapPosition[1], mapPosition[0]] },
-        latitude: mapPosition[0],
-        longitude: mapPosition[1]
+        street,
+        city,
+        state,
+        zipCode: String(addressFormData.zipCode || "").trim(),
+        phone: String(addressFormData.phone || "").trim(),
+        ...(validGeo ? {
+          location: { type: "Point", coordinates: [lng, lat] },
+          latitude: lat,
+          longitude: lng
+        } : {})
       }
       const created = await addAddress(payload)
       if (created) {
@@ -655,8 +668,8 @@ export default function AddressSelectorPage() {
         if (id) await setDefaultAddress(id)
         try {
           await persistActiveLocation({
-            latitude: mapPosition[0],
-            longitude: mapPosition[1],
+            latitude: validGeo ? lat : undefined,
+            longitude: validGeo ? lng : undefined,
             street: addressFormData.street || "",
             city: addressFormData.city || "",
             state: addressFormData.state || "",
@@ -675,7 +688,8 @@ export default function AddressSelectorPage() {
         handleBack()
       }
     } catch (error) {
-      toast.error("Failed to save address")
+      const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to save address"
+      toast.error(msg)
     } finally {
       setLoadingAddress(false)
     }

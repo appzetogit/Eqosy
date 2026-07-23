@@ -52,6 +52,7 @@ const pricingSchema = new mongoose.Schema(
         deliveryPartnerIncentiveEligible: { type: Boolean, default: false },
         platformFee: { type: Number, default: 0, min: 0 },
         surgeAmount: { type: Number, default: 0, min: 0 },
+        surgeTitle: { type: String, default: 'Surge Charge', trim: true },
         restaurantCommission: { type: Number, default: 0, min: 0 },
         discount: { type: Number, default: 0, min: 0 },
         deliveryPartnerTip: { type: Number, default: 0, min: 0 },

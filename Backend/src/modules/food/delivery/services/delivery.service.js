@@ -367,7 +367,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
             {
                 $group: {
                     _id: null,
-                    totalEarned: { $sum: { $ifNull: ['$riderEarning', 0] } }
+                    totalEarned: { $sum: { $ifNull: ['$riderEarning', '$pricing.deliveryFee'] } }
                 }
             }
         ]),
@@ -421,7 +421,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
         return {
             _id: o._id,
             type: 'payment',
-            amount: Number(o.riderEarning) || 0,
+            amount: Number(o.riderEarning) || Number(o?.pricing?.deliveryFee) || 0,
             status: 'Completed',
             date,
             createdAt: date,
@@ -508,7 +508,7 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
             {
                 $group: {
                     _id: null,
-                    totalEarnings: { $sum: { $ifNull: ['$riderEarning', 0] } }
+                    totalEarnings: { $sum: { $ifNull: ['$riderEarning', '$pricing.deliveryFee'] } }
                 }
             }
         ])

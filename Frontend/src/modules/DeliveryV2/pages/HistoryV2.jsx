@@ -117,27 +117,39 @@ export const HistoryV2 = () => {
   const formatCurrency = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
 
   const getEarningBreakdown = (trip) => {
-    const basePay = Number(trip.riderBasePay || 0);
-    const deliveryFee = Number(trip.riderDeliveryFeeShare || 0);
-    const surgeAmount = Number(trip.riderSurgePay || 0);
-    const incentiveAmount = Number(trip.riderIncentivePay || 0);
-    const tipReceived = Number(trip.riderTipPay || trip.deliveryPartnerTip || 0);
+    const basePay = Number(trip.riderBasePay || trip.pricing?.deliveryFeeBreakdown?.basePayout || 0);
+    const deliveryFeeShare = Number(trip.riderDeliveryFeeShare || trip.deliveryFee || trip.pricing?.deliveryFee || 0);
+    const distancePay = Math.max(0, Math.round((deliveryFeeShare - basePay) * 100) / 100);
+    const surgeAmount = Number(trip.riderSurgePay || trip.surgeAmount || trip.pricing?.surgeAmount || 0);
+    const incentiveAmount = Number(trip.riderIncentivePay || trip.pricing?.deliveryPartnerIncentiveAmount || 0);
+    const tipReceived = Number(trip.riderTipPay || trip.deliveryPartnerTip || trip.pricing?.deliveryPartnerTip || 0);
     const totalPayout = Number(
       trip.riderTotalPayout ||
       trip.deliveryEarning ||
       trip.amount ||
       trip.earningAmount ||
-      0
+      (deliveryFeeShare + surgeAmount + incentiveAmount + tipReceived)
     );
 
-    return [
-      { key: 'basePay', label: 'Base Pay', value: basePay },
-      { key: 'deliveryFee', label: 'Delivery Fee', value: deliveryFee },
-      { key: 'surgeAmount', label: 'Surge Amount', value: surgeAmount },
-      { key: 'incentiveAmount', label: 'Incentive', value: incentiveAmount },
-      { key: 'tipReceived', label: 'Tip received', value: tipReceived },
-      { key: 'totalPayout', label: 'Total Earned', value: totalPayout, isTotal: true }
-    ].filter((item) => item.isTotal || item.value > 0);
+    const items = [];
+    if (basePay > 0 && distancePay > 0) {
+      items.push({ key: 'basePay', label: 'Base Pay', value: basePay });
+      items.push({ key: 'distancePay', label: 'Distance Pay', value: distancePay });
+    } else if (deliveryFeeShare > 0) {
+      items.push({ key: 'deliveryFee', label: 'Delivery Charge', value: deliveryFeeShare });
+    }
+    if (surgeAmount > 0) {
+      items.push({ key: 'surgeAmount', label: 'Surge Charge', value: surgeAmount });
+    }
+    if (incentiveAmount > 0) {
+      items.push({ key: 'incentiveAmount', label: 'Incentive', value: incentiveAmount });
+    }
+    if (tipReceived > 0) {
+      items.push({ key: 'tipReceived', label: 'Tip Received', value: tipReceived });
+    }
+    items.push({ key: 'totalPayout', label: 'Total Earned', value: totalPayout, isTotal: true });
+
+    return items;
   };
 
   return (

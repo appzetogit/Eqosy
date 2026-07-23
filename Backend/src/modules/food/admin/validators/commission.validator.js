@@ -88,14 +88,16 @@ export const validateDeliveryCommissionRuleDto = (body) => {
 const zoneSurgeUpsertSchema = z.object({
     zoneId: z.string().min(1, 'zoneId is required'),
     isEnabled: z.boolean().optional(),
-    surgeAmount: z.number().min(0, 'surgeAmount must be 0 or greater')
+    surgeAmount: z.number().min(0, 'surgeAmount must be 0 or greater'),
+    surgeTitle: z.string().optional()
 });
 
 export const validateZoneSurgeUpsertDto = (body) => {
     const normalized = {
         zoneId: body?.zoneId ? String(body.zoneId) : '',
         isEnabled: body?.isEnabled,
-        surgeAmount: Number(body?.surgeAmount)
+        surgeAmount: Number(body?.surgeAmount),
+        surgeTitle: body?.surgeTitle != null ? String(body.surgeTitle).trim() : undefined
     };
     const result = zoneSurgeUpsertSchema.safeParse(normalized);
     if (!result.success) {
@@ -108,6 +110,7 @@ export const validateZoneSurgeUpsertDto = (body) => {
     return {
         zoneId: result.data.zoneId,
         isEnabled: typeof result.data.isEnabled === 'boolean' ? result.data.isEnabled : undefined,
-        surgeAmount: rounded
+        surgeAmount: rounded,
+        surgeTitle: result.data.surgeTitle ? result.data.surgeTitle.trim() : undefined
     };
 };

@@ -240,13 +240,11 @@ export async function createOrder(userId, dto) {
 
     normalizedPricing.restaurantCommission = restaurantCommission;
 
+    // Admin ONLY gets platform fee + restaurant commission (delivery fee, surge & tip go 100% directly to delivery partner)
     const platformProfit = Math.max(
       0,
-      (Number.isFinite(normalizedPricing.deliveryFee) ? normalizedPricing.deliveryFee : 0) +
-        (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
-        (Number.isFinite(normalizedPricing.surgeAmount) ? normalizedPricing.surgeAmount : 0) +
-        restaurantCommission -
-        riderTotalPayout,
+      (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
+        restaurantCommission,
     );
 
     const initialStatus = (paymentMethod === "razorpay" || paymentMethod === "card") ? "pending_payment" : "created";

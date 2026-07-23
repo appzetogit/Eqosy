@@ -1832,6 +1832,9 @@ export async function upsertFeeSettings(body) {
         if (body.platformFee === null) $unset.platformFee = 1;
         else if (body.platformFee !== undefined) $set.platformFee = body.platformFee;
 
+        if (body.surgeTitle === null) $unset.surgeTitle = 1;
+        else if (body.surgeTitle !== undefined) $set.surgeTitle = body.surgeTitle;
+
         if (body.gstRate === null) $unset.gstRate = 1;
         else if (body.gstRate !== undefined) $set.gstRate = body.gstRate;
 
@@ -1864,6 +1867,7 @@ export async function upsertFeeSettings(body) {
     if (body.deliveryFee !== undefined && body.deliveryFee !== null) payload.deliveryFee = body.deliveryFee;
     if (body.freeDeliveryThreshold !== undefined && body.freeDeliveryThreshold !== null) payload.freeDeliveryThreshold = body.freeDeliveryThreshold;
     if (body.platformFee !== undefined && body.platformFee !== null) payload.platformFee = body.platformFee;
+    if (body.surgeTitle !== undefined && body.surgeTitle !== null) payload.surgeTitle = body.surgeTitle;
     if (body.gstRate !== undefined && body.gstRate !== null) payload.gstRate = body.gstRate;
     if (body.codLimit !== undefined && body.codLimit !== null) payload.codLimit = body.codLimit;
 
@@ -5034,7 +5038,8 @@ export async function getDeliveryZoneSurgeConfigs() {
             zoneName: zone.zoneName || zone.name || '',
             zoneActive: zone.isActive !== false,
             isEnabled: cfg?.isEnabled === true,
-            surgeAmount
+            surgeAmount,
+            surgeTitle: cfg?.surgeTitle || 'Surge Charge'
         };
     });
     return { surgeConfigs };
@@ -5046,6 +5051,9 @@ export async function upsertDeliveryZoneSurgeConfig(body, adminId = null) {
     const payload = {
         surgeAmount: Math.round((Number(body.surgeAmount || 0) * 100)) / 100
     };
+    if (body.surgeTitle !== undefined) {
+        payload.surgeTitle = String(body.surgeTitle).trim() || 'Surge Charge';
+    }
     if (typeof body.isEnabled === 'boolean') payload.isEnabled = body.isEnabled;
     if (adminId && mongoose.Types.ObjectId.isValid(adminId)) payload.updatedBy = new mongoose.Types.ObjectId(adminId);
     const updated = await FoodDeliverySurgeZone.findOneAndUpdate(

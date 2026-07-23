@@ -11,6 +11,7 @@ const deliverySurgeZoneSchema = new mongoose.Schema(
         },
         isEnabled: { type: Boolean, default: false, index: true },
         surgeAmount: { type: Number, default: 0, min: 0 },
+        surgeTitle: { type: String, default: 'Surge Charge', trim: true },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'FoodUser',

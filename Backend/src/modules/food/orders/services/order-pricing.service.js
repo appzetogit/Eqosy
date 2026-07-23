@@ -180,7 +180,7 @@ export async function calculateOrderPricing(userId, dto) {
       // Non-base (Option A): base slab user per-km rate as flat + matched per-km × excess beyond base max
       const baseSlab = await resolveBaseDistanceSlab();
       baseSlabFlatFee = baseSlab
-        ? Math.round((Number(baseSlab.commissionPerKm || 0) * 100)) / 100
+        ? Math.round((Number(baseSlab.basePayout || 0) * 100)) / 100
         : 0;
       baseSlabMaxKm =
         baseSlab && baseSlab.maxDistance != null && Number.isFinite(Number(baseSlab.maxDistance))
@@ -195,12 +195,11 @@ export async function calculateOrderPricing(userId, dto) {
       deliveryFee = Math.round(Math.max(0, baseSlabFlatFee + distanceLeg) * 100) / 100;
     }
 
-    adminDeliveryCommissionEnabled = adminCommissionRow?.isEnabled === true;
-    adminDeliveryCommissionPercent = adminDeliveryCommissionEnabled
-      ? Math.round((Number(adminCommissionRow?.adminDeliveryCommissionPercent || 0) * 100)) / 100
-      : 0;
-    adminDeliveryCommissionAmount = Math.round((deliveryFee * (adminDeliveryCommissionPercent / 100)) * 100) / 100;
-    riderDeliveryEarningAfterAdminCommission = Math.round(Math.max(0, deliveryFee - adminDeliveryCommissionAmount) * 100) / 100;
+    // 100% of delivery fee goes directly to delivery partner earning (admin takes 0% of delivery fee)
+    adminDeliveryCommissionEnabled = false;
+    adminDeliveryCommissionPercent = 0;
+    adminDeliveryCommissionAmount = 0;
+    riderDeliveryEarningAfterAdminCommission = deliveryFee;
     deliveryFeeBreakdown = {
       source: 'distance_slab',
       distanceKm: Math.round(Number(distanceKm || 0) * 100) / 100,
@@ -327,10 +326,14 @@ export async function calculateOrderPricing(userId, dto) {
 
   const zoneIdForSurge = await resolveOrderZoneId(dto, restaurant);
   let surgeAmount = 0;
+  let surgeTitle = (feeSettings.surgeTitle && String(feeSettings.surgeTitle).trim()) || "Surge Charge";
   if (zoneIdForSurge) {
     const surgeConfig = await FoodDeliverySurgeZone.findOne({ zoneId: zoneIdForSurge }).lean();
     if (surgeConfig?.isEnabled) {
       surgeAmount = Math.round((Number(surgeConfig.surgeAmount || 0) * 100)) / 100;
+      if (surgeConfig.surgeTitle && String(surgeConfig.surgeTitle).trim()) {
+        surgeTitle = String(surgeConfig.surgeTitle).trim();
+      }
     }
   }
 
@@ -357,6 +360,7 @@ export async function calculateOrderPricing(userId, dto) {
       deliveryPartnerIncentiveEligible,
       platformFee,
       surgeAmount,
+      surgeTitle,
       discount,
       total,
       currency: "INR",

@@ -33,6 +33,14 @@ export default function UserOrderDetails() {
   const [order, setOrder] = useState(null)
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
+  const [companyName, setCompanyName] = useState("Eqosy")
+
+  useEffect(() => {
+    getCompanyNameAsync().then((name) => {
+      if (name) setCompanyName(name)
+    })
+  }, [])
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -522,25 +530,31 @@ export default function UserOrderDetails() {
                 {pricing.deliveryFee ? `₹${Number(pricing.deliveryFee).toFixed(2)}` : "Free"}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500 dark:text-gray-400">Platform fee</span>
-              <span className="text-gray-800 dark:text-gray-200">
+            <div className="flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setShowPlatformFeeModal(true)}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+              >
+                Platform fee
+              </button>
+              <span className="text-gray-800 dark:text-gray-200 font-medium">
                 ₹{Number(pricing.platformFee || 0).toFixed(2)}
               </span>
             </div>
-            {Number(pricing.deliveryPartnerTip || 0) > 0 && (
+            {Number(pricing.deliveryPartnerTip || order?.deliveryPartnerTip || order?.tip || 0) > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Delivery partner tip</span>
                 <span className="text-gray-800 dark:text-gray-200">
-                  ₹{Number(pricing.deliveryPartnerTip || 0).toFixed(2)}
+                  ₹{Number(pricing.deliveryPartnerTip || order?.deliveryPartnerTip || order?.tip || 0).toFixed(2)}
                 </span>
               </div>
             )}
-            {Number(pricing.surgeAmount || 0) > 0 && (
+            {Number(pricing.surgeAmount || order?.surgeAmount || 0) > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Surge Amount</span>
-                <span className="text-gray-800 dark:text-gray-200">
-                  ₹{Number(pricing.surgeAmount || 0).toFixed(2)}
+                <span className="text-gray-500 dark:text-gray-400">{pricing.surgeTitle || order?.surgeTitle || "Surge Charge"}</span>
+                <span className="text-gray-800 dark:text-gray-200 font-medium">
+                  ₹{Number(pricing.surgeAmount || order?.surgeAmount || 0).toFixed(2)}
                 </span>
               </div>
             )}
@@ -699,6 +713,44 @@ export default function UserOrderDetails() {
             <FileText className="w-4 h-4" />
             Restaurant Complaint
           </button>
+        </div>
+      )}
+
+      {/* Platform Fee Modal */}
+      {showPlatformFeeModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[10020] flex items-center justify-center p-4"
+          onClick={() => setShowPlatformFeeModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#18181b] rounded-3xl max-w-sm w-[90vw] p-6 text-center shadow-2xl border border-gray-100 dark:border-zinc-800 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative flex items-center justify-center pb-4 border-b border-gray-100 dark:border-zinc-800">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                Platform Fee
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPlatformFeeModal(false)}
+                className="absolute right-0 top-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium py-2">
+              This small fee helps us pay the bills so that we can keep {companyName || "Eqosy"} running
+            </p>
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPlatformFeeModal(false)}
+                className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+              >
+                OKAY
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

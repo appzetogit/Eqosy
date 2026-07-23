@@ -19,6 +19,7 @@ export default function FeeSettings() {
       incentivePercent: "0",
     },
     platformFee: "",
+    surgeTitle: "Surge Charge",
     gstRate: "",
     codLimit: "",
   })
@@ -101,6 +102,7 @@ export default function FeeSettings() {
             incentivePercent: String(saved.deliveryPartnerIncentiveRule?.incentivePercent ?? 0),
           },
           platformFee: saved.platformFee ?? "",
+          surgeTitle: saved.surgeTitle || "Surge Charge",
           gstRate: saved.gstRate ?? "",
           codLimit: saved.codLimit ?? "",
         })
@@ -335,6 +337,7 @@ export default function FeeSettings() {
           incentivePercent: Number(feeSettings.deliveryPartnerIncentiveRule?.incentivePercent || 0),
         },
         platformFee,
+        surgeTitle: String(feeSettings.surgeTitle || "").trim() || "Surge Charge",
         gstRate,
         codLimit,
         isActive: true,
@@ -358,6 +361,7 @@ export default function FeeSettings() {
       await adminAPI.upsertZoneSurgeConfig({
         zoneId,
         surgeAmount: Number(next.surgeAmount || 0),
+        surgeTitle: String(next.surgeTitle || "").trim() || "Surge Charge",
         isEnabled: Boolean(next.isEnabled),
       })
       await fetchZoneSurges()
@@ -519,23 +523,50 @@ export default function FeeSettings() {
               </div>
 
               <div className="mt-8 border-t border-slate-200 pt-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-3">Zone-wise Surge Amount</h3>
-                <div className="mb-4">
-                  <div className="relative w-full sm:max-w-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Zone-wise Surge Amount & Title</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Configure surge pricing amount and customer billing title for each zone</p>
+                  </div>
+                  <div className="relative w-full sm:max-w-xs">
                     <input
                       type="text"
                       placeholder="Search zone..."
                       value={zoneSearchQuery}
                       onChange={(e) => setZoneSearchQuery(e.target.value)}
-                      className="pl-3 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                      className="pl-3 pr-4 py-2 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400"
                     />
                   </div>
                 </div>
+
+                {/* Table Header Row */}
+                <div className="hidden sm:grid grid-cols-12 gap-3 px-3 py-2 bg-slate-100 rounded-lg text-xs font-semibold text-slate-600 mb-2 border border-slate-200">
+                  <div className="col-span-3">Zone Name</div>
+                  <div className="col-span-3">Surge Title (Label)</div>
+                  <div className="col-span-2">Surge Amount (₹)</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-2 text-right">Action</div>
+                </div>
+
                 <div className="space-y-3">
                   {paginatedZoneSurges.map((z) => (
-                    <div key={z.zoneId} className="grid grid-cols-12 gap-3 items-center p-3 border border-slate-200 rounded-lg">
-                      <div className="col-span-12 sm:col-span-5 text-sm font-medium text-slate-800">{z.zoneName || "Unnamed Zone"}</div>
+                    <div key={z.zoneId} className="grid grid-cols-12 gap-3 items-center p-3 border border-slate-200 rounded-lg bg-white hover:border-slate-300 transition-all">
+                      <div className="col-span-12 sm:col-span-3 text-sm font-medium text-slate-800">{z.zoneName || "Unnamed Zone"}</div>
                       <div className="col-span-6 sm:col-span-3">
+                        <label className="block sm:hidden text-[10px] font-semibold text-slate-500 mb-1">Surge Title</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Rain Surge"
+                          value={z.surgeTitle ?? "Surge Charge"}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setZoneSurges((prev) => prev.map((r) => r.zoneId === z.zoneId ? { ...r, surgeTitle: value } : r))
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div className="col-span-6 sm:col-span-2">
+                        <label className="block sm:hidden text-[10px] font-semibold text-slate-500 mb-1">Surge Amount (₹)</label>
                         <input
                           type="number"
                           min="0"
@@ -545,13 +576,13 @@ export default function FeeSettings() {
                             const value = e.target.value
                             setZoneSurges((prev) => prev.map((r) => r.zoneId === z.zoneId ? { ...r, surgeAmount: value } : r))
                           }}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md text-xs font-semibold text-emerald-600 focus:ring-2 focus:ring-emerald-500 outline-none"
                         />
                       </div>
                       <div className="col-span-3 sm:col-span-2">
                         <button
                           onClick={() => updateZoneSurge(z.zoneId, { ...z, isEnabled: !z.isEnabled })}
-                          className={`px-3 py-2 rounded-md text-xs font-semibold ${z.isEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                          className={`px-3 py-1.5 rounded-md text-xs font-semibold ${z.isEnabled ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"} transition-colors`}
                         >
                           {z.isEnabled ? "Enabled" : "Disabled"}
                         </button>
@@ -560,14 +591,13 @@ export default function FeeSettings() {
                         <button
                           onClick={() => updateZoneSurge(z.zoneId, z)}
                           disabled={savingZoneId === String(z.zoneId)}
-                          className="px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold disabled:opacity-60"
+                          className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-60 transition-colors shadow-sm"
                         >
                           {savingZoneId === String(z.zoneId) ? "Saving..." : "Save"}
                         </button>
                       </div>
                     </div>
                   ))}
-                  {filteredZoneSurges.length === 0 && <p className="text-sm text-slate-500">No zones found.</p>}
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <p className="text-xs text-slate-500">
@@ -680,6 +710,17 @@ export default function FeeSettings() {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
                     placeholder="0"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">Surge Amount Title (Billing Label)</label>
+                  <input
+                    type="text"
+                    value={feeSettings.surgeTitle || ""}
+                    onChange={(e) => setFeeSettings((s) => ({ ...s, surgeTitle: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="e.g. Rain Surge / Peak Hours Charge"
+                  />
+                  <p className="text-xs text-slate-500">Custom title shown to customers in bill breakdown</p>
                 </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-slate-700">GST Rate (%)</label>

@@ -61,7 +61,26 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
 
   if (!order) return null;
 
-  const earnings = order.earnings || order.riderEarning || (order.orderAmount ? order.orderAmount * 0.1 : 0);
+  const earnings = useMemo(() => {
+    if (order?.riderEarning != null && Number(order.riderEarning) > 0) {
+      return Number(order.riderEarning);
+    }
+    if (order?.earnings != null && Number(order.earnings) > 0) {
+      return Number(order.earnings);
+    }
+    const baseFee = Number(
+      order?.pricing?.riderDeliveryEarningAfterAdminCommission ??
+      order?.pricing?.deliveryFee ??
+      order?.deliveryFee ??
+      order?.deliveryCharge ??
+      order?.amounts?.riderShare ??
+      order?.riderShare ??
+      0
+    );
+    const surge = Number(order?.pricing?.surgeAmount ?? order?.surgeAmount ?? 0);
+    const tip = Number(order?.pricing?.deliveryPartnerTip ?? order?.deliveryPartnerTip ?? 0);
+    return baseFee + surge + tip;
+  }, [order]);
   const restaurantName = order.restaurantName || order.restaurant_name || (order.restaurantId?.name) || 'Restaurant';
   const restaurantAddress = order.restaurantAddress || order.restaurant_address || (order.restaurantId?.location?.address) || 'Address not available';
   const restaurantPhone =
