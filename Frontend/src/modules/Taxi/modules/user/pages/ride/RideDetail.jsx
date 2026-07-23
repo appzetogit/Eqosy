@@ -79,8 +79,8 @@ const RideDetail = () => {
   const details = useMemo(() => {
     const driver = ride?.driver || ride?.driverId || {};
     const timeSource = ride?.completedAt || ride?.startedAt || ride?.acceptedAt || ride?.createdAt || ride?.updatedAt;
-    const fare = Number(ride?.fare || 0);
-    const taxes = Math.max(Math.round(fare * 0.18), 0);
+    const fare = Math.round(Number(ride?.fare || 0));
+    const taxes = Math.round(Math.max(fare * 0.18, 0));
     const status = String(ride?.status || ride?.liveStatus || 'trip').toLowerCase();
     const rideCode = String(ride?.rideId || ride?._id || ride?.id || id || 'ride');
 

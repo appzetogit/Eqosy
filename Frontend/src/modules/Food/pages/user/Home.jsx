@@ -452,6 +452,8 @@ const RecommendedFoodImageStrip = React.memo(
       [backendOrigin],
     );
 
+    const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+
     const stripImages = useMemo(() => {
       const list = Array.isArray(restaurant?.recommendedImages)
         ? restaurant.recommendedImages
@@ -462,16 +464,36 @@ const RecommendedFoodImageStrip = React.memo(
       for (const item of list) {
         const image = resolveImageSrc(item);
         if (!image) continue;
+        const price = Number(item?.price || restaurant?.featuredPrice || 165);
+        const originalPrice = item?.originalPrice
+          ? Number(item.originalPrice)
+          : (restaurant?.featuredOriginalPrice
+            ? Number(restaurant.featuredOriginalPrice)
+            : (price ? Math.round(price * 1.5) : null));
+        const foodType = item?.foodType || restaurant?.featuredFoodType || (restaurant?.pureVegRestaurant ? "Veg" : "Non-Veg");
+
         slides.push({
           id: item?.id || `${image}-${slides.length}`,
           image,
-          name: item?.name || restaurant?.featuredDish || restaurant?.name || "Dish",
+          name: item?.name || restaurant?.featuredDish || restaurant?.name || "Special Dish",
+          price,
+          originalPrice,
+          foodType,
         });
         if (slides.length >= 8) break;
       }
 
       return slides;
-    }, [restaurant?.recommendedImages, restaurant?.featuredDish, restaurant?.name, resolveImageSrc]);
+    }, [restaurant?.recommendedImages, restaurant?.featuredDish, restaurant?.featuredPrice, restaurant?.featuredOriginalPrice, restaurant?.featuredFoodType, restaurant?.pureVegRestaurant, restaurant?.name, resolveImageSrc]);
+
+    const handleScroll = useCallback(() => {
+      const container = scrollContainerRef.current;
+      if (!container || container.clientWidth === 0) return;
+      const index = Math.round(container.scrollLeft / container.clientWidth);
+      if (index >= 0 && index < stripImages.length) {
+        setActiveSlideIndex(index);
+      }
+    }, [stripImages.length]);
 
     const handlePointerDown = useCallback((event) => {
       dragStateRef.current = {
@@ -543,12 +565,35 @@ const RecommendedFoodImageStrip = React.memo(
       );
     }
 
+    const activeItem = stripImages[activeSlideIndex] || stripImages[0];
+
     return (
       <div
-        className={`relative ${className} w-full overflow-hidden ${roundedClass} bg-[#f5f5f5]`}
+        className={`relative ${className} w-full overflow-hidden ${roundedClass} bg-[#f5f5f5] group`}
       >
+        {/* Dynamic Dish Badge for Active Slide */}
+        {activeItem && (
+          <div className="absolute top-3 left-3 flex items-center z-20 pointer-events-none transform transition-all duration-300 group-hover:scale-105">
+            <div className="bg-black/75 backdrop-blur-md text-white px-3 py-1 rounded-full text-[11px] font-medium tracking-tight flex items-center gap-1.5 shadow-2xl border border-white/20">
+              {/* Veg / Non-Veg Indicator Dot */}
+              <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border p-0.5 ${activeItem.foodType === 'Veg' || restaurant?.pureVegRestaurant ? 'border-emerald-500 bg-emerald-950/40' : 'border-rose-500 bg-rose-950/40'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${activeItem.foodType === 'Veg' || restaurant?.pureVegRestaurant ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              </span>
+              <span className="font-semibold truncate max-w-[130px] sm:max-w-[170px]">{activeItem.name}</span>
+              <span className="opacity-50">·</span>
+              <span className="font-bold text-white">₹{Math.round(activeItem.price)}</span>
+              {activeItem.originalPrice && Number(activeItem.originalPrice) > Number(activeItem.price) && (
+                <span className="text-[10px] text-gray-300 line-through font-normal ml-0.5">
+                  ₹{Math.round(activeItem.originalPrice)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div
           ref={scrollContainerRef}
+          onScroll={handleScroll}
           className="flex h-full overflow-x-auto overscroll-x-contain snap-x snap-mandatory [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           onPointerDown={handlePointerDown}
@@ -882,9 +927,9 @@ export default function Home() {
       ([entry]) => {
         // Only mark stuck after the sentinel has scrolled above the viewport —
         // not when it simply starts below the fold on initial load.
-        setIsCategoryStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+        setIsCategoryStuck(!entry.isIntersecting && entry.boundingClientRect.top < 100);
       },
-      { threshold: 0, rootMargin: '-72px 0px 0px 0px' }
+      { threshold: 0, rootMargin: '-52px 0px 0px 0px' }
     );
     if (categoryAnchorRef.current) observer.observe(categoryAnchorRef.current);
     return () => observer.disconnect();
@@ -1925,10 +1970,23 @@ export default function Home() {
                           `${restaurant.restaurantId || restaurant._id || "restaurant"}-recommended-${itemIndex}`,
                         image,
                         name: item?.name || "",
+                        price: Number(item?.price || 0),
+                        originalPrice: item?.originalPrice ? Number(item.originalPrice) : null,
+                        foodType: item?.foodType || "Non-Veg",
                       };
                     })
                     .filter(Boolean)
                 : [];
+
+              const rawFirstRec = Array.isArray(restaurant.recommendedImages) && restaurant.recommendedImages.length > 0 ? restaurant.recommendedImages[0] : null;
+              const featuredDish = rawFirstRec?.name || restaurant.featuredDish || (restaurant.cuisines && restaurant.cuisines.length > 0 ? `${restaurant.cuisines[0]} Special` : "Special Dish");
+              const featuredPrice = Number(rawFirstRec?.price || restaurant.featuredPrice || 165);
+              const featuredOriginalPrice = rawFirstRec?.originalPrice
+                ? Number(rawFirstRec.originalPrice)
+                : (restaurant.featuredOriginalPrice
+                  ? Number(restaurant.featuredOriginalPrice)
+                  : (rawFirstRec?.price ? Math.round(rawFirstRec.price * 1.5) : null));
+              const featuredFoodType = rawFirstRec?.foodType || restaurant.featuredFoodType || (restaurant.pureVegRestaurant ? "Veg" : "Non-Veg");
 
               return {
                 id: restaurant.restaurantId || restaurant._id,
@@ -1951,12 +2009,10 @@ export default function Home() {
                 images: allImages, // Array of cover images for carousel (separate from menu images)
                 recommendedImages,
                 priceRange: restaurant.priceRange || "$$", // Use from API or default
-                featuredDish:
-                  restaurant.featuredDish ||
-                  (restaurant.cuisines && restaurant.cuisines.length > 0
-                    ? `${restaurant.cuisines[0]} Special`
-                    : "Special Dish"),
-                featuredPrice: restaurant.featuredPrice || 249, // Use from API or default
+                featuredDish,
+                featuredPrice,
+                featuredOriginalPrice,
+                featuredFoodType,
                 offer: offerText,
                 slug: restaurant.slug,
                 restaurantId: restaurant.restaurantId,
@@ -2202,16 +2258,22 @@ export default function Home() {
             ]);
             const profileImageUrl = profileImageCandidates[0] || "";
 
+            const menuImageCandidates = extractImages([
+              ...(Array.isArray(rest.menuImages) ? rest.menuImages : [rest.menuImages]).filter(Boolean),
+              ...(Array.isArray(rest.onboarding?.step2?.menuImageUrls) ? rest.onboarding.step2.menuImageUrls : []).filter(Boolean),
+            ]);
+
             const allImages = Array.from(
               new Set(
                 [
                   ...coverImages,
                   ...profileImageCandidates,
+                  ...menuImageCandidates,
                 ].filter(Boolean),
               ),
             );
 
-            const image = allImages[0] || profileImageUrl || "";
+            const image = allImages[0] || profileImageUrl || menuImageCandidates[0] || "";
 
             uniqueMap.set(rest._id, {
               id: rest._id,
@@ -2220,6 +2282,7 @@ export default function Home() {
               slug: rest.slug || (rest.restaurantName || rest.name || "restaurant").toLowerCase().replace(/\s+/g, "-"),
               coverImages: rest.coverImages || null,
               profileImage: rest.profileImage || null,
+              menuImages: rest.menuImages || null,
               image: image,
               images: allImages,
               rating: Number(rest.rating) || 0,
@@ -2814,8 +2877,8 @@ export default function Home() {
   // Memoized Category Rail Header
   const CategoryRailHeader = useMemo(() => {
     return (
-      <section className="space-y-4 pt-4 sm:pt-6">
-        <div className="px-4 flex items-center justify-between">
+      <section className="space-y-4 pt-1">
+        <div className="flex items-center justify-between">
           <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white tracking-tight">
             What's on your mind today?
           </h2>
@@ -2952,7 +3015,23 @@ export default function Home() {
       );
     }
 
-    if (previouslyOrderedRestaurants.length === 0) return null;
+    const previouslyOrderedWithImages = previouslyOrderedRestaurants.map((r) => {
+      const match = restaurantsData.find((d) => 
+        String(d.id || d.mongoId) === String(r.id || r.mongoId) ||
+        d.name?.toLowerCase().trim() === r.name?.toLowerCase().trim()
+      );
+      if (match) {
+        return {
+          ...r,
+          image: match.image || r.image,
+          images: match.images && match.images.length > 0 ? match.images : (match.image ? [match.image] : r.images),
+          recommendedImages: match.recommendedImages || r.recommendedImages,
+        };
+      }
+      return r;
+    });
+
+    if (previouslyOrderedWithImages.length === 0) return null;
 
     return (
       <section className="space-y-4 pt-4 sm:pt-6">
@@ -2963,8 +3042,8 @@ export default function Home() {
           </h2>
         </div>
         
-        <HorizontalCarousel showControls={previouslyOrderedRestaurants.length > 3} className="px-4">
-          {previouslyOrderedRestaurants.map((restaurant, idx) => {
+        <HorizontalCarousel showControls={previouslyOrderedWithImages.length > 3} className="px-4">
+          {previouslyOrderedWithImages.map((restaurant, idx) => {
             const restaurantSlug =
               restaurant.slug ||
               restaurant.name.toLowerCase().replace(/\s+/g, "-");
@@ -2978,7 +3057,7 @@ export default function Home() {
                   className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="relative h-28 bg-gray-50">
-                    <RestaurantImageCarousel
+                    <RecommendedFoodImageStrip
                       restaurant={restaurant}
                       backendOrigin={BACKEND_ORIGIN}
                       className="h-28"
@@ -3050,9 +3129,9 @@ export default function Home() {
         {!zoneLoading && !isOutOfService && superAppVertical === "food" && (
           <motion.div
             key="food-panel"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
       <div className="relative transition-all duration-300">
@@ -3176,23 +3255,20 @@ export default function Home() {
 
         <PromotionBannerCarousel zoneId={zoneId} />
 
-        {CategoryRailHeader}
+        {/* Category sticky anchor sentinel — must be before any sticky elements */}
+        <div ref={categoryAnchorRef} className="h-px w-full" aria-hidden="true" />
 
-        {/* Category sticky anchor sentinel â€” must be immediately before the category rail */}
-        <div ref={categoryAnchorRef} aria-hidden="true" />
+        {/* Category Rail Header — sticky right below search bar */}
+        <div className="sticky top-[52px] z-[50] bg-white dark:bg-[#0a0a0a] pt-4 pb-2 px-4">
+          {CategoryRailHeader}
+        </div>
 
-        {/* Single unified glassmorphism backdrop behind BOTH search bar + categories.
-            One blur context = no seam between the two sticky bars. */}
-        {isCategoryStuck && (
-          <div
-            className="fixed top-0 left-0 right-0 z-[48] backdrop-blur-xl border-b border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.12)]"
-            style={{ height: '170px', backgroundColor: getVerticalTheme(superAppVertical).stickyBackdrop }}
-            aria-hidden="true"
-          />
-        )}
-
-        {/* Category Rail â€” permanently sticky using native CSS for 0 latency. */}
-        <div className="sticky top-[72px] z-[50]">
+        {/* Category Rail — permanently sticky using native CSS for 0 latency. */}
+        <div
+          className={`sticky top-[100px] z-[50] bg-white dark:bg-[#0a0a0a] pb-4 px-4 transition-shadow duration-300 ${
+            isCategoryStuck ? 'shadow-[0_12px_30px_rgba(0,0,0,0.08)] rounded-b-[1.75rem]' : ''
+          }`}
+        >
           {CategoryRailSection}
         </div>
 
@@ -3395,14 +3471,11 @@ export default function Home() {
                                 restaurant={restaurant}
                                 priority={index < 3}
                                 backendOrigin={BACKEND_ORIGIN}
+                                onSlideChange={(activeDish) => {
+                                  // This assumes the component updates local state or updates parent
+                                  // based on the logic injected.
+                                }}
                               />
-
-                              {/* Featured Dish Badge - Top Left */}
-                              <div className="absolute top-4 left-4 flex items-center z-10 transform transition-transform duration-300 group-hover:scale-105">
-                                <div className="bg-black/70 backdrop-blur-lg text-white px-4 py-1.5 rounded-full text-[11px] font-medium tracking-tight flex items-center shadow-2xl border border-white/20">
-                                  {restaurant.featuredDish} @ Rs {restaurant.featuredPrice}
-                                </div>
-                              </div>
 
                               {/* Bookmark Icon - Top Right */}
                               <div className="absolute top-4 right-4 z-10 transform transition-transform duration-300 group-hover:scale-110">
@@ -4668,9 +4741,9 @@ export default function Home() {
         {!zoneLoading && !isOutOfService && superAppVertical === "grocery" && (
           <motion.div
             key="grocery-panel"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
             <GrocerySection />

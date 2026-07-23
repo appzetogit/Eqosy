@@ -1681,13 +1681,25 @@ export default function CategoryPage() {
                           </div>
                         )}
 
-                        {/* Category Dish Badge - Top Left (shows category dish if available, otherwise featured dish) */}
-                        {(isCategoryView ? restaurant.categoryDishPrice : (restaurant.categoryDishName || restaurant.featuredDish)) && (
-                          <div className="absolute top-3 left-3">
-                            <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm md:text-base font-medium">
-                              {isCategoryView
-                                ? `₹${restaurant.categoryDishPrice || restaurant.featuredPrice || 0}`
-                                : `${restaurant.categoryDishName || restaurant.featuredDish} • ₹${restaurant.categoryDishPrice || restaurant.featuredPrice}`}
+                        {/* Category Dish Badge - Top Left */}
+                        {(restaurant.categoryDishName || restaurant.featuredDish || restaurant.categoryDishPrice || restaurant.featuredPrice) && (
+                          <div className="absolute top-3 left-3 flex items-center z-10">
+                            <div className="bg-black/75 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-medium tracking-tight flex items-center gap-1.5 shadow-xl border border-white/20">
+                              <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border p-0.5 ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'border-emerald-500 bg-emerald-950/40' : 'border-rose-500 bg-rose-950/40'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              </span>
+                              <span className="font-semibold truncate max-w-[130px] sm:max-w-[170px]">
+                                {restaurant.categoryDishName || restaurant.featuredDish || "Special"}
+                              </span>
+                              <span className="opacity-50">·</span>
+                              <span className="font-bold text-white">
+                                ₹{Math.round(restaurant.categoryDishPrice || restaurant.featuredPrice || 0)}
+                              </span>
+                              {(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice) && Number(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice) > Number(restaurant.categoryDishPrice || restaurant.featuredPrice) && (
+                                <span className="text-[10px] text-gray-300 line-through font-normal ml-0.5">
+                                  ₹{Math.round(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice)}
+                                </span>
+                              )}
                             </div>
                           </div>
                         )}

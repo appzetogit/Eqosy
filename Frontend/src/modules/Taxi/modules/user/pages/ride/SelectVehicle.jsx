@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle, Calendar } from 'lucide-react';
 import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
@@ -662,7 +662,11 @@ const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, duration
   }
 
   const total = subtotal + (subtotal * serviceTax) / 100;
-  return Math.max(0, Math.round(total));
+  const rideSurgeAmount = pricingRule.zone_id?.ride_surge_enabled
+    ? toFiniteNumber(pricingRule.ride_surge_amount, 0)
+    : 0;
+
+  return Math.max(0, Math.round(total + rideSurgeAmount));
 };
 
 const getDropTime = (minutesAway = 0) => {
@@ -772,7 +776,7 @@ const formatDateTimeInputValue = (date) => {
 };
 
 const getMinScheduledDateTime = () => {
-  const next = new Date(Date.now() + 60 * 60 * 1000);
+  const next = new Date(Date.now() + 15 * 60 * 1000);
   return formatDateTimeInputValue(next);
 };
 
@@ -798,6 +802,20 @@ const formatScheduledDisplay = (value) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const formatDateTimeDisplay = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${day}-${month}-${year} ${hours}:${minutes}`;
 };
 
 const formatAvailabilityLine = (availability) => {
@@ -889,6 +907,10 @@ const SelectVehicle = () => {
   const [selected, setSelected] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showRideModeModal, setShowRideModeModal] = useState(false);
+  const [tempScheduledAt, setTempScheduledAt] = useState('');
+  const [localScheduleError, setLocalScheduleError] = useState('');
+  const [bookingTab, setBookingTab] = useState('instant');
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showBidModal, setShowBidModal] = useState(false);
   const [previewVehicleId, setPreviewVehicleId] = useState('');
@@ -949,6 +971,63 @@ const SelectVehicle = () => {
   const { isLoaded: isMapLoaded, loadError: mapLoadError } = useAppGoogleMapsLoader();
   const minScheduledAt = useMemo(() => getMinScheduledDateTime(), []);
   const maxScheduledAt = useMemo(() => getMaxScheduledDateTime(), []);
+
+  const openSchedulePicker = () => {
+    const currentMin = getMinScheduledDateTime();
+    if (!scheduledAt || scheduledAt < currentMin) {
+      setScheduledAt(currentMin);
+      setTempScheduledAt(currentMin);
+    } else {
+      setTempScheduledAt(scheduledAt);
+    }
+    setLocalScheduleError('');
+    setShowRideModeModal(true);
+  };
+
+  const isConfirmDisabled = useMemo(() => {
+    const val = tempScheduledAt || scheduledAt;
+    if (!val) return true;
+    const parsedSchedule = new Date(val);
+    if (Number.isNaN(parsedSchedule.getTime())) return true;
+    
+    const nextMin = new Date(Date.now() + 15 * 60 * 1000);
+    const minVal = formatDateTimeInputValue(nextMin);
+    
+    const nextMax = new Date();
+    nextMax.setDate(nextMax.getDate() + 7);
+    const maxVal = formatDateTimeInputValue(nextMax);
+    
+    return val < minVal || val > maxVal;
+  }, [tempScheduledAt, scheduledAt]);
+
+  useEffect(() => {
+    const val = tempScheduledAt || scheduledAt;
+    if (!val) {
+      setLocalScheduleError('');
+      return;
+    }
+    
+    const parsedSchedule = new Date(val);
+    if (Number.isNaN(parsedSchedule.getTime())) {
+      setLocalScheduleError('Choose a valid schedule date and time.');
+      return;
+    }
+    
+    const nextMin = new Date(Date.now() + 15 * 60 * 1000);
+    const minVal = formatDateTimeInputValue(nextMin);
+    
+    const nextMax = new Date();
+    nextMax.setDate(nextMax.getDate() + 7);
+    const maxVal = formatDateTimeInputValue(nextMax);
+    
+    if (val < minVal) {
+      setLocalScheduleError('Schedule time cannot be earlier than now.');
+    } else if (val > maxVal) {
+      setLocalScheduleError('Advance booking is available for up to 7 days only.');
+    } else {
+      setLocalScheduleError('');
+    }
+  }, [tempScheduledAt, scheduledAt]);
 
   useEffect(() => {
     let active = true;
@@ -1168,7 +1247,7 @@ const SelectVehicle = () => {
         const response = await api.get('/rides/pending-cancellation-dues');
         if (!active) return;
         const totalDue = Number(response?.data?.data?.totalDueAmount || response?.data?.totalDueAmount || 0);
-        setPendingCancellationFee(totalDue);
+        setPendingCancellationFee(Math.round(totalDue));
       } catch (_err) {
         if (active) setPendingCancellationFee(0);
       }
@@ -1198,8 +1277,8 @@ const SelectVehicle = () => {
           ...vehicle,
           pricingRule,
           basePrice: baseCalculatedPrice,
-          previousCancellationFee: pendingCancellationFee,
-          price: baseCalculatedPrice + pendingCancellationFee,
+          previousCancellationFee: Math.round(pendingCancellationFee),
+          price: Math.round(baseCalculatedPrice + pendingCancellationFee),
         };
       }),
     [pricingRules, effectiveServiceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles, pendingCancellationFee],
@@ -1210,48 +1289,55 @@ const SelectVehicle = () => {
   const hasAvailabilityResults = Object.keys(availabilityByVehicleId).length > 0;
 
   const displayedVehicles = useMemo(() => {
+    let baseList = [];
     if (!hasAvailabilityResults) {
-      return pricedVehicles;
+      baseList = pricedVehicles;
+    } else {
+      const rankedVehicles = pricedVehicles
+        .map((vehicle, index) => ({
+          vehicle,
+          index,
+          availability: availabilityByVehicleId[vehicle.id] || DEFAULT_AVAILABILITY,
+        }))
+        .sort((a, b) => {
+          const aAvailable = a.availability.totalDrivers > 0;
+          const bAvailable = b.availability.totalDrivers > 0;
+
+          if (aAvailable !== bAvailable) {
+            return aAvailable ? -1 : 1;
+          }
+
+          if (aAvailable && bAvailable) {
+            const driverDelta = (b.availability.totalDrivers || 0) - (a.availability.totalDrivers || 0);
+            if (driverDelta !== 0) return driverDelta;
+
+            const etaDelta = (a.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY)
+              - (b.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY);
+            if (etaDelta !== 0) return etaDelta;
+          }
+
+          return a.index - b.index;
+        })
+        .map(({ vehicle, availability }) => ({
+          vehicle,
+          availability,
+        }));
+
+      if (rideMode !== 'schedule') {
+        baseList = rankedVehicles
+          .filter(({ availability }) => (availability.totalDrivers || 0) > 0)
+          .map(({ vehicle }) => vehicle);
+      } else {
+        baseList = rankedVehicles.map(({ vehicle }) => vehicle);
+      }
     }
 
-    const rankedVehicles = pricedVehicles
-      .map((vehicle, index) => ({
-        vehicle,
-        index,
-        availability: availabilityByVehicleId[vehicle.id] || DEFAULT_AVAILABILITY,
-      }))
-      .sort((a, b) => {
-        const aAvailable = a.availability.totalDrivers > 0;
-        const bAvailable = b.availability.totalDrivers > 0;
-
-        if (aAvailable !== bAvailable) {
-          return aAvailable ? -1 : 1;
-        }
-
-        if (aAvailable && bAvailable) {
-          const driverDelta = (b.availability.totalDrivers || 0) - (a.availability.totalDrivers || 0);
-          if (driverDelta !== 0) return driverDelta;
-
-          const etaDelta = (a.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY)
-            - (b.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY);
-          if (etaDelta !== 0) return etaDelta;
-        }
-
-        return a.index - b.index;
-      })
-      .map(({ vehicle, availability }) => ({
-        vehicle,
-        availability,
-      }));
-
-    if (rideMode !== 'schedule') {
-      return rankedVehicles
-        .filter(({ availability }) => (availability.totalDrivers || 0) > 0)
-        .map(({ vehicle }) => vehicle);
+    if (bookingTab === 'bid') {
+      return baseList.filter((vehicle) => vehicle.supportsBidding);
+    } else {
+      return baseList.filter((vehicle) => !vehicle.supportsBidding || vehicle.dispatchType === 'both' || vehicle.dispatchType === 'normal');
     }
-
-    return rankedVehicles.map(({ vehicle }) => vehicle);
-  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, rideMode]);
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, rideMode, bookingTab]);
 
   const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === selected), [pricedVehicles, selected]);
   const previewVehicle = useMemo(
@@ -1266,11 +1352,11 @@ const SelectVehicle = () => {
     ),
     [routeState.transportType, routeState.transport_type, selectedVehicle?.transportType],
   );
-  const appliedPromoDiscount = Math.max(0, Number(appliedPromo?.breakdown?.discount_amount || 0));
-  const discountedSelectedFare = Math.max(
+  const appliedPromoDiscount = Math.round(Math.max(0, Number(appliedPromo?.breakdown?.discount_amount || 0)));
+  const discountedSelectedFare = Math.round(Math.max(
     0,
     Number(appliedPromo?.breakdown?.fare_after_discount ?? selectedVehicle?.price ?? 0),
-  );
+  ));
   const selectedAvailability = selectedVehicle ? (availabilityByVehicleId[selectedVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
   const previewAvailability = previewVehicle ? (availabilityByVehicleId[previewVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
   const canProceed = Boolean(selectedVehicle) && !isFarePending && (rideMode === 'schedule' || Boolean(selectedAvailability.totalDrivers));
@@ -1278,7 +1364,7 @@ const SelectVehicle = () => {
     () => displayedVehicles.some((vehicle) => (availabilityByVehicleId[vehicle.id]?.totalDrivers || 0) > 0),
     [availabilityByVehicleId, displayedVehicles],
   );
-  const shouldUseDriverBidding = Boolean(
+  const shouldUseDriverBidding = bookingTab === 'bid' || Boolean(
     routeState.intercity ||
     routeState.serviceType === 'intercity' ||
     routeState.transport_type === 'intercity' ||
@@ -1803,7 +1889,7 @@ const SelectVehicle = () => {
             </div>
             <button
               type="button"
-              onClick={() => openPicker(scheduledAtInputRef)}
+              onClick={openSchedulePicker}
               className={`flex w-[42px] shrink-0 flex-col items-center justify-center rounded-[12px] border px-1 py-2 text-[10px] font-medium ${
                 rideMode === 'schedule'
                   ? 'border-slate-900 bg-slate-900 text-white'
@@ -1812,6 +1898,46 @@ const SelectVehicle = () => {
             >
               <Clock3 size={14} strokeWidth={2.2} />
               <span className="mt-1">{rideMode === 'schedule' ? 'Later' : 'Now'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Instant vs Bid Booking Tabs */}
+        <div className="shrink-0 px-4 pt-3 pb-1 border-b border-slate-100 bg-white">
+          <div className="grid grid-cols-2 rounded-[14px] bg-[#F4F6F8] p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setBookingTab('instant');
+                const instantVehicles = pricedVehicles.filter(v => !v.supportsBidding || v.dispatchType === 'both' || v.dispatchType === 'normal');
+                if (instantVehicles.length > 0 && !instantVehicles.some(v => v.id === selected)) {
+                  setSelected(instantVehicles[0].id);
+                }
+              }}
+              className={`py-2 text-[13px] font-extrabold rounded-[10px] transition-all duration-200 ${
+                bookingTab === 'instant'
+                  ? 'bg-white text-[#1A2B3D] shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Instant Booking
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBookingTab('bid');
+                const bidVehicles = pricedVehicles.filter(v => v.supportsBidding);
+                if (bidVehicles.length > 0 && !bidVehicles.some(v => v.id === selected)) {
+                  setSelected(bidVehicles[0].id);
+                }
+              }}
+              className={`py-2 text-[13px] font-extrabold rounded-[10px] transition-all duration-200 ${
+                bookingTab === 'bid'
+                  ? 'bg-white text-[#1A2B3D] shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Bid Booking
             </button>
           </div>
         </div>
@@ -1850,7 +1976,7 @@ const SelectVehicle = () => {
                     <AlertTriangle size={16} strokeWidth={2.5} />
                   </div>
                   <div>
-                    <p className="text-[11px] font-black text-amber-900 leading-tight">Previous Cancellation Charge (+Rs {pendingCancellationFee}) Added</p>
+                    <p className="text-[11px] font-black text-amber-900 leading-tight">Previous Cancellation Charge (+Rs {Math.round(pendingCancellationFee)}) Added</p>
                     <p className="text-[10px] font-semibold text-amber-700">This fee is added to your ride fare by admin policy.</p>
                   </div>
                 </div>
@@ -1924,7 +2050,7 @@ const SelectVehicle = () => {
                           </p>
                           {v.previousCancellationFee > 0 && (
                             <p className="mt-0.5 text-[10px] font-bold text-amber-700">
-                              Fare Rs {v.basePrice} + Prev Fee Rs {v.previousCancellationFee}
+                              Fare Rs {Math.round(v.basePrice)} + Prev Fee Rs {Math.round(v.previousCancellationFee)}
                             </p>
                           )}
                         </div>
@@ -2016,10 +2142,22 @@ const SelectVehicle = () => {
             </button>
             <button
               type="button"
-              className="flex items-center justify-center gap-2 px-3 py-2.5 text-[12px] font-medium text-slate-700"
+              onClick={openSchedulePicker}
+              className="flex items-center justify-center gap-1 px-3 py-2.5 text-[11px] font-medium text-slate-700 min-w-0"
             >
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[10px] text-slate-600">•</span>
-              <span>Myself</span>
+              {rideMode === 'schedule' ? (
+                <>
+                  <Calendar size={13} strokeWidth={2.3} className="text-blue-600 flex-shrink-0" />
+                  <span className="text-blue-700 font-semibold truncate">
+                    {formatDateTimeDisplay(scheduledAt)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[10px] text-slate-600 flex-shrink-0">•</span>
+                  <span className="truncate">Schedule ride</span>
+                </>
+              )}
             </button>
           </div>
 
@@ -2402,6 +2540,97 @@ const SelectVehicle = () => {
                     )}
                   </motion.button>
                 ))}
+              </div>
+            </motion.div>
+          </React.Fragment>
+        )}
+        {showRideModeModal && (
+          <React.Fragment key="ride-mode-modal">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowRideModeModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+              className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[32px] px-6 pt-4 pb-8 z-[101] font-['Plus_Jakarta_Sans']"
+            >
+              {/* Drag indicator */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8C9BA5] mb-1">
+                SCHEDULE RIDE
+              </p>
+              <h3 className="text-[22px] font-black text-[#1A2B3D] tracking-tight mb-6">
+                When do you want to leave?
+              </h3>
+
+              <p className="text-[12px] font-bold text-[#8C9BA5] mb-2">
+                Select Date & Time
+              </p>
+
+              {/* Date & Time selection input box */}
+              <div className="relative flex items-center justify-between rounded-[16px] border-2 border-slate-100 bg-[#F4F6F8] px-4 py-4 mb-8">
+                <span className="text-[16px] font-extrabold text-[#1A2B3D]">
+                  {formatDateTimeDisplay(tempScheduledAt || scheduledAt) || 'Select date & time'}
+                </span>
+                <Calendar size={18} className="text-[#1A2B3D]" />
+                <input
+                  type="datetime-local"
+                  value={tempScheduledAt || scheduledAt || ''}
+                  min={minScheduledAt}
+                  max={maxScheduledAt}
+                  onChange={(e) => {
+                    setTempScheduledAt(e.target.value);
+                    setLocalScheduleError('');
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+
+              {localScheduleError && (
+                <p className="text-[12px] font-semibold text-rose-500 mb-4 -mt-4 px-1">
+                  {localScheduleError}
+                </p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRideMode('now');
+                    setScheduledAt('');
+                    setTempScheduledAt('');
+                    setLocalScheduleError('');
+                    setShowRideModeModal(false);
+                  }}
+                  className="w-full py-3.5 rounded-[16px] bg-[#F4F6F8] text-[#1A2B3D] font-extrabold text-[14px] hover:bg-slate-200 transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={isConfirmDisabled}
+                  onClick={() => {
+                    const valueToConfirm = tempScheduledAt || scheduledAt;
+                    setScheduledAt(valueToConfirm);
+                    setRideMode('schedule');
+                    setShowRideModeModal(false);
+                  }}
+                  className={`w-full py-3.5 rounded-[16px] font-extrabold text-[14px] transition-colors ${
+                    isConfirmDisabled
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-[#00A86B] text-white hover:bg-[#00915c]'
+                  }`}
+                >
+                  Confirm Schedule
+                </button>
               </div>
             </motion.div>
           </React.Fragment>

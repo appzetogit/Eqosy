@@ -122,7 +122,7 @@ export async function createInitialTransaction(order) {
     const riderTotalPayout =
         Number(order.riderTotalPayout) ||
         Number(order.riderEarning) ||
-        Math.round((riderBasePay + riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
+        Math.round((riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
 
     let restaurantNet = subtotal + packagingFee - restaurantCommission;
     let platformNetProfit = platformFee + deliveryFee + surgeAmount + restaurantCommission - riderShare;

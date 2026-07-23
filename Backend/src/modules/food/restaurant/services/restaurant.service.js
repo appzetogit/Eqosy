@@ -225,7 +225,7 @@ const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
         isActive: { $ne: false },
         isAvailable: { $ne: false }
     })
-        .select('restaurantId image name')
+        .select('restaurantId image name price originalPrice foodType discountAmount discountType')
         .sort({ createdAt: -1 })
         .lean();
 
@@ -242,7 +242,12 @@ const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
         current.push({
             id: String(item?._id || `${restaurantId}-${current.length}`),
             image,
-            name: item?.name || ''
+            name: item?.name || '',
+            price: Number(item?.price || 0),
+            originalPrice: item?.originalPrice ? Number(item.originalPrice) : null,
+            foodType: item?.foodType || 'Non-Veg',
+            discountAmount: Number(item?.discountAmount || 0),
+            discountType: item?.discountType || 'Percent'
         });
         recommendedByRestaurantId.set(restaurantId, current);
     }
@@ -1434,11 +1439,17 @@ export const listApprovedRestaurants = async (query = {}) => {
         }
     }
 
-    // Strict zone filter for user listing:
-    // if zoneId is provided, return only restaurants mapped to that zone.
+    // Zone filter for user listing:
+    // If zoneId is provided, return restaurants mapped to that zone,
+    // as well as restaurants with unassigned/global zone status (zoneId null/undefined).
     const zoneIdRaw = String(query.zoneId || '').trim();
     if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
-        filter.zoneId = new mongoose.Types.ObjectId(zoneIdRaw);
+        const targetZoneId = new mongoose.Types.ObjectId(zoneIdRaw);
+        filter.$or = [
+            { zoneId: targetZoneId },
+            { zoneId: { $exists: false } },
+            { zoneId: null }
+        ];
     }
 
     const lat = toFiniteNumber(query.lat);

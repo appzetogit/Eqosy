@@ -975,8 +975,8 @@ export const createRideRecord = async ({
     ? Math.max(0, Number(pricingRule?.ride_surge_amount || 0))
     : 0;
   const effectiveStartingFareWithoutSurge = pricingNegotiationMode === 'user_increment_only'
-    ? effectiveUserMaxBidFare
-    : safeFare;
+    ? Math.max(0, effectiveUserMaxBidFare - rideSurgeAmount)
+    : Math.max(0, safeFare - rideSurgeAmount);
   const effectiveStartingFare = effectiveStartingFareWithoutSurge + rideSurgeAmount;
   const effectiveBidFloorFareWithSurge = effectiveBidFloorFare + rideSurgeAmount;
   const effectiveUserMaxBidFareWithSurge = effectiveUserMaxBidFare + rideSurgeAmount;
@@ -1010,12 +1010,15 @@ export const createRideRecord = async ({
     'cancellation.cancellation_charge': { $gt: 0 },
   }).select('_id cancellation').lean();
 
-  const previousCancellationFee = pendingDueRides.reduce(
+  const previousCancellationFee = Math.round(pendingDueRides.reduce(
     (sum, r) => sum + Number(r.cancellation?.cancellation_charge || 0),
     0,
-  );
+  ));
   const carriedCancellationRideIds = pendingDueRides.map((r) => r._id);
-  const totalStartingFare = effectiveStartingFare + previousCancellationFee;
+  // IMPORTANT: Frontend already includes previousCancellationFee in the fare it sends.
+  // So totalStartingFare = effectiveStartingFare (which is based on safeFare from frontend)
+  // We do NOT add previousCancellationFee again to avoid double-counting.
+  const totalStartingFare = effectiveStartingFare;
 
   const applicableSubscription = primaryVehicleTypeId
     ? await resolveApplicableUserSubscription({
@@ -1083,9 +1086,9 @@ export const createRideRecord = async ({
       pickupAddress: normalizeAddress(pickupAddress),
       dropLocation: toPoint(dropCoords, 'drop'),
       dropAddress: normalizeAddress(dropAddress),
-      fare: totalStartingFare,
+fare: totalStartingFare,
       baseFare: effectiveStartingFare,
-      baseRideFare: effectiveStartingFare,
+      baseRideFare: Math.max(0, effectiveStartingFare - previousCancellationFee),
       previousCancellationFee,
       carriedCancellationRideIds,
       bookingMode: effectiveBookingMode,
@@ -1112,6 +1115,8 @@ export const createRideRecord = async ({
       status: RIDE_STATUS.SEARCHING,
       liveStatus: RIDE_LIVE_STATUS.SEARCHING,
     });
+
+
 
     user.currentRideId = ride._id;
     await user.save();
@@ -1143,7 +1148,7 @@ export const createRideRecord = async ({
             dropAddress: normalizeAddress(dropAddress),
             fare: totalStartingFare,
             baseFare: effectiveStartingFare,
-            baseRideFare: effectiveStartingFare,
+            baseRideFare: Math.max(0, effectiveStartingFare - previousCancellationFee),
             previousCancellationFee,
             carriedCancellationRideIds,
             bookingMode: effectiveBookingMode,
@@ -1445,6 +1450,8 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, p
       'liveStatus',
       'fare',
       'baseFare',
+      'baseRideFare',
+      'previousCancellationFee',
       'bookingMode',
       'biddingStatus',
       'bidStepAmount',
@@ -1501,6 +1508,8 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, p
     liveStatus: ride.liveStatus,
     fare: ride.fare,
     baseFare: Number(ride.baseFare || ride.fare || 0),
+    baseRideFare: Number(ride.baseRideFare || (Number(ride.fare || 0) - Number(ride.previousCancellationFee || 0))),
+    previousCancellationFee: Number(ride.previousCancellationFee || 0),
     bookingMode: ride.bookingMode || 'normal',
     biddingStatus: ride.biddingStatus || 'none',
     bidStepAmount: Number(ride.bidStepAmount || DEFAULT_BID_STEP_AMOUNT),

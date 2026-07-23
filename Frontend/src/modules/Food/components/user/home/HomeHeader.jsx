@@ -454,8 +454,9 @@ export default function HomeHeader({
 
   return (
     <>
+      {/* Container 1: Location + Vertical Navigation Tabs */}
       <div
-        className={`relative z-10 w-full overflow-hidden rounded-b-[1.75rem] shadow-[0_10px_40px_rgba(0,0,0,0.18)] transition-colors duration-500 ease-in-out ${currentVertical.themeBg}`}
+        className={`relative z-10 w-full transition-colors duration-500 ease-in-out`}
         style={{ backgroundColor: verticalTheme.theme }}
       >
         <div className="relative z-20 px-4 pt-4 pb-2 flex items-center justify-between gap-3">
@@ -618,14 +619,20 @@ export default function HomeHeader({
             })}
           </div>
         </div>
+      </div>
 
-        {/* Search row */}
-        <div
-          className={`relative z-30 px-3 pt-3 flex items-center gap-2.5 ${
-            isFood ? 'pb-0' : 'pb-4'
-          } ${isCategoryStuck && isFood ? `sticky top-0 z-50 ${currentVertical.themeBg}` : ''}`}
-          style={isCategoryStuck && isFood ? { backgroundColor: verticalTheme.theme } : undefined}
-        >
+      {/* Container 2: Search Row — Sticky at top-0 */}
+      <div
+        className={`w-full px-3 pt-2.5 transition-all duration-300 sticky top-0 z-[50] ${
+          isCategoryStuck && isFood
+            ? 'shadow-md pb-3'
+            : `shadow-[0_10px_40px_rgba(0,0,0,0.18)] ${
+                isFood ? 'pb-3' : 'rounded-b-[1.75rem] pb-4'
+              }`
+        }`}
+        style={{ backgroundColor: verticalTheme.theme }}
+      >
+        <div className="flex items-center gap-2.5">
           {isTaxi ? (
             <button
               type="button"
@@ -641,67 +648,72 @@ export default function HomeHeader({
               </span>
             </button>
           ) : (
-          <>
-          <div
-            className="flex-1 min-w-0 rounded-[14px] flex items-center px-3 py-2 bg-white dark:bg-[#1a1a1a] shadow-[0_4px_16px_rgba(0,0,0,0.15)] cursor-pointer active:scale-[0.99] transition-all duration-200 overflow-hidden"
-            onClick={onSearchFocus}
-            onTouchStart={onSearchFocus}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSearchFocus();
-              }
-            }}
-          >
-            <Search className="h-[18px] w-[18px] mr-2 flex-shrink-0" strokeWidth={2.5} style={{ color: verticalTheme.accent }} />
-            <div className="flex-1 relative h-5 min-w-0">
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={placeholderIndex}
-                  initial={{ y: 12, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -12, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
-                  className="absolute inset-0 text-[14px] font-medium text-gray-400 truncate"
+            <>
+              <div
+                className="flex-1 min-w-0 rounded-[14px] flex items-center px-3 py-2 bg-white dark:bg-[#1a1a1a] shadow-[0_4px_16px_rgba(0,0,0,0.15)] cursor-pointer active:scale-[0.99] transition-all duration-200 overflow-hidden"
+                onClick={onSearchFocus}
+                onTouchStart={onSearchFocus}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSearchFocus();
+                  }
+                }}
+              >
+                <Search className="h-[18px] w-[18px] mr-2 flex-shrink-0" strokeWidth={2.5} style={{ color: verticalTheme.accent }} />
+                <div className="flex-1 relative h-5 min-w-0">
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={placeholderIndex}
+                      initial={{ y: 12, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -12, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className="absolute inset-0 text-[14px] font-medium text-gray-400 truncate"
+                    >
+                      {resolvedPlaceholders?.[placeholderIndex] || 'Search "chinese"'}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+                <div className="h-5 w-px bg-gray-200 mx-2.5 flex-shrink-0" />
+                <div
+                  className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                  style={{ backgroundColor: verticalTheme.accentSoft }}
                 >
-                  {resolvedPlaceholders?.[placeholderIndex] || 'Search "chinese"'}
-                </motion.span>
-              </AnimatePresence>
-            </div>
-            <div className="h-5 w-px bg-gray-200 mx-2.5 flex-shrink-0" />
-            <div
-              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all"
-              style={{ backgroundColor: verticalTheme.accentSoft }}
-            >
-              <Mic className="h-[18px] w-[18px]" strokeWidth={2.5} style={{ color: verticalTheme.accent }} />
-            </div>
-          </div>
+                  <Mic className="h-[18px] w-[18px]" strokeWidth={2.5} style={{ color: verticalTheme.accent }} />
+                </div>
+              </div>
 
-          {isFood && (
-          <div
-            className="flex flex-col items-center justify-center cursor-pointer flex-shrink-0 w-[52px]"
-            onClick={() => handleVegModeChange && handleVegModeChange(!isVegMode)}
-            ref={vegModeToggleRef}
-          >
-            <span className="text-[9px] font-black uppercase tracking-wide leading-tight text-white text-center">
-              Veg
-            </span>
-            <span className="text-[9px] font-black uppercase tracking-wide leading-tight text-white text-center mb-1">
-              Mode
-            </span>
-            <div className={`w-9 h-[18px] rounded-full relative transition-colors ${isVegMode ? 'bg-[#065f46]' : 'bg-white/40'}`}>
-              <div className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white transition-transform ${isVegMode ? 'translate-x-[18px]' : 'translate-x-[2px]'} shadow-sm`} />
-            </div>
-          </div>
-          )}
-          </>
+              {isFood && (
+                <div
+                  className="flex flex-col items-center justify-center cursor-pointer flex-shrink-0 w-[52px]"
+                  onClick={() => handleVegModeChange && handleVegModeChange(!isVegMode)}
+                  ref={vegModeToggleRef}
+                >
+                  <span className="text-[9px] font-black uppercase tracking-wide leading-tight text-white text-center">
+                    Veg
+                  </span>
+                  <span className="text-[9px] font-black uppercase tracking-wide leading-tight text-white text-center mb-1">
+                    Mode
+                  </span>
+                  <div className={`w-9 h-[18px] rounded-full relative transition-colors ${isVegMode ? 'bg-[#065f46]' : 'bg-white/40'}`}>
+                    <div className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white transition-transform ${isVegMode ? 'translate-x-[18px]' : 'translate-x-[2px]'} shadow-sm`} />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
+      </div>
 
-        {isFood && (
-        <div className="relative z-10 mt-3">
+      {/* Container 3: Slide Banners — rounded corners and shadow at the bottom */}
+      {isFood && (
+        <div
+          className="relative z-10 w-full overflow-hidden rounded-b-[1.75rem] shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
+          style={{ backgroundColor: verticalTheme.theme }}
+        >
           <div className="relative w-full h-[168px] overflow-hidden">
             <div
               className="absolute inset-0 flex transition-transform duration-700 ease-in-out"
@@ -736,8 +748,7 @@ export default function HomeHeader({
             </div>
           </div>
         </div>
-        )}
-      </div>
+      )}
     </>
   );
 }

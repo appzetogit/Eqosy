@@ -40,7 +40,15 @@ const InputField = ({ label, name, value, onChange, placeholder, type = "text", 
          type={type}
          name={name}
          value={value || ''}
-         onChange={(e) => onChange(name, e.target.value)}
+         min={type === 'number' ? '0' : undefined}
+         onChange={(e) => {
+           const val = e.target.value;
+           if (type === 'number' && val !== '' && Number(val) < 0) {
+             onChange(name, '0');
+           } else {
+             onChange(name, val);
+           }
+         }}
          placeholder={placeholder}
          className={`w-full bg-white border border-slate-200 rounded-lg py-3 ${prefix ? 'pl-16' : 'px-4'} text-[14px] text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none`}
        />

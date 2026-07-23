@@ -350,9 +350,9 @@ const RideTracking = () => {
   const scheduledCountdown = getScheduledCountdownLabel(scheduledAt, waitingNow);
   const scheduledDateLabel = formatScheduledDateTime(scheduledAt);
   const fare = rideRealtime?.fare || state.fare || 22;
-  const previousCancellationFee = Number(rideRealtime?.previousCancellationFee || state?.previousCancellationFee || 0);
-  const baseRideFare = Number(rideRealtime?.baseRideFare || state?.baseRideFare || (previousCancellationFee > 0 ? fare - previousCancellationFee : fare));
-  const displayFare = previousCancellationFee > 0 ? baseRideFare + previousCancellationFee : fare;
+  const previousCancellationFee = Math.round(Number(rideRealtime?.previousCancellationFee || state?.previousCancellationFee || 0));
+  const baseRideFare = Math.round(Number(rideRealtime?.baseRideFare || state?.baseRideFare || (previousCancellationFee > 0 ? fare - previousCancellationFee : fare)));
+  const displayFare = Math.round(previousCancellationFee > 0 ? baseRideFare + previousCancellationFee : fare);
   const paymentMethod = rideRealtime?.paymentMethod || state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
     () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },

@@ -60,8 +60,15 @@ const SurgePricing = () => {
   };
 
   const updateSurge = (index, field, value) => {
+    let sanitizedValue = value;
+    if (field === 'surge_price' && value !== '') {
+      const num = Number(value);
+      if (!isNaN(num) && num < 0) {
+        sanitizedValue = '0';
+      }
+    }
     const newSurges = [...surges];
-    newSurges[index][field] = value;
+    newSurges[index][field] = sanitizedValue;
     setSurges(newSurges);
   };
 

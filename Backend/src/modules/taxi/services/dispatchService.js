@@ -1,17 +1,14 @@
 import mongoose from 'mongoose';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
-import { UserWallet } from '../user/models/UserWallet.js';
 import { Driver } from '../driver/models/Driver.js';
-import { WalletTransaction } from '../driver/models/WalletTransaction.js';
-import { applyDriverWalletAdjustment } from '../driver/services/walletService.js';
 import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
   RIDE_STATUS,
 } from '../constants/index.js';
 import { Delivery } from '../user/models/Delivery.js';
-import { getRideRoom, resolveSetPriceForRide } from './rideService.js';
+import { getRideRoom } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
@@ -20,277 +17,15 @@ import { processRideCancellation } from './cancellationService.js';
 const activeDispatches = new Map();
 let ioInstance = null;
 const scheduledDispatchTimers = new Map();
+const actualTimeNotificationTimers = new Map();
 
-const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
-
-const ensureUserWallet = async (userId, session = null) => {
-  if (!userId) {
-    return;
+const clearActualTimeNotificationTimer = (rideId) => {
+  const key = String(rideId);
+  const timer = actualTimeNotificationTimers.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    actualTimeNotificationTimers.delete(key);
   }
-
-  await UserWallet.updateOne(
-    { userId },
-    { $setOnInsert: { userId, balance: 0, refundWallet: 0, transactions: [] } },
-    { upsert: true, session },
-  );
-};
-
-const normalizeRideTransportType = (ride) => {
-  const serviceType = String(ride?.serviceType || '').trim().toLowerCase();
-  const transportType = String(ride?.transport_type || '').trim().toLowerCase();
-
-  if (serviceType === 'parcel') {
-    return transportType === 'both' ? 'delivery' : (transportType || 'delivery');
-  }
-
-  if (serviceType === 'intercity') {
-    return 'intercity';
-  }
-
-  if (transportType === 'all' || transportType === 'both' || !transportType) {
-    return 'taxi';
-  }
-
-  return transportType;
-};
-
-const computeCancellationFeeAmount = ({ ride, feeType, feeValue }) => {
-  const baseAmount = Math.max(roundMoney(ride?.fare || 0), roundMoney(ride?.baseFare || 0), 0);
-  const normalizedValue = Math.max(roundMoney(feeValue || 0), 0);
-  const normalizedType = String(feeType || 'percentage').trim().toLowerCase();
-
-  if (normalizedValue <= 0) {
-    return 0;
-  }
-
-  if (normalizedType === 'fixed') {
-    return normalizedValue;
-  }
-
-  return Math.min(roundMoney((baseAmount * normalizedValue) / 100), baseAmount);
-};
-
-const resolveCancellationPricing = async (ride, session) => {
-  if (!ride?.vehicleTypeId) {
-    return null;
-  }
-
-  return resolveSetPriceForRide({
-    serviceLocationId: ride.service_location_id || null,
-    transportType: normalizeRideTransportType(ride),
-    vehicleTypeId: ride.vehicleTypeId,
-  });
-};
-
-const applyUserWalletAdjustment = async ({
-  userId,
-  amount,
-  kind,
-  title,
-  referenceKey,
-  walletField = 'balance',
-  provider = 'ride_cancellation',
-  session = null,
-  requireSufficientFunds = false,
-}) => {
-  const normalizedAmount = roundMoney(amount);
-  const normalizedKind = kind === 'debit' ? 'debit' : 'credit';
-  const normalizedField = walletField === 'refundWallet' ? 'refundWallet' : 'balance';
-  const normalizedReferenceKey = String(referenceKey || '').trim();
-
-  if (!userId || normalizedAmount <= 0 || !normalizedReferenceKey) {
-    return { status: 'skipped', amount: 0 };
-  }
-
-  await ensureUserWallet(userId, session);
-
-  const existing = await UserWallet.findOne({
-    userId,
-    'transactions.referenceKey': normalizedReferenceKey,
-  })
-    .select('_id')
-    .session(session)
-    .lean();
-
-  if (existing) {
-    return { status: 'existing', amount: normalizedAmount };
-  }
-
-  const tx = {
-    kind: normalizedKind,
-    amount: normalizedAmount,
-    title: String(title || '').trim(),
-    provider,
-    referenceKey: normalizedReferenceKey,
-  };
-
-  const updateFilter = { userId };
-  if (normalizedKind === 'debit' && requireSufficientFunds) {
-    updateFilter[normalizedField] = { $gte: normalizedAmount };
-  }
-
-  const updateResult = await UserWallet.updateOne(
-    updateFilter,
-    {
-      $inc: { [normalizedField]: normalizedKind === 'credit' ? normalizedAmount : -normalizedAmount },
-      $push: { transactions: { $each: [tx], $slice: -50 } },
-    },
-    { session },
-  );
-
-  if (!updateResult?.modifiedCount) {
-    return { status: requireSufficientFunds ? 'insufficient_funds' : 'not_modified', amount: normalizedAmount };
-  }
-
-  return { status: 'applied', amount: normalizedAmount };
-};
-
-const applyDriverWalletAdjustmentByReference = async ({
-  driverId,
-  amount,
-  rideId = null,
-  description,
-  referenceKey,
-  metadata = {},
-  session = null,
-}) => {
-  const normalizedAmount = roundMoney(amount);
-  const normalizedReferenceKey = String(referenceKey || '').trim();
-
-  if (!driverId || !normalizedAmount || !normalizedReferenceKey) {
-    return { status: 'skipped', amount: normalizedAmount, walletResult: null };
-  }
-
-  const existing = await WalletTransaction.findOne({
-    driverId,
-    'metadata.referenceKey': normalizedReferenceKey,
-  })
-    .select('_id')
-    .session(session)
-    .lean();
-
-  if (existing) {
-    return { status: 'existing', amount: normalizedAmount, walletResult: null };
-  }
-
-  const walletResult = await applyDriverWalletAdjustment({
-    driverId,
-    amount: normalizedAmount,
-    type: 'adjustment',
-    rideId,
-    description,
-    metadata: {
-      ...metadata,
-      referenceKey: normalizedReferenceKey,
-    },
-    session,
-  });
-
-  return { status: 'applied', amount: normalizedAmount, walletResult };
-};
-
-const settleUserCancellationFee = async (ride, session) => {
-  const pricing = await resolveCancellationPricing(ride, session);
-  const feeAmount = computeCancellationFeeAmount({
-    ride,
-    feeType: pricing?.user_cancellation_fee_type,
-    feeValue: pricing?.user_cancellation_fee,
-  });
-
-  if (feeAmount <= 0) {
-    return { feeAmount: 0, userDebitStatus: 'none', driverCreditStatus: 'none', driverWalletResult: null };
-  }
-
-  const feeReferenceBase = `ride-cancel:user:${String(ride._id)}`;
-  const userDebit = await applyUserWalletAdjustment({
-    userId: ride.userId,
-    amount: feeAmount,
-    kind: 'debit',
-    title: `Ride cancellation fee for booking ${String(ride._id).slice(-6)}`,
-    referenceKey: `${feeReferenceBase}:user-debit`,
-    session,
-    requireSufficientFunds: true,
-  });
-
-  let driverCredit = { status: 'skipped', walletResult: null };
-  const shouldCreditDriver =
-    ['applied', 'existing'].includes(userDebit.status) &&
-    String(pricing?.cancellation_fee_goes_to || 'admin').trim().toLowerCase() === 'driver' &&
-    ride.driverId;
-
-  if (shouldCreditDriver) {
-    driverCredit = await applyDriverWalletAdjustmentByReference({
-      driverId: ride.driverId,
-      amount: feeAmount,
-      rideId: ride._id,
-      description: `Cancellation fee received for booking ${String(ride._id).slice(-6)}`,
-      referenceKey: `${feeReferenceBase}:driver-credit`,
-      metadata: {
-        source: 'ride_cancellation_fee',
-        cancelledBy: 'user',
-        counterpartyRole: 'user',
-        counterpartyId: String(ride.userId),
-      },
-      session,
-    });
-  }
-
-  return {
-    feeAmount,
-    userDebitStatus: userDebit.status,
-    driverCreditStatus: driverCredit.status,
-    driverWalletResult: driverCredit.walletResult || null,
-  };
-};
-
-const settleDriverCancellationFee = async (ride, session) => {
-  const pricing = await resolveCancellationPricing(ride, session);
-  const feeAmount = computeCancellationFeeAmount({
-    ride,
-    feeType: pricing?.driver_cancellation_fee_type,
-    feeValue: pricing?.driver_cancellation_fee,
-  });
-
-  if (feeAmount <= 0 || !ride?.driverId) {
-    return { feeAmount: 0, driverDebitStatus: 'none', userCreditStatus: 'none', driverWalletResult: null };
-  }
-
-  const feeReferenceBase = `ride-cancel:driver:${String(ride._id)}`;
-  const driverDebit = await applyDriverWalletAdjustmentByReference({
-    driverId: ride.driverId,
-    amount: -feeAmount,
-    rideId: ride._id,
-    description: `Scheduled ride cancellation fee for booking ${String(ride._id).slice(-6)}`,
-    referenceKey: `${feeReferenceBase}:driver-debit`,
-    metadata: {
-      source: 'ride_cancellation_fee',
-      cancelledBy: 'driver',
-      counterpartyRole: 'user',
-      counterpartyId: String(ride.userId),
-    },
-    session,
-  });
-
-  let userCredit = { status: 'skipped' };
-  if (['applied', 'existing'].includes(driverDebit.status) && ride.userId) {
-    userCredit = await applyUserWalletAdjustment({
-      userId: ride.userId,
-      amount: feeAmount,
-      kind: 'credit',
-      title: `Driver cancellation compensation for booking ${String(ride._id).slice(-6)}`,
-      referenceKey: `${feeReferenceBase}:user-credit`,
-      walletField: 'refundWallet',
-      provider: 'ride_cancellation_refund',
-      session,
-    });
-  }
-
-  return {
-    feeAmount,
-    driverDebitStatus: driverDebit.status,
-    userCreditStatus: userCredit.status,
-    driverWalletResult: driverDebit.walletResult || null,
-  };
 };
 
 export const getUserRoom = (userId) => `user:${userId}`;
@@ -379,6 +114,7 @@ const clearScheduledDispatchTimer = (rideId) => {
 export const stopDispatchFlow = (rideId) => {
   clearDispatchTimer(rideId);
   clearScheduledDispatchTimer(rideId);
+  clearActualTimeNotificationTimer(rideId);
   activeDispatches.delete(String(rideId));
 };
 
@@ -985,25 +721,122 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
   }
 };
 
+export const handleScheduledRidePreTrigger = async (rideId) => {
+  const ride = await Ride.findById(rideId);
+  if (!ride) return;
+
+  if (ride.status === RIDE_STATUS.SEARCHING) {
+    dispatchAttempt(ride._id, 0).catch((error) => {
+      console.error('Scheduled dispatch failed', error);
+    });
+  } else if (ride.status === RIDE_STATUS.ACCEPTED && ride.driverId) {
+    sendPushNotificationToEntities({
+      driverIds: [String(ride.driverId)],
+      title: 'Scheduled Ride Reminder',
+      body: 'Your scheduled ride starts in 30 minutes. Please prepare for pickup.',
+      data: {
+        type: 'scheduled_ride_reminder',
+        rideId: String(ride._id),
+      },
+    }).catch((error) => {
+      console.error('Failed to send driver scheduled-ride 30m reminder push', error);
+    });
+  }
+};
+
+export const scheduleActualTimeNotification = async (rideId, scheduledAt) => {
+  const delayMs = new Date(scheduledAt).getTime() - Date.now();
+  const key = String(rideId);
+
+  clearActualTimeNotificationTimer(rideId);
+
+  if (delayMs <= 0) {
+    sendActualTimeNotifications(rideId).catch(err => console.error(err));
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    actualTimeNotificationTimers.delete(key);
+    sendActualTimeNotifications(rideId).catch(err => console.error(err));
+  }, delayMs);
+
+  actualTimeNotificationTimers.set(key, timer);
+};
+
+export const sendActualTimeNotifications = async (rideId) => {
+  const ride = await Ride.findById(rideId);
+  if (!ride) return;
+
+  if (ride.status === RIDE_STATUS.ACCEPTED && ride.driverId) {
+    // Notify driver
+    sendPushNotificationToEntities({
+      driverIds: [String(ride.driverId)],
+      title: 'Scheduled Ride Starting Now',
+      body: "It's time for your scheduled ride! Please start heading to the pickup location.",
+      data: {
+        type: 'scheduled_ride_start_driver',
+        rideId: String(ride._id),
+      },
+    }).catch((error) => {
+      console.error('Failed to notify driver at scheduled time', error);
+    });
+
+    // Notify user
+    sendPushNotificationToEntities({
+      userIds: [String(ride.userId)],
+      title: 'Scheduled Ride Starting Now',
+      body: 'Your scheduled ride is about to start! Your driver is on the way.',
+      data: {
+        type: 'scheduled_ride_start_user',
+        rideId: String(ride._id),
+      },
+    }).catch((error) => {
+      console.error('Failed to notify user at scheduled time', error);
+    });
+  } else if (ride.status === RIDE_STATUS.SEARCHING) {
+    sendPushNotificationToEntities({
+      userIds: [String(ride.userId)],
+      title: 'Scheduled Ride Starting Now',
+      body: 'Your scheduled ride is starting now. We are looking for drivers near you.',
+      data: {
+        type: 'scheduled_ride_start_searching',
+        rideId: String(ride._id),
+      },
+    }).catch((error) => {
+      console.error('Failed to notify user at scheduled searching time', error);
+    });
+  }
+};
+
 export const startDispatchFlow = async (ride) => {
   stopDispatchFlow(ride._id);
 
   const scheduledAt = ride?.scheduledAt ? new Date(ride.scheduledAt) : null;
-  const delayMs = scheduledAt ? scheduledAt.getTime() - Date.now() : 0;
   const bookingMode = String(ride?.bookingMode || 'normal').trim().toLowerCase();
   const shouldDispatchImmediately = bookingMode === 'bidding';
 
-  if (!shouldDispatchImmediately && scheduledAt && Number.isFinite(delayMs) && delayMs > 0) {
+  if (!shouldDispatchImmediately && scheduledAt) {
     const rideId = String(ride._id);
-    const timer = setTimeout(() => {
-      scheduledDispatchTimers.delete(rideId);
-      dispatchAttempt(ride._id, 0).catch((error) => {
-        console.error('Scheduled dispatch failed', error);
-      });
-    }, delayMs);
+    const timeToStartMs = scheduledAt.getTime() - 30 * 60 * 1000;
+    const delayMs = timeToStartMs - Date.now();
 
-    scheduledDispatchTimers.set(rideId, timer);
-    return;
+    if (delayMs > 0) {
+      const timer = setTimeout(() => {
+        scheduledDispatchTimers.delete(rideId);
+        handleScheduledRidePreTrigger(rideId).catch((error) => {
+          console.error('Scheduled pre-trigger failed', error);
+        });
+      }, delayMs);
+
+      scheduledDispatchTimers.set(rideId, timer);
+
+      scheduleActualTimeNotification(rideId, scheduledAt).catch(err => console.error(err));
+      return;
+    } else {
+      handleScheduledRidePreTrigger(rideId).catch(err => console.error(err));
+      scheduleActualTimeNotification(rideId, scheduledAt).catch(err => console.error(err));
+      return;
+    }
   }
 
   await dispatchAttempt(ride._id, 0);
@@ -1011,8 +844,7 @@ export const startDispatchFlow = async (ride) => {
 
 export const restoreScheduledDispatches = async () => {
   const rides = await Ride.find({
-    status: RIDE_STATUS.SEARCHING,
-    liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+    status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED] },
     scheduledAt: { $ne: null },
   }).select('_id scheduledAt');
 

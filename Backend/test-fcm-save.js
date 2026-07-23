@@ -10,10 +10,10 @@ async function run() {
     console.log("No user found.");
     process.exit(0);
   }
-  
+
   console.log("Found user:", user._id);
   const token = 'test_fcm_token_123';
-  
+
   try {
     const res = await upsertFirebaseDeviceToken({
       ownerType: 'USER',
@@ -22,7 +22,7 @@ async function run() {
       platform: 'web'
     });
     console.log("Upsert result:", res);
-    
+
     // Check DB
     const updated = await FoodUser.findById(user._id);
     console.log("Stored fcmTokens in DB:", updated.fcmTokens);

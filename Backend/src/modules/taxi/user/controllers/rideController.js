@@ -970,13 +970,12 @@ export const cancelRide = async (req, res) => {
     reason,
   });
 
-  res.json({
+res.json({
     success: true,
     data: {
       rideId: String(ride._id),
       status: ride.status,
       liveStatus: ride.liveStatus,
-      cancellationBill,
     },
   });
 };
@@ -1145,10 +1144,10 @@ export const getPendingCancellationDues = async (req, res) => {
     'cancellation.cancellation_charge': { $gt: 0 },
   }).select('_id cancellation createdAt').lean();
 
-  const totalDueAmount = pendingDueRides.reduce(
+  const totalDueAmount = Math.round(pendingDueRides.reduce(
     (sum, r) => sum + Number(r.cancellation?.cancellation_charge || 0),
     0,
-  );
+  ));
 
   res.json({
     success: true,

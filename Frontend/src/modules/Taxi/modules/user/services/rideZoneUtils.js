@@ -35,15 +35,40 @@ const toZonePoint = (point) => {
 };
 
 export const normalizeZonePath = (zone) => {
-  const source = Array.isArray(zone?.coordinates?.[0]) && Array.isArray(zone?.coordinates?.[0]?.[0])
-    ? zone.coordinates[0]
-    : zone?.coordinates;
+  const coordsRaw = zone?.geometry?.coordinates || zone?.coordinates;
+  let source = coordsRaw;
+
+  if (Array.isArray(source?.[0]) && Array.isArray(source?.[0]?.[0])) {
+    source = source[0];
+  }
 
   if (!Array.isArray(source)) {
     return [];
   }
 
   return source.map(toZonePoint).filter(Boolean);
+};
+
+export const isPointInCircleZone = (point, zone) => {
+  if (zone?.boundary_mode === 'circle' && zone?.circle_center?.lat != null && zone?.circle_center?.lng != null) {
+    const centerLat = Number(zone.circle_center.lat);
+    const centerLng = Number(zone.circle_center.lng);
+    const radiusMeters = Number(zone.circle_radius_meters || 5000);
+
+    const R = 6371000;
+    const dLat = ((point.lat - centerLat) * Math.PI) / 180;
+    const dLng = ((point.lng - centerLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((centerLat * Math.PI) / 180) *
+        Math.cos((point.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const dist = R * c;
+    return dist <= radiusMeters;
+  }
+  return false;
 };
 
 export const isPointInPolygon = (point, polygon) => {
@@ -86,11 +111,25 @@ export const isCoordsInZones = (coords, zones = []) => {
     return false;
   }
 
+  if (!zones.length) {
+    return true;
+  }
+
   const [lng, lat] = coords;
   const point = { lat: Number(lat), lng: Number(lng) };
-  const zonePaths = getZonePathsFromZones(zones);
 
-  return isPointInAnyZone(point, zonePaths);
+  return zones.some((zone) => {
+    if (zone?.boundary_mode === 'circle') {
+      return isPointInCircleZone(point, zone);
+    }
+
+    const path = normalizeZonePath(zone);
+    if (path.length >= 3 && isPointInPolygon(point, path)) {
+      return true;
+    }
+
+    return isPointInCircleZone(point, zone);
+  });
 };
 
 export const resolveServiceLocationIdFromCoords = (coords, zones = []) => {
@@ -102,6 +141,13 @@ export const resolveServiceLocationIdFromCoords = (coords, zones = []) => {
   const point = { lat: Number(lat), lng: Number(lng) };
 
   for (const zone of zones) {
+    if (zone?.boundary_mode === 'circle' && isPointInCircleZone(point, zone)) {
+      const serviceLocationId = getZoneServiceLocationId(zone);
+      if (serviceLocationId) {
+        return String(serviceLocationId);
+      }
+    }
+
     const path = normalizeZonePath(zone);
     if (path.length >= 3 && isPointInPolygon(point, path)) {
       const serviceLocationId = getZoneServiceLocationId(zone);

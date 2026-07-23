@@ -23,6 +23,7 @@ const TABS = [
   { id: 'all', label: 'All' },
   { id: 'ride', label: 'Rides' },
   { id: 'parcel', label: 'Deliveries' },
+  { id: 'scheduled', label: 'Scheduled' },
 ];
 
 const STATUS_FILTERS = [
@@ -76,7 +77,7 @@ const formatStatus = (status) => {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
-const getRideTimeSource = (ride) => ride.completedAt || ride.startedAt || ride.acceptedAt || ride.createdAt || ride.updatedAt;
+const getRideTimeSource = (ride) => ride.scheduledAt || ride.completedAt || ride.startedAt || ride.acceptedAt || ride.createdAt || ride.updatedAt;
 
 const buildLocationLabel = (address, point, fallback) => {
   if (address) {
@@ -145,11 +146,12 @@ const normalizeRide = (ride) => {
   const timeSource = getRideTimeSource(ride);
   const passengerName = ride?.user?.name || 'Passenger';
   const earnings = getDriverEarnings(ride);
+  const isScheduled = Boolean(ride?.scheduledAt);
 
   return {
     id: ride?.rideId || ride?._id || '',
     type,
-    title: type === 'parcel' ? 'Delivery job' : 'Ride trip',
+    title: isScheduled ? 'Scheduled ride' : (type === 'parcel' ? 'Delivery job' : 'Ride trip'),
     subtitle: type === 'parcel' ? `Customer: ${passengerName}` : `Rider: ${passengerName}`,
     dateLabel: formatDateLabel(timeSource),
     shortDate: formatShortDate(timeSource),
@@ -161,6 +163,10 @@ const normalizeRide = (ride) => {
     status,
     paymentMethod: normalizePaymentLabel(ride),
     distanceKm: Number(ride?.estimatedDistanceMeters || 0) / 1000,
+    baseRideFare: Number(ride?.baseRideFare || (Number(ride?.fare || 0) - Number(ride?.previousCancellationFee || 0))),
+    commissionAmount: Number(ride?.commissionAmount || 0),
+    tipAmount: Number(ride?.feedback?.tipAmount || 0),
+    scheduledAt: ride?.scheduledAt || null,
   };
 };
 
@@ -184,6 +190,11 @@ const RideRequests = () => {
   const [error, setError] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [expandedRideId, setExpandedRideId] = useState(null);
+
+  const toggleBreakdown = (rideId) => {
+    setExpandedRideId((prev) => (prev === rideId ? null : rideId));
+  };
 
   useEffect(() => {
     let active = true;
@@ -224,7 +235,11 @@ const RideRequests = () => {
 
   const filteredHistory = useMemo(
     () => {
-      const byType = activeTab === 'all' ? rides : rides.filter((item) => item.type === activeTab);
+      const byType = activeTab === 'scheduled'
+        ? rides.filter((item) => item.scheduledAt !== null)
+        : activeTab === 'all'
+          ? rides
+          : rides.filter((item) => item.type === activeTab && item.scheduledAt === null);
 
       if (statusFilter === 'completed') {
         return byType.filter((item) => ['Completed', 'Delivered'].includes(item.status));
@@ -434,6 +449,53 @@ const RideRequests = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Earnings Breakdown Accordion */}
+              {['Completed', 'Delivered'].includes(item.status) && (
+                <div className="border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleBreakdown(item.id)}
+                    className="flex w-full items-center justify-between text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-slate-900 transition-colors"
+                  >
+                    <span>Earnings Breakdown</span>
+                    <svg
+                      className={`h-3 w-3 transform transition-transform duration-200 ${
+                        expandedRideId === item.id ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {expandedRideId === item.id && (
+                    <div className="mt-3 space-y-2.5 rounded-2xl bg-slate-50 border border-slate-100 p-4 text-[12px] font-bold text-slate-700">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-black uppercase tracking-wider text-[10px]">Base Fare</span>
+                        <span className="font-black text-slate-900">{formatCurrency(item.baseRideFare)}</span>
+                      </div>
+                      <div className="flex justify-between text-rose-600">
+                        <span className="font-black uppercase tracking-wider text-[10px]">Commission Deducted</span>
+                        <span className="font-black">-{formatCurrency(item.commissionAmount)}</span>
+                      </div>
+                      {item.tipAmount > 0 && (
+                        <div className="flex justify-between text-emerald-600">
+                          <span className="font-black uppercase tracking-wider text-[10px]">Tip Received</span>
+                          <span className="font-black">+{formatCurrency(item.tipAmount)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-slate-200 my-2" />
+                      <div className="flex justify-between text-slate-900 text-[13px] font-black">
+                        <span>Net Earnings</span>
+                        <span>{formatCurrency(item.earnings)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">

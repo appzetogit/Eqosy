@@ -194,7 +194,32 @@ const SetPrices = ({ mode }) => {
     return Array.from(normalized.values());
   }, [transportTypes]);
 
-  const [formData, setFormData] = useState(initialFormState);
+  const [formData, setFormDataRaw] = useState(initialFormState);
+
+  const setFormData = (update) => {
+    setFormDataRaw((prev) => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      const fieldsToClamp = [
+        'admin_commision', 'admin_commission_from_driver', 'admin_commission_for_owner',
+        'service_tax', 'order_number', 'base_price', 'base_distance', 'price_per_distance',
+        'time_price', 'waiting_charge', 'ride_surge_amount', 'free_waiting_before', 'free_waiting_after',
+        'airport_surge', 'support_airport_fee', 'outstation_base_price', 'outstation_base_distance',
+        'outstation_price_per_distance', 'outstation_time_price', 'fixed_cancellation_charge',
+        'max_cancellation_fee', 'free_cancellation_time_mins', 'cancellation_grace_period_driver_arrived',
+        'driver_compensation_percentage', 'user_cancellation_fee', 'driver_cancellation_fee'
+      ];
+      const sanitized = { ...next };
+      for (const field of fieldsToClamp) {
+        if (sanitized[field] !== undefined && sanitized[field] !== '') {
+          const num = Number(sanitized[field]);
+          if (!isNaN(num) && num < 0) {
+            sanitized[field] = '0';
+          }
+        }
+      }
+      return sanitized;
+    });
+  };
 
   const baseUrl = `${API_BASE_URL}/admin`;
   const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));

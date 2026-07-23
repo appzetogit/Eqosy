@@ -675,7 +675,7 @@ function TaxiApp() {
                 <span className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></span>
               </div>
             }>
-            <Toaster position="top-right" />
+            <Toaster position="top-right" closeButton />
             <Routes>
               {/* Static / Public routes */}
               <Route index element={<LandingPage />} />

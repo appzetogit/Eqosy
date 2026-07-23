@@ -105,7 +105,10 @@ const TipSettings = () => {
                        <input 
                          type="text" 
                          value={settings.min_tip_amount || '10'} 
-                         onChange={(e) => setSettings(s => ({ ...s, min_tip_amount: e.target.value }))}
+                         onChange={(e) => {
+                           const val = e.target.value.replace(/\D/g, '');
+                           setSettings(s => ({ ...s, min_tip_amount: val }));
+                         }}
                          placeholder="10"
                          className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
                        />

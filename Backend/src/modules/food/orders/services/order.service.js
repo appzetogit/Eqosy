@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 import crypto from 'crypto';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
 // import { paymentSnapshotFromOrder } from './foodOrderPayment.service.js';
@@ -221,7 +221,9 @@ export async function createOrder(userId, dto) {
     const riderSurgePay = Number(normalizedPricing.surgeAmount) || 0;
     const riderIncentivePay = Math.round((Number(normalizedPricing.deliveryPartnerIncentiveAmount || 0) * 100)) / 100;
     const riderTipPay = Math.round((Number(normalizedPricing.deliveryPartnerTip || 0) * 100)) / 100;
-    const riderTotalPayout = Math.round((riderBasePay + riderSurgePay + riderDeliveryFeeShare + riderIncentivePay + riderTipPay) * 100) / 100;
+    // riderDeliveryFeeShare already includes base pay + per-km delivery earnings after admin commission.
+    // Do NOT add riderBasePay again to prevent double payout.
+    const riderTotalPayout = Math.round((riderDeliveryFeeShare + riderSurgePay + riderIncentivePay + riderTipPay) * 100) / 100;
     const riderEarning = riderTotalPayout;
     
     // Calculate restaurant commission from subtotal
@@ -501,7 +503,7 @@ export async function listOrdersUser(userId, query) {
     FoodOrder.find(filter)
       .populate(
         "restaurantId",
-        "restaurantName profileImage area city location rating totalRatings isActive isRestaurant zoneId status slug coverImages cuisines estimatedDeliveryTime pricingAttributes",
+        "restaurantName profileImage area city location rating totalRatings isActive isRestaurant zoneId status slug coverImages cuisines estimatedDeliveryTime pricingAttributes menuImages",
       )
       .populate("dispatch.deliveryPartnerId", "name phone rating totalRatings")
       .sort({ createdAt: -1 })

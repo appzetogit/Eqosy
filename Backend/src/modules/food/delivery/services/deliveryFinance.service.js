@@ -111,7 +111,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
             const riderDeliveryFeeShare = Number(o.riderDeliveryFeeShare || o.pricing?.riderDeliveryEarningAfterAdminCommission || 0);
             const riderSurgePay = Number(o.riderSurgePay || o.pricing?.surgeAmount || 0);
             const riderIncentivePay = Number(o.riderIncentivePay || o.pricing?.deliveryPartnerIncentiveAmount || 0);
-            const computedPayout = Math.round((riderBasePay + riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
+            const computedPayout = Math.round((riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
             const riderTotalPayout = Number(o.riderTotalPayout || computedPayout || o.riderEarning || 0);
 
             return {

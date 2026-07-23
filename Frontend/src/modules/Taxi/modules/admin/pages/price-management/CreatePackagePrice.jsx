@@ -142,10 +142,22 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
   };
 
   const updateRow = (rowId, field, value) => {
+    let sanitizedValue = value;
+    const numericFields = [
+      'base_price', 'free_distance', 'distance_price', 'free_time', 'time_price',
+      'admin_commision', 'admin_commission_from_driver', 'admin_commission_for_owner',
+      'service_tax', 'cancellation_fee'
+    ];
+    if (numericFields.includes(field) && value !== '') {
+      const num = Number(value);
+      if (!isNaN(num) && num < 0) {
+        sanitizedValue = '0';
+      }
+    }
     setFormData((current) => ({
       ...current,
       package_vehicle_prices: current.package_vehicle_prices.map((row) =>
-        row.id === rowId ? { ...row, [field]: value } : row
+        row.id === rowId ? { ...row, [field]: sanitizedValue } : row
       ),
     }));
   };

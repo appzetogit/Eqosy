@@ -1710,6 +1710,7 @@ const serializeSetPrice = (item) => ({
     ? {
       _id: item.zone_id._id || item.zone_id,
       name: item.zone_id.name || '',
+      ride_surge_enabled: Boolean(item.zone_id.ride_surge_enabled),
     }
     : null,
   service_location_id: item.service_location_id

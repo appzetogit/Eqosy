@@ -1977,7 +1977,7 @@ export default function Cart() {
   }
 
   return (
-    <div 
+    <div
       className="relative min-h-screen bg-slate-50 dark:bg-[#0a0a0a]"
       style={isRestaurantOffline ? { filter: "grayscale(100%)" } : {}}
     >
@@ -2725,12 +2725,9 @@ export default function Cart() {
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm items-center">
-                      <button
-                        onClick={() => setShowDeliveryFeeModal(true)}
-                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left"
-                      >
+                      <span className="text-gray-600 dark:text-gray-400">
                         Delivery partner fee for {pricing?.deliveryFeeBreakdown?.distanceKm || 0} km
-                      </button>
+                      </span>
                       <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                         {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : ""}
                       </span>
@@ -2772,6 +2769,16 @@ export default function Cart() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Cancellation Policy */}
+              <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800 mt-4">
+                <p className="text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">
+                  Cancellation Policy
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  A 100% cancellation charge will apply. This helps us compensate the restaurant partner for food preparation.
+                </p>
               </div>
 
             </div>

@@ -314,21 +314,21 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       return null;
     }
 
-    const fare = normalizeAmount(ride.fare || 0, 'fare');
-    const previousCancellationFee = Math.max(0, normalizeAmount(ride.previousCancellationFee || 0, 'previousCancellationFee'));
-    const baseRideFare = Math.max(0, normalizeAmount(ride.baseRideFare || (fare - previousCancellationFee), 'baseRideFare'));
-    const surgeAmount = Math.max(0, normalizeAmount(ride?.pricingSnapshot?.ride_surge_amount || 0, 'surgeAmount'));
-    const commissionableFare = Math.max(0, normalizeAmount(baseRideFare - surgeAmount, 'commissionableFare'));
+    const fare = Math.round(ride.fare || 0);
+    const previousCancellationFee = Math.max(0, Math.round(ride.previousCancellationFee || 0));
+    const baseRideFare = Math.max(0, Math.round(ride.baseRideFare || (fare - previousCancellationFee)));
+    const surgeAmount = Math.max(0, Math.round(ride?.pricingSnapshot?.ride_surge_amount || 0));
+    const commissionableFare = Math.max(0, Math.round(baseRideFare - surgeAmount));
     const commissionConfig = await resolveCommissionConfigForRide(ride, session);
-    const commissionAmount = computeCommissionAmount({
+    const commissionAmount = Math.round(computeCommissionAmount({
       fare: commissionableFare,
       type: commissionConfig.type,
       value: commissionConfig.value,
-    });
+    }));
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
-    const driverEarnings = Math.max(Math.round((baseRideFare - commissionAmount) * 100) / 100, 0);
+    const driverEarnings = Math.max(Math.round(baseRideFare - commissionAmount), 0);
     const amount = paymentMethod === 'cash'
-      ? -Math.round((commissionAmount + previousCancellationFee) * 100) / 100
+      ? -Math.round(commissionAmount + previousCancellationFee)
       : driverEarnings;
     const type = paymentMethod === 'cash' ? 'commission_deduction' : 'ride_earning';
 

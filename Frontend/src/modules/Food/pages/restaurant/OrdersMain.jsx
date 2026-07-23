@@ -660,6 +660,41 @@ function AllOrders({ onSelectOrder, onCancel }) {
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [markingReadyOrderIds, setMarkingReadyOrderIds] = useState({});
+  const [acceptingOrderIds, setAcceptingOrderIds] = useState({});
+
+  const handleAccept = async ({ orderId, mongoId }) => {
+    const orderKey = mongoId || orderId;
+    if (!orderKey || acceptingOrderIds[orderKey]) return;
+
+    try {
+      setAcceptingOrderIds((prev) => ({ ...prev, [orderKey]: true }));
+      await restaurantAPI.acceptOrder(orderKey, 11);
+      setOrders((prev) =>
+        prev.map((order) =>
+          (order.mongoId || order.orderId) === orderKey
+            ? {
+              ...order,
+              status: "preparing",
+              preparingTimestamp: new Date(),
+              sortTimestamp: Date.now(),
+            }
+            : order,
+        ),
+      );
+      toast.success(`Order ${orderId} accepted successfully`);
+    } catch (error) {
+      debugError("Error accepting order from All orders:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to accept order",
+      );
+    } finally {
+      setAcceptingOrderIds((prev) => {
+        const next = { ...prev };
+        delete next[orderKey];
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -814,6 +849,12 @@ function AllOrders({ onSelectOrder, onCancel }) {
                 isMarkingReady={Boolean(
                   markingReadyOrderIds[order.mongoId || order.orderId],
                 )}
+                onAccept={
+                  normalizedStatus === "confirmed" ? handleAccept : undefined
+                }
+                isAccepting={Boolean(
+                  acceptingOrderIds[order.mongoId || order.orderId],
+                )}
               />
             );
           })}
@@ -851,7 +892,12 @@ export default function OrdersMain() {
   const [showCancelPopup, setShowCancelPopup] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [orderToCancel, setOrderToCancel] = useState(null);
-  const [acceptSwipeProgress, setAcceptSwipeProgress] = useState(0);
+  const [acceptSwipeProgress, setAcceptSwipeProgressState] = useState(0);
+  const acceptSwipeProgressRef = useRef(0);
+  const setAcceptSwipeProgress = (val) => {
+    setAcceptSwipeProgressState(val);
+    acceptSwipeProgressRef.current = val;
+  };
   const [isAcceptingOrder, setIsAcceptingOrder] = useState(false);
   const audioRef = useRef(null);
   const shownOrdersRef = useRef(new Set()); // Track orders already shown in popup
@@ -1352,7 +1398,7 @@ export default function OrdersMain() {
     if (!acceptSwipeActiveRef.current || isAcceptingOrder) return;
     acceptSwipeActiveRef.current = false;
 
-    if (acceptSwipeProgress >= 0.45) {
+    if (acceptSwipeProgressRef.current >= 0.45) {
       triggerSwipeAccept();
       return;
     }
@@ -1464,6 +1510,25 @@ export default function OrdersMain() {
     clearNewOrder();
     setRejectReason("");
     setCountdown(240);
+  };
+
+  const handleClosePopup = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    const currentPopupOrder = popupOrder || newOrder;
+    if (currentPopupOrder) {
+      markOrderAsShown(currentPopupOrder);
+    }
+
+    setShowNewOrderPopup(false);
+    setPopupOrder(null);
+    clearNewOrder();
+    setCountdown(240);
+    setPrepTime(11);
+    setAcceptSwipeProgress(0);
   };
 
   // Handle cancel order (for preparing orders)
@@ -2118,6 +2183,12 @@ export default function OrdersMain() {
                         <Volume2 className="w-5 h-5 text-gray-700" />
                       )}
                     </button>
+                    <button
+                      onClick={handleClosePopup}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      aria-label="Close">
+                      <X className="w-5 h-5 text-gray-700" />
+                    </button>
                   </div>
                 </div>
 
@@ -2737,6 +2808,8 @@ function OrderCard({
   onCancel,
   onMarkReady,
   isMarkingReady = false,
+  onAccept,
+  isAccepting = false,
 }) {
   const normalizedStatus = String(status || "").toLowerCase();
   const isReady = normalizedStatus === "ready";
@@ -2854,6 +2927,15 @@ function OrderCard({
 
         {/* Mark Ready + ETA */}
         <div className="flex items-center gap-2 shrink-0">
+          {normalizedStatus === "confirmed" && onAccept && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAccept({ orderId, mongoId, customerName }); }}
+              disabled={isAccepting}
+              className="h-8 px-3 rounded-lg text-[11px] font-bold bg-blue-600 text-white active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
+              {isAccepting ? "Accepting…" : "Accept"}
+            </button>
+          )}
           {isPreparing && onMarkReady && (
             <button
               type="button"

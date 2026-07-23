@@ -386,7 +386,27 @@ const VehicleType = ({ mode: propMode }) => {
   );
 
   const updateForm = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    let sanitizedValue = value;
+    if (field === 'capacity' && value !== '') {
+      const num = Number(value);
+      if (!isNaN(num) && num < 0) {
+        sanitizedValue = 0;
+      }
+    }
+    if (field === 'delivery_distance_pricing') {
+      const pricing = { ...value };
+      const keys = ['base_price', 'free_distance', 'distance_price', 'free_time', 'time_price'];
+      for (const k of keys) {
+        if (pricing[k] !== undefined && pricing[k] !== '') {
+          const num = Number(pricing[k]);
+          if (!isNaN(num) && num < 0) {
+            pricing[k] = '0';
+          }
+        }
+      }
+      sanitizedValue = pricing;
+    }
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
   };
 
   const handleImageChange = async (event, field = 'image') => {

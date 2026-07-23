@@ -77,20 +77,28 @@ const Stat = ({ label, value, tone = 'slate' }) => {
   );
 };
 
-const AmountField = ({ field, value, onChange }) => (
-  <label className="block rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-    <span className="text-sm font-black text-slate-900">{field.label}</span>
-    <span className="mt-1 block text-xs font-semibold leading-relaxed text-slate-500">{field.help}</span>
-    <input
-      type="number"
-      name={field.name}
-      value={value ?? ''}
-      onChange={(event) => onChange(field.name, event.target.value)}
-      placeholder={field.placeholder}
-      className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-900 focus:bg-white"
-    />
-  </label>
-);
+const AmountField = ({ field, value, onChange }) => {
+  const isNonNegative = [
+    'minimum_amount_added_to_wallet',
+    'minimum_wallet_amount_for_transfer'
+  ].includes(field.name);
+
+  return (
+    <label className="block rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <span className="text-sm font-black text-slate-900">{field.label}</span>
+      <span className="mt-1 block text-xs font-semibold leading-relaxed text-slate-500">{field.help}</span>
+      <input
+        type="number"
+        name={field.name}
+        value={value ?? ''}
+        min={isNonNegative ? '0' : undefined}
+        onChange={(event) => onChange(field.name, event.target.value)}
+        placeholder={field.placeholder}
+        className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-slate-900 focus:bg-white"
+      />
+    </label>
+  );
+};
 
 const SwitchField = ({ field, checked, onToggle }) => (
   <button
@@ -155,7 +163,18 @@ const WalletSettings = () => {
   };
 
   const handleChange = (name, value) => {
-    setSettings((prev) => ({ ...prev, [name]: value }));
+    let sanitizedValue = value;
+    const nonNegativeFields = [
+      'minimum_amount_added_to_wallet',
+      'minimum_wallet_amount_for_transfer'
+    ];
+    if (nonNegativeFields.includes(name) && value !== '') {
+      const num = Number(value);
+      if (!isNaN(num) && num < 0) {
+        sanitizedValue = '0';
+      }
+    }
+    setSettings((prev) => ({ ...prev, [name]: sanitizedValue }));
   };
 
   const handleToggle = (name) => {

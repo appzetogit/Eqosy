@@ -52,8 +52,15 @@ const DriverIncentive = () => {
   };
 
   const updateRow = (index, field, value) => {
+    let sanitizedValue = value;
+    if (value !== '') {
+      const num = Number(value);
+      if (!isNaN(num) && num < 0) {
+        sanitizedValue = '0';
+      }
+    }
     const newInc = [...incentives];
-    newInc[index][field] = value;
+    newInc[index][field] = sanitizedValue;
     setIncentives(newInc);
   };
 

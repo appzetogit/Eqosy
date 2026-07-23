@@ -28,11 +28,24 @@ export const getCancellationPolicy = async (ride) => {
   }
 
   if (setPrice?.cancellation_policy && Object.keys(setPrice.cancellation_policy).length > 0) {
+    const userCancelFeeType = String(setPrice.user_cancellation_fee_type || '').trim().toLowerCase();
+    const userCancelFee = Number(setPrice.user_cancellation_fee ?? 0);
+
+    const fixedCharge = userCancelFeeType === 'percentage'
+      ? 0
+      : userCancelFeeType === 'fixed'
+      ? userCancelFee
+      : Number(setPrice.cancellation_policy.fixed_cancellation_charge ?? 50);
+
+    const percentageCharge = userCancelFeeType === 'percentage'
+      ? userCancelFee
+      : 0;
+
     return {
       enable_cancellation_charge: setPrice.cancellation_policy.enable_cancellation_charge ?? true,
       free_cancellation_time_mins: Number(setPrice.cancellation_policy.free_cancellation_time_mins ?? 2),
-      fixed_cancellation_charge: Number(setPrice.cancellation_policy.fixed_cancellation_charge ?? 50),
-      percentage_cancellation_charge: Number(setPrice.cancellation_policy.percentage_cancellation_charge ?? 0),
+      fixed_cancellation_charge: fixedCharge,
+      percentage_cancellation_charge: percentageCharge,
       max_cancellation_fee: Number(setPrice.cancellation_policy.max_cancellation_fee ?? 150),
       charge_after_driver_accepted: setPrice.cancellation_policy.charge_after_driver_accepted ?? true,
       charge_after_driver_arrived: setPrice.cancellation_policy.charge_after_driver_arrived ?? true,
@@ -108,10 +121,10 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
       stage === 'started'
     ) {
       const calculatedBase = policy.fixed_cancellation_charge + (estimatedFare * policy.percentage_cancellation_charge / 100);
-      cancellationFee = Math.min(roundMoney(calculatedBase), policy.max_cancellation_fee);
+      cancellationFee = Math.min(Math.round(calculatedBase), policy.max_cancellation_fee);
 
       if (policy.driver_compensation_percentage > 0) {
-        driverCompensation = roundMoney((cancellationFee * policy.driver_compensation_percentage) / 100);
+        driverCompensation = Math.round((cancellationFee * policy.driver_compensation_percentage) / 100);
       }
       paymentStatus = 'added_to_next_ride_due';
     } else {
@@ -123,9 +136,9 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
 
     if (isPassengerNoShow && timeSinceArrivalMins >= policy.cancellation_grace_period_driver_arrived) {
       const calculatedBase = policy.fixed_cancellation_charge + (estimatedFare * policy.percentage_cancellation_charge / 100);
-      cancellationFee = Math.min(roundMoney(calculatedBase), policy.max_cancellation_fee);
+      cancellationFee = Math.min(Math.round(calculatedBase), policy.max_cancellation_fee);
       if (policy.driver_compensation_percentage > 0) {
-        driverCompensation = roundMoney((cancellationFee * policy.driver_compensation_percentage) / 100);
+        driverCompensation = Math.round((cancellationFee * policy.driver_compensation_percentage) / 100);
       }
       driverPenalty = 0;
       paymentStatus = 'added_to_next_ride_due';
@@ -142,7 +155,7 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
   }
 
   const taxAmount = 0;
-  const totalAmount = roundMoney(cancellationFee);
+  const totalAmount = Math.round(cancellationFee);
 
   return {
     rideId: String(ride._id),
@@ -163,7 +176,7 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
     driverBreakdown: {
       driverPayout: driverCompensation,
       driverPenalty,
-      netWalletChange: roundMoney(driverCompensation - driverPenalty),
+      netWalletChange: Math.round(driverCompensation - driverPenalty),
     },
     paymentDetails: {
       status: paymentStatus,
