@@ -27,6 +27,8 @@ export default function Orders() {
   const [submittingRating, setSubmittingRating] = useState(false)
   const [countdowns, setCountdowns] = useState({})
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
+  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
+  const [selectedOrderForDeliveryFee, setSelectedOrderForDeliveryFee] = useState(null)
   const [companyName, setCompanyName] = useState("Eqosy")
 
   useEffect(() => {
@@ -889,12 +891,22 @@ Order again from this restaurant in the ${companyName} app.`
                         <span className="text-gray-800 dark:text-gray-200 font-medium">{"\u20B9"}{order.subtotal.toFixed(2)}</span>
                       </div>
                     )}
-                    {order.deliveryFee > 0 && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
-                        <span className="text-gray-800 dark:text-gray-200 font-medium">{"\u20B9"}{order.deliveryFee.toFixed(2)}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between text-xs items-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedOrderForDeliveryFee(order)
+                          setShowDeliveryFeeModal(true)
+                        }}
+                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium"
+                      >
+                        Delivery partner fee
+                      </button>
+                      <span className="text-gray-800 dark:text-gray-200 font-medium">
+                        {Number(order.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(order.deliveryFee || 0).toFixed(2)}`}
+                      </span>
+                    </div>
                     {order.platformFee > 0 && (
                       <div className="flex justify-between text-xs items-center">
                         <button
@@ -1335,6 +1347,50 @@ Order again from this restaurant in the ${companyName} app.`
                 OKAY
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Fee Modal */}
+      {showDeliveryFeeModal && selectedOrderForDeliveryFee && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4"
+          onClick={() => setShowDeliveryFeeModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#18181b] rounded-3xl p-6 max-w-sm w-[90vw] space-y-4 shadow-2xl border border-gray-100 dark:border-zinc-800 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start border-b border-gray-100 dark:border-zinc-800 pb-4">
+              <div>
+                <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
+                  Delivery partner fee (up to {(() => {
+                    const o = selectedOrderForDeliveryFee;
+                    const d = parseFloat(o?.pricing?.deliveryFeeBreakdown?.distanceKm ?? o?.pricing?.distanceKm ?? o?.distanceKm);
+                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+                    return "1.2";
+                  })()} km)
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                  Goes to them for their time and effort
+                </p>
+              </div>
+              <span className="text-base font-black text-gray-900 dark:text-white shrink-0 ml-3">
+                {Number(selectedOrderForDeliveryFee.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(selectedOrderForDeliveryFee.deliveryFee || 0).toFixed(2)}`}
+              </span>
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
+              100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowDeliveryFeeModal(false)}
+              className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+            >
+              OKAY
+            </button>
           </div>
         </div>
       )}

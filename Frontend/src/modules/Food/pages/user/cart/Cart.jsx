@@ -22,6 +22,7 @@ import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
+import { calculateDistance } from "@food/utils/common"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
@@ -1058,6 +1059,30 @@ export default function Cart() {
   const gstBreakdown = getGstBreakdown();
   const total = baseTotal + deliveryPartnerTip
   const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - baseTotal)
+
+  const getCartActualDistanceKm = () => {
+    const d = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm ?? pricing?.distanceKm);
+    if (!isNaN(d) && d > 0 && d < 100) {
+      return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+    }
+    const resLoc = restaurantDetails?.location || {};
+    const resCoords = Array.isArray(resLoc.coordinates) ? resLoc.coordinates : [];
+    const resLat = parseFloat(resLoc.latitude || resLoc.lat || (resCoords.length >= 2 ? resCoords[1] : NaN));
+    const resLng = parseFloat(resLoc.longitude || resLoc.lng || (resCoords.length >= 2 ? resCoords[0] : NaN));
+
+    const custLoc = selectedAddress?.location || {};
+    const custCoords = Array.isArray(custLoc.coordinates) ? custLoc.coordinates : [];
+    const custLat = parseFloat(custLoc.latitude || custLoc.lat || (custCoords.length >= 2 ? custCoords[1] : NaN));
+    const custLng = parseFloat(custLoc.longitude || custLoc.lng || (custCoords.length >= 2 ? custCoords[0] : NaN));
+
+    if (!isNaN(resLat) && !isNaN(resLng) && !isNaN(custLat) && !isNaN(custLng)) {
+      const dKm = calculateDistance(resLat, resLng, custLat, custLng);
+      if (dKm && dKm > 0 && dKm < 100) {
+        return dKm % 1 === 0 ? dKm.toFixed(0) : dKm.toFixed(1);
+      }
+    }
+    return "1.2";
+  };
   const selectedPaymentLabel =
     selectedPaymentMethod === "wallet"
       ? "Wallet"
@@ -2750,10 +2775,13 @@ export default function Cart() {
                       <span className="text-gray-600 dark:text-gray-400">Item Total</span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Delivery Charge
-                      </span>
+                    <div className="flex justify-between items-center text-sm">
+                      <button
+                        onClick={() => setShowDeliveryFeeModal(true)}
+                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+                      >
+                        Delivery partner fee
+                      </button>
                       <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                         {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : ""}
                       </span>
@@ -3534,33 +3562,37 @@ export default function Cart() {
                   onClick={() => setShowDeliveryFeeModal(false)}
                 />
                 <motion.div
-                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="px-5 py-5 space-y-4">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 pb-4">
-                      Delivery Charge
-                    </p>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-700 dark:text-gray-300">Total Delivery Charge</span>
-                        <span className="text-gray-900 dark:text-gray-100 font-bold">{RUPEE_SYMBOL}{(deliveryFee || 0).toFixed(2)}</span>
+                  <div className="p-6 space-y-4">
+                    <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
+                      <div>
+                        <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
+                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                          Goes to them for their time and effort
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        100% of the delivery charge goes directly to your delivery partner.
-                      </p>
+                      <span className="text-base font-black text-gray-900 dark:text-white shrink-0 ml-3">
+                        {deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`}
+                      </span>
                     </div>
+
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                    </p>
                   </div>
 
-                  <div className="border-t border-gray-100 dark:border-gray-800">
+                  <div className="border-t border-gray-100 dark:border-gray-800 p-3">
                     <button
                       onClick={() => setShowDeliveryFeeModal(false)}
-                      className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      className="w-full py-3 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] bg-emerald-50 dark:bg-emerald-950/30 rounded-xl hover:bg-emerald-100 transition-colors"
                     >
                       OKAY
                     </button>

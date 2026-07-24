@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
+import { calculateDistance } from "@food/utils/common"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -34,6 +35,7 @@ export default function UserOrderDetails() {
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
+  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
   const [companyName, setCompanyName] = useState("Eqosy")
 
   useEffect(() => {
@@ -519,15 +521,16 @@ export default function UserOrderDetails() {
                 ₹{Number(pricing.tax || 0).toFixed(2)}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400 dark:text-gray-500 font-medium">Delivery fee</span>
-              {pricing.deliveryFee === 0 && (
-                <span className="text-[#EB590E] text-[10px] font-bold border border-[#EB590E] px-1 rounded ml-1">
-                  FREE
-                </span>
-              )}
-              <span className="text-[#EB590E] font-medium uppercase">
-                {pricing.deliveryFee ? `₹${Number(pricing.deliveryFee).toFixed(2)}` : "Free"}
+            <div className="flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setShowDeliveryFeeModal(true)}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium"
+              >
+                Delivery partner fee
+              </button>
+              <span className={Number(pricing.deliveryFee) === 0 ? "text-[#EB590E] font-medium uppercase" : "text-gray-800 dark:text-gray-200 font-medium"}>
+                {Number(pricing.deliveryFee) === 0 ? "FREE" : `₹${Number(pricing.deliveryFee).toFixed(2)}`}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -750,6 +753,45 @@ export default function UserOrderDetails() {
                 OKAY
               </button>
             </div>
+      {/* Delivery Fee Modal */}
+      {showDeliveryFeeModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDeliveryFeeModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#18181b] rounded-3xl max-w-sm w-[90vw] p-6 text-left shadow-2xl border border-gray-100 dark:border-zinc-800 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start border-b border-gray-100 dark:border-zinc-800 pb-4">
+              <div>
+                <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
+                  Delivery partner fee (up to {(() => {
+                    const d = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm ?? pricing?.distanceKm ?? order?.distanceKm);
+                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+                    return "1.2";
+                  })()} km)
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                  Goes to them for their time and effort
+                </p>
+              </div>
+              <span className="text-base font-black text-gray-900 dark:text-white shrink-0 ml-3">
+                {Number(pricing.deliveryFee) === 0 ? "FREE" : `₹${Number(pricing.deliveryFee).toFixed(2)}`}
+              </span>
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowDeliveryFeeModal(false)}
+              className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+            >
+              OKAY
+            </button>
           </div>
         </div>
       )}

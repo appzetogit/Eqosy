@@ -489,6 +489,7 @@ export default function OrderTracking({ isSharedView = false }) {
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showOrderDetails, setShowOrderDetails] = useState(false)
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
+  const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
   const [cancellationReason, setCancellationReason] = useState("")
   const [cancellationPolicyText, setCancellationPolicyText] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
@@ -1653,12 +1654,18 @@ export default function OrderTracking({ isSharedView = false }) {
               <span>Item Total</span>
               <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{(order.subtotal || order.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0) || 0).toFixed(2)}</span>
             </div>
-            {Number(order.deliveryFee || 0) > 0 && (
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Delivery Charge</span>
-                <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.deliveryFee).toFixed(2)}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
+              <button
+                type="button"
+                onClick={() => setShowDeliveryFeeModal(true)}
+                className="font-medium hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
+              >
+                Delivery partner fee
+              </button>
+              <span className="font-medium text-gray-900 dark:text-white">
+                {Number(order?.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(order?.deliveryFee || 0).toFixed(2)}`}
+              </span>
+            </div>
             {Number(order.platformFee || 0) > 0 && (
               <div className="flex justify-between text-gray-600 dark:text-gray-400 items-center">
                 <button
@@ -1836,6 +1843,36 @@ export default function OrderTracking({ isSharedView = false }) {
             </p>
             <Button
               onClick={() => setShowPlatformFeeModal(false)}
+              className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+            >
+              OKAY
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Delivery Fee Dialog */}
+      <Dialog open={showDeliveryFeeModal} onOpenChange={setShowDeliveryFeeModal}>
+        <DialogContent className="sm:max-w-sm w-[90vw] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-[#18181b] z-[200]">
+          <DialogHeader className="border-b border-gray-100 dark:border-zinc-800 pb-4">
+            <DialogTitle className="text-left font-bold text-gray-900 dark:text-white">
+              <span className="text-base underline decoration-dotted underline-offset-4 decoration-gray-400">
+                Delivery partner fee (up to {(() => {
+                  const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
+                  if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+                  return "1.2";
+                })()} km)
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                Goes to them for their time and effort
+              </p>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3 space-y-5">
+            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
+              100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+            </p>
+            <Button
+              onClick={() => setShowDeliveryFeeModal(false)}
               className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
