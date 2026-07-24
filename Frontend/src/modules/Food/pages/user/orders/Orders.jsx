@@ -891,19 +891,26 @@ Order again from this restaurant in the ${companyName} app.`
                         <span className="text-gray-800 dark:text-gray-200 font-medium">{"\u20B9"}{order.subtotal.toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-xs items-center">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedOrderForDeliveryFee(order)
-                          setShowDeliveryFeeModal(true)
-                        }}
-                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium"
-                      >
-                        Delivery partner fee
-                      </button>
-                      <span className="text-gray-800 dark:text-gray-200 font-medium">
+                    <div className="flex justify-between items-start text-xs py-1">
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedOrderForDeliveryFee(order)
+                            setShowDeliveryFeeModal(true)
+                          }}
+                          className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium text-left w-fit"
+                        >
+                          Delivery partner fee (up to {(() => {
+                            const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
+                            if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+                            return "1.2";
+                          })()} km)
+                        </button>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 font-medium">Goes to them for their time and effort</span>
+                      </div>
+                      <span className={Number(order.deliveryFee || 0) === 0 ? "font-medium text-[#EB590E] mt-0.5 uppercase" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5"}>
                         {Number(order.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(order.deliveryFee || 0).toFixed(2)}`}
                       </span>
                     </div>
@@ -1341,7 +1348,7 @@ Order again from this restaurant in the ${companyName} app.`
             <div>
               <button
                 type="button"
-                onClick={() => setShowPlatformFeeModal(false)}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
                 className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
               >
                 OKAY
@@ -1386,7 +1393,7 @@ Order again from this restaurant in the ${companyName} app.`
 
             <button
               type="button"
-              onClick={() => setShowDeliveryFeeModal(false)}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
               className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY

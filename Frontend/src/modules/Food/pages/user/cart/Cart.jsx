@@ -2775,15 +2775,18 @@ export default function Cart() {
                       <span className="text-gray-600 dark:text-gray-400">Item Total</span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <button
-                        onClick={() => setShowDeliveryFeeModal(true)}
-                        className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
-                      >
-                        Delivery partner fee
-                      </button>
-                      <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
-                        {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : ""}
+                    <div className="flex justify-between items-start text-sm py-1">
+                      <div className="flex flex-col">
+                        <button
+                          onClick={() => setShowDeliveryFeeModal(true)}
+                          className="text-gray-800 dark:text-gray-200 font-medium hover:text-gray-900 dark:hover:text-white transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left w-fit"
+                        >
+                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                        </button>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
+                      </div>
+                      <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium mt-0.5" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5"}>
+                        {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : "-"}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm items-center">
@@ -3591,7 +3594,8 @@ export default function Cart() {
 
                   <div className="border-t border-gray-100 dark:border-gray-800 p-3">
                     <button
-                      onClick={() => setShowDeliveryFeeModal(false)}
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
                       className="w-full py-3 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] bg-emerald-50 dark:bg-emerald-950/30 rounded-xl hover:bg-emerald-100 transition-colors"
                     >
                       OKAY
@@ -3645,7 +3649,8 @@ export default function Cart() {
 
                   <div>
                     <button
-                      onClick={() => setShowPlatformFeeModal(false)}
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
                       className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
                     >
                       OKAY

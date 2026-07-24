@@ -799,22 +799,33 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     
     const pingInterval = setInterval(() => {
       const now = Date.now();
-      // If no natural GPS update happened in the last 15 seconds, force a ping
-      if (now - lastLocationSentAt.current >= 15000 && lastCoordRef.current) {
-        lastLocationSentAt.current = now;
-        deliveryAPI.updateLocation(
-          lastCoordRef.current.lat, 
-          lastCoordRef.current.lng, 
-          true, 
-          {
-            heading: 0,
-            speed: 0,
-            accuracy: null,
-            ...(onlineSelfieRef.current?.imageUrl
-              ? { selfieImageUrl: onlineSelfieRef.current.imageUrl }
-              : {}),
-          }
-        ).catch(() => {});
+      // If no natural GPS update happened in the last 15 seconds, force a fresh ping
+      if (now - lastLocationSentAt.current >= 15000) {
+        // Try to force a fresh GPS read instead of just sending old coordinates
+        navigator.geolocation.getCurrentPosition((pos) => {
+           const { latitude: lat, longitude: lng, heading, speed, accuracy } = pos.coords;
+           lastLocationSentAt.current = Date.now();
+           lastCoordRef.current = { lat, lng };
+           publishLiveRiderLocation(lat, lng, heading || 0, speed || 0, accuracy);
+        }, () => {
+           // Fallback to last known if GPS fails to acquire
+           if (lastCoordRef.current) {
+             lastLocationSentAt.current = Date.now();
+             deliveryAPI.updateLocation(
+               lastCoordRef.current.lat, 
+               lastCoordRef.current.lng, 
+               true, 
+               {
+                 heading: 0,
+                 speed: 0,
+                 accuracy: null,
+                 ...(onlineSelfieRef.current?.imageUrl
+                   ? { selfieImageUrl: onlineSelfieRef.current.imageUrl }
+                   : {}),
+               }
+             ).catch(() => {});
+           }
+        }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
       }
     }, 10000); // Check every 10 seconds
     

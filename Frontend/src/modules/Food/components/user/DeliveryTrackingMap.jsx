@@ -637,7 +637,7 @@ const DeliveryTrackingMap = ({
     const currentLeg = isDeliveryLeg ? 'delivery' : (isPickupLeg ? 'pickup' : 'static');
     const legChanged = lastCameraUpdateRef.current.leg !== currentLeg;
     const timeSinceLastUpdate = now - lastCameraUpdateRef.current.time;
-    const throttleTime = isDeliveryLeg ? 4000 : 15000;
+    const throttleTime = isDeliveryLeg ? 4000 : 8000;
 
     if (!legChanged && timeSinceLastUpdate < throttleTime) return;
 
@@ -652,6 +652,7 @@ const DeliveryTrackingMap = ({
     destinationCoords,
     baselineDirections,
     frameOverviewCamera,
+    displayRiderLocation
   ]);
 
   useEffect(() => {
@@ -757,16 +758,17 @@ const DeliveryTrackingMap = ({
   }, [isDeliveryLeg, deliveryLegDirections, activeDeliveryPath, lastDirectionsAt, displayRiderLocation]);
 
   const cloudRemainingPath = useMemo(() => {
-    if (!isDeliveryLeg || !cloudPolyline || !displayRiderLocation || !window.google?.maps?.geometry?.encoding) return [];
+    if (!cloudPolyline || !displayRiderLocation || !window.google?.maps?.geometry?.encoding) return [];
     try {
       const decoded = window.google.maps.geometry.encoding.decodePath(
         typeof cloudPolyline === 'string' ? cloudPolyline : (cloudPolyline.points || '')
       );
-      return buildRemainingRoutePath(decoded, displayRiderLocation, destinationCoords);
+      const endpoint = isPickupLeg ? restaurantCoords : destinationCoords;
+      return buildRemainingRoutePath(decoded, displayRiderLocation, endpoint);
     } catch {
       return [];
     }
-  }, [isDeliveryLeg, cloudPolyline, displayRiderLocation, destinationCoords]);
+  }, [isPickupLeg, cloudPolyline, displayRiderLocation, destinationCoords, restaurantCoords]);
 
   // Delivery leg: rider → customer route, trimmed live as rider moves forward
   const deliveryRemainingPath = useMemo(() => {
@@ -812,10 +814,13 @@ const DeliveryTrackingMap = ({
 
   const pickupRemainingPath = useMemo(() => {
     if (!isPickupLeg || !displayRiderLocation) return [];
+    
+    if (cloudRemainingPath.length > 1) return cloudRemainingPath;
+    
     const fullPath = pickupLegDirections?.routes?.[0]?.overview_path;
     if (!fullPath?.length) return [];
     return buildRemainingRoutePath(fullPath, displayRiderLocation, restaurantCoords);
-  }, [isPickupLeg, pickupLegDirections, displayRiderLocation, restaurantCoords]);
+  }, [isPickupLeg, pickupLegDirections, displayRiderLocation, restaurantCoords, cloudRemainingPath]);
 
   // Rider icon: real GPS → map-match to route → pin snap only on arrival (Swiggy-style)
   const riderMarkerPosition = useMemo(() => {

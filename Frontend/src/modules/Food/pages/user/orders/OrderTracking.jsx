@@ -1654,15 +1654,22 @@ export default function OrderTracking({ isSharedView = false }) {
               <span>Item Total</span>
               <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{(order.subtotal || order.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0) || 0).toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
-              <button
-                type="button"
-                onClick={() => setShowDeliveryFeeModal(true)}
-                className="font-medium hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500"
-              >
-                Delivery partner fee
-              </button>
-              <span className="font-medium text-gray-900 dark:text-white">
+            <div className="flex justify-between items-start text-gray-600 dark:text-gray-400 py-1">
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => setShowDeliveryFeeModal(true)}
+                  className="font-medium hover:text-gray-900 dark:hover:text-white transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left w-fit text-sm text-gray-800 dark:text-gray-300"
+                >
+                  Delivery partner fee (up to {(() => {
+                    const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
+                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
+                    return "1.2";
+                  })()} km)
+                </button>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
+              </div>
+              <span className={Number(order?.deliveryFee || 0) === 0 ? "font-medium text-[#EB590E] mt-0.5 text-sm uppercase" : "font-medium text-gray-900 dark:text-white mt-0.5 text-sm"}>
                 {Number(order?.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(order?.deliveryFee || 0).toFixed(2)}`}
               </span>
             </div>
@@ -1842,7 +1849,8 @@ export default function OrderTracking({ isSharedView = false }) {
               This small fee helps us pay the bills so that we can keep {companyName || "Eqosy"} running
             </p>
             <Button
-              onClick={() => setShowPlatformFeeModal(false)}
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
               className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
@@ -1872,7 +1880,8 @@ export default function OrderTracking({ isSharedView = false }) {
               100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
             </p>
             <Button
-              onClick={() => setShowDeliveryFeeModal(false)}
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
               className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
