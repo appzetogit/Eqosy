@@ -239,7 +239,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const customerLocation = activeOrder?.customerLocation || null;
 
   const mapNavUrl = customerLocation?.lat != null && customerLocation?.lng != null
-    ? `https://www.google.com/maps/search/?api=1&query=${customerLocation.lat},${customerLocation.lng}`
+    ? `https://www.google.com/maps/dir/?api=1&destination=${customerLocation.lat},${customerLocation.lng}`
     : customerAddress
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`
       : null;
@@ -726,9 +726,19 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       // CRITICAL: In Simulation Mode, we disable actual GPS to prevent overwriting our test position
       if (isSimMode) return;
       
-      const { latitude: lat, longitude: lng, heading, speed } = pos.coords;
+      const { latitude: lat, longitude: lng, heading: rawHeading, speed } = pos.coords;
       const now = Date.now();
       
+      let heading = (rawHeading != null && !isNaN(rawHeading) && rawHeading > 0) ? rawHeading : 0;
+      if (lastCoordRef.current && (!rawHeading || isNaN(rawHeading))) {
+        const dist = getHaversineDistance(lastCoordRef.current.lat, lastCoordRef.current.lng, lat, lng);
+        if (dist >= 1.5) {
+          heading = calculateHeading(lastCoordRef.current.lat, lastCoordRef.current.lng, lat, lng);
+        } else if (riderLocation?.heading) {
+          heading = riderLocation.heading;
+        }
+      }
+
       const currentRiderPos = { lat, lng, heading: heading || 0 };
       setRiderLocation(currentRiderPos);
       

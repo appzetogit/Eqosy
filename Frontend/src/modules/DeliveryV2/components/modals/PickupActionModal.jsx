@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChefHat, MapPin, Phone, 
@@ -71,8 +71,11 @@ export const PickupActionModal = ({
   }
 
   const isAtPickup = status === 'REACHED_PICKUP';
-  const restaurantName = order.restaurantName || order.restaurant_name || 'Restaurant';
-  const restaurantAddress = order.restaurantAddress || order.restaurant_address || order.restaurantLocation?.address || 'Address not available';
+  const restaurantName = order.restaurantName || order.restaurant_name || order.restaurantId?.restaurantName || order.restaurantId?.name || 'Restaurant';
+  const restLoc = order.restaurantLocation || order.restaurantId?.location || {};
+  const restLat = order.restaurant_lat || order.restaurantLat || restLoc.latitude || restLoc.lat || (Array.isArray(restLoc.coordinates) ? restLoc.coordinates[1] : null);
+  const restLng = order.restaurant_lng || order.restaurantLng || restLoc.longitude || restLoc.lng || (Array.isArray(restLoc.coordinates) ? restLoc.coordinates[0] : null);
+  const restaurantAddress = order.restaurantAddress || order.restaurant_address || restLoc.address || restLoc.formattedAddress || [order.restaurantId?.addressLine1, order.restaurantId?.area, order.restaurantId?.city].filter(Boolean).join(', ') || 'Address not available';
   const restaurantPhone =
     order.restaurantPhone ||
     order.restaurant_phone ||
@@ -81,6 +84,18 @@ export const PickupActionModal = ({
     '';
   const items = order.items || [];
   const restaurantLogo = order.restaurantImage || order.restaurant?.logo || order.restaurant?.profileImage || 'https://cdn-icons-png.flaticon.com/512/3170/3170733.png';
+
+  const handleNavigateToRestaurant = () => {
+    let navUrl = '';
+    if (restLat && restLng && !isNaN(Number(restLat)) && !isNaN(Number(restLng))) {
+      navUrl = `https://www.google.com/maps/dir/?api=1&destination=${restLat},${restLng}`;
+    } else if (restaurantAddress && restaurantAddress !== 'Address not available') {
+      navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantAddress + ', ' + restaurantName)}`;
+    } else {
+      navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantName)}`;
+    }
+    window.open(navUrl, '_blank');
+  };
 
   return (
     <div className="absolute inset-0 z-[110] flex items-end justify-center">
@@ -144,8 +159,9 @@ export const PickupActionModal = ({
                   </button>
                 )}
                 <button 
-                  onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantAddress)}`, '_blank')}
+                  onClick={handleNavigateToRestaurant}
                   className="w-11 h-11 rounded-2xl bg-gray-950 flex items-center justify-center text-white shadow-xl hover:bg-gray-800 transition-colors active:scale-90"
+                  title="Navigate to Restaurant on Google Maps"
                 >
                   <Navigation className="w-5 h-5" />
                 </button>

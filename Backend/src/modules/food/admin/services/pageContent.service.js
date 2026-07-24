@@ -1,4 +1,4 @@
-﻿import { FoodPageContent } from '../models/pageContent.model.js';
+import { FoodPageContent } from '../models/pageContent.model.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 
 const normalizeKey = (key) => String(key || '').trim().toLowerCase();
@@ -38,9 +38,30 @@ const normalizeAboutForResponse = (about) => {
 export const getPublicPageByKey = async (key) => {
     const k = normalizeKey(key);
     const doc = await FoodPageContent.findOne({ key: k }).lean();
-    if (!doc) return { key: k, data: null };
+    if (!doc) {
+        if (k === 'cancellation') {
+            return {
+                key: k,
+                data: {
+                    title: 'Cancellation Policy',
+                    content: 'A cancellation charge will apply as per configured rules once order is confirmed.'
+                }
+            };
+        }
+        return { key: k, data: null };
+    }
     if (k === 'about') return { key: k, data: normalizeAboutForResponse(doc.about || null) };
-    return { key: k, data: normalizeLegalForResponse(doc.legal || null) };
+    const legalData = normalizeLegalForResponse(doc.legal || null);
+    if (k === 'cancellation' && (!legalData || !legalData.content || !legalData.content.trim())) {
+        return {
+            key: k,
+            data: {
+                title: 'Cancellation Policy',
+                content: 'A cancellation charge will apply as per configured rules once order is confirmed.'
+            }
+        };
+    }
+    return { key: k, data: legalData };
 };
 
 export const getAdminPageByKey = async (key) => getPublicPageByKey(key);

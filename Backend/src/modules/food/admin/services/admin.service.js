@@ -3363,6 +3363,9 @@ export async function createRestaurantByAdmin(body) {
         approvedAt: new Date()
     };
 
+    let finalLat = latitude;
+    let finalLng = longitude;
+
     if (body.zoneId !== undefined) {
         const zoneId = String(body.zoneId || '').trim();
         if (!zoneId) {
@@ -3370,22 +3373,36 @@ export async function createRestaurantByAdmin(body) {
         } else if (!mongoose.Types.ObjectId.isValid(zoneId)) {
             throw new ValidationError('Invalid zoneId');
         } else {
-            doc.zoneId = new mongoose.Types.ObjectId(zoneId);
+            const zId = new mongoose.Types.ObjectId(zoneId);
+            doc.zoneId = zId;
+            const zoneDoc = await FoodZone.findById(zId).lean();
+            if (zoneDoc) {
+                if (!doc.city) doc.city = zoneDoc.serviceLocation || zoneDoc.zoneName || zoneDoc.name || '';
+                if (!doc.area) doc.area = zoneDoc.name || zoneDoc.zoneName || '';
+                if ((finalLat === null || finalLng === null) && Array.isArray(zoneDoc.coordinates) && zoneDoc.coordinates.length > 0) {
+                    const avgLat = zoneDoc.coordinates.reduce((sum, c) => sum + Number(c.latitude || 0), 0) / zoneDoc.coordinates.length;
+                    const avgLng = zoneDoc.coordinates.reduce((sum, c) => sum + Number(c.longitude || 0), 0) / zoneDoc.coordinates.length;
+                    if (Number.isFinite(avgLat) && Number.isFinite(avgLng)) {
+                        finalLat = Math.round(avgLat * 1000000) / 1000000;
+                        finalLng = Math.round(avgLng * 1000000) / 1000000;
+                    }
+                }
+            }
         }
     }
 
-    if (latitude !== null && longitude !== null) {
+    if (finalLat !== null && finalLng !== null) {
         doc.location = {
             type: 'Point',
-            coordinates: [longitude, latitude],
-            latitude,
-            longitude,
+            coordinates: [finalLng, finalLat],
+            latitude: finalLat,
+            longitude: finalLng,
             formattedAddress: toStr(loc.formattedAddress || loc.address || loc.addressLine1),
             address: toStr(loc.address || loc.formattedAddress || loc.addressLine1),
             addressLine1: toStr(loc.addressLine1 || loc.formattedAddress || loc.address),
             addressLine2: toStr(loc.addressLine2),
-            area: toStr(loc.area),
-            city: toStr(loc.city),
+            area: toStr(loc.area || doc.area),
+            city: toStr(loc.city || doc.city),
             state: toStr(loc.state),
             pincode: toStr(loc.pincode || loc.zipCode || loc.postalCode),
             landmark: toStr(loc.landmark),
@@ -3400,6 +3417,12 @@ export async function createRestaurantByAdmin(body) {
     }
 
     const restaurant = await FoodRestaurant.create(doc);
+
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurants*');
+    } catch (_) {}
+
     return restaurant.toObject();
 }
 

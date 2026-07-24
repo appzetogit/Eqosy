@@ -37,8 +37,8 @@ import { useOrders } from "@food/context/OrdersContext"
 import { useProfile } from "@food/context/ProfileContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import DeliveryTrackingMap from "@food/components/user/DeliveryTrackingMap"
-import { orderAPI, restaurantAPI } from "@food/api"
-import { API_BASE_URL } from "@food/api/config"
+import api, { orderAPI, restaurantAPI } from "@food/api"
+import { API_BASE_URL, API_ENDPOINTS } from "@food/api/config"
 import {
   resolveSharerDisplayName,
   saveSharedOrder,
@@ -490,7 +490,30 @@ export default function OrderTracking({ isSharedView = false }) {
   const [showOrderDetails, setShowOrderDetails] = useState(false)
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
   const [cancellationReason, setCancellationReason] = useState("")
+  const [cancellationPolicyText, setCancellationPolicyText] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
+
+  // Fetch admin configured cancellation policy
+  useEffect(() => {
+    const fetchCancellationPolicy = async () => {
+      try {
+        const response = await api.get(API_ENDPOINTS.ADMIN.CANCELLATION_PUBLIC)
+        const contentData = response?.data?.data?.content || response?.data?.content
+        if (contentData) {
+          const raw = contentData
+          const cleaned = typeof document !== 'undefined'
+            ? (new DOMParser().parseFromString(raw, 'text/html').body.textContent || '')
+            : raw.replace(/<[^>]*>?/gm, '')
+          if (cleaned.trim()) {
+            setCancellationPolicyText(cleaned.trim())
+          }
+        }
+      } catch (error) {
+        // keep fallback
+      }
+    }
+    fetchCancellationPolicy()
+  }, [])
   const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false)
   const [deliveryInstructions, setDeliveryInstructions] = useState("")
   const [isUpdatingInstructions, setIsUpdatingInstructions] = useState(false)
@@ -1704,10 +1727,10 @@ export default function OrderTracking({ isSharedView = false }) {
             </div>
             <div className="flex-1">
               <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest mb-1 select-none">
-                Wastage Policy
+                Cancellation & Wastage Policy
               </p>
               <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-relaxed">
-                In order to reduce the food wastage, once the order gets confirmed by the restaurant. it can't be cancelled
+                {cancellationPolicyText || "In order to reduce the food wastage, once the order gets confirmed by the restaurant, it can't be cancelled"}
               </p>
             </div>
           </div>
@@ -1723,7 +1746,12 @@ export default function OrderTracking({ isSharedView = false }) {
               Cancel Order
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-5 py-6 px-2">
+          <div className="space-y-4 py-4 px-2">
+            {cancellationPolicyText && (
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3 text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                {cancellationPolicyText}
+              </div>
+            )}
             <div className="space-y-2 w-full">
               <Textarea
                 value={cancellationReason}

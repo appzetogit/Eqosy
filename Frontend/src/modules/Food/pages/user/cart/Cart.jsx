@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil, ShieldAlert } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -13,7 +13,7 @@ import { useOrders } from "@food/context/OrdersContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
 import { useLocationSelector } from "@food/components/user/UserLayout"
-import { orderAPI, restaurantAPI, userAPI, API_ENDPOINTS } from "@food/api"
+import api, { orderAPI, restaurantAPI, userAPI, API_ENDPOINTS } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { initRazorpayPayment } from "@food/utils/razorpay"
 import { toast } from "sonner"
@@ -1000,6 +1000,30 @@ export default function Cart() {
     }
 
     fetchOrderCount()
+  }, [])
+
+  const [cancellationPolicyText, setCancellationPolicyText] = useState("")
+
+  // Fetch admin configured cancellation policy
+  useEffect(() => {
+    const fetchCancellationPolicy = async () => {
+      try {
+        const response = await api.get(API_ENDPOINTS.ADMIN.CANCELLATION_PUBLIC)
+        const contentData = response?.data?.data?.content || response?.data?.content
+        if (contentData) {
+          const raw = contentData
+          const cleaned = typeof document !== 'undefined'
+            ? (new DOMParser().parseFromString(raw, 'text/html').body.textContent || '')
+            : raw.replace(/<[^>]*>?/gm, '')
+          if (cleaned.trim()) {
+            setCancellationPolicyText(cleaned.trim())
+          }
+        }
+      } catch (error) {
+        // keep default fallback text if error
+      }
+    }
+    fetchCancellationPolicy()
   }, [])
 
   // Use backend pricing only for fee-related bill values.
@@ -2779,13 +2803,25 @@ export default function Cart() {
               </div>
 
               {/* Cancellation Policy */}
-              <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800 mt-4">
-                <p className="text-[11px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">
-                  Cancellation Policy
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                  A 100% cancellation charge will apply. This helps us compensate the restaurant partner for food preparation.
-                </p>
+              <div className="bg-linear-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-950/20 dark:to-orange-950/20 p-5 rounded-3xl border border-amber-200/70 dark:border-amber-900/40 shadow-xs mt-4 relative overflow-hidden group">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <ShieldAlert className="w-5 h-5 stroke-[2.2]" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                        Cancellation Policy
+                      </p>
+                      <span className="text-[9px] font-black bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Notice
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {cancellationPolicyText || "A cancellation charge will apply as per configured rules once order is confirmed."}
+                    </p>
+                  </div>
+                </div>
               </div>
 
             </div>

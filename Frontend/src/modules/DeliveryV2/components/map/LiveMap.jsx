@@ -74,13 +74,20 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
     if (!activeOrder) return null;
     let rawLoc = null;
     if (tripStatus === 'PICKING_UP' || tripStatus === 'REACHED_PICKUP') {
-      rawLoc = activeOrder.restaurantLocation;
+      rawLoc = activeOrder.restaurantLocation || activeOrder.restaurant_location || activeOrder.restaurantId?.location;
+      if (!rawLoc && (activeOrder.restaurant_lat || activeOrder.restaurantLat)) {
+        rawLoc = { lat: activeOrder.restaurant_lat || activeOrder.restaurantLat, lng: activeOrder.restaurant_lng || activeOrder.restaurantLng };
+      }
     } else if (tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') {
-      rawLoc = activeOrder.customerLocation;
+      rawLoc = activeOrder.customerLocation || activeOrder.customer_location || activeOrder.deliveryAddress?.location;
+      if (!rawLoc && (activeOrder.customer_lat || activeOrder.customerLat)) {
+        rawLoc = { lat: activeOrder.customer_lat || activeOrder.customerLat, lng: activeOrder.customer_lng || activeOrder.customerLng };
+      }
     }
     if (!rawLoc) return null;
-    const lat = parseFloat(rawLoc.lat || rawLoc.latitude);
-    const lng = parseFloat(rawLoc.lng || rawLoc.longitude);
+    const coords = Array.isArray(rawLoc.coordinates) ? rawLoc.coordinates : [];
+    const lat = parseFloat(rawLoc.lat || rawLoc.latitude || (coords.length >= 2 ? coords[1] : null));
+    const lng = parseFloat(rawLoc.lng || rawLoc.longitude || (coords.length >= 2 ? coords[0] : null));
     return (Number.isFinite(lat) && Number.isFinite(lng)) ? { lat, lng } : null;
   }, [activeOrder, tripStatus]);
 

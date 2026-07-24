@@ -226,14 +226,18 @@ export default function UnifiedOTPFastLogin() {
           } catch (_) {}
         }
         if (!fcmToken) {
-          throw new Error("Unable to fetch mobile FCM token from app bridge")
+          console.warn("[Auth] Mobile FCM token not retrieved from Flutter app bridge during login.")
         }
       } else {
-        fcmToken = await withTimeout(
-          getWebFcmTokenForLogin(),
-          FCM_FETCH_TIMEOUT_MS,
-          "FCM token fetch",
-        )
+        try {
+          fcmToken = await withTimeout(
+            getWebFcmTokenForLogin(),
+            FCM_FETCH_TIMEOUT_MS,
+            "FCM token fetch",
+          )
+        } catch (webFcmErr) {
+          console.warn("[Auth] Web FCM token fetch failed during login:", webFcmErr?.message || webFcmErr)
+        }
       }
 
       console.log("[Auth] FCM token for login:", {

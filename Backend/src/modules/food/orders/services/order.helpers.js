@@ -50,6 +50,38 @@ export function sanitizeOrderForExternal(orderDoc) {
   o.orderMongoId = (o._id || orderDoc?._id || "").toString();
   // Ensure orderId field for UI always contains the pretty ID
   o.orderId = o.order_id || o.orderMongoId; 
+
+  // Enrich restaurantLocation & restaurantAddress for Delivery Partner navigation
+  const restObj = o.restaurantId && typeof o.restaurantId === 'object' ? o.restaurantId : {};
+  const restLocObj = restObj.location || o.restaurantLocation || {};
+  const restCoords = Array.isArray(restLocObj.coordinates) ? restLocObj.coordinates : [];
+  
+  const restLat = o.restaurant_lat ?? o.restaurantLat ?? restLocObj.latitude ?? restLocObj.lat ?? (restCoords.length >= 2 ? restCoords[1] : null);
+  const restLng = o.restaurant_lng ?? o.restaurantLng ?? restLocObj.longitude ?? restLocObj.lng ?? (restCoords.length >= 2 ? restCoords[0] : null);
+
+  const restAddress = o.restaurantAddress || restLocObj.formattedAddress || restLocObj.address || [restObj.addressLine1, restObj.area, restObj.city].filter(Boolean).join(', ') || '';
+
+  if (!o.restaurantName) {
+    o.restaurantName = restObj.restaurantName || restObj.name || o.restaurant_name || 'Restaurant';
+  }
+
+  if (restAddress) {
+    o.restaurantAddress = restAddress;
+  }
+
+  if (restLat != null && restLng != null && !isNaN(Number(restLat)) && !isNaN(Number(restLng))) {
+    o.restaurant_lat = Number(restLat);
+    o.restaurant_lng = Number(restLng);
+    o.restaurantLocation = {
+      lat: Number(restLat),
+      lng: Number(restLng),
+      latitude: Number(restLat),
+      longitude: Number(restLng),
+      address: restAddress || o.restaurantAddress,
+      coordinates: [Number(restLng), Number(restLat)]
+    };
+  }
+
   return o;
 }
 

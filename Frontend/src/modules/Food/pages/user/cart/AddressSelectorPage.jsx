@@ -1031,7 +1031,7 @@ export default function AddressSelectorPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto pb-10">
-        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-800">
+        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-800 space-y-3">
           <button 
             onClick={handleUseCurrentLocation}
             className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm hover:shadow-md transition-all group"
@@ -1042,6 +1042,20 @@ export default function AddressSelectorPage() {
             <div className="text-left flex-1">
               <p className="font-bold text-[#EB590E]">Use Current Location</p>
               <p className="text-xs text-gray-500 line-clamp-1">{currentAddress || "Enable GPS for accuracy"}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-gray-400" />
+          </button>
+
+          <button 
+            onClick={handleAddAddressClick}
+            className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm hover:shadow-md transition-all group"
+          >
+            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <MapPin className="h-5 w-5 text-blue-600" />
+            </div>
+            <div className="text-left flex-1">
+              <p className="font-bold text-blue-600">Select / Search Location Manually</p>
+              <p className="text-xs text-gray-500 line-clamp-1">Search any city, area, or pick location on map</p>
             </div>
             <ChevronRight className="h-5 w-5 text-gray-400" />
           </button>
