@@ -753,6 +753,9 @@ export default function UserOrderDetails() {
                 OKAY
               </button>
             </div>
+          </div>
+        </div>
+      )}
       {/* Delivery Fee Modal */}
       {showDeliveryFeeModal && (
         <div
