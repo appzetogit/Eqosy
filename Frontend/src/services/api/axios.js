@@ -16,7 +16,7 @@ const resolveApiBaseUrl = () => {
       ? String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, "")
       : "";
 
-  if (!envValue) return "";
+  if (!envValue) return "/api/v1";
 
   // Safety fallback:
   // If a localhost API URL is baked into a deployed build, the browser on production
@@ -28,7 +28,7 @@ const resolveApiBaseUrl = () => {
       const isEnvLocal = LOCAL_HOSTS.has(parsed.hostname);
       const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
       if (isEnvLocal && !isBrowserLocal) {
-        return "";
+        return "/api/v1";
       }
     }
   } catch (_) {
