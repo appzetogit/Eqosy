@@ -448,18 +448,20 @@ export default function AddressSelectorPage() {
         formattedAddress: locationData.formattedAddress || "",
       }
 
-      const existingOther = (addresses || []).find(
-        (addr) => String(addr?.label || "").toLowerCase() === "other"
-      )
-      let savedAddress = null
-      if (existingOther && getAddressId(existingOther)) {
-        savedAddress = await updateAddress(getAddressId(existingOther), addressPayload)
-      } else {
-        savedAddress = await addAddress(addressPayload)
-      }
-      const savedAddressId = getAddressId(savedAddress)
-      if (savedAddressId) {
-        await setDefaultAddress(savedAddressId)
+      if (userProfile) {
+        const existingOther = (addresses || []).find(
+          (addr) => String(addr?.label || "").toLowerCase() === "other"
+        )
+        let savedAddress = null
+        if (existingOther && getAddressId(existingOther)) {
+          savedAddress = await updateAddress(getAddressId(existingOther), addressPayload)
+        } else {
+          savedAddress = await addAddress(addressPayload)
+        }
+        const savedAddressId = getAddressId(savedAddress)
+        if (savedAddressId) {
+          await setDefaultAddress(savedAddressId)
+        }
       }
       await persistActiveLocation(locationData, "saved")
 
@@ -663,31 +665,34 @@ export default function AddressSelectorPage() {
           longitude: lng
         } : {})
       }
-      const created = await addAddress(payload)
-      if (created) {
-        const id = getAddressId(created)
-        if (id) await setDefaultAddress(id)
-        try {
-          await persistActiveLocation({
-            latitude: validGeo ? lat : undefined,
-            longitude: validGeo ? lng : undefined,
-            street: addressFormData.street || "",
-            city: addressFormData.city || "",
-            state: addressFormData.state || "",
-            postalCode: addressFormData.zipCode || "",
-            area: addressFormData.street || "",
-            address: [addressFormData.additionalDetails, addressFormData.street, addressFormData.city, addressFormData.state, addressFormData.zipCode]
-              .filter(Boolean)
-              .join(", "),
-            formattedAddress: currentAddress || [addressFormData.additionalDetails, addressFormData.street, addressFormData.city, addressFormData.state, addressFormData.zipCode]
-              .filter(Boolean)
-              .join(", "),
-            label: addressFormData.label || "Home",
-          }, "saved")
-        } catch {}
-        toast.success("Address saved")
-        handleBack()
+      if (userProfile) {
+        const created = await addAddress(payload)
+        if (created) {
+          const id = getAddressId(created)
+          if (id) await setDefaultAddress(id)
+        }
       }
+
+      try {
+        await persistActiveLocation({
+          latitude: validGeo ? lat : undefined,
+          longitude: validGeo ? lng : undefined,
+          street: addressFormData.street || "",
+          city: addressFormData.city || "",
+          state: addressFormData.state || "",
+          postalCode: addressFormData.zipCode || "",
+          area: addressFormData.street || "",
+          address: [addressFormData.additionalDetails, addressFormData.street, addressFormData.city, addressFormData.state, addressFormData.zipCode]
+            .filter(Boolean)
+            .join(", "),
+          formattedAddress: currentAddress || [addressFormData.additionalDetails, addressFormData.street, addressFormData.city, addressFormData.state, addressFormData.zipCode]
+            .filter(Boolean)
+            .join(", "),
+          label: addressFormData.label || "Home",
+        }, "saved")
+      } catch {}
+      toast.success("Address saved")
+      handleBack()
     } catch (error) {
       const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to save address"
       toast.error(msg)
