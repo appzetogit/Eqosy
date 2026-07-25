@@ -470,7 +470,8 @@ export default function AddressSelectorPage() {
 
       toast.success("Location updated", { id: "geo" })
     } catch (e) {
-      toast.error("Failed to get location", { id: "geo" })
+      console.error("Location error:", e)
+      toast.error(e.message || "Failed to get location", { id: "geo" })
     }
   }
 
