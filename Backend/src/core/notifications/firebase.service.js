@@ -54,10 +54,10 @@ const OWNER_TOKEN_FIELD_CONFIG = {
     SERVICE_CENTER_STAFF: { web: 'fcmTokenWeb', mobile: 'fcmTokenMobile' }
 };
 const OWNER_APP_PREFIXES = {
-    USER: '👤 [User]',
-    RESTAURANT: '🏪 [Shop]',
-    DELIVERY_PARTNER: '🛵 [Rider]',
-    ADMIN: '🛡️ [Admin]'
+    USER: '👤',
+    RESTAURANT: '🏪',
+    DELIVERY_PARTNER: '🛵',
+    ADMIN: '🛡️'
 };
 
 let cachedAccessToken = null;
@@ -442,15 +442,36 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
     // 🏷️ Add Highlighter Prefix to the Title
     if (enrichedPayload && !enrichedPayload.skipHighlighter) {
         const typeKey = String(ownerType || '').toUpperCase();
-        const prefix = OWNER_APP_PREFIXES[typeKey] || '';
+        const basePrefix = OWNER_APP_PREFIXES[typeKey] || '';
         
-        if (prefix) {
+        if (basePrefix) {
+            let dynamicPrefix = basePrefix;
+            try {
+                const model = getOwnerModel(ownerType);
+                if (model && ownerId) {
+                    const doc = await model.findById(ownerId).select('name fullName restaurantName').lean();
+                    if (doc) {
+                        const name = doc.name || doc.fullName || doc.restaurantName;
+                        if (name) {
+                            // Only use first name for a friendlier tone
+                            const firstName = name.split(' ')[0];
+                            dynamicPrefix = `${basePrefix} ${firstName},`;
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.warn(`Failed to fetch name for notification prefix: ${err.message}`);
+            }
+
             // Get original title from any potential field
             let originalTitle = enrichedPayload.title || enrichedPayload.notification?.title || 'New notification';
             
+            // Remove legacy hardcoded prefixes if they somehow got hardcoded in the payload
+            originalTitle = originalTitle.replace('👤 [User] ', '').replace('🏪 [Shop] ', '').replace('🛵 [Rider] ', '').replace('🛡️ [Admin] ', '');
+            
             // Safety: Ensure we don't ADD the prefix if it's already there (defensive check)
-            if (!originalTitle.includes(prefix)) {
-                enrichedPayload.title = `${prefix} ${originalTitle}`.trim();
+            if (!originalTitle.startsWith(dynamicPrefix)) {
+                enrichedPayload.title = `${dynamicPrefix} ${originalTitle}`.trim();
             } else {
                 enrichedPayload.title = originalTitle;
             }

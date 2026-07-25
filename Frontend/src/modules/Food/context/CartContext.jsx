@@ -176,9 +176,10 @@ export function CartProvider({ children }) {
     const safeCart = normalizeCartData(cart)
     if (safeCart.length > 0) {
       const firstItemRestaurantId = safeCart[0]?.restaurantId
-      const firstItemRestaurantName = safeCart[0]?.restaurant
-      const newItemRestaurantId = item?.restaurantId
-      const newItemRestaurantName = item?.restaurant
+      const getRestaurantName = (i) => typeof i?.restaurant === 'string' ? i.restaurant : i?.restaurant?.name || '';
+      const firstItemRestaurantName = getRestaurantName(safeCart[0]);
+      const newItemRestaurantId = item?.restaurantId || item?.restaurant?._id;
+      const newItemRestaurantName = getRestaurantName(item);
       const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : '')
 
       const firstRestaurantNameNormalized = normalizeName(firstItemRestaurantName)
@@ -215,12 +216,13 @@ export function CartProvider({ children }) {
       // If cart already has items, ensure new item belongs to the same restaurant
       if (safePrev.length > 0) {
         const firstItemRestaurantId = safePrev[0]?.restaurantId;
-        const firstItemRestaurantName = safePrev[0]?.restaurant;
-        const newItemRestaurantId = item?.restaurantId;
-        const newItemRestaurantName = item?.restaurant;
+        const getRestaurantName = (i) => typeof i?.restaurant === 'string' ? i.restaurant : i?.restaurant?.name || '';
+        const firstItemRestaurantName = getRestaurantName(safePrev[0]);
+        const newItemRestaurantId = item?.restaurantId || item?.restaurant?._id;
+        const newItemRestaurantName = getRestaurantName(item);
         
         // Normalize restaurant names for comparison (trim and case-insensitive)
-        const normalizeName = (name) => name ? name.trim().toLowerCase() : '';
+        const normalizeName = (name) => name ? String(name).trim().toLowerCase() : '';
         const firstRestaurantNameNormalized = normalizeName(firstItemRestaurantName);
         const newRestaurantNameNormalized = normalizeName(newItemRestaurantName);
         
@@ -407,8 +409,8 @@ export function CartProvider({ children }) {
       
       // Filter cart to keep only items from the target restaurant
       const cleanedCart = safePrev.filter((item) => {
-        const itemRestaurantId = item?.restaurantId;
-        const itemRestaurantName = item?.restaurant;
+        const itemRestaurantId = item?.restaurantId || item?.restaurant?._id;
+        const itemRestaurantName = typeof item?.restaurant === 'string' ? item.restaurant : item?.restaurant?.name;
         const itemRestaurantNameNormalized = normalizeName(itemRestaurantName);
         
         // Check by restaurant name first (more reliable)
@@ -475,8 +477,8 @@ export function CartProvider({ children }) {
         const firstRestaurantNameNormalized = normalizeName(firstRestaurantName);
         
         return safePrev.filter((item) => {
-          const itemRestaurantId = item?.restaurantId;
-          const itemRestaurantName = item?.restaurant;
+          const itemRestaurantId = item?.restaurantId || item?.restaurant?._id;
+          const itemRestaurantName = typeof item?.restaurant === 'string' ? item.restaurant : item?.restaurant?.name;
           const itemRestaurantNameNormalized = normalizeName(itemRestaurantName);
           
           // Check by restaurant name first
