@@ -1032,7 +1032,19 @@ export function useLocation() {
                   formattedAddress: "Select location"
                 }
                 setLocation(defaultLocation)
-                setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
+                
+                let userFriendlyError = err.message;
+                if (err.code === 1) {
+                  userFriendlyError = "Please turn on location services and allow access in your browser settings.";
+                } else if (err.code === 2) {
+                  userFriendlyError = "Unable to detect your location. Please check your device's GPS signal.";
+                } else if (err.code === 3) {
+                  userFriendlyError = "Location request timed out. Please try again or check your signal.";
+                } else if (!userFriendlyError) {
+                  userFriendlyError = "An unexpected error occurred while fetching your location.";
+                }
+                
+                setError(userFriendlyError)
                 setPermissionGranted(false)
                 if (showLoading) setLoading(false)
                 resolve(defaultLocation) // Always resolve with something
@@ -1040,7 +1052,19 @@ export function useLocation() {
             } catch (fallbackErr) {
               debugWarn("?? Fallback retrieval failed:", fallbackErr)
               setLocation(null)
-              setError(err.code === 3 ? "Location request timed out. Please try again." : err.message)
+              
+              let userFriendlyError = err.message;
+              if (err.code === 1) {
+                userFriendlyError = "Please turn on location services and allow access in your browser settings.";
+              } else if (err.code === 2) {
+                userFriendlyError = "Unable to detect your location. Please check your device's GPS signal.";
+              } else if (err.code === 3) {
+                userFriendlyError = "Location request timed out. Please try again or check your signal.";
+              } else if (!userFriendlyError) {
+                userFriendlyError = "An unexpected error occurred while fetching your location.";
+              }
+
+              setError(userFriendlyError)
               setPermissionGranted(false)
               if (showLoading) setLoading(false)
               resolve(null)
@@ -1056,7 +1080,7 @@ export function useLocation() {
     // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
       enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 15000,            // 15 seconds timeout (gives GPS more time to get accurate fix)
+      timeout: 6000,             // Reduced to 6 seconds so it falls back to low accuracy faster if GPS is weak
       maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
     })
   }
