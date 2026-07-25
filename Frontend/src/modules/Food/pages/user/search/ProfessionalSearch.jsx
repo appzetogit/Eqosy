@@ -46,7 +46,23 @@ export default function ProfessionalSearch() {
   const isRestaurantParam = isGrocerySearch ? "false" : "true"
   const navigate = useNavigate()
   const { getDefaultAddress } = useProfile()
-  const { location: userCoords } = useGeoLocation()
+  const { location: userCoords, requestLocation } = useGeoLocation()
+  
+  // Auto-track location when visiting search page
+  const hasAttemptedAutoLocation = useRef(false)
+  useEffect(() => {
+    if (hasAttemptedAutoLocation.current) return;
+    
+    const isMissingLocation = !userCoords || 
+      userCoords.city === "Current Location" || 
+      userCoords.address === "Select location" || 
+      userCoords.formattedAddress === "Select location";
+      
+    if (isMissingLocation && requestLocation) {
+      hasAttemptedAutoLocation.current = true;
+      requestLocation();
+    }
+  }, [userCoords, requestLocation]);
   const [deliveryAddressMode, setDeliveryAddressMode] = useState(() => {
     try {
       return window.localStorage.getItem("deliveryAddressMode") || "saved"

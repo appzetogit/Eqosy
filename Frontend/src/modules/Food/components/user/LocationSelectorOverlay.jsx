@@ -754,14 +754,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       // Increase timeout to 15 seconds to allow GPS to get accurate fix
       // The getLocation function already has a 15-second timeout, so we match it
-      const locationPromise = requestLocation()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Location request is taking longer than expected. Please check your GPS settings.")), 15000)
-      )
-
+      // Let requestLocation handle its own timeouts
       let locationData
       try {
-        locationData = await Promise.race([locationPromise, timeoutPromise])
+        locationData = await requestLocation()
 
         // Check if we got valid location data
         if (!locationData || (!locationData.latitude || !locationData.longitude)) {
@@ -1715,17 +1711,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.loading("Getting your fresh location...", { id: "current-location" })
 
       // Use Promise.race to keep UI responsive, but don't fail too aggressively:
-      // geolocation + reverse geocode can legitimately take a few seconds on slow networks/devices.
-      const locationPromise = requestLocation(true, true) // forceFresh = true, updateDB = true
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Location timeout")), 10000)
-      )
-
+      // Allow requestLocation to handle its own timeouts (it has a 15s GPS + 5s fallback cycle)
       let locationData
       try {
-        locationData = await Promise.race([locationPromise, timeoutPromise])
+        locationData = await requestLocation(true, true) // forceFresh = true, updateDB = true
       } catch (raceError) {
-        // If timeout, try to use cached location immediately (and don't show an error if we can proceed).
+        // If timeout or error, try to use cached location immediately
         const stored = localStorage.getItem("userLocation")
         if (stored) {
           try {
