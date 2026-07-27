@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
+import { FoodItem } from '../../admin/models/food.model.js';
+
 
 const normalizeName = (value) =>
     String(value || '')
