@@ -1955,7 +1955,43 @@ export default function Home() {
 
               // Keep single image for backward compatibility
               const image = allImages[0] || profileImageUrl || "";
-              const offerText = restaurant.offer || null;
+              const isPureVegRestaurant =
+                restaurant.pureVegRestaurant === true ||
+                restaurant.pureVegRestaurant === "true" ||
+                restaurant.pureVeg === true ||
+                restaurant.pureVeg === "true" ||
+                restaurant.isPureVeg === true ||
+                restaurant.isPureVeg === "true" ||
+                restaurant.foodType === "Veg" ||
+                restaurant.foodTypeScope === "Veg" ||
+                (Array.isArray(restaurant.categories) &&
+                  restaurant.categories.length > 0 &&
+                  restaurant.categories.every((c) => c.foodTypeScope === "Veg" || c.isVeg || String(c.foodType || "").toLowerCase() === "veg")) ||
+                (Array.isArray(restaurant.menuCategories) &&
+                  restaurant.menuCategories.length > 0 &&
+                  restaurant.menuCategories.every((c) => c.foodTypeScope === "Veg" || c.isVeg || String(c.foodType || "").toLowerCase() === "veg")) ||
+                (Array.isArray(restaurant.cuisines) &&
+                  restaurant.cuisines.some((c) =>
+                    String(c).toLowerCase().includes("pure veg")
+                  ));
+
+              const offerText =
+                restaurant.offer ||
+                restaurant.offerText ||
+                restaurant.discountText ||
+                restaurant.discount ||
+                restaurant.activeOffer ||
+                (Array.isArray(restaurant.offers) && restaurant.offers[0]
+                  ? typeof restaurant.offers[0] === "string"
+                    ? restaurant.offers[0]
+                    : restaurant.offers[0]?.title || restaurant.offers[0]?.discountText || restaurant.offers[0]?.code
+                  : null) ||
+                (Array.isArray(restaurant.coupons) && restaurant.coupons[0]
+                  ? typeof restaurant.coupons[0] === "string"
+                    ? restaurant.coupons[0]
+                    : restaurant.coupons[0]?.title || (restaurant.coupons[0]?.discount ? `${restaurant.coupons[0].discount}% OFF` : null)
+                  : null) ||
+                null;
               const recommendedImages = Array.isArray(restaurant.recommendedImages)
                 ? restaurant.recommendedImages
                     .map((item, itemIndex) => {
@@ -2016,7 +2052,7 @@ export default function Home() {
                 offer: offerText,
                 slug: restaurant.slug,
                 restaurantId: restaurant.restaurantId,
-                pureVegRestaurant: restaurant.pureVegRestaurant === true,
+                pureVegRestaurant: isPureVegRestaurant,
                 pricingAttributes: Array.isArray(restaurant.pricingAttributes) ? restaurant.pricingAttributes : [],
                 location: restaurant.location, // Store location for distance recalculation
                 isActive: restaurant.isActive !== false, // Default to true if not specified
@@ -3323,16 +3359,11 @@ export default function Home() {
                           <p className="text-[13px] font-bold text-gray-900 dark:text-white truncate tracking-tight">
                             {restaurant.name}
                           </p>
-                          {showMartSwitch ? (
-                            <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 uppercase tracking-wide">
-                              <Car className="w-3.5 h-3.5" />
-                              Switch to EqosyTaxi
-                            </p>
-                          ) : (
-                            <p className="text-[10px] text-orange-600 font-bold mt-1 flex items-center gap-1 uppercase tracking-wide">
-                              <Flame className="w-3.5 h-3.5 fill-orange-600" />
-                              Near &amp; Fast
-                            </p>
+                          {(restaurant.pureVegRestaurant === true || restaurant.pureVeg === true) && (
+                            <p className="text-[10px] text-emerald-600 font-bold mt-0.5">100% PURE VEG</p>
+                          )}
+                          {restaurant.offer && (
+                            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold truncate mt-0.5">{restaurant.offer}</p>
                           )}
                         </div>
                       </Link>
@@ -3557,18 +3588,31 @@ export default function Home() {
                                   </span>
                                 </div>
 
-                                {/* Offer Badge */}
-                                {restaurant.offer && (
-                                  <div className="flex items-center gap-2 text-sm lg:text-base mt-auto transform transition-transform duration-300 group-hover:translate-x-1">
-                                    <BadgePercent
-                                      className="h-4 w-4 lg:h-5 lg:w-5 text-black"
-                                      strokeWidth={2}
-                                    />
-                                    <span className="text-gray-700 dark:text-gray-300 font-medium">
-                                      {restaurant.offer}
-                                    </span>
-                                  </div>
-                                )}
+                                 {/* Pure Veg Tag & Offer Badges beneath delivery time and distance */}
+                                 <div className="mt-auto pt-1 space-y-1.5">
+                                   {/* Pure Veg Tag */}
+                                   {(restaurant.pureVegRestaurant === true || restaurant.pureVeg === true) && (
+                                     <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 px-2 py-0.5 rounded-md w-fit">
+                                       <span className="w-2.5 h-2.5 rounded-sm border border-emerald-600 dark:border-emerald-400 flex items-center justify-center p-0.5 flex-shrink-0">
+                                         <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+                                       </span>
+                                       <span>100% PURE VEG</span>
+                                     </div>
+                                   )}
+
+                                   {/* Running Offer Badge */}
+                                   {restaurant.offer && (
+                                     <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/40 px-2.5 py-1 rounded-lg w-fit transform transition-transform duration-300 group-hover:translate-x-1">
+                                       <BadgePercent
+                                         className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0"
+                                         strokeWidth={2.2}
+                                       />
+                                       <span className="truncate max-w-[220px]">
+                                         {restaurant.offer}
+                                       </span>
+                                     </div>
+                                   )}
+                                 </div>
                               </CardContent>
                             </div>
 

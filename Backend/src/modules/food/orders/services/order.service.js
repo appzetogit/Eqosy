@@ -447,8 +447,8 @@ export async function verifyPayment(userId, dto) {
 
   // Notify Customer about payment success
   await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
-    title: "Payment Successful! âœ…",
-    body: `We have received your payment of â‚¹${order.payment.amountDue} for Order #${order._id.toString()}.`,
+    title: "Payment Successful! ✅",
+    body: `We have received your payment of ₹${order.payment.amountDue} for Order #${order._id.toString()}.`,
     image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
     data: {
       type: "payment_success",
@@ -724,7 +724,7 @@ export async function cancelOrder(orderId, userId, reason) {
   const hasRefundProcessed =
     String(order.payment?.refund?.status || "none").toLowerCase() === "processed";
 
-  // âœ… NEW: Automated Razorpay Refund on User Cancel
+  // ✅ NEW: Automated Razorpay Refund on User Cancel
   if (
     paymentStatus === "paid" &&
     paymentMethod === "razorpay" &&
@@ -807,7 +807,7 @@ export async function cancelOrder(orderId, userId, reason) {
   const isOnlinePaid =
     finalPaymentMethod === "razorpay" &&
     (finalPaymentStatus === "paid" || finalPaymentStatus === "refunded");
-  const refundDetail = isOnlinePaid ? ` Your refund of â‚¹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+  const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
   
   await notifyOwnersSafely(
     [
@@ -1067,7 +1067,7 @@ export async function updateOrderStatusRestaurant(
     body = "Your order is ready and waiting to be picked up.";
   } else if (String(orderStatus).includes("cancel")) {
     const isOnlinePaid = order.payment.method === "razorpay" && (order.payment.status === "paid" || order.payment.status === "refunded");
-    const refundDetail = isOnlinePaid ? ` Your refund of â‚¹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+    const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
     
     title = "Order Cancelled âŒ";
     body = (note && String(note).trim()) ? note : `Unfortunately, your order has been cancelled by the restaurant.${refundDetail}`;
@@ -1206,7 +1206,7 @@ export async function updateOrderStatusRestaurant(
         to: orderStatus
     });
 
-    // âœ… NEW: Automated Razorpay Refund on Restaurant Cancel
+    // ✅ NEW: Automated Razorpay Refund on Restaurant Cancel
     // Triggers if the restaurant sets status to a cancelled state (e.g., cancelled_by_restaurant)
     if (
       String(orderStatus).includes("cancel") &&

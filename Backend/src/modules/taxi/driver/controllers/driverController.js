@@ -6096,7 +6096,7 @@ export const getOwnerFleetDashboard = async (req, res) => {
             longitude: Number(serviceLocation.longitude || 0),
             currencySymbol:
               serviceLocation.currency_symbol &&
-              serviceLocation.currency_symbol !== "â‚¹"
+              serviceLocation.currency_symbol !== "₹"
                 ? serviceLocation.currency_symbol
                 : "₹",
             currencyCode: serviceLocation.currency_code || "INR",

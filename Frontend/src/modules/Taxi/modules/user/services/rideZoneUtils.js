@@ -10,6 +10,8 @@ export const getZoneServiceLocationId = (zone) =>
   || zone?.service_location?._id
   || zone?.service_location?.id
   || zone?.service_location
+  || zone?._id
+  || zone?.id
   || '';
 
 export const isZoneActive = (zone) => zone?.active !== false && Number(zone?.status ?? 1) !== 0;

@@ -75,7 +75,7 @@ export default function Checkout() {
 
       clearCart()
       setIsPlacingOrder(false)
-      navigate(`/user/orders/${orderId}?confirmed=true`)
+      navigate(`/food/user/orders/${orderId}?confirmed=true`)
     }, 1500)
   }
 

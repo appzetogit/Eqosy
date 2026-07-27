@@ -568,6 +568,11 @@ const getRuleServiceLocationId = (rule) => normalizeId(
   || rule?.zone?.service_location?._id
   || rule?.zone?.service_location?.id
   || rule?.zone?.service_location_id
+  || rule?.zone_id?._id
+  || rule?.zone_id?.id
+  || rule?.zone_id
+  || rule?.zone?._id
+  || rule?.zone?.id
   || '',
 );
 

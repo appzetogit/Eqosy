@@ -440,43 +440,12 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
     const enrichedPayload = { ...payload };
 
     // 🏷️ Add Highlighter Prefix to the Title
-    if (enrichedPayload && !enrichedPayload.skipHighlighter) {
-        const typeKey = String(ownerType || '').toUpperCase();
-        const basePrefix = OWNER_APP_PREFIXES[typeKey] || '';
-        
-        if (basePrefix) {
-            let dynamicPrefix = basePrefix;
-            try {
-                const model = getOwnerModel(ownerType);
-                if (model && ownerId) {
-                    const doc = await model.findById(ownerId).select('name fullName restaurantName').lean();
-                    if (doc) {
-                        const name = doc.name || doc.fullName || doc.restaurantName;
-                        if (name) {
-                            // Only use first name for a friendlier tone
-                            const firstName = name.split(' ')[0];
-                            dynamicPrefix = `${basePrefix} ${firstName},`;
-                        }
-                    }
-                }
-            } catch (err) {
-                logger.warn(`Failed to fetch name for notification prefix: ${err.message}`);
-            }
-
-            // Get original title from any potential field
-            let originalTitle = enrichedPayload.title || enrichedPayload.notification?.title || 'New notification';
-            
-            // Remove legacy hardcoded prefixes if they somehow got hardcoded in the payload
-            originalTitle = originalTitle.replace('👤 [User] ', '').replace('🏪 [Shop] ', '').replace('🛵 [Rider] ', '').replace('🛡️ [Admin] ', '');
-            
-            // Safety: Ensure we don't ADD the prefix if it's already there (defensive check)
-            if (!originalTitle.startsWith(dynamicPrefix)) {
-                enrichedPayload.title = `${dynamicPrefix} ${originalTitle}`.trim();
-            } else {
-                enrichedPayload.title = originalTitle;
-            }
-        }
-    }
+// Zomato/Swiggy style: keep notification title as is without emoji prefixes or custom highlighter
+// If title is missing, fallback to notification.title or a generic placeholder
+if (!enrichedPayload.title && enrichedPayload.notification?.title) {
+    enrichedPayload.title = enrichedPayload.notification.title;
+}
+// No additional prefixes are added
 
     const tokens = await listOwnerTokens({ ownerType, ownerId, platform });
     if (!tokens.length) {

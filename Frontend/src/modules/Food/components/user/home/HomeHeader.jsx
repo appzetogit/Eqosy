@@ -15,6 +15,7 @@ import { useCart } from "@food/context/CartContext";
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
 import { syncThemeForPath } from "@/shared/utils/theme.js";
+import { calculateDistanceInKm, extractCoords } from "@food/utils/geoDistance";
 
 const ICON_MAP = {
   CheckCircle2,
@@ -271,6 +272,31 @@ export default function HomeHeader({
   }, []);
 
   const location = locationProp ?? storedLocation;
+
+  const selectedAddressDistanceKm = useMemo(() => {
+    const deliveryAddressMode = localStorage.getItem("deliveryAddressMode") || "saved";
+    if (deliveryAddressMode === "current") return 0;
+
+    let liveCoords = null;
+    try {
+      const raw = localStorage.getItem("userLocation");
+      if (raw) {
+        liveCoords = extractCoords(JSON.parse(raw));
+      }
+    } catch {
+      // ignore
+    }
+
+    const addressCoords = extractCoords(location);
+    if (!liveCoords || !addressCoords) return 0;
+
+    return calculateDistanceInKm(
+      liveCoords.latitude,
+      liveCoords.longitude,
+      addressCoords.latitude,
+      addressCoords.longitude
+    );
+  }, [location]);
 
   const resolvedPlaceholders = useMemo(() => {
     if (placeholdersProp?.length) return placeholdersProp;
@@ -707,6 +733,18 @@ export default function HomeHeader({
           )}
         </div>
       </div>
+
+      {/* Selected Address Far Distance Warning Banner */}
+      {selectedAddressDistanceKm > 0.5 && isFood && (
+        <div className="bg-amber-100 dark:bg-amber-950/70 border-b border-amber-200 dark:border-amber-900/50 px-4 py-2 flex items-center justify-between text-xs font-semibold text-amber-900 dark:text-amber-200 relative z-[40]">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <span>
+              Selected address is <span className="underline font-bold">{selectedAddressDistanceKm} km</span> away from your location
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Container 3: Slide Banners — rounded corners and shadow at the bottom */}
       {isFood && (

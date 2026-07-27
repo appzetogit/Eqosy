@@ -491,13 +491,17 @@ const DeliveryTrackingMap = ({
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Use smooth location for sync if available
-  const displayRiderLocation = smoothLocation || riderLocation;
-
   const tripStatus = String(order?.status || order?.orderStatus || 'pending').toLowerCase();
   const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase();
-
   const hasAssignedRider = Boolean(deliveryPartnerId || order?.deliveryPartner);
+
+  // Use smooth location for sync if available with automatic fallback to restaurantCoords if rider assigned
+  const displayRiderLocation = useMemo(() => {
+    if (smoothLocation) return smoothLocation;
+    if (riderLocation) return riderLocation;
+    if (hasAssignedRider && restaurantCoords) return restaurantCoords;
+    return null;
+  }, [smoothLocation, riderLocation, hasAssignedRider, restaurantCoords]);
 
   // Delivery leg = rider left restaurant with the order (NOT while still at / heading to pickup)
   const isDeliveryLeg = useMemo(() => {
@@ -743,7 +747,8 @@ const DeliveryTrackingMap = ({
     if (
       displayRiderLocation
       && activeDeliveryPath?.length
-      && window.google?.maps?.geometry
+      && window.google?.maps?.geometry?.spherical
+      && window.google?.maps?.LatLng
     ) {
       const riderPos = new window.google.maps.LatLng(displayRiderLocation.lat, displayRiderLocation.lng);
       let minDist = Infinity;
@@ -947,14 +952,27 @@ const DeliveryTrackingMap = ({
            />
         )}
 
+        {/* Immediate Fallback Polyline if Google Directions isn't ready yet */}
+        {!baselineDirections && restaurantCoords && destinationCoords && (
+          <Polyline
+            path={[restaurantCoords, destinationCoords]}
+            options={{
+              strokeColor: '#EB590E',
+              strokeOpacity: 0.6,
+              strokeWeight: 5,
+              zIndex: 4
+            }}
+          />
+        )}
+
         {/* 1. PERSISTENT BASELINE (Full journey: Restaurant -> Customer) */}
-        {baselineDirections && !isDeliveryLeg && !isPickupLeg && (
+        {baselineDirections?.routes?.[0]?.overview_path && !isDeliveryLeg && (
           <Polyline
             path={baselineDirections.routes[0].overview_path}
             options={{
               strokeColor: '#EB590E', 
-              strokeOpacity: 0.8,
-              strokeWeight: 6,
+              strokeOpacity: isPickupLeg ? 0.45 : 0.85,
+              strokeWeight: isPickupLeg ? 5 : 6,
               zIndex: 5
             }}
           />

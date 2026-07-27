@@ -909,13 +909,45 @@ export default function CategoryPage() {
               return hasName
             })
             .map((restaurant) => {
-              let deliveryTime = restaurant.estimatedDeliveryTime || null
+              let deliveryTime = restaurant.estimatedDeliveryTime || restaurant.deliveryTime || null
               let distance = restaurant.distance || null
-              let offer = restaurant.offer || null
+              let offer =
+                restaurant.offer ||
+                restaurant.offerText ||
+                restaurant.discountText ||
+                restaurant.discount ||
+                restaurant.activeOffer ||
+                (Array.isArray(restaurant.offers) && restaurant.offers[0]
+                  ? typeof restaurant.offers[0] === "string"
+                    ? restaurant.offers[0]
+                    : restaurant.offers[0]?.title || restaurant.offers[0]?.discountText || restaurant.offers[0]?.code
+                  : null) ||
+                (Array.isArray(restaurant.coupons) && restaurant.coupons[0]
+                  ? typeof restaurant.coupons[0] === "string"
+                    ? restaurant.coupons[0]
+                    : restaurant.coupons[0]?.title || (restaurant.coupons[0]?.discount ? `${restaurant.coupons[0].discount}% OFF` : null)
+                  : null) ||
+                null;
 
-              if (isDefaultValue(deliveryTime, 'deliveryTime')) deliveryTime = null
-              if (isDefaultValue(distance, 'distance')) distance = null
-              if (isDefaultValue(offer, 'offer')) offer = null
+              const isPureVeg =
+                restaurant.pureVegRestaurant === true ||
+                restaurant.pureVegRestaurant === "true" ||
+                restaurant.pureVeg === true ||
+                restaurant.pureVeg === "true" ||
+                restaurant.isPureVeg === true ||
+                restaurant.isPureVeg === "true" ||
+                restaurant.foodType === "Veg" ||
+                restaurant.foodTypeScope === "Veg" ||
+                (Array.isArray(restaurant.categories) &&
+                  restaurant.categories.length > 0 &&
+                  restaurant.categories.every((c) => c.foodTypeScope === "Veg" || c.isVeg || String(c.foodType || "").toLowerCase() === "veg")) ||
+                (Array.isArray(restaurant.menuCategories) &&
+                  restaurant.menuCategories.length > 0 &&
+                  restaurant.menuCategories.every((c) => c.foodTypeScope === "Veg" || c.isVeg || String(c.foodType || "").toLowerCase() === "veg")) ||
+                (Array.isArray(restaurant.cuisines) &&
+                  restaurant.cuisines.some((c) =>
+                    String(c).toLowerCase().includes("pure veg")
+                  ));
 
               const cuisine = restaurant.cuisines && restaurant.cuisines.length > 0
                 ? restaurant.cuisines.join(", ")
@@ -960,6 +992,8 @@ export default function CategoryPage() {
                 featuredDish: featuredDish,
                 featuredPrice: featuredPrice,
                 offer: offer,
+                pureVegRestaurant: isPureVeg,
+                pureVeg: isPureVeg,
                 slug: restaurant.slug || (restaurant.restaurantName || restaurant.name)?.toLowerCase().replace(/\s+/g, '-'),
                 restaurantId: restaurantId,
                 mongoId: restaurant._id || null,
@@ -1762,13 +1796,31 @@ export default function CategoryPage() {
                           </div>
                         )}
 
-                        {/* Offer Badge */}
-                        {restaurant.offer && (
-                          <div className="flex items-center gap-2 text-sm md:text-base lg:text-lg mt-auto">
-                            <BadgePercent className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 text-[#EB590E]" strokeWidth={2} />
-                            <span className="text-gray-700 dark:text-gray-300 font-medium">{restaurant.offer}</span>
-                          </div>
-                        )}
+                        {/* Pure Veg Tag & Offer Badges beneath delivery time and distance */}
+                        <div className="mt-auto pt-1 space-y-1.5">
+                          {/* Pure Veg Tag */}
+                          {(restaurant.pureVegRestaurant === true || restaurant.pureVeg === true) && (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 px-2 py-0.5 rounded-md w-fit">
+                              <span className="w-2.5 h-2.5 rounded-sm border border-emerald-600 dark:border-emerald-400 flex items-center justify-center p-0.5 flex-shrink-0">
+                                <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+                              </span>
+                              <span>100% PURE VEG</span>
+                            </div>
+                          )}
+
+                          {/* Running Offer Badge */}
+                          {restaurant.offer && (
+                            <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/40 px-2.5 py-1 rounded-lg w-fit">
+                              <BadgePercent
+                                className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0"
+                                strokeWidth={2.2}
+                              />
+                              <span className="truncate max-w-[220px]">
+                                {restaurant.offer}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   </Link>

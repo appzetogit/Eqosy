@@ -77,7 +77,7 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         } else if (!response.ok) {
             logger.error(`SMS API HTTP error for ${phone}: ${response.status} â€“ ${resultText}`);
         } else {
-            logger.info(`âœ… SMS sent successfully to ${msisdn}`);
+            logger.info(`✅ SMS sent successfully to ${msisdn}`);
         }
     } catch (error) {
         logger.error(`Error sending SMS to ${phone}: ${error.message}`);

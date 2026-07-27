@@ -105,6 +105,35 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
   </motion.svg>
 )
 
+// Error boundary to protect page from map render failures
+class MapErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.warn('[MapErrorBoundary] Caught map rendering error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="relative w-full h-[250px] bg-gray-100 dark:bg-zinc-800 rounded-2xl flex flex-col items-center justify-center p-4 text-center border border-gray-200 dark:border-zinc-700">
+          <MapPin className="w-8 h-8 text-gray-400 mb-2" />
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Map preview unavailable</p>
+          <p className="text-xs text-gray-400 mt-1">Live order status is tracked below</p>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // Real Delivery Map Component with User Live Location
 const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoords = null, userLiveCoords = null, userLocationAccuracy = null, onEtaUpdate = null }) => {
   const toPointFromGeoJSON = (coords) => {
@@ -116,35 +145,6 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
   };
 
   // Memoize coordinates to prevent re-calculating on every parent render
-  const restaurantCoords = useMemo(() => {
-    // Try multiple sources for restaurant coordinates
-    let coords = null;
-
-    if (order?.restaurantLocation?.coordinates &&
-      Array.isArray(order.restaurantLocation.coordinates) &&
-      order.restaurantLocation.coordinates.length >= 2) {
-      coords = order.restaurantLocation.coordinates;
-    }
-    else if (order?.restaurantId?.location?.coordinates &&
-      Array.isArray(order.restaurantId.location.coordinates) &&
-      order.restaurantId.location.coordinates.length >= 2) {
-      coords = order.restaurantId.location.coordinates;
-    }
-    else if (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude) {
-      coords = [order.restaurantId.location.longitude, order.restaurantId.location.latitude];
-    }
-
-    const fromCoords = toPointFromGeoJSON(coords);
-    if (fromCoords) return fromCoords;
-
-    const fallbackLat = Number(order?.restaurantId?.location?.latitude || order?.restaurant?.location?.latitude);
-    const fallbackLng = Number(order?.restaurantId?.location?.longitude || order?.restaurant?.location?.longitude);
-    if (Number.isFinite(fallbackLat) && Number.isFinite(fallbackLng)) {
-      return { lat: fallbackLat, lng: fallbackLng };
-    }
-    return null;
-  }, [order?.restaurantId, order?.restaurantLocation, order?.restaurant]);
-
   const customerCoords = useMemo(() => {
     const coords = order?.address?.coordinates || order?.address?.location?.coordinates;
     const fromCoords = toPointFromGeoJSON(coords);
@@ -152,7 +152,7 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
 
     const lat = Number(order?.address?.latitude ?? order?.address?.location?.latitude);
     const lng = Number(order?.address?.longitude ?? order?.address?.location?.longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
       return { lat, lng };
     }
 
@@ -163,8 +163,56 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
     ) {
       return fallbackCustomerCoords;
     }
+
+    if (
+      userLiveCoords &&
+      Number.isFinite(userLiveCoords.lat) &&
+      Number.isFinite(userLiveCoords.lng)
+    ) {
+      return userLiveCoords;
+    }
+
     return null;
-  }, [order?.address, fallbackCustomerCoords]);
+  }, [order?.address, fallbackCustomerCoords, userLiveCoords]);
+
+  const restaurantCoords = useMemo(() => {
+    let coords =
+      order?.restaurantLocation?.coordinates ||
+      order?.restaurantId?.location?.coordinates ||
+      order?.restaurant?.location?.coordinates ||
+      order?.restaurant?.coordinates ||
+      (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude
+        ? [order.restaurantId.location.longitude, order.restaurantId.location.latitude]
+        : null) ||
+      (order?.restaurant?.location?.latitude && order?.restaurant?.location?.longitude
+        ? [order.restaurant.location.longitude, order.restaurant.location.latitude]
+        : null);
+
+    const fromCoords = toPointFromGeoJSON(coords);
+    if (fromCoords) return fromCoords;
+
+    const fallbackLat = Number(
+      order?.restaurantId?.location?.latitude ||
+      order?.restaurant?.location?.latitude ||
+      order?.restaurant?.latitude ||
+      order?.restaurantLocation?.latitude
+    );
+    const fallbackLng = Number(
+      order?.restaurantId?.location?.longitude ||
+      order?.restaurant?.location?.longitude ||
+      order?.restaurant?.longitude ||
+      order?.restaurantLocation?.longitude
+    );
+    if (Number.isFinite(fallbackLat) && Number.isFinite(fallbackLng) && (fallbackLat !== 0 || fallbackLng !== 0)) {
+      return { lat: fallbackLat, lng: fallbackLng };
+    }
+
+    if (customerCoords) {
+      return { lat: customerCoords.lat + 0.015, lng: customerCoords.lng + 0.015 };
+    }
+
+    return null;
+  }, [order?.restaurantId, order?.restaurantLocation, order?.restaurant, customerCoords]);
 
   // Delivery boy data
   const deliveryBoyData = useMemo(() => order?.deliveryPartner ? {
@@ -518,6 +566,53 @@ export default function OrderTracking({ isSharedView = false }) {
   const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false)
   const [deliveryInstructions, setDeliveryInstructions] = useState("")
   const [isUpdatingInstructions, setIsUpdatingInstructions] = useState(false)
+
+  // Post-Delivery Rating State
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false)
+  const [restaurantRating, setRestaurantRating] = useState(5)
+  const [deliveryRating, setDeliveryRating] = useState(5)
+  const [restaurantComment, setRestaurantComment] = useState("")
+  const [deliveryComment, setDeliveryComment] = useState("")
+  const [submittingRating, setSubmittingRating] = useState(false)
+
+  const isAlreadyRated = Boolean(
+    order?.ratings?.restaurant?.rating ||
+    order?.restaurantRating ||
+    order?.ratings?.deliveryPartner?.rating
+  )
+
+  const handleRatingSubmit = async () => {
+    if (!order) return
+    try {
+      setSubmittingRating(true)
+      const hasDeliveryPartner = Boolean(order?.deliveryPartnerId || order?.deliveryPartner)
+      const payload = {
+        restaurantRating,
+        restaurantComment: restaurantComment.trim() || undefined,
+        ...(hasDeliveryPartner ? {
+          deliveryPartnerRating: deliveryRating,
+          deliveryPartnerComment: deliveryComment.trim() || undefined,
+        } : {})
+      }
+
+      const response = await orderAPI.submitOrderRatings(resolvedLookupId || orderId, payload)
+      toast.success("Thank you for rating your delivery & food!")
+      setIsRatingModalOpen(false)
+
+      // Update order state locally so UI updates immediately
+      setOrder(prev => prev ? {
+        ...prev,
+        ratings: response?.data?.data?.order?.ratings || {
+          restaurant: { rating: restaurantRating, comment: restaurantComment },
+          deliveryPartner: hasDeliveryPartner ? { rating: deliveryRating, comment: deliveryComment } : null
+        }
+      } : prev)
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to submit rating. Please try again.")
+    } finally {
+      setSubmittingRating(false)
+    }
+  }
   const [resolvedLookupId, setResolvedLookupId] = useState("")
   const [timerNow, setTimerNow] = useState(Date.now())
   const handleEtaUpdate = useCallback((newEta) => setEstimatedTime(newEta), [])
@@ -619,11 +714,8 @@ export default function OrderTracking({ isSharedView = false }) {
     resolveOrderFromList: async (rawLookupId) => {
       const needle = normalizeLookupId(rawLookupId)
       if (!needle) return null
-      const maxPages = 3
-      const limit = 50
-
-      for (let page = 1; page <= maxPages; page += 1) {
-        const listResponse = await orderAPI.getOrders({ page, limit })
+      try {
+        const listResponse = await orderAPI.getOrders({ page: 1, limit: 20 })
         let orders = []
         if (listResponse?.data?.success && listResponse?.data?.data?.orders) {
           orders = listResponse.data.data.orders || []
@@ -640,9 +732,7 @@ export default function OrderTracking({ isSharedView = false }) {
           return candidates.includes(needle)
         })
         if (matched) return matched
-        const totalPages = Number(listResponse?.data?.data?.pagination?.pages) || Number(listResponse?.data?.data?.totalPages) || 1
-        if (page >= totalPages) break
-      }
+      } catch {}
       return null
     },
     fetchOrderDetailsWithFallback: async (options = {}) => {
@@ -887,9 +977,20 @@ export default function OrderTracking({ isSharedView = false }) {
       if (isInitial && now - lastPollExecutionRef.current < 1000) return;
       if (isInitial) lastPollExecutionRef.current = now;
 
-      // Check context immediately to avoid loaders if data exists locally
+      // Check context and local cache immediately to eliminate loading delay
       if (isInitial && !isShared && orderId) {
-        const rawContext = getOrderById(orderId);
+        let rawContext = getOrderById(orderId);
+        if (!rawContext) {
+          try {
+            const cachedStr = localStorage.getItem("lastPlacedOrder");
+            if (cachedStr) {
+              const parsed = JSON.parse(cachedStr);
+              const needle = String(orderId).trim().toLowerCase();
+              const candidates = [parsed?.id, parsed?._id, parsed?.mongoId, parsed?.orderId].filter(Boolean).map(s => String(s).trim().toLowerCase());
+              if (candidates.includes(needle)) rawContext = parsed;
+            }
+          } catch {}
+        }
         if (rawContext) {
           setOrder(transformOrderForTracking(rawContext));
           setLoading(false);
@@ -1465,15 +1566,17 @@ export default function OrderTracking({ isSharedView = false }) {
 
       {/* Map Section */}
       {!isDeliveredOrder && orderStatus !== 'cancelled' && (
-        <DeliveryMap
-          orderId={mapOrderId}
-          order={order}
-          isVisible={order !== null}
-          fallbackCustomerCoords={fallbackCustomerCoords}
-          userLiveCoords={userLiveCoords}
-          userLocationAccuracy={userLiveLocation?.accuracy ?? null}
-          onEtaUpdate={handleEtaUpdate}
-        />
+        <MapErrorBoundary>
+          <DeliveryMap
+            orderId={mapOrderId}
+            order={order}
+            isVisible={order !== null}
+            fallbackCustomerCoords={fallbackCustomerCoords}
+            userLiveCoords={userLiveCoords}
+            userLocationAccuracy={userLiveLocation?.accuracy ?? null}
+            onEtaUpdate={handleEtaUpdate}
+          />
+        </MapErrorBoundary>
       )}
 
       {/* Scrollable Content */}
@@ -1604,14 +1707,53 @@ export default function OrderTracking({ isSharedView = false }) {
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-1 gap-3 px-1">
-          {isDeliveredOrder ? (
+        {/* Post-Delivery Rating & Complaint Card */}
+        {isDeliveredOrder && (
+          <div className="space-y-3 px-1 mb-3">
+            {/* Rating Banner */}
+            <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-3xl p-5 shadow-lg text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-yellow-300">
+                    <Star className="w-7 h-7 fill-yellow-300 stroke-yellow-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg leading-tight">
+                      {isAlreadyRated ? "You Rated This Order!" : "Rate Food & Delivery"}
+                    </h3>
+                    <p className="text-xs text-orange-100 mt-0.5 font-medium">
+                      {isAlreadyRated
+                        ? `Food: ${order?.ratings?.restaurant?.rating || 5}★ | Delivery: ${order?.ratings?.deliveryPartner?.rating || 5}★`
+                        : "How was your food quality and delivery service?"}
+                    </p>
+                  </div>
+                </div>
+                {!isAlreadyRated ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsRatingModalOpen(true)}
+                    className="px-4 py-2.5 bg-white text-[#EB590E] font-extrabold text-xs rounded-xl shadow-md hover:bg-orange-50 transition-all active:scale-95 flex items-center gap-1.5"
+                  >
+                    Rate Now <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsRatingModalOpen(true)}
+                    className="px-3 py-1.5 bg-white/20 backdrop-blur-md rounded-xl text-xs font-bold text-white flex items-center gap-1 hover:bg-white/30"
+                  >
+                    <Check className="w-4 h-4 text-emerald-300" /> View Rating
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Raise Complaint Button */}
             <Link to="/user/profile/support" className="flex items-center justify-center gap-2 py-4 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 font-bold text-gray-800 dark:text-white text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors w-full">
               <AlertCircle className="w-4 h-4 text-red-500" /> Raise a Complaint
             </Link>
-          ) : null}
-        </div>
+          </div>
+        )}
 
         {/* Delivery Instructions - Only show if NOT delivered */}
         {!isShared && !isDeliveredOrder && !isCancelledOrder && (
@@ -1885,6 +2027,164 @@ export default function OrderTracking({ isSharedView = false }) {
               className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rating & Review Dialog */}
+      <Dialog open={isRatingModalOpen} onOpenChange={setIsRatingModalOpen}>
+        <DialogContent className="sm:max-w-md w-[95vw] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-zinc-900 max-h-[90vh] overflow-y-auto z-[200]">
+          <DialogHeader className="mb-2">
+            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent text-center">
+              Rate Your Order Experience
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 py-2">
+            {/* 1. Rate Delivery Partner */}
+            {(order?.deliveryPartnerId || order?.deliveryPartner) && (
+              <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-[#EB590E] flex items-center justify-center font-bold">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">
+                      Rate {order?.deliveryPartner?.name || 'Delivery Partner'}
+                    </h4>
+                    <p className="text-xs text-gray-500">Delivery service & behavior</p>
+                  </div>
+                </div>
+
+                {/* Star Rating */}
+                <div className="flex items-center justify-center gap-2 my-3">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={`del-star-${star}`}
+                      type="button"
+                      onClick={() => setDeliveryRating(star)}
+                      className="p-1 transition-transform hover:scale-125 focus:outline-none"
+                    >
+                      <Star
+                        className={`w-8 h-8 ${
+                          star <= deliveryRating
+                            ? 'text-amber-400 fill-amber-400'
+                            : 'text-gray-300 dark:text-zinc-600'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                {/* Quick Feedback Pills */}
+                <div className="flex flex-wrap gap-1.5 my-2">
+                  {['⚡ On-time delivery', '😊 Polite behavior', '📦 Handled with care'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setDeliveryComment((prev) =>
+                          prev.includes(tag) ? prev.replace(tag, '').trim() : `${prev} ${tag}`.trim()
+                        )
+                      }
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                        deliveryComment.includes(tag)
+                          ? 'bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-600 dark:text-orange-400'
+                          : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+
+                <Textarea
+                  value={deliveryComment}
+                  onChange={(e) => setDeliveryComment(e.target.value)}
+                  placeholder="Write a review for delivery partner (optional)..."
+                  className="min-h-[60px] text-xs resize-none rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                />
+              </div>
+            )}
+
+            {/* 2. Rate Restaurant Food */}
+            <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-gray-900 dark:text-white">
+                    Rate {order?.restaurant || 'Restaurant Food'}
+                  </h4>
+                  <p className="text-xs text-gray-500">Food quality & taste</p>
+                </div>
+              </div>
+
+              {/* Star Rating */}
+              <div className="flex items-center justify-center gap-2 my-3">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={`rest-star-${star}`}
+                    type="button"
+                    onClick={() => setRestaurantRating(star)}
+                    className="p-1 transition-transform hover:scale-125 focus:outline-none"
+                  >
+                    <Star
+                      className={`w-8 h-8 ${
+                        star <= restaurantRating
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-gray-300 dark:text-zinc-600'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              {/* Quick Feedback Pills */}
+              <div className="flex flex-wrap gap-1.5 my-2">
+                {['😋 Delicious taste', '🔥 Hot & fresh', '🍱 Great packaging', '👌 Good portion'].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setRestaurantComment((prev) =>
+                        prev.includes(tag) ? prev.replace(tag, '').trim() : `${prev} ${tag}`.trim()
+                      )
+                    }
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                      restaurantComment.includes(tag)
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <Textarea
+                value={restaurantComment}
+                onChange={(e) => setRestaurantComment(e.target.value)}
+                placeholder="Write a review for food & restaurant (optional)..."
+                className="min-h-[60px] text-xs resize-none rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              onClick={handleRatingSubmit}
+              disabled={submittingRating}
+              className="w-full h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-base rounded-2xl shadow-lg border-none active:scale-98 transition-all"
+            >
+              {submittingRating ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" /> Submitting Ratings...
+                </div>
+              ) : (
+                "Submit Ratings & Feedback"
+              )}
             </Button>
           </div>
         </DialogContent>

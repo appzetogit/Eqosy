@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil, ShieldAlert } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Banknote, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, Pencil, ShieldAlert, AlertCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -23,6 +23,7 @@ import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailabil
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
 import { calculateDistance } from "@food/utils/common"
+import { calculateDistanceInKm, extractCoords } from "@food/utils/geoDistance"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
@@ -118,7 +119,7 @@ export default function Cart() {
 
   const { cart, updateQuantity, addToCart, getCartCount, clearCart, cleanCartForRestaurant } = cartContext;
   const { getDefaultAddress, getDefaultPaymentMethod, setDefaultAddress, addresses, paymentMethods, userProfile } = useProfile()
-  const { createOrder } = useOrders()
+  const { createOrder, addOrder } = useOrders()
   const { openLocationSelector } = useLocationSelector()
   const { location: currentLocation, loading: currentLocationLoading } = useUserLocation() // Get live location address
 
@@ -379,6 +380,30 @@ export default function Cart() {
   }, [deliveryAddressMode, currentLocationAddress, selectedAddress, savedAddress])
 
   const hasSavedAddress = Boolean(defaultAddress && formatFullAddress(defaultAddress))
+
+  const selectedAddressDistanceKm = useMemo(() => {
+    if (deliveryAddressMode === "current") return 0;
+
+    const liveCoords = extractCoords(currentLocation) || (() => {
+      try {
+        const raw = localStorage.getItem("userLocation");
+        return raw ? extractCoords(JSON.parse(raw)) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const addressCoords = extractCoords(defaultAddress);
+
+    if (!liveCoords || !addressCoords) return 0;
+
+    return calculateDistanceInKm(
+      liveCoords.latitude,
+      liveCoords.longitude,
+      addressCoords.latitude,
+      addressCoords.longitude
+    );
+  }, [currentLocation, defaultAddress, deliveryAddressMode]);
   const recipientName = String(recipientDetails.name || "").trim() || userProfile?.name || "Your Name"
   const recipientPhone = sanitizeRecipientPhone(recipientDetails.phone || "") || userProfile?.phone || ""
   const selectedAddressCoordinates = defaultAddress?.location?.coordinates
@@ -598,8 +623,8 @@ export default function Cart() {
       // Strategy 1: Try using restaurantId from cart if available
       if (cart[0]?.restaurantId) {
         try {
-          const cartRestaurantId = cart[0].restaurantId;
-          const cartRestaurantName = cart[0].restaurant;
+          const cartRestaurantId = cart[0]?.restaurantId;
+          const cartRestaurantName = cart[0]?.restaurant;
 
           debugLog("?? Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
           const response = await restaurantAPI.getRestaurantById(cartRestaurantId)
@@ -664,22 +689,22 @@ export default function Cart() {
       // Strategy 2: If no restaurantId in cart, search by restaurant name
       if (cart[0]?.restaurant && !restaurantData) {
         try {
-          debugLog("?? Searching restaurant by name:", cart[0].restaurant)
+          debugLog("?? Searching restaurant by name:", cart[0]?.restaurant)
           const searchResponse = await restaurantAPI.getRestaurants({ limit: 100 })
           const restaurants = searchResponse?.data?.data?.restaurants || searchResponse?.data?.data || []
           debugLog("?? Fetched", restaurants.length, "restaurants for name search")
 
           // Try exact match first
           let matchingRestaurant = restaurants.find(r =>
-            r.name?.toLowerCase().trim() === cart[0].restaurant?.toLowerCase().trim()
+            r.name?.toLowerCase().trim() === cart[0]?.restaurant?.toLowerCase().trim()
           )
 
           // If no exact match, try partial match
           if (!matchingRestaurant) {
             debugLog("?? No exact match, trying partial match...")
             matchingRestaurant = restaurants.find(r =>
-              r.name?.toLowerCase().includes(cart[0].restaurant?.toLowerCase().trim()) ||
-              cart[0].restaurant?.toLowerCase().trim().includes(r.name?.toLowerCase())
+              r.name?.toLowerCase().includes(cart[0]?.restaurant?.toLowerCase().trim()) ||
+              cart[0]?.restaurant?.toLowerCase().trim().includes(r.name?.toLowerCase())
             )
           }
 
@@ -1065,12 +1090,12 @@ export default function Cart() {
     if (!isNaN(d) && d > 0 && d < 100) {
       return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
     }
-    const resLoc = restaurantDetails?.location || {};
+    const resLoc = restaurantData?.location || {};
     const resCoords = Array.isArray(resLoc.coordinates) ? resLoc.coordinates : [];
     const resLat = parseFloat(resLoc.latitude || resLoc.lat || (resCoords.length >= 2 ? resCoords[1] : NaN));
     const resLng = parseFloat(resLoc.longitude || resLoc.lng || (resCoords.length >= 2 ? resCoords[0] : NaN));
 
-    const custLoc = selectedAddress?.location || {};
+    const custLoc = defaultAddress?.location || selectedAddress?.location || {};
     const custCoords = Array.isArray(custLoc.coordinates) ? custLoc.coordinates : [];
     const custLat = parseFloat(custLoc.latitude || custLoc.lat || (custCoords.length >= 2 ? custCoords[1] : NaN));
     const custLng = parseFloat(custLoc.longitude || custLoc.lng || (custCoords.length >= 2 ? custCoords[0] : NaN));
@@ -1775,12 +1800,19 @@ export default function Cart() {
 
       debugLog("? Order created successfully:", orderResponse.data)
 
-      const { order, razorpay } = orderResponse.data.data
+      const rawOrderData = orderResponse?.data?.data
+      const order = rawOrderData?.order || rawOrderData || {}
+      const orderIdToStore = String(order?._id || order?.orderId || order?.id || "")
+
+      if (addOrder && order) addOrder(order);
+      try {
+        if (order) localStorage.setItem("lastPlacedOrder", JSON.stringify(order));
+      } catch {}
 
       // Cash flow: order placed without online payment
       if (selectedPaymentMethod === "cash") {
         toast.success("Order placed with Cash on Delivery")
-        setPlacedOrderId(order?._id || order?.orderId || order?.id || null)
+        setPlacedOrderId(orderIdToStore)
         setShowOrderSuccess(true)
         window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
         clearCart()
@@ -1798,7 +1830,7 @@ export default function Cart() {
       // Wallet flow: order placed with wallet payment (already processed in backend)
       if (selectedPaymentMethod === "wallet") {
         toast.success("Order placed with Wallet payment")
-        setPlacedOrderId(order?._id || order?.orderId || order?.id || null)
+        setPlacedOrderId(orderIdToStore)
         setShowOrderSuccess(true)
         window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
         clearCart()
@@ -1984,7 +2016,11 @@ export default function Cart() {
 
   const handleGoToOrders = () => {
     setShowOrderSuccess(false)
-    navigate(`/user/orders/${placedOrderId}?confirmed=true`)
+    if (placedOrderId) {
+      navigate(`/food/user/orders/${placedOrderId}?confirmed=true`)
+    } else {
+      navigate('/food/user/orders')
+    }
   }
 
   // While restaurant status is loading, show neutral skeleton (avoids colorful cart flash before offline state)
@@ -2067,6 +2103,18 @@ export default function Cart() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-52">
+        {/* Selected Address Far Distance Warning Banner */}
+        {selectedAddressDistanceKm > 0.5 && (
+          <div className="bg-amber-100/90 dark:bg-amber-950/50 border-b border-amber-200/80 dark:border-amber-900/50 px-4 md:px-6 py-2.5 flex-shrink-0 transition-all">
+            <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs md:text-sm font-semibold text-amber-900 dark:text-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <span>
+                Selected address is <span className="underline font-bold">{selectedAddressDistanceKm} km</span> away from your location
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">

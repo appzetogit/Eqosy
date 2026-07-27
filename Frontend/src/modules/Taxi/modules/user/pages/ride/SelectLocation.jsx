@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle,
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import api from '../../../../shared/api/axiosInstance';
+import toast from 'react-hot-toast';
 import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
 import {
   fetchActiveRideZones,
@@ -568,12 +569,12 @@ const SelectLocation = () => {
     const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
 
     if (isLoadingZones) {
-      window.alert('Service zones are still loading. Please try again in a moment.');
+      toast.error('Service zones are still loading. Please try again in a moment.');
       return;
     }
 
     if (!validateZoneSelection(resolvedPickupCoords) || !validateZoneSelection(resolvedDropCoords)) {
-      window.alert('Please choose pickup and drop locations inside the active service zone.');
+      toast.error('Please choose pickup and drop locations inside the active service zone.');
       return;
     }
 
@@ -581,7 +582,7 @@ const SelectLocation = () => {
       || resolveServiceLocationIdFromCoords(resolvedPickupCoords, activeZones);
 
     if (!resolvedServiceLocationId) {
-      window.alert('Could not determine the service zone for this pickup location.');
+      toast.error('Could not determine the service zone for this pickup location.');
       return;
     }
 
@@ -619,7 +620,7 @@ const SelectLocation = () => {
     const selectedCoords = [lastCenterRef.current.lng, lastCenterRef.current.lat];
 
     if (!validateZoneSelection(selectedCoords)) {
-      window.alert('Please pin a location inside the active service zone.');
+      toast.error('Please pin a location inside the active service zone.');
       return;
     }
 
@@ -708,7 +709,7 @@ const SelectLocation = () => {
     const resolvedCoords = selectedCoords || resolvedSelection.coords;
 
     if (!validateZoneSelection(resolvedCoords)) {
-      window.alert('That location is outside your active service zone. Please choose a point inside the zone.');
+      toast.error('That location is outside your active service zone. Please choose a point inside the zone.');
       return;
     }
 
