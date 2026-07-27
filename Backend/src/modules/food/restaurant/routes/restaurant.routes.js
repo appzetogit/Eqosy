@@ -16,6 +16,7 @@ import {
     getRestaurantComplaintsController,
     uploadRestaurantAttachmentController,
     deleteCurrentRestaurantAccountController,
+    getRestaurantReviewsController,
 } from '../controllers/restaurant.controller.js';
 import {
     createRestaurantOfferController,
@@ -114,6 +115,7 @@ router.patch('/dining-settings', authMiddleware, requireRestaurant, updateCurren
 router.get('/outlet-timings', authMiddleware, requireRestaurant, getCurrentRestaurantOutletTimingsController);
 router.put('/outlet-timings', authMiddleware, requireRestaurant, upsertCurrentRestaurantOutletTimingsController);
 router.get('/finance', authMiddleware, requireRestaurant, getRestaurantFinanceController);
+router.get('/reviews', authMiddleware, requireRestaurant, getRestaurantReviewsController);
 router.post('/withdraw', authMiddleware, requireRestaurant, createWithdrawalRequestController);
 router.get('/withdrawals', authMiddleware, requireRestaurant, listMyWithdrawalsController);
 router.post(

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
+import { FoodReview } from '../models/foodReview.model.js';
 // import { paymentSnapshotFromOrder } from './foodOrderPayment.service.js';
 import { logger } from '../../../../utils/logger.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
@@ -334,7 +335,7 @@ export async function createOrder(userId, dto) {
       await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
         title: isAwaitingOnlinePayment
           ? "Complete Payment to Confirm Order"
-          : "Order Confirmed! ðŸ”",
+          : "Order Confirmed! 🎉",
         body: isAwaitingOnlinePayment
           ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
           : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
@@ -815,7 +816,7 @@ export async function cancelOrder(orderId, userId, reason) {
       { ownerType: "RESTAURANT", ownerId: order.restaurantId },
     ],
     {
-      title: "Order Cancelled âŒ",
+      title: "Order Cancelled ❌",
       body: `Order #${order.order_id || order._id} has been cancelled successfully.${refundDetail}`,
       image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
       data: {
@@ -903,9 +904,36 @@ export async function submitOrderRatings(orderId, userId, dto) {
           dto.deliveryPartnerRating,
         )
       : Promise.resolve(),
+    FoodReview.create({
+      orderId: order._id,
+      userId: new mongoose.Types.ObjectId(userId),
+      restaurantId: order.restaurantId,
+      targetType: 'restaurant',
+      rating: dto.restaurantRating,
+      comment: dto.restaurantComment || '',
+    }),
+    hasDeliveryPartner
+      ? FoodReview.create({
+          orderId: order._id,
+          userId: new mongoose.Types.ObjectId(userId),
+          deliveryPartnerId: order.dispatch.deliveryPartnerId,
+          targetType: 'delivery_partner',
+          rating: dto.deliveryPartnerRating,
+          comment: dto.deliveryPartnerComment || '',
+        })
+      : Promise.resolve(),
   ]);
 
     await order.save();
+    
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (cacheErr) {
+        // ignore cache invalidation errors
+    }
+
     enqueueOrderEvent('order_ratings_submitted', {
         orderMongoId: order._id?.toString?.(),
         orderId: order._id.toString(),
@@ -1057,19 +1085,19 @@ export async function updateOrderStatusRestaurant(
   let body = `Status changed to ${String(orderStatus).replace(/_/g, " ")}`;
 
   if (orderStatus === "confirmed") {
-    title = "Order Accepted! ðŸ§‘â€ðŸ³";
+    title = "Order Accepted! 🧑‍🍳";
     body = "The restaurant has accepted your order and is starting to prepare it.";
   } else if (orderStatus === "preparing") {
-    title = "Food is being prepared! ðŸ³";
+    title = "Food is being prepared! 🍳";
     body = "Your food is currently being prepared by the restaurant.";
   } else if (orderStatus === "ready_for_pickup") {
-    title = "Food is ready! ðŸ›ï¸";
+    title = "Food is ready! 🛍️";
     body = "Your order is ready and waiting to be picked up.";
   } else if (String(orderStatus).includes("cancel")) {
     const isOnlinePaid = order.payment.method === "razorpay" && (order.payment.status === "paid" || order.payment.status === "refunded");
     const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
     
-    title = "Order Cancelled âŒ";
+    title = "Order Cancelled ❌";
     body = (note && String(note).trim()) ? note : `Unfortunately, your order has been cancelled by the restaurant.${refundDetail}`;
   }
 

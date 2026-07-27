@@ -50,7 +50,7 @@ const RestaurantDishCard = ({
         <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] sm:text-xs font-bold ring-1 ring-white/20">
             <Star className="w-3 h-3 text-yellow-400 fill-current" />
-            <span>{restaurant.rating || "4.5"}</span>
+            <span>{restaurant.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}</span>
           </div>
           <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] sm:text-xs font-bold ring-1 ring-white/20">
             <Clock className="w-3 h-3 text-white" />

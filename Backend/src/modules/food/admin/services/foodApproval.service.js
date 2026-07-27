@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodItem } from '../models/food.model.js';
 import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
@@ -125,7 +125,7 @@ export async function approveFoodItem(id) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: updated.restaurantId }],
                 {
-                    title: 'Dish Approved! ðŸ²',
+                    title: 'Dish Approved! 🍱',
                     body: `Your dish "${updated.name}" has been approved and is now visible to customers.`,
                     image: updated.image || 'https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png',
                     data: {
@@ -170,7 +170,7 @@ export async function rejectFoodItem(id, reason) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: updated.restaurantId }],
                 {
-                    title: 'Dish Rejected âŒ',
+                    title: 'Dish Rejected ❌',
                     body: `Your dish "${updated.name}" was rejected. Reason: ${r}`,
                     image: updated.image || 'https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png',
                     data: {

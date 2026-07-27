@@ -1441,6 +1441,11 @@ export const restaurantAPI = {
       params,
       contextModule: "restaurant",
     }),
+  /** GET /food/restaurant/reviews - ratings and customer reviews */
+  getReviews: () =>
+    apiClient.get("/food/restaurant/reviews", {
+      contextModule: "restaurant",
+    }),
 };
 
 function stableStringify(value) {
@@ -2048,6 +2053,11 @@ export const deliveryAPI = {
   createWithdrawalRequest: (body) =>
     apiClient.post("/food/delivery/wallet/withdraw", body ?? {}, {
       contextModule: "delivery"
+    }),
+  /** GET /food/delivery/reviews - ratings and customer reviews */
+  getReviews: () =>
+    apiClient.get("/food/delivery/reviews", {
+      contextModule: "delivery",
     }),
   createDepositOrder: (amount) =>
     apiClient.post("/food/delivery/wallet/deposit/order", { amount }, {

@@ -866,3 +866,66 @@ export const deleteDeliveryPartnerAccount = async (partnerId) => {
 
     return { success: true };
 };
+
+export const getDeliveryPartnerReviews = async (deliveryPartnerId) => {
+    if (!deliveryPartnerId || !mongoose.Types.ObjectId.isValid(deliveryPartnerId)) {
+        throw new ValidationError('Delivery partner not found');
+    }
+
+    const partner = await FoodDeliveryPartner.findById(deliveryPartnerId).select('rating totalRatings name').lean();
+    if (!partner) {
+        throw new ValidationError('Delivery partner not found');
+    }
+
+    const { FoodReview } = await import('../../orders/models/foodReview.model.js');
+    const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
+
+    // Fetch from FoodReview collection
+    const reviewDocs = await FoodReview.find({ deliveryPartnerId: partnerId })
+        .populate('userId', 'name profileImage avatar')
+        .populate('orderId', 'orderId order_id')
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+
+    let reviews = reviewDocs.map((doc) => ({
+        _id: doc._id,
+        rating: doc.rating,
+        comment: doc.comment || '',
+        customerName: doc.userId?.name || 'Customer',
+        orderId: doc.orderId?.order_id || doc.orderId?.orderId || doc.orderId?._id || 'N/A',
+        createdAt: doc.createdAt
+    }));
+
+    // If FoodReview table has no docs yet for this partner, fallback to historical FoodOrder.ratings.deliveryPartner
+    if (reviews.length === 0) {
+        const orderDocs = await FoodOrder.find({
+            'dispatch.deliveryPartnerId': partnerId,
+            'ratings.deliveryPartner.rating': { $exists: true, $ne: null }
+        })
+            .populate('userId', 'name profileImage avatar')
+            .select('orderId order_id ratings.deliveryPartner createdAt')
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        reviews = orderDocs.map((o) => ({
+            _id: o._id,
+            rating: o.ratings?.deliveryPartner?.rating || 0,
+            comment: o.ratings?.deliveryPartner?.comment || '',
+            customerName: o.userId?.name || 'Customer',
+            orderId: o.order_id || o.orderId || o._id,
+            createdAt: o.ratings?.deliveryPartner?.ratedAt || o.createdAt
+        }));
+    }
+
+    const overallRating = Number(partner.rating || 0);
+    const totalRatings = Number(partner.totalRatings || reviews.length || 0);
+
+    return {
+        rating: overallRating,
+        totalRatings: totalRatings,
+        reviews
+    };
+};
+

@@ -157,7 +157,7 @@ const compressSelfieDataUrl = async (dataUrl) => {
  */
 export default function DeliveryHomeV2({ tab = 'feed' }) {
   const navigate = useNavigate();
-  const { isOnline, setOnline, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
+  const { isOnline, setOnline, activeOrder, tripStatus, riderLocation, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
   const { isWithinRange, distanceToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
   const {
@@ -946,9 +946,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           <div className="flex items-center gap-4">
              <div 
                 onClick={() => navigate('/food/delivery/profile')}
-                className="w-10 h-10 rounded-full border border-white/20 p-0.5 shadow-xl overflow-hidden bg-white/5 cursor-pointer active:scale-95 transition-all"
+                className="w-10 h-10 rounded-full border border-white/20 p-0.5 shadow-xl overflow-hidden bg-white/5 cursor-pointer active:scale-95 transition-all flex items-center justify-center"
              >
-                <img src={profileImage || "https://i.ibb.co/3m2Yh7r/Eqosy-Brand-Image.png"} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <UserIcon className="w-5 h-5 text-white/70" />
+                )}
              </div>
              <button 
                onClick={handleDutyToggle}

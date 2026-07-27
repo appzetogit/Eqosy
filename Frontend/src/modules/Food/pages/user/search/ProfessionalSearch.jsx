@@ -482,7 +482,7 @@ export default function ProfessionalSearch() {
                            </div>
                            <div className="bg-white/20 backdrop-blur-md border border-white/30 px-2 py-1 rounded-lg flex items-center gap-1">
                               <Star className="w-3 h-3 text-white fill-white" />
-                              <span className="text-white text-xs font-bold">{r.rating || "4.0"}</span>
+                              <span className="text-white text-xs font-bold">{r.rating ? Number(r.rating).toFixed(1) : "NEW"}</span>
                            </div>
                         </div>
                         {r.offer && (

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Search, ChevronRight, MapPin, X, Bell } from "lucide-react"
+import { Search, ChevronRight, MapPin, X, Bell, Star, MessageSquare, Loader2 } from "lucide-react"
 import { restaurantAPI } from "@food/api"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import useNotificationInbox from "@food/hooks/useNotificationInbox"
+import { createPortal } from "react-dom"
 
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -34,6 +35,9 @@ export default function RestaurantNavbar({
   const [companyName, setCompanyName] = useState("")
   const [logoUrl, setLogoUrl] = useState(null)
   const { unreadCount } = useNotificationInbox("restaurant", { limit: 20, pollMs: 5 * 60 * 1000 })
+  const [showReviewsModal, setShowReviewsModal] = useState(false)
+  const [reviewsData, setReviewsData] = useState({ rating: 0, totalRatings: 0, reviews: [] })
+  const [loadingReviews, setLoadingReviews] = useState(false)
 
   // Load business settings for branding
   useEffect(() => {
@@ -369,7 +373,11 @@ export default function RestaurantNavbar({
         <div className="flex items-center">
           {showSearch && (
             <button
-              onClick={handleSearchClick}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSearchClick();
+              }}
               className="p-1.5 hover:bg-gray-50 rounded-full transition-colors"
               aria-label="Search"
             >
@@ -379,7 +387,11 @@ export default function RestaurantNavbar({
 
           {showNotifications && (
             <button
-              onClick={handleNotificationsClick}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleNotificationsClick();
+              }}
               className="relative p-1.5 hover:bg-gray-50 rounded-full transition-colors"
               aria-label="Notifications"
             >
@@ -390,9 +402,161 @@ export default function RestaurantNavbar({
             </button>
           )}
 
-
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log("[RestaurantNavbar] Star clicked. Current state:", { showReviewsModal, loadingReviews });
+              console.log("[RestaurantNavbar] restaurantAPI object:", restaurantAPI);
+              setShowReviewsModal(true);
+              setLoadingReviews(true);
+              try {
+                if (typeof restaurantAPI?.getReviews === 'function') {
+                  console.log("[RestaurantNavbar] Calling getReviews API...");
+                  restaurantAPI.getReviews()
+                    .then(res => {
+                      if (res?.data?.success && res?.data?.data) {
+                        setReviewsData(res.data.data);
+                      }
+                    })
+                    .catch(err => {
+                      console.error("Error fetching restaurant reviews:", err);
+                    })
+                    .finally(() => setLoadingReviews(false));
+                } else {
+                  console.error("restaurantAPI.getReviews is not a function", restaurantAPI);
+                  setLoadingReviews(false);
+                }
+              } catch (err) {
+                console.error("Exception in reviews click handler:", err);
+                setLoadingReviews(false);
+              }
+            }}
+            className="relative p-1.5 hover:bg-amber-50 rounded-full transition-colors text-amber-500"
+            title="Customer Ratings & Reviews"
+          >
+            <Star className="w-5 h-5 fill-amber-400" />
+          </button>
         </div>
       </div>
+
+      {/* Ratings & Reviews Modal */}
+      {showReviewsModal && createPortal(
+        <div 
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowReviewsModal(false);
+          }}
+          className="fixed inset-0 bg-black/60 z-[9999] flex justify-center items-start overflow-y-auto p-4 sm:p-6"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-lg rounded-3xl my-8 sm:my-16 max-h-[85vh] flex flex-col overflow-hidden shadow-2xl transition-all duration-300"
+          >
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                  <Star className="w-5 h-5 fill-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Restaurant Ratings & Reviews</h3>
+                  <p className="text-xs text-gray-500 font-medium">Customer reviews for {restaurantName}</p>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowReviewsModal(false);
+                }}
+                className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm border border-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Summary Banner */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-amber-800 uppercase tracking-wider block mb-1">Average Rating</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-gray-900">
+                      {reviewsData.rating ? Number(reviewsData.rating).toFixed(1) : (restaurantData?.rating ? Number(restaurantData.rating).toFixed(1) : "0.0")}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium">out of 5.0</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-1 mb-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= Math.round(reviewsData.rating || restaurantData?.rating || 0)
+                            ? "text-amber-400 fill-amber-400"
+                            : "text-gray-200 fill-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-gray-600">
+                    {reviewsData.totalRatings || restaurantData?.totalRatings || reviewsData.reviews.length} Total Ratings
+                  </span>
+                </div>
+              </div>
+
+              {/* Reviews List */}
+              {loadingReviews ? (
+                <div className="py-12 text-center text-gray-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading reviews...</span>
+                </div>
+              ) : reviewsData.reviews.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 font-medium">
+                  <MessageSquare className="w-12 h-12 mx-auto text-gray-200 mb-2" />
+                  <p>No customer reviews yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {reviewsData.reviews.map((item) => (
+                    <div key={item._id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                            {item.customerName ? item.customerName.charAt(0).toUpperCase() : "C"}
+                          </div>
+                          <div>
+                            <span className="text-sm font-bold text-gray-900 block leading-tight">{item.customerName}</span>
+                            <span className="text-[10px] text-gray-400">Order #{item.orderId}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span className="text-xs font-bold text-amber-700">{item.rating}</span>
+                        </div>
+                      </div>
+                      {item.comment ? (
+                        <p className="text-xs text-gray-600 mt-2 bg-gray-50 p-2.5 rounded-xl border border-gray-100 italic">
+                          "{item.comment}"
+                        </p>
+                      ) : null}
+                      <p className="text-[10px] text-gray-400 mt-2 text-right">
+                        {new Date(item.createdAt).toLocaleDateString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

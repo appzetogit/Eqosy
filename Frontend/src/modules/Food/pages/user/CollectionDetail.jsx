@@ -143,7 +143,7 @@ export default function CollectionDetail() {
                       <h3 className="text-lg font-bold line-clamp-1 flex-1">{restaurant.name}</h3>
                       <div className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded-lg ml-2">
                         <Star className="h-3 w-3 fill-white" />
-                        <span className="text-sm font-bold">{restaurant.rating || "4.5"}</span>
+                        <span className="text-sm font-bold">{restaurant.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">

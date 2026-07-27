@@ -4,7 +4,7 @@ import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js'
 import mongoose from 'mongoose';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
-import { FoodItem } from '../../admin/models/food.model.js';
+import { FoodOrder } from '../../orders/models/order.model.js';
 
 const normalizeName = (value) =>
     String(value || '')
@@ -1834,3 +1834,66 @@ export const deleteCurrentRestaurantAccount = async (restaurantId) => {
 
     return { success: true };
 };
+
+export const getRestaurantReviewsForCurrent = async (restaurantId) => {
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+        throw new ValidationError('Restaurant not found');
+    }
+
+    const restaurant = await FoodRestaurant.findById(restaurantId).select('rating totalRatings restaurantName').lean();
+    if (!restaurant) {
+        throw new ValidationError('Restaurant not found');
+    }
+
+    const { FoodReview } = await import('../../orders/models/foodReview.model.js');
+    const rId = new mongoose.Types.ObjectId(restaurantId);
+
+    // Fetch from FoodReview collection
+    const reviewDocs = await FoodReview.find({ restaurantId: rId })
+        .populate('userId', 'name profileImage avatar')
+        .populate('orderId', 'orderId order_id')
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+
+    let reviews = reviewDocs.map((doc) => ({
+        _id: doc._id,
+        rating: doc.rating,
+        comment: doc.comment || '',
+        customerName: doc.userId?.name || 'Customer',
+        orderId: doc.orderId?.order_id || doc.orderId?.orderId || doc.orderId?._id || 'N/A',
+        createdAt: doc.createdAt
+    }));
+
+    // Fallback to historical FoodOrder.ratings.restaurant if FoodReview table has no records for this restaurant
+    if (reviews.length === 0) {
+        const orderDocs = await FoodOrder.find({
+            restaurantId: rId,
+            'ratings.restaurant.rating': { $exists: true, $ne: null }
+        })
+            .populate('userId', 'name profileImage avatar')
+            .select('orderId order_id ratings.restaurant createdAt')
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        reviews = orderDocs.map((o) => ({
+            _id: o._id,
+            rating: o.ratings?.restaurant?.rating || 0,
+            comment: o.ratings?.restaurant?.comment || '',
+            customerName: o.userId?.name || 'Customer',
+            orderId: o.order_id || o.orderId || o._id,
+            createdAt: o.ratings?.restaurant?.ratedAt || o.createdAt
+        }));
+    }
+
+    const overallRating = Number(restaurant.rating || 0);
+    const totalRatings = Number(restaurant.totalRatings || reviews.length || 0);
+
+    return {
+        rating: overallRating,
+        totalRatings: totalRatings,
+        reviews
+    };
+};
+

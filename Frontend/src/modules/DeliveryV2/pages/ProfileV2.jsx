@@ -10,7 +10,9 @@ import {
   LogOut,
   X,
   Loader2,
-  Briefcase
+  Briefcase,
+  Star,
+  MessageSquare
 } from "lucide-react"
 import { deliveryAPI } from "@food/api"
 import DeleteAccountModal from "@food/components/DeleteAccountModal";
@@ -32,6 +34,9 @@ export const ProfileV2 = () => {
   const [logoutSubmitting, setLogoutSubmitting] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const [reviewsData, setReviewsData] = useState({ rating: 0, totalRatings: 0, reviews: [] });
+  const [loadingReviews, setLoadingReviews] = useState(false);
 
   // Fetch profile data
   useEffect(() => {
@@ -52,6 +57,12 @@ export const ProfileV2 = () => {
     deliveryAPI.getWallet().then(res => {
       const bal = res?.data?.data?.wallet?.pocketBalance || res?.data?.data?.wallet?.totalBalance || 0;
       setWalletBalance(Number(bal));
+    }).catch(() => {});
+
+    deliveryAPI.getReviews().then(res => {
+      if (res?.data?.success && res?.data?.data) {
+        setReviewsData(res.data.data);
+      }
     }).catch(() => {});
   }, [])
 
@@ -148,15 +159,34 @@ export const ProfileV2 = () => {
 
       <div className="px-4 py-6">
         {/* Navigation Buttons */}
-        <div className="grid grid-cols-1 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <button
             onClick={() => navigate("/food/delivery/history")}
-            className="bg-white rounded-xl p-4 flex flex-col items-center gap-2 border border-transparent active:bg-gray-50 transition-colors"
+            className="bg-white rounded-xl p-4 flex flex-col items-center gap-2 border border-transparent active:bg-gray-50 transition-colors shadow-sm"
           >
             <div className="rounded-full bg-gray-50 p-3">
               <Bike className="w-6 h-6 text-gray-700" />
             </div>
             <span className="text-sm font-bold text-gray-900">Trips history</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowReviewsModal(true);
+              setLoadingReviews(true);
+              deliveryAPI.getReviews().then(res => {
+                if (res?.data?.success && res?.data?.data) {
+                  setReviewsData(res.data.data);
+                }
+              }).finally(() => setLoadingReviews(false));
+            }}
+            className="bg-white rounded-xl p-4 flex flex-col items-center gap-2 border border-transparent active:bg-gray-50 transition-colors shadow-sm"
+          >
+            <div className="rounded-full bg-amber-50 p-3">
+              <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
+            </div>
+            <span className="text-sm font-bold text-gray-900">
+              Ratings & Reviews ({reviewsData.totalRatings || profile?.totalRatings || 0})
+            </span>
           </button>
         </div>
 
@@ -260,6 +290,110 @@ export const ProfileV2 = () => {
         walletAmount={walletBalance} 
         moduleName="delivery" 
       />
+
+      {/* Ratings & Reviews Modal */}
+      {showReviewsModal && (
+        <div className="fixed inset-0 bg-black/60 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                  <Star className="w-5 h-5 fill-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Customer Ratings & Reviews</h3>
+                  <p className="text-xs text-gray-500 font-medium">Feedback from customers delivered to</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReviewsModal(false)}
+                className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-400 hover:text-gray-600 shadow-sm border border-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Summary Banner */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-amber-800 uppercase tracking-wider block mb-1">Average Score</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-gray-900">
+                      {reviewsData.rating ? Number(reviewsData.rating).toFixed(1) : (profile?.rating ? Number(profile.rating).toFixed(1) : "0.0")}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium">out of 5.0</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-1 mb-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= Math.round(reviewsData.rating || profile?.rating || 0)
+                            ? "text-amber-400 fill-amber-400"
+                            : "text-gray-200 fill-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-gray-600">
+                    {reviewsData.totalRatings || profile?.totalRatings || reviewsData.reviews.length} Total Ratings
+                  </span>
+                </div>
+              </div>
+
+              {/* Reviews List */}
+              {loadingReviews ? (
+                <div className="py-12 text-center text-gray-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading reviews...</span>
+                </div>
+              ) : reviewsData.reviews.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 font-medium">
+                  <MessageSquare className="w-12 h-12 mx-auto text-gray-200 mb-2" />
+                  <p>No customer reviews yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {reviewsData.reviews.map((item) => (
+                    <div key={item._id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                            {item.customerName ? item.customerName.charAt(0).toUpperCase() : "C"}
+                          </div>
+                          <div>
+                            <span className="text-sm font-bold text-gray-900 block leading-tight">{item.customerName}</span>
+                            <span className="text-[10px] text-gray-400">Order #{item.orderId}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">
+                          <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                          <span className="text-xs font-bold text-amber-700">{item.rating}</span>
+                        </div>
+                      </div>
+                      {item.comment ? (
+                        <p className="text-xs text-gray-600 mt-2 bg-gray-50 p-2.5 rounded-xl border border-gray-100 italic">
+                          "{item.comment}"
+                        </p>
+                      ) : null}
+                      <p className="text-[10px] text-gray-400 mt-2 text-right">
+                        {new Date(item.createdAt).toLocaleDateString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

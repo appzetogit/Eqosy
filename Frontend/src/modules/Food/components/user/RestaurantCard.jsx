@@ -221,7 +221,7 @@ const RestaurantCard = ({
             {restaurant.name}
           </h3>
           <div className="flex items-center gap-1 bg-green-600 text-white px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold shadow-sm flex-shrink-0">
-            <span>{restaurant.rating || "4.2"}</span>
+            <span>{restaurant.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}</span>
             <Star className="w-2.5 h-2.5 fill-current" />
           </div>
         </div>

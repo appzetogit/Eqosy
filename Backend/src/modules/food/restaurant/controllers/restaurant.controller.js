@@ -13,7 +13,8 @@ import {
     uploadRestaurantAttachment,
     listPublicOffers,
     getRestaurantComplaints,
-    deleteCurrentRestaurantAccount
+    deleteCurrentRestaurantAccount,
+    getRestaurantReviewsForCurrent
 } from '../services/restaurant.service.js';
 import { validateRestaurantRegisterDto } from '../validators/restaurant.validator.js';
 import { sendResponse } from '../../../../utils/response.js';
@@ -162,6 +163,16 @@ export const deleteCurrentRestaurantAccountController = async (req, res, next) =
         const restaurantId = req.user?.userId;
         const result = await deleteCurrentRestaurantAccount(restaurantId);
         return sendResponse(res, 200, 'Restaurant account deleted successfully', result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRestaurantReviewsController = async (req, res, next) => {
+    try {
+        const restaurantId = req.user?.userId;
+        const data = await getRestaurantReviewsForCurrent(restaurantId);
+        return sendResponse(res, 200, 'Reviews fetched successfully', data);
     } catch (error) {
         next(error);
     }
