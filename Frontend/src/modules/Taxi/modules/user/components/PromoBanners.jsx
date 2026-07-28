@@ -197,7 +197,7 @@ const PromoBanners = ({ plain = false }) => {
   };
 
   const containerClass = plain
-    ? 'relative z-10 px-4 mt-1'
+    ? 'relative z-10 px-5 mt-1'
     : 'mx-5 my-4 rounded-[32px] bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] relative overflow-visible px-5 py-5.5';
 
   return (

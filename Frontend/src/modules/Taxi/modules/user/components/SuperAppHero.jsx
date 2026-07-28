@@ -41,7 +41,7 @@ export default function SuperAppHero({ onSearchFocus }) {
     <div 
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="w-full relative h-[255px] overflow-hidden rounded-b-none bg-slate-950 shadow-xl select-none"
+      className="w-full relative h-[255px] overflow-hidden rounded-b-none bg-[#0B172A] select-none"
     >
       {/* 1. Animated Background Blobs & Morphing Gradients */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

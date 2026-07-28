@@ -140,6 +140,10 @@ const clearStaleAuthState = (role = '', staleToken = '') => {
     if (!staleToken || localStorage.getItem('userToken') === staleToken) {
       localStorage.removeItem('userToken');
     }
+    localStorage.removeItem('user_accessToken');
+    localStorage.removeItem('user_refreshToken');
+    localStorage.removeItem('user_authenticated');
+    localStorage.removeItem('user_user');
     localStorage.removeItem('userInfo');
   }
 
@@ -272,7 +276,8 @@ api.interceptors.response.use(
         const tokenRole = normalizeAuthRole(getTokenPayload(token)?.role || '');
 
         const shouldClearAuth =
-          (error.response.status === 401 && isAuthTokenFailure(serverMessage)) ||
+          error.response.status === 401 ||
+          isAuthTokenFailure(serverMessage) ||
           serverMessage === 'Authenticated account no longer exists' ||
           (tokenRole === 'user' && serverMessage === 'User account is not active');
 

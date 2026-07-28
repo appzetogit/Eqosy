@@ -94,9 +94,17 @@ const ServiceCard = ({ icon, label, description, path, iconGradient, borderColor
   );
 };
 
+const DEFAULT_SERVICES = [
+  { id: 'cab', icon: rideImg, label: 'Cab', description: 'Ride', iconGradient: 'from-[#FF6B00] to-[#FF8C42]', path: '/taxi/user/ride/select-location' },
+  { id: 'parcel', icon: deliveryImg, label: 'Parcel', description: 'Send Pack', iconGradient: 'from-[#FF8A65] to-[#E53935]', path: '/taxi/user/parcel/type' },
+  { id: 'outstation', icon: outstationImg, label: 'Book Outstation', description: 'Intercity', iconGradient: 'from-[#1E3A8A] to-[#2563EB]', path: '/taxi/user/intercity' },
+  { id: 'bus', icon: busImg, label: 'Bus', description: 'Reserve', iconGradient: 'from-[#7C3AED] to-[#A855F7]', path: '/taxi/user/bus' },
+  { id: 'pooling', icon: poolingImg, label: 'Pooling', description: 'Share Cab', iconGradient: 'from-[#10B981] to-[#34D399]', path: '/taxi/user/pooling' },
+];
+
 const ServiceGrid = ({ plain = false }) => {
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [services, setServices] = useState(DEFAULT_SERVICES);
+  const [loading, setLoading] = useState(false);
 
   const getPath = (module) => {
     if (module.transport_type === 'delivery') return '/taxi/user/parcel/type';
@@ -175,10 +183,14 @@ const ServiceGrid = ({ plain = false }) => {
           };
         }).filter((item) => Boolean(item.path));
 
-        setServices(mapped);
+        if (mapped.length > 0) {
+          setServices(mapped);
+        } else {
+          setServices(DEFAULT_SERVICES);
+        }
       } catch (err) {
-        console.error('Failed to load services:', err);
-        toast.error('Could not load services');
+        console.warn('Failed to load services from API, falling back to defaults:', err);
+        setServices(DEFAULT_SERVICES);
       } finally {
         setLoading(false);
       }

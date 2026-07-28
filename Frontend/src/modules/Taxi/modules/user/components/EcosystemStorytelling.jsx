@@ -37,7 +37,8 @@ const EcosystemStorytelling = () => {
   const activeBg = backgrounds[currentActive] || backgrounds.ride;
 
   return (
-    <div className="relative w-full h-[390px] overflow-hidden bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] rounded-[32px] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] mx-8 mb-6 select-none">
+    <div className="px-5 mb-6 select-none">
+      <div className="relative w-full h-[390px] overflow-hidden bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] rounded-[28px] border border-blue-100/30 shadow-[0_16px_36px_rgba(30,41,59,0.04)]">
       
       {/* 1. Backdrop Skyline Image Carousel with Smooth Fade Transitions */}
       <div className="absolute inset-0 pointer-events-none z-0">
@@ -281,6 +282,7 @@ const EcosystemStorytelling = () => {
         ))}
       </div>
     </div>
+  </div>
   );
 };
 

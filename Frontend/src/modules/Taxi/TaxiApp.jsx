@@ -401,14 +401,23 @@ const ScrollToTop = () => {
 const clearUserSession = () => {
   clearCurrentRide();
   clearLocalUserSession();
+  try {
+    localStorage.removeItem('user_accessToken');
+    localStorage.removeItem('user_refreshToken');
+    localStorage.removeItem('user_authenticated');
+    localStorage.removeItem('user_user');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
+  } catch {}
 };
 
 const UserProtectedRoute = () => {
   const location = useLocation();
 
   if (!getLocalUserToken()) {
-    const loginPath = '/login';
-    return <Navigate to={loginPath} replace />;
+    const loginPath = '/food/user/auth/login';
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
 
   return <Outlet />;
@@ -417,7 +426,7 @@ const UserProtectedRoute = () => {
 const UserHomeRoute = ({ taxiPrefixed = true }) => (
   getLocalUserToken()
     ? <UserHome />
-    : <Navigate to="/login" replace />
+    : <Navigate to="/food/user/auth/login" replace />
 );
 
 const UserAccountInvalidationListener = () => {
@@ -439,7 +448,7 @@ const UserAccountInvalidationListener = () => {
     const handleLogout = () => {
       clearUserSession();
       socketService.disconnect();
-      navigate('/login', { replace: true });
+      navigate('/food/user/auth/login', { replace: true, state: { from: location.pathname } });
     };
 
     const handleAdminChatMessage = (payload = {}) => {

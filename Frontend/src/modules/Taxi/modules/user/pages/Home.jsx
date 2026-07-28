@@ -258,7 +258,7 @@ const Home = ({ embedded = false }) => {
       localStorage.getItem('token');
 
     if (!token) {
-      navigate('/login', { replace: true });
+      navigate('/food/user/auth/login', { replace: true, state: { from: location.pathname } });
     }
 
     return undefined;
@@ -575,19 +575,19 @@ const Home = ({ embedded = false }) => {
   };
 
   const pageBgClass = embedded
-    ? 'bg-[linear-gradient(180deg,#E8EEF7_0%,#F8FAFC_38%,#E8EEF7_100%)]'
-    : 'bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)]';
+    ? 'bg-[linear-gradient(180deg,#EBF3FD_0%,#F5F8FE_40%,#EBF3FD_100%)]'
+    : 'bg-[linear-gradient(180deg,#E3EEFC_0%,#EFF5FD_18%,#F8FAFE_42%,#EDF4FD_100%)]';
 
   return (
     <div className={`${embedded ? 'relative' : 'min-h-screen'} ${pageBgClass} ${embedded ? 'pb-6' : 'pb-24'} max-w-lg mx-auto relative overflow-hidden font-sans no-scrollbar`}>
-      <div className={`absolute -top-16 right-[-40px] h-44 w-44 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#0A2540]/15' : 'bg-orange-100/60'}`} />
-      <div className={`absolute top-52 left-[-60px] h-52 w-52 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#2563EB]/12' : 'bg-emerald-100/60'}`} />
-      <div className={`absolute bottom-28 right-[-40px] h-40 w-40 rounded-full blur-3xl pointer-events-none ${embedded ? 'bg-[#0A2540]/20' : 'bg-blue-100/60'}`} />
+      {/* Light blue draped vanished shade background elements */}
+      <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-full max-w-lg h-[450px] bg-[radial-gradient(ellipse_at_top,_rgba(147,197,253,0.55)_0%,_rgba(219,234,254,0.3)_45%,_rgba(255,255,255,0)_80%)] blur-2xl pointer-events-none" />
+      <div className="absolute top-44 -left-20 h-80 w-80 rounded-full bg-blue-300/30 blur-3xl pointer-events-none" />
+      <div className="absolute top-[32rem] -right-20 h-96 w-96 rounded-full bg-sky-200/40 blur-3xl pointer-events-none" />
 
-
-      <div className="relative z-10 space-y-4 pb-6">
+      <div className="relative z-10 space-y-3 pb-6">
         {!embedded && (
-          <div className="flex flex-col">
+          <div className="flex flex-col bg-[#0B172A] rounded-b-[28px] shadow-[0_14px_36px_rgba(11,23,42,0.18)] overflow-hidden">
             <HomeHeader activeVertical="taxi" hideSearchRow={true} />
             <SuperAppHero onSearchFocus={() => navigate(`${routePrefix}/ride/select-location`)} />
           </div>
@@ -716,11 +716,7 @@ const Home = ({ embedded = false }) => {
 
         {embedded && <ServiceGrid />}
         {showDeferredSections ? (
-          <div className="mx-8 my-4 rounded-[32px] bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] relative overflow-visible py-6.5 flex flex-col gap-8">
-            <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px]">
-              <div className="absolute top-10 left-5 w-52 h-52 rounded-full bg-blue-400/3 blur-[60px]" />
-              <div className="absolute bottom-20 right-5 w-60 h-60 rounded-full bg-red-400/3 blur-[80px]" />
-            </div>
+          <div className="relative z-10 flex flex-col gap-5 pt-1 pb-6">
             <ServiceGrid plain={true} />
             <LocationMapSection plain={true} />
             <ActionsSection plain={true} />
@@ -728,7 +724,7 @@ const Home = ({ embedded = false }) => {
             <ExplorerSection plain={true} />
           </div>
         ) : (
-          <div className="space-y-4 px-5">
+          <div className="relative z-10 flex flex-col gap-4 pt-1 pb-6 px-5">
             <div className="h-[170px] animate-pulse rounded-[20px] border border-white/80 bg-white/70 shadow-[0_10px_22px_rgba(15,23,42,0.05)]" />
             <div className="h-[112px] animate-pulse rounded-[24px] border border-white/80 bg-white/70 shadow-[0_10px_22px_rgba(15,23,42,0.05)]" />
             <div className="h-[160px] animate-pulse rounded-[24px] border border-white/80 bg-white/70 shadow-[0_10px_22px_rgba(15,23,42,0.05)]" />
