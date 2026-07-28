@@ -45,46 +45,9 @@ export default function SuperAppHero({ onSearchFocus }) {
     >
       {/* 1. Animated Background Blobs & Morphing Gradients */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div 
-          animate={{
-            scale: [1, 1.15, 1],
-            x: [0, 20, 0],
-            y: [0, -30, 0],
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-24 -left-20 w-56 h-56 rounded-full bg-indigo-600/15 blur-3xl"
-        />
-        <motion.div 
-          animate={{
-            scale: [1.15, 1, 1.15],
-            x: [0, -30, 0],
-            y: [0, 20, 0],
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-24 -right-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl"
-        />
+        <div className="absolute -top-24 -left-20 w-56 h-56 rounded-full bg-indigo-600/15 blur-3xl" />
+        <div className="absolute -bottom-24 -right-20 w-60 h-60 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.04)_0%,transparent_70%)]" />
-      </div>
-
-      {/* 2. Floating Subtle Background Particles */}
-      <div className="absolute inset-0 pointer-events-none opacity-30">
-        {[...Array(4)].map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ y: 255, x: Math.random() * 320, opacity: 0.1 }}
-            animate={{
-              y: -50,
-              opacity: [0.1, 0.5, 0.1],
-            }}
-            transition={{
-              duration: 7 + Math.random() * 3,
-              repeat: Infinity,
-              delay: i * 2,
-              ease: "linear"
-            }}
-            className="absolute w-1 h-1 rounded-full bg-indigo-300"
-          />
-        ))}
       </div>
 
       {/* 3. Center Revealed Content */}

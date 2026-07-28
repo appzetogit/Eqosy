@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Clock3, ShieldCheck, Sparkles, MapPin } from 'lucide-react';
+import { ArrowRight, Clock3, ShieldCheck, Sparkles, MapPin, Coins, Percent, Tag, Zap } from 'lucide-react';
 
 // Asset Imports for Vehicles
 import autoImg from '../../../assets/icons/auto.png';
@@ -262,42 +262,127 @@ const PromoBanners = ({ plain = false }) => {
         />
       </div>
 
-      {/* Savings Promo Strip at the Bottom */}
+      {/* Redesigned Premium Super-App Savings Promotional Card */}
       <motion.div
-        initial={{ opacity: 0, y: 15, filter: 'blur(6px)' }}
+        initial={{ opacity: 0, y: 20, filter: 'blur(6px)' }}
         whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
         viewport={{ once: true, amount: 0.15 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="relative overflow-hidden rounded-2xl border border-white/80 bg-gradient-to-br from-slate-900 to-slate-800 p-4 shadow-[0_18px_44px_rgba(15,23,42,0.12)] mt-5"
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        onClick={() => navigate('/taxi/user/ride/select-location')}
+        className="relative overflow-hidden rounded-[26px] border border-white/15 bg-gradient-to-br from-[#0B1528] via-[#0F1E36] to-[#0A1220] p-5 shadow-[0_20px_50px_rgba(11,23,42,0.35)] mt-5 group cursor-pointer select-none"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(240px_160px_at_20%_25%,rgba(56,189,248,0.16),transparent_60%)]" aria-hidden="true" />
-        <div className="absolute inset-0 bg-[radial-gradient(260px_180px_at_85%_85%,rgba(251,191,36,0.10),transparent_62%)]" aria-hidden="true" />
+        {/* Soft Radial Ambient Glows */}
+        <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-blue-500/15 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 -right-16 w-60 h-60 rounded-full bg-amber-400/10 blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(59,130,246,0.12)_0%,transparent_70%)] pointer-events-none" />
 
-        <div className="relative z-10 flex min-h-[155px] items-end justify-between gap-4">
-          <div className="max-w-[62%]">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-white/85">
-              <Sparkles size={11} strokeWidth={2.5} className="text-cyan-200" />
-              Savings
+        {/* Shine Sweep Effect on Hover */}
+        <motion.div
+          animate={{ x: ['-100%', '200%'] }}
+          transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none z-20"
+        />
+
+        <div className="relative z-10 flex items-center justify-between gap-3">
+          {/* Left Column: Offer Details & CTA */}
+          <div className="flex-1 min-w-0 pr-1">
+            {/* Top Row: Badges */}
+            <div className="flex items-center gap-2 flex-wrap mb-2.5">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-amber-300 backdrop-blur-md">
+                <Sparkles size={11} className="text-amber-400" />
+                <span>SAVINGS</span>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/25 px-2 py-0.5 text-[8.5px] font-bold text-emerald-300">
+                <Percent size={9} />
+                Save 30%
+              </span>
             </div>
 
-            <h3 className="mt-2.5 text-[18px] font-black leading-tight tracking-tight text-white">
+            {/* Headline */}
+            <h3 className="text-[19px] font-black leading-tight tracking-tight text-white group-hover:text-amber-300 transition-colors">
               Better savings on your next ride.
             </h3>
-            <p className="mt-1 text-[10.5px] font-bold leading-relaxed text-white/60">Book quickly and save more.</p>
 
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={() => navigate('/taxi/user/ride/select-location')}
-              className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-[11px] font-black text-slate-900 shadow-lg shadow-black/15"
-            >
-              Ride Now
-              <ArrowRight size={12} strokeWidth={3} />
-            </motion.button>
+            {/* Supporting Description */}
+            <p className="mt-1.5 text-[10.5px] font-medium leading-relaxed text-slate-300/80">
+              Book quickly and save more with instant cashback credits.
+            </p>
+
+            {/* Upgrade CTA Button */}
+            <div className="mt-4 flex items-center gap-2.5">
+              <motion.div
+                whileTap={{ scale: 0.96 }}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-4 py-2 text-[11px] font-black text-slate-950 shadow-lg shadow-amber-500/20 group-hover:shadow-amber-500/35 transition-all"
+              >
+                <span>Ride Now</span>
+                <motion.div
+                  animate={{ x: [0, 3, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <ArrowRight size={13} strokeWidth={3} />
+                </motion.div>
+              </motion.div>
+              <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">
+                Limited offer
+              </span>
+            </div>
           </div>
 
-          <div className="pointer-events-none w-[130px] shrink-0 opacity-95">
-            <img src="/ride_now_banner.png" alt="Promo" className="w-full drop-shadow-2xl" />
+          {/* Right Column: 3D Illustration + Floating Badge Accents */}
+          <div className="relative w-[130px] h-[130px] shrink-0 flex items-center justify-center pointer-events-none">
+            {/* Glassmorphic Background Circle */}
+            <div className="absolute inset-2 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 backdrop-blur-xl shadow-inner" />
+
+            {/* SVG Route Line with Moving Pulse Dot */}
+            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 130 130" fill="none">
+              <path
+                d="M15,90 C40,50 90,80 115,35"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="2"
+                strokeDasharray="3 3"
+              />
+              <motion.circle
+                cx="15"
+                cy="90"
+                r="3"
+                fill="#F59E0B"
+                animate={{
+                  cx: [15, 65, 115],
+                  cy: [90, 68, 35],
+                }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            </svg>
+
+            {/* High Quality 3D Vehicle Illustration */}
+            <motion.img
+              src={taxiImg}
+              alt="Promo Taxi"
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              className="relative z-10 w-[105px] h-[105px] object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]"
+            />
+
+            {/* Floating Accent 1: Cashback Coin */}
+            <motion.div
+              animate={{ y: [0, -6, 0], rotate: [0, 8, 0] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute -top-1 right-1 z-20 flex items-center gap-1 rounded-full bg-amber-400/90 text-slate-950 px-2 py-0.5 text-[8px] font-black shadow-md border border-white/40"
+            >
+              <Coins size={9} />
+              <span>₹100 OFF</span>
+            </motion.div>
+
+            {/* Floating Accent 2: Fast Tag */}
+            <motion.div
+              animate={{ y: [0, 5, 0] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+              className="absolute -bottom-1 left-0 z-20 flex items-center gap-1 rounded-full bg-blue-600/90 text-white px-2 py-0.5 text-[7.5px] font-bold shadow-md border border-white/30"
+            >
+              <Zap size={8} />
+              <span>Instant</span>
+            </motion.div>
           </div>
         </div>
       </motion.div>

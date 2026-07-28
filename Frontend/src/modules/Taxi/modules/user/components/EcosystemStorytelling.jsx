@@ -190,96 +190,23 @@ const EcosystemStorytelling = () => {
           </defs>
         </svg>
 
-        {/* 4. Overlay Moving Vehicles (HTML elements overlaying the SVG coordinates) */}
-        
-        {/* Vehicle A: Delivery Rider */}
-        <motion.div
-          animate={{
-            x: [-60, 480],
-            y: [120, 115, 128, 115]
-          }}
-          transition={{
-            duration: currentActive === 'parcel' || currentActive === 'food' ? 6 : 14,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute z-20 top-0 left-0"
-          style={{ originX: 0.5, originY: 0.5 }}
-        >
-          <motion.div
-            animate={currentActive === 'food' || currentActive === 'parcel' ? { y: [0, -4, 0] } : {}}
-            transition={{ repeat: Infinity, duration: 0.4 }}
-            className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-0.5 rounded-full border border-white/20 shadow-md"
-          >
-            <Bike size={10} className="animate-bounce" />
+        {/* 4. Vehicles Overview Badges */}
+        <div className="absolute z-20 bottom-4 left-4 right-4 flex justify-between items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-0.5 rounded-full border border-white/20 shadow-md">
+            <Bike size={10} />
             <span className="text-[7px] font-black uppercase tracking-wider">EQOSY Delivery</span>
-          </motion.div>
-        </motion.div>
+          </div>
 
-        {/* Vehicle B: Premium Cab */}
-        <motion.div
-          animate={{
-            x: [480, -60],
-            y: [160, 162, 172, 170]
-          }}
-          transition={{
-            duration: currentActive === 'ride' ? 5 : 12,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute z-20 top-0 left-0"
-        >
-          <motion.div
-            animate={currentActive === 'ride' ? { rotate: [0, 2, -2, 0] } : {}}
-            transition={{ repeat: Infinity, duration: 0.3 }}
-            className="flex items-center gap-1 bg-slate-900 text-[#FFB300] px-2 py-0.5 rounded-full border border-[#FFB300]/40 shadow-lg"
-          >
+          <div className="flex items-center gap-1 bg-slate-900 text-[#FFB300] px-2 py-0.5 rounded-full border border-[#FFB300]/40 shadow-lg">
             <Car size={10} />
             <span className="text-[7px] font-black uppercase tracking-wider">EQOSY Cab</span>
-          </motion.div>
-        </motion.div>
+          </div>
 
-        {/* Vehicle C: Transit Bus */}
-        <motion.div
-          animate={{
-            x: [-70, 480],
-            y: [142, 140, 150, 146]
-          }}
-          transition={{
-            duration: currentActive === 'bus' ? 8 : 18,
-            repeat: Infinity,
-            ease: "linear"
-          }}
-          className="absolute z-20 top-0 left-0"
-        >
-          <motion.div
-            className="flex items-center gap-1 bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 shadow-md"
-          >
+          <div className="flex items-center gap-1 bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 shadow-md">
             <Bus size={10} />
             <span className="text-[7px] font-black uppercase tracking-wider">Transit Bus</span>
-          </motion.div>
-        </motion.div>
-      </div>
-
-      {/* 5. Ambient Particles Floating */}
-      <div className="absolute inset-0 pointer-events-none z-10 opacity-20">
-        {[...Array(6)].map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ y: 250, x: Math.random() * 320, opacity: 0.1 }}
-            animate={{
-              y: -40,
-              opacity: [0.1, 0.4, 0.1],
-            }}
-            transition={{
-              duration: 10 + Math.random() * 5,
-              repeat: Infinity,
-              delay: i * 2.5,
-              ease: "linear"
-            }}
-            className="absolute w-1 h-1 rounded-full bg-[#FF6B00]"
-          />
-        ))}
+          </div>
+        </div>
       </div>
     </div>
   </div>

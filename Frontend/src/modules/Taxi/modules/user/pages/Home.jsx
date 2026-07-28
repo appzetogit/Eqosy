@@ -574,12 +574,10 @@ const Home = ({ embedded = false }) => {
     maskSize: '100% 100%',
   };
 
-  const pageBgClass = embedded
-    ? 'bg-[linear-gradient(180deg,#EBF3FD_0%,#F5F8FE_40%,#EBF3FD_100%)]'
-    : 'bg-[linear-gradient(180deg,#E3EEFC_0%,#EFF5FD_18%,#F8FAFE_42%,#EDF4FD_100%)]';
+  const pageBgClass = 'bg-[#EFF5FD]';
 
   return (
-    <div className={`${embedded ? 'relative' : 'min-h-screen'} ${pageBgClass} ${embedded ? 'pb-6' : 'pb-24'} max-w-lg mx-auto relative overflow-hidden font-sans no-scrollbar`}>
+    <div className={`${embedded ? 'relative' : 'min-h-screen'} ${pageBgClass} ${embedded ? 'pb-6' : 'pb-24'} w-full relative font-sans no-scrollbar`}>
       {/* Light blue draped vanished shade background elements */}
       <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-full max-w-lg h-[450px] bg-[radial-gradient(ellipse_at_top,_rgba(147,197,253,0.55)_0%,_rgba(219,234,254,0.3)_45%,_rgba(255,255,255,0)_80%)] blur-2xl pointer-events-none" />
       <div className="absolute top-44 -left-20 h-80 w-80 rounded-full bg-blue-300/30 blur-3xl pointer-events-none" />
