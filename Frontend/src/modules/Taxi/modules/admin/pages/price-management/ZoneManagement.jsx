@@ -133,14 +133,19 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
         adminService.getDrivers(1, 200),
       ]);
 
+      let fetchedZones = [];
+      let fetchedLocations = [];
+
       if (zoneRes) {
         const zoneData = zoneRes.success ? (zoneRes.data?.results || zoneRes.data) : zoneRes;
-        setZones(Array.isArray(zoneData) ? zoneData : []);
+        fetchedZones = Array.isArray(zoneData) ? zoneData : [];
+        setZones(fetchedZones);
       }
 
       if (slRes) {
         const locs = slRes.success ? (slRes.data?.results || slRes.data) : slRes;
-        setServiceLocations(Array.isArray(locs) ? locs : []);
+        fetchedLocations = Array.isArray(locs) ? locs : [];
+        setServiceLocations(fetchedLocations);
       }
 
       if (driverRes) {
@@ -149,8 +154,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
       }
 
       if (id && initialMode === 'edit') {
-        const zoneToEdit = Array.isArray(zoneData) && zoneData.find(z => (z._id || z.id) === id);
-        if (zoneToEdit) handleEdit(zoneToEdit);
+        const zoneToEdit = fetchedZones.find(z => String(z._id || z.id) === String(id));
+        if (zoneToEdit) handleEdit(zoneToEdit, fetchedLocations);
       }
     } catch (err) {
       console.error("Fetch error:", err);
@@ -350,8 +355,18 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
       Number.isFinite(Number(effectiveCircleCenter?.lat)) &&
       Number.isFinite(Number(effectiveCircleCenter?.lng));
 
-    if (!formData.name.English.trim() || (!hasPolygon && !hasCircle)) {
-      alert("Please add a zone name and draw a polygon or circle boundary on the map.");
+    if (!formData.service_location_id) {
+      alert("Please select a Service Location before saving.");
+      return;
+    }
+
+    if (!formData.name.English?.trim()) {
+      alert("Please enter a Zone Name.");
+      return;
+    }
+
+    if (!hasPolygon && !hasCircle) {
+      alert("Please draw a polygon boundary or set a circle radius on the map.");
       return;
     }
     setSaving(true);
@@ -430,13 +445,28 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     }
   };
 
-  const handleEdit = (zone) => {
+  const handleEdit = (zone, locationsList = serviceLocations) => {
     const zid = zone._id || zone.id;
     setEditingId(zid);
     const localizedNames = typeof zone.name === 'object' && zone.name !== null ? zone.name : {};
     let zoneName = typeof zone.name === 'string' ? zone.name : (localizedNames.English || zone.zone_name || '');
+    let slId = typeof zone.service_location_id === 'object' && zone.service_location_id !== null
+      ? String(zone.service_location_id._id || zone.service_location_id.id || '')
+      : String(zone.service_location_id || '');
+
+    const currentLocations = Array.isArray(locationsList) && locationsList.length > 0 ? locationsList : serviceLocations;
+    if (slId && currentLocations.length > 0) {
+      const matched = currentLocations.find(l => 
+        String(l._id || l.id) === slId ||
+        String(l.name || l.service_location_name || '').toLowerCase() === slId.toLowerCase()
+      );
+      if (matched) {
+        slId = String(matched._id || matched.id);
+      }
+    }
+
     setFormData({
-      service_location_id: zone.service_location_id || '',
+      service_location_id: slId,
       name: {
         English: zoneName,
         Hindi: localizedNames.Hindi || '',
@@ -679,9 +709,9 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                    
                    <div className="space-y-5">
                       <div>
-                        <label className={labelClass}>Service Location</label>
+                        <label className={labelClass}>Service Location <span className="text-rose-500">*</span></label>
                         <select 
-                          value={formData.service_location_id}
+                          value={String(formData.service_location_id || '')}
                           onChange={(e) => {
                             const nextId = e.target.value;
                             setFormData({...formData, service_location_id: nextId});
@@ -693,11 +723,19 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                             }
                           }}
                           className={inputClass}
+                          required
                         >
                           <option value="">Select Service Location</option>
-                          {serviceLocations.map(sl => (
-                            <option key={sl._id || sl.id} value={sl._id || sl.id}>{sl.name || sl.service_location_name}</option>
-                          ))}
+                          {serviceLocations.map(sl => {
+                            const slId = String(sl._id || sl.id);
+                            const name = sl.name || sl.service_location_name || 'Service Location';
+                            const countryName = typeof sl.country === 'object' ? sl.country?.name : sl.country;
+                            return (
+                              <option key={slId} value={slId}>
+                                {name} {countryName ? `(${countryName})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 

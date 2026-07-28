@@ -155,7 +155,11 @@ const getAdminScope = (admin = {}) => ({
 
 const isSuperAdmin = (admin = {}) => {
   const level = resolveAdminLevel(admin);
-  if (level === ADMIN_LEVELS.TAXI_SUPERADMIN || level === ADMIN_LEVELS.PLATFORM_SUPERADMIN) {
+  if (level === ADMIN_LEVELS.TAXI_SUPERADMIN || level === ADMIN_LEVELS.PLATFORM_SUPERADMIN || level === ADMIN_LEVELS.FOOD_SUPERADMIN) {
+    return true;
+  }
+  const roleLower = String(admin.role || admin.admin_type || '').toLowerCase();
+  if (roleLower === 'superadmin' || roleLower === 'admin') {
     return true;
   }
   return getAdminScope(admin).adminType === 'superadmin';
@@ -5233,7 +5237,7 @@ export const listServiceLocations = async (currentAdmin = null) => {
   if (currentAdmin) {
     assertAdminPermission(currentAdmin, 'service_locations.view', 'service locations');
   }
-  const query = currentAdmin ? buildServiceLocationScopeQuery(currentAdmin) : {};
+  const query = currentAdmin ? buildServiceLocationScopeQuery(currentAdmin, '_id') : {};
   return ServiceLocation.find(query).sort({ createdAt: -1 }).lean();
 };
 
@@ -7503,6 +7507,9 @@ export const getDashboardData = async () => {
   };
 
   export const createZone = async (payload, currentAdmin = null) => {
+    if (!payload.service_location_id) {
+      throw new ApiError(400, 'Service location is required');
+    }
     if (!payload.name?.trim()) {
       throw new ApiError(400, 'Zone name is required');
     }
@@ -7515,7 +7522,7 @@ export const getDashboardData = async () => {
 
     const zone = await Zone.create({
       name: String(payload.name).trim(),
-      service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+      service_location_id: toObjectId(payload.service_location_id),
       unit: payload.unit || 'km',
       peak_zone_ride_count: toNullableNumber(payload.peak_zone_ride_count),
       peak_zone_radius: toNullableNumber(payload.peak_zone_radius),
@@ -7548,6 +7555,10 @@ export const getDashboardData = async () => {
       await assertZoneAccess(currentAdmin, zone._id);
     }
 
+    if (payload.service_location_id !== undefined && !payload.service_location_id) {
+      throw new ApiError(400, 'Service location is required');
+    }
+
     if (payload.name !== undefined) {
       zone.name = String(payload.name).trim();
     }
@@ -7555,7 +7566,7 @@ export const getDashboardData = async () => {
       if (currentAdmin && payload.service_location_id) {
         assertServiceLocationAccess(currentAdmin, payload.service_location_id);
       }
-      zone.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
+      zone.service_location_id = toObjectId(payload.service_location_id);
     }
     if (payload.unit !== undefined) {
       zone.unit = payload.unit || 'km';

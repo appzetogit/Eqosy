@@ -13,10 +13,15 @@ import outstationImg from '../../../assets/3d images/AutoCab/one way.png';
 import rideImg from '../../../assets/3d images/AutoCab/taxi.png';
 import deliveryImg from '../../../assets/icons/Delivery.png';
 
-const ServiceCard = ({ icon, label, description, path, iconGradient, borderColor, delay }) => {
+const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradient, borderColor, delay }) => {
   const navigate = useNavigate();
   const [coords, setCoords] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [imgSrc, setImgSrc] = useState(icon);
+
+  useEffect(() => {
+    setImgSrc(icon);
+  }, [icon]);
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -73,8 +78,9 @@ const ServiceCard = ({ icon, label, description, path, iconGradient, borderColor
             <motion.img
               animate={isHovered ? { rotate: [0, 4, 0] } : {}}
               transition={{ duration: 0.3 }}
-              src={icon}
-              alt=""
+              src={imgSrc || icon}
+              onError={() => fallbackIcon && setImgSrc(fallbackIcon)}
+              alt={label || ''}
               className="h-6 w-6 object-contain drop-shadow-sm"
             />
           </motion.div>
@@ -136,7 +142,7 @@ const ServiceGrid = ({ plain = false }) => {
           return true;
         });
 
-        // Config mappings matching premium designs
+        // Config mappings matching premium designs & admin settings
         const mapped = activeModules.map((m, idx) => {
           const nameLower = String(m.name || '').toLowerCase();
           const isBus = m.service_type === 'bus' || nameLower.includes('bus');
@@ -144,38 +150,42 @@ const ServiceGrid = ({ plain = false }) => {
           const isOutstation = m.service_type === 'outstation' || nameLower.includes('outstation');
           const isParcel = m.transport_type === 'delivery' || nameLower.includes('parcel') || nameLower.includes('delivery');
 
-          let icon = rideImg;
+          const adminIcon = (
+            m.mobile_menu_icon ||
+            m.mobile_menu_cover_image ||
+            m.icon ||
+            m.image ||
+            m.thumbnail ||
+            m.icon_url
+          );
+
+          let fallbackIcon = rideImg;
           let iconGradient = 'from-[#FF6B00] to-[#FF8C42]';
-          let label = m.name;
-          let description = 'Ride';
+          let label = m.name || 'Cab';
+          let description = m.short_description || 'Ride';
 
           if (isParcel) {
-            icon = deliveryImg;
+            fallbackIcon = deliveryImg;
             iconGradient = 'from-[#FF8A65] to-[#E53935]';
-            label = 'Parcel';
-            description = 'Send Pack';
+            if (!m.short_description) description = 'Send Pack';
           } else if (isOutstation) {
-            icon = outstationImg;
+            fallbackIcon = outstationImg;
             iconGradient = 'from-[#1E3A8A] to-[#2563EB]';
-            label = 'Book Outstation';
-            description = 'Intercity';
+            if (!m.short_description) description = 'Intercity';
           } else if (isBus) {
-            icon = busImg;
+            fallbackIcon = busImg;
             iconGradient = 'from-[#7C3AED] to-[#A855F7]';
-            label = 'Bus';
-            description = 'Reserve';
+            if (!m.short_description) description = 'Reserve';
           } else if (isPooling) {
-            icon = poolingImg;
+            fallbackIcon = poolingImg;
             iconGradient = 'from-[#10B981] to-[#34D399]';
-            label = 'Pooling';
-            description = 'Share Cab';
-          } else {
-            label = 'Cab';
+            if (!m.short_description) description = 'Share Cab';
           }
 
           return {
             id: m._id || idx,
-            icon,
+            icon: adminIcon && String(adminIcon).trim() !== '' ? adminIcon : fallbackIcon,
+            fallbackIcon,
             label,
             description,
             iconGradient,

@@ -39,12 +39,12 @@ export const resolveAdminLevel = (admin = {}) => {
     servicesAccess.includes(ADMIN_MODULES.FOOD) &&
     servicesAccess.includes(ADMIN_MODULES.TAXI);
 
-  if (adminType === 'subadmin') {
-    return ADMIN_LEVELS.SUBADMIN;
-  }
+  const roleLower = String(admin.role || '').toLowerCase();
+  const adminTypeLower = String(admin.admin_type || '').toLowerCase();
+  const isExplicitSubadmin = adminTypeLower === 'subadmin' || roleLower === 'subadmin';
 
-  if (adminType === 'superadmin' || String(admin.role || '').toLowerCase() === 'superadmin') {
-    if (hasAllServices || servicesAccess.length >= 2) {
+  if (!isExplicitSubadmin || roleLower === 'superadmin' || roleLower === 'admin' || adminTypeLower === 'superadmin' || adminTypeLower === 'admin') {
+    if (hasAllServices || servicesAccess.length >= 2 || servicesAccess.length === 0) {
       return ADMIN_LEVELS.PLATFORM_SUPERADMIN;
     }
     if (servicesAccess.includes(ADMIN_MODULES.TAXI) && !servicesAccess.includes(ADMIN_MODULES.FOOD)) {

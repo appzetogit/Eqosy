@@ -63,33 +63,111 @@ const ServiceLocation = ({ mode }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [locationsRes, countriesRes] = await Promise.allSettled([
+      const [locationsRes, countriesRes, restApiRes] = await Promise.allSettled([
         adminService.getServiceLocations(),
-        adminService.getCountries()
+        adminService.getCountries(),
+        fetch('https://restcountries.com/v3.1/all?fields=name,cca2,currencies,timezones').then(r => r.ok ? r.json() : [])
       ]);
 
       const nextLocations = locationsRes.status === 'fulfilled' ? (Array.isArray(locationsRes.value?.data) ? locationsRes.value.data : (locationsRes.value?.data?.results || locationsRes.value?.results || [])) : [];
-      const nextCountries = countriesRes.status === 'fulfilled' ? (Array.isArray(countriesRes.value?.data?.results) ? countriesRes.value.data.results : (Array.isArray(countriesRes.value?.data) ? countriesRes.value.data : (countriesRes.value?.results || []))) : [];
+      const dbCountries = countriesRes.status === 'fulfilled' ? (Array.isArray(countriesRes.value?.data?.results) ? countriesRes.value.data.results : (Array.isArray(countriesRes.value?.data) ? countriesRes.value.data : (countriesRes.value?.results || []))) : [];
+      const restCountries = restApiRes.status === 'fulfilled' && Array.isArray(restApiRes.value) ? restApiRes.value : [];
+
+      // Build unified, deduplicated list of all world countries
+      const combinedMap = new Map();
+
+      // Legacy ID to Country Name Mapping
+      const legacyIdMap = {
+        '102': { name: 'India', code: 'IN', currency_code: 'INR', currency_symbol: '₹', timezone: 'Asia/Kolkata' },
+        '226': { name: 'United Arab Emirates', code: 'AE', currency_code: 'AED', currency_symbol: 'AED', timezone: 'Asia/Dubai' },
+        '228': { name: 'United States', code: 'US', currency_code: 'USD', currency_symbol: '$', timezone: 'America/New_York' },
+        '227': { name: 'United Kingdom', code: 'GB', currency_code: 'GBP', currency_symbol: '£', timezone: 'Europe/London' },
+        '194': { name: 'Saudi Arabia', code: 'SA', currency_code: 'SAR', currency_symbol: '﷼', timezone: 'Asia/Riyadh' },
+      };
+
+      // 1. Add local countryMetadata first (Master source)
+      (countryMetadata || []).forEach(c => {
+        const key = String(c.name || c.code).toLowerCase();
+        if (key) {
+          combinedMap.set(key, { ...c, id: c.id || c.code || c.name, _id: c.id || c.code || c.name });
+        }
+      });
+
+      // 2. Add REST Countries API data
+      restCountries.forEach(item => {
+        const name = item.name?.common || item.name?.official || '';
+        const code = item.cca2 || '';
+        const key = name.toLowerCase();
+        if (key && !combinedMap.has(key) && !combinedMap.has(code.toLowerCase())) {
+          const currKey = item.currencies ? Object.keys(item.currencies)[0] : '';
+          const currObj = currKey ? item.currencies[currKey] : {};
+          combinedMap.set(key, {
+            id: code || name,
+            _id: code || name,
+            code,
+            name,
+            currency_code: currKey || '',
+            currency_symbol: currObj?.symbol || currKey || '',
+            timezone: item.timezones?.[0] || 'Asia/Kolkata'
+          });
+        }
+      });
+
+      // 3. Merge DB Countries (and resolve legacy numeric IDs like 102)
+      dbCountries.forEach(c => {
+        const rawId = String(c._id || c.id || '');
+        const rawName = String(c.name || c.country || '').trim();
+        
+        // Check if rawId or rawName is legacy numeric ID like "102"
+        const legacyMatch = legacyIdMap[rawId] || legacyIdMap[rawName];
+        const countryName = legacyMatch ? legacyMatch.name : (rawName && !/^\d+$/.test(rawName) ? rawName : '');
+        
+        if (countryName) {
+          const key = countryName.toLowerCase();
+          const existing = combinedMap.get(key) || {};
+          combinedMap.set(key, {
+            ...existing,
+            ...c,
+            id: rawId || existing.id || countryName,
+            _id: rawId || existing._id || countryName,
+            name: countryName,
+            currency_code: c.currency_code || legacyMatch?.currency_code || existing.currency_code || '',
+            currency_symbol: c.currency_symbol || legacyMatch?.currency_symbol || existing.currency_symbol || '',
+            timezone: c.timezone || legacyMatch?.timezone || existing.timezone || ''
+          });
+        }
+      });
+
+      // Filter out any entries where name is purely numeric or empty
+      const nextCountries = Array.from(combinedMap.values())
+        .filter(c => c.name && !/^\d+$/.test(String(c.name).trim()))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
       setLocations(Array.isArray(nextLocations) ? nextLocations : []);
-      setCountries(Array.isArray(nextCountries) ? nextCountries : []);
+      setCountries(nextCountries);
       
       if (isEdit && id) {
         const item = nextLocations.find(l => String(l._id || l.id) === String(id));
         if (item) {
-          const matchedCountry = nextCountries.find(c => (c._id || c.id) === item.country || c.name === item.country || c.name === item.country?.name);
+          const matchedCountry = nextCountries.find(c => (c._id || c.id) === item.country || String(c.name).toLowerCase() === String(typeof item.country === 'object' ? item.country?.name : item.country).toLowerCase());
           setFormData({
             name: item.name || item.service_location_name || '',
-            country: matchedCountry?._id || matchedCountry?.id || '',
-            currency_code: item.currency_code || '',
-            currency_symbol: item.currency_symbol || '',
-            timezone: item.timezone || ''
+            country: matchedCountry?._id || matchedCountry?.id || item.country || '',
+            currency_code: item.currency_code || matchedCountry?.currency_code || '',
+            currency_symbol: item.currency_symbol || matchedCountry?.currency_symbol || '',
+            timezone: item.timezone || matchedCountry?.timezone || ''
           });
         }
       } else if (isCreate) {
         if (Array.isArray(nextCountries) && nextCountries.length > 0) {
           const defaultCountry = nextCountries.find(c => c.name?.toLowerCase() === 'india') || nextCountries[0];
-          setFormData(p => ({ ...p, country: defaultCountry?._id || defaultCountry?.id || '' }));
+          setFormData(p => ({
+            ...p,
+            country: defaultCountry?._id || defaultCountry?.id || '',
+            currency_code: defaultCountry?.currency_code || 'INR',
+            currency_symbol: defaultCountry?.currency_symbol || '₹',
+            timezone: defaultCountry?.timezone || 'Asia/Kolkata'
+          }));
         }
       }
     } catch (error) {
@@ -101,20 +179,20 @@ const ServiceLocation = ({ mode }) => {
 
   useEffect(() => {
     if (formData.country && countries.length > 0) {
-      // 1. Try to find in the dynamic API data (highest priority)
-      let matched = countries.find(c => String(c._id || c.id) === String(formData.country));
+      // Find selected country from unified countries list
+      let matched = countries.find(c => String(c._id || c.id) === String(formData.country) || String(c.name).toLowerCase() === String(formData.country).toLowerCase());
       
-      // 2. If dynamic data is missing currency info, fallback to our local master metadata
       if (!matched?.currency_code) {
         const countryName = matched?.name || '';
         matched = countryMetadata.find(c => c.name === countryName || c.code === matched?.code);
       }
 
-      if (matched?.currency_code) {
+      if (matched) {
         setFormData(prev => ({
           ...prev,
-          currency_code: prev.currency_code || matched.currency_code,
-          currency_symbol: prev.currency_symbol || matched.currency_symbol
+          currency_code: matched.currency_code || prev.currency_code,
+          currency_symbol: matched.currency_symbol || prev.currency_symbol,
+          timezone: prev.timezone || matched.timezone || ''
         }));
       }
     }
@@ -332,22 +410,25 @@ const ServiceLocation = ({ mode }) => {
                  </div>
 
                  <div className="md:col-span-1 border-0" />
-
-                 <div className="space-y-2">
-                    <label className={labelClass}>Select Country <span className="text-rose-400">*</span></label>
-                    <div className="relative">
-                      <select 
-                         value={formData.country} 
-                         onChange={(e) => setFormData(p => ({ ...p, country: e.target.value }))} 
-                         className={inputClass + " appearance-none cursor-pointer"}
-                         required
-                      >
-                         <option value="">Choose Country</option>
-                         {countries.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                 </div>
+                  <div className="space-y-2">
+                     <label className={labelClass}>Select Country <span className="text-rose-400">*</span></label>
+                     <div className="relative">
+                       <select 
+                          value={formData.country} 
+                          onChange={(e) => setFormData(p => ({ ...p, country: e.target.value }))} 
+                          className={inputClass + " appearance-none cursor-pointer"}
+                          required
+                       >
+                          <option value="">Choose Country</option>
+                          {countries.map(c => (
+                            <option key={c._id || c.id || c.code} value={c._id || c.id || c.name}>
+                              {c.name} {c.currency_code ? `(${c.currency_code})` : ''}
+                            </option>
+                          ))}
+                       </select>
+                       <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                     </div>
+                  </div>
 
                  <div className="space-y-2">
                     <label className={labelClass}>Currency Code <span className="text-rose-400">*</span></label>

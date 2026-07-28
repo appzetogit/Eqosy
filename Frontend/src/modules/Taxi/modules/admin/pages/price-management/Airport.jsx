@@ -578,7 +578,11 @@ const Airport = ({ mode: initialMode = "list" }) => {
                           className={inputClass}
                         >
                           <option value="">Select Service Location</option>
-                          {serviceLocations.map(sl => <option key={sl._id || sl.id} value={sl._id || sl.id}>{sl.name}</option>)}
+                          {serviceLocations.map(sl => (
+                            <option key={sl._id || sl.id} value={sl._id || sl.id}>
+                              {sl.name || sl.service_location_name}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
