@@ -24,6 +24,7 @@ import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
 import { calculateDistance } from "@food/utils/common"
 import { calculateDistanceInKm, extractCoords } from "@food/utils/geoDistance"
+import { isModuleAuthenticated, clearModuleAuth, clearAuthData } from "@food/utils/auth"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
@@ -978,6 +979,10 @@ export default function Cart() {
           }
         }
       } catch (error) {
+        if (error?.response?.status === 401) {
+          clearModuleAuth('user')
+          clearAuthData()
+        }
         // Pricing must come from backend fee settings; do not calculate fee defaults in the browser.
         if (error.code !== 'ERR_NETWORK' && error.response?.status !== 404) {
           debugError("Error calculating pricing:", error)
@@ -1050,6 +1055,25 @@ export default function Cart() {
       }
     }
     fetchCancellationPolicy()
+  }, [])
+
+  const isUserAuthenticated = isModuleAuthenticated('user')
+
+  const handleLoginRedirect = () => {
+    clearModuleAuth('user')
+    clearAuthData()
+    navigate('/food/user/auth/login', { state: { from: location.pathname } })
+  }
+
+  useEffect(() => {
+    const handleAuthFailed = (e) => {
+      if (e?.detail?.module === 'user') {
+        clearModuleAuth('user')
+        clearAuthData()
+      }
+    }
+    window.addEventListener('authRefreshFailed', handleAuthFailed)
+    return () => window.removeEventListener('authRefreshFailed', handleAuthFailed)
   }, [])
 
   // Use backend pricing only for fee-related bill values.
@@ -2718,19 +2742,21 @@ export default function Cart() {
                     <button
                       type="button"
                       onClick={() => {
-                        setShowCustomTipInput(true)
-                        setCustomTipInput(
-                          deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip)
-                            ? String(deliveryPartnerTip)
-                            : customTipInput || "",
-                        )
+                        const isCustomActive = deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip);
+                        if (showCustomTipInput) {
+                          setShowCustomTipInput(false);
+                        } else {
+                          setShowCustomTipInput(true);
+                          setCustomTipInput(isCustomActive ? String(deliveryPartnerTip) : "");
+                        }
                       }}
-                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                        : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
-                        }`}
+                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${
+                        showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
+                      }`}
                     >
-                      {showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                      {deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip)
                         ? `${RUPEE_SYMBOL}${deliveryPartnerTip}`
                         : "Other"}
                       <Pencil className="w-3.5 h-3.5" />
@@ -2877,6 +2903,23 @@ export default function Cart() {
                       <span>To Pay</span>
                       <span>{RUPEE_SYMBOL}{total.toFixed(2)}</span>
                     </div>
+                    {!isUserAuthenticated && (
+                      <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 leading-tight">
+                            Login required to calculate fees, taxes & place order
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleLoginRedirect}
+                          className="text-xs font-bold bg-[#EB590E] hover:bg-[#D94F0C] text-white px-3 py-1.5 rounded-xl shadow-xs transition-transform active:scale-95 whitespace-nowrap shrink-0"
+                        >
+                          Login
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2954,8 +2997,8 @@ export default function Cart() {
 
             {/* Place Order Button */}
             <button
-              onClick={handlePlaceOrder}
-              disabled={isPlacingOrder || loadingPricing || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline}
+              onClick={!isUserAuthenticated ? handleLoginRedirect : handlePlaceOrder}
+              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline)}
               className="w-full bg-gradient-to-r from-[#EB590E] to-[#E23744] hover:from-[#D94F0C] hover:to-[#CF2834] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#EB590E]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
@@ -2965,17 +3008,19 @@ export default function Cart() {
                 </div>
               )}
               <div className="flex items-center gap-1 mx-auto text-sm md:text-lg tracking-wide">
-                {isRestaurantOffline
-                  ? "Restaurant Offline"
-                  : isPlacingOrder
-                    ? "Processing..."
-                    : loadingPricing
-                      ? "Calculating Fees..."
-                      : !hasSavedAddress
-                        ? "Select Address"
-                        : !isPricingAvailable
-                          ? "Fees Unavailable"
-                          : "Place Order"}
+                {!isUserAuthenticated
+                  ? "Login to Place Order"
+                  : isRestaurantOffline
+                    ? "Restaurant Offline"
+                    : isPlacingOrder
+                      ? "Processing..."
+                      : loadingPricing
+                        ? "Calculating Fees..."
+                        : !hasSavedAddress
+                          ? "Select Address"
+                          : !isPricingAvailable
+                            ? "Fees Unavailable"
+                            : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>

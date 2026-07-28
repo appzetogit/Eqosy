@@ -13,7 +13,7 @@ const areCentersNearlyEqual = (first, second, threshold = 0.00001) => (
   Math.abs(Number(first?.lon ?? 0) - Number(second?.lon ?? 0)) < threshold
 );
 
-const LocationMapSection = () => {
+const LocationMapSection = ({ plain = false }) => {
   const [coords, setCoords] = useState(null);
   const [centerCoords, setCenterCoords] = useState(DEFAULT_CENTER);
   const [status, setStatus] = useState('idle');
@@ -70,40 +70,51 @@ const LocationMapSection = () => {
     }
 
     setStatus('loading');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const next = {
-          lat: position.coords.latitude,
-          lon: position.coords.longitude,
-        };
+    
+    const onSuccess = (position) => {
+      const next = {
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+      };
 
-        persistCoords(next);
-        if (map) {
-          map.panTo({ lat: next.lat, lng: next.lon });
-          map.setZoom(DEFAULT_ZOOM);
-        }
+      persistCoords(next);
+      if (map) {
+        map.panTo({ lat: next.lat, lng: next.lon });
+        map.setZoom(DEFAULT_ZOOM);
+      }
 
-        if (window.google?.maps?.Geocoder) {
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: next.lat, lng: next.lon } }, (results, geocodeStatus) => {
-            if (geocodeStatus === 'OK' && results?.[0]?.formatted_address) {
-              try {
-                persistAddress(results[0].formatted_address);
-              } catch {
-                // ignore
-              }
+      if (window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: next.lat, lng: next.lon } }, (results, geocodeStatus) => {
+          if (geocodeStatus === 'OK' && results?.[0]?.formatted_address) {
+            try {
+              persistAddress(results[0].formatted_address);
+            } catch {
+              // ignore
             }
-          });
-        }
+          }
+        });
+      }
+    };
+
+    const onError = (error) => {
+      if (error?.code === 1) {
+        setStatus('denied');
+        return;
+      }
+      setStatus('error');
+    };
+
+    const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
+    const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
+
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      (err) => {
+        console.warn("LocationMapSection GPS high accuracy failed, trying low accuracy...", err);
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsLow);
       },
-      (error) => {
-        if (error?.code === 1) {
-          setStatus('denied');
-          return;
-        }
-        setStatus('error');
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+      optionsHigh
     );
   };
 
@@ -116,12 +127,16 @@ const LocationMapSection = () => {
     return 'Pin your current location, then adjust by dragging.';
   })();
 
+  const containerClass = plain
+    ? 'relative z-10 px-5 mt-1'
+    : 'mx-5 my-4 rounded-[32px] bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] relative overflow-visible px-5 py-5.5';
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: 'easeOut' }}
-      className="px-5"
+      className={containerClass}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">

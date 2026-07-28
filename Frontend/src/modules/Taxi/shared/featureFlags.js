@@ -24,4 +24,4 @@ export const RENTAL_ENABLED = false
  *
  * Flip to true to re-enable without hunting commented blocks.
  */
-export const POOLING_ENABLED = false
+export const POOLING_ENABLED = true

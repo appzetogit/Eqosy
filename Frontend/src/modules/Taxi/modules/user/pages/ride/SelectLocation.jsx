@@ -543,21 +543,107 @@ const SelectLocation = () => {
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) return;
     setIsLocating(true);
+    
+    const onSuccess = (pos) => {
+      setIsLocating(false);
+      const { latitude, longitude } = pos.coords;
+      const newCoords = { lat: latitude, lng: longitude };
+      
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.panTo(newCoords);
+        mapInstanceRef.current.setZoom(17);
+      }
+      
+      // Explicitly geocode and update pickedAddress
+      setIsGeocoding(true);
+      if (window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: newCoords }, (results, status) => {
+          setIsGeocoding(false);
+          if (status === 'OK' && results[0]) {
+            setPickedAddress(results[0].formatted_address);
+          } else {
+            setPickedAddress(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+          }
+        });
+      } else {
+        setIsGeocoding(false);
+        setPickedAddress(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+      }
+      
+      lastCenterRef.current = newCoords;
+    };
+    
+    const onError = () => {
+      setIsLocating(false);
+    };
+    
+    const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
+    const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
+    
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsLocating(false);
-        const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.panTo(newCoords);
-          mapInstanceRef.current.setZoom(17);
-        }
+      onSuccess,
+      (err) => {
+        console.warn("Map picker GPS high accuracy failed, trying low accuracy...", err);
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsLow);
       },
-      () => {
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true }
+      optionsHigh
     );
   };
+
+  // Auto-detect and set pickup location on load if not set
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!routeState.pickup && !savedPickupLabel) {
+      setIsLocating(true);
+      const onSuccess = (pos) => {
+        setIsLocating(false);
+        const { latitude, longitude } = pos.coords;
+        const coords = [longitude, latitude];
+        
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              const addr = results[0].formatted_address;
+              setPickup(addr);
+              setPickupCoords(coords);
+              saveLocation({
+                address: addr,
+                lat: latitude,
+                lon: longitude,
+              });
+            } else {
+              const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+              setPickup(raw);
+              setPickupCoords(coords);
+            }
+          });
+        } else {
+          const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+          setPickup(raw);
+          setPickupCoords(coords);
+        }
+      };
+      
+      const onError = (err) => {
+        console.warn("Auto-location failed:", err);
+        setIsLocating(false);
+      };
+      
+      const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
+      const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
+      
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (err) => {
+          console.warn("Auto-location high accuracy failed, trying low accuracy...", err);
+          navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsLow);
+        },
+        optionsHigh
+      );
+    }
+  }, [isLoaded]);
 
   const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
@@ -647,15 +733,17 @@ const SelectLocation = () => {
   const handleUseCurrentLocationResult = () => {
     if (!navigator.geolocation) return;
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsLocating(false);
-        const { latitude, longitude } = pos.coords;
+    
+    const onSuccess = (pos) => {
+      setIsLocating(false);
+      const { latitude, longitude } = pos.coords;
+      const coords = [longitude, latitude];
+      
+      if (window.google?.maps?.Geocoder) {
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
           if (status === 'OK' && results[0]) {
             const addr = results[0].formatted_address;
-            const coords = [longitude, latitude];
             if (activeInput === 'drop') {
               setDrop(addr);
               setDropCoords(coords);
@@ -665,7 +753,6 @@ const SelectLocation = () => {
             }
           } else {
             const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-            const coords = [longitude, latitude];
             if (activeInput === 'drop') {
               setDrop(raw);
               setDropCoords(coords);
@@ -675,9 +762,32 @@ const SelectLocation = () => {
             }
           }
         });
+      } else {
+        const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        if (activeInput === 'drop') {
+          setDrop(raw);
+          setDropCoords(coords);
+          handleConfirmNavigate(raw, coords);
+        } else {
+          handleSelectResult(raw, coords);
+        }
+      }
+    };
+    
+    const onError = () => {
+      setIsLocating(false);
+    };
+    
+    const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
+    const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
+    
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      (err) => {
+        console.warn("Search suggestions GPS high accuracy failed, trying low accuracy...", err);
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsLow);
       },
-      () => setIsLocating(false),
-      { enableHighAccuracy: true }
+      optionsHigh
     );
   };
 

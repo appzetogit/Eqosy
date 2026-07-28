@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarClock, ChevronRight, Clock3, MapPin, ShieldCheck, User } from 'lucide-react';
 import HomeHeader from '@food/components/user/home/HomeHeader';
+import SuperAppHero from '../components/SuperAppHero';
 import ServiceGrid from '../components/ServiceGrid';
 import LocationMapSection from '../components/LocationMapSection';
 import ActionsSection from '../components/ActionsSection';
 import PromoBanners from '../components/PromoBanners';
 import ExplorerSection from '../components/ExplorerSection';
+import EcosystemStorytelling from '../components/EcosystemStorytelling';
 import BottomNavbar from '../components/BottomNavbar';
 import carIcon from '../../../assets/icons/car.png';
 import bikeIcon from '../../../assets/icons/bike.png';
@@ -584,7 +586,12 @@ const Home = ({ embedded = false }) => {
 
 
       <div className="relative z-10 space-y-4 pb-6">
-        {!embedded && <HomeHeader activeVertical="taxi" />}
+        {!embedded && (
+          <div className="flex flex-col">
+            <HomeHeader activeVertical="taxi" hideSearchRow={true} />
+            <SuperAppHero onSearchFocus={() => navigate(`${routePrefix}/ride/select-location`)} />
+          </div>
+        )}
 
         {isScheduledAcceptedRide && (
           <motion.button
@@ -707,14 +714,19 @@ const Home = ({ embedded = false }) => {
           </motion.div>
         )}
 
-        <ServiceGrid />
+        {embedded && <ServiceGrid />}
         {showDeferredSections ? (
-          <>
-            <LocationMapSection />
-            <ActionsSection />
-            <PromoBanners />
-            <ExplorerSection />
-          </>
+          <div className="mx-8 my-4 rounded-[32px] bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] relative overflow-visible py-6.5 flex flex-col gap-8">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px]">
+              <div className="absolute top-10 left-5 w-52 h-52 rounded-full bg-blue-400/3 blur-[60px]" />
+              <div className="absolute bottom-20 right-5 w-60 h-60 rounded-full bg-red-400/3 blur-[80px]" />
+            </div>
+            <ServiceGrid plain={true} />
+            <LocationMapSection plain={true} />
+            <ActionsSection plain={true} />
+            <PromoBanners plain={true} />
+            <ExplorerSection plain={true} />
+          </div>
         ) : (
           <div className="space-y-4 px-5">
             <div className="h-[170px] animate-pulse rounded-[20px] border border-white/80 bg-white/70 shadow-[0_10px_22px_rgba(15,23,42,0.05)]" />
@@ -722,54 +734,7 @@ const Home = ({ embedded = false }) => {
             <div className="h-[160px] animate-pulse rounded-[24px] border border-white/80 bg-white/70 shadow-[0_10px_22px_rgba(15,23,42,0.05)]" />
           </div>
         )}
-        <div
-          className="relative w-full"
-          style={{
-            height: 360,
-          }}
-        >
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-white via-white/40 to-transparent" />
-            <div className="relative z-10 flex h-full items-start justify-center px-6 pt-10 text-left">
-              <div className="flex max-w-[340px] flex-col items-start px-2 py-2 -translate-x-4">
-                <div className="text-[48px] font-black tracking-[-0.04em] text-[#FFB300] drop-shadow-[0_10px_30px_rgba(255,179,0,0.4)] leading-none">
-                  Eqosy
-                </div>
-                <div className="mt-2 text-[14px] font-sans italic font-black tracking-wide text-slate-800">
-                  Your Trusted Journey Partner
-                </div>
-                <div className="mt-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                  Made for Everyone, Crafted for You.
-                  <img
-                    src="/flag-in.svg"
-                    alt="India"
-                    className="ml-0.5 inline-block h-[2.2em] w-[1.2em] align-[-0.88em]"
-                    draggable={false}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              filter: 'grayscale(1) contrast(1.08)',
-              ...footerIllustrationFadeMask,
-            }}
-          >
-            <div className="absolute inset-0" style={footerIllustrationBg} />
-            <div
-              className="absolute inset-0 opacity-55"
-              style={{
-                ...footerIllustrationBg,
-                filter: 'blur(3px)',
-                ...footerIllustrationEdgeBlurMask,
-              }}
-            />
-          </div>
-        </div>
+        <EcosystemStorytelling />
       </div>
 
       <AnimatePresence>

@@ -1,35 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import indiaGateImg from '@/assets/india_gate_real.png';
 import jaipurImg from '@/assets/jaipur.avif';
 import tajMahalImg from '@/assets/taj mahal.jpeg';
 
-const ExplorerSection = () => {
+const ExplorerSection = ({ plain = false }) => {
   const navigate = useNavigate();
-  const cities = [
-    {
-      title: 'Airport Indore',
-      image: '/Gemini_Generated_Image_ob17d1ob17d1ob17.png',
-      label: '10 min',
-      code: 'IDR',
-      drop: 'Devi Ahilya Bai Holkar Airport, Indore',
-    },
-    {
-      title: 'Indore Junction',
-      image: '/train_station_illustration.png',
-      label: '5 min',
-      code: 'JCT',
-      drop: 'Indore Junction Railway Station, Indore',
-    },
-    {
-      title: 'Rajwada',
-      image: '/Gemini_Generated_Image_17lko817lko817lk.png',
-      label: '15 min',
-      code: 'RAJ',
-      drop: 'Rajwada Palace, Indore',
-    },
-  ];
 
   const indiaCities = [
     {
@@ -53,6 +30,27 @@ const ExplorerSection = () => {
       code: 'DEL',
       drop: 'India Gate, New Delhi',
     },
+    {
+      title: 'Charminar',
+      image: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=400&q=80',
+      label: 'Hyderabad',
+      code: 'HYD',
+      drop: 'Charminar, Hyderabad',
+    },
+    {
+      title: 'Gateway of India',
+      image: 'https://images.unsplash.com/photo-1566552881560-0be862a7c445?auto=format&fit=crop&w=400&q=80',
+      label: 'Mumbai',
+      code: 'BOM',
+      drop: 'Gateway of India, Mumbai',
+    },
+    {
+      title: 'Howrah Bridge',
+      image: 'https://images.unsplash.com/photo-1558431382-27e303142255?auto=format&fit=crop&w=400&q=80',
+      label: 'Kolkata',
+      code: 'CCU',
+      drop: 'Howrah Bridge, Kolkata',
+    }
   ];
 
   const handleExploreDestination = (city) => {
@@ -63,63 +61,89 @@ const ExplorerSection = () => {
     });
   };
 
+  // Double the array for seamless infinite marquee scrolling
+  const doubledCities = [...indiaCities, ...indiaCities];
+
+  const marqueeStyle = `
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .animate-marquee-left {
+      display: flex;
+      width: max-content;
+      animation: marquee 30s linear infinite;
+    }
+    .marquee-wrapper:hover .animate-marquee-left {
+      animation-play-state: paused;
+    }
+  `;
+
+  const containerClass = plain
+    ? 'relative z-10 px-5 mt-1'
+    : 'mx-5 my-4 rounded-[32px] bg-gradient-to-br from-[#EBF1FA] via-[#F3F7FC] to-[#F8FAFC] border border-blue-100/30 shadow-[0_24px_50px_rgba(30,41,59,0.04)] relative overflow-visible px-5 py-5.5';
+
   return (
-    <div className="px-5 pb-8 flex flex-col gap-10">
-      {/* Explore Indore Section */}
-      
+    <div className={containerClass}>
+      <style>{marqueeStyle}</style>
 
       {/* Explore India Section */}
       <div>
-        <div className="mb-3 ml-1">
-          <h2 className="text-[19px] font-black text-gray-900 tracking-tight">Explore India</h2>
-          <p className="mt-1 text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">
+        {/* Header Section */}
+        <div className="mb-4 ml-1">
+          <div className="flex items-center gap-1.5">
+            <Sparkles size={11} className="text-indigo-600 animate-pulse" />
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-indigo-600">
+              DISCOVER INCREDIBLE INDIA
+            </span>
+          </div>
+          <h2 className="text-[19px] font-black text-slate-800 tracking-tight mt-0.5 relative inline-block">
+            Explore India
+            <div className="absolute bottom-[-3px] left-0 right-0 h-[2.5px] bg-gradient-to-r from-indigo-500/40 to-transparent" />
+          </h2>
+          <p className="mt-1 text-[11px] font-bold text-slate-500 leading-tight">
             Top tourist destinations across the country
           </p>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-5 px-1">
-          {indiaCities.map((city, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleExploreDestination(city)}
-              className="flex-shrink-0 w-[214px] group text-left transition-all active:scale-[0.98] cursor-pointer"
-            >
-              <div className="rounded-[20px] bg-white/92 border border-white/80 shadow-[0_18px_40px_rgba(15,23,42,0.07)] overflow-hidden h-[136px] transition-all relative">
-                <img
-                  src={city.image}
-                  alt={city.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 to-transparent"></div>
-                <div className="absolute top-4 right-4 bg-white/92 backdrop-blur-md px-2.5 py-1 rounded-full shadow-sm border border-white/60 z-10">
-                  <p className="text-[9px] font-black text-primary tracking-widest uppercase">{city.code}</p>
-                </div>
-              </div>
-              <div className="mt-3 px-2">
-                <h4 className="text-[15px] font-black text-gray-900 leading-tight tracking-tight flex items-center justify-between">
-                  {city.title}
-                  <div className="w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
-                    <ArrowRight size={14} strokeWidth={2.5} />
+        {/* Infinite Auto-Scrolling Marquee (No Scrollbars, Pauses on Hover) */}
+        <div className="marquee-wrapper w-full overflow-hidden relative py-2 select-none mask-gradient">
+          {/* Subtle horizontal mask gradient for soft fading edges */}
+          <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none" />
+          <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none" />
+
+          <div className="animate-marquee-left flex gap-4">
+            {doubledCities.map((city, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleExploreDestination(city)}
+                className="flex-shrink-0 w-[190px] group text-left transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <div className="rounded-[18px] bg-white border border-slate-100 shadow-[0_8px_20px_rgba(15,23,42,0.04)] overflow-hidden h-[120px] transition-all relative">
+                  <img
+                    src={city.image}
+                    alt={city.title}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/20 to-transparent"></div>
+                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-full shadow-sm border border-white/60 z-10">
+                    <p className="text-[8px] font-black text-indigo-600 tracking-widest uppercase">{city.code}</p>
                   </div>
-                </h4>
-                <p className="text-[11px] text-gray-400 font-bold mt-1 tracking-tight">
-                  Located in {city.label}
-                </p>
-              </div>
-            </button>
-          ))}
-          
-          <button
-            type="button"
-            onClick={() => handleExploreDestination(indiaCities[0])}
-            className="flex-shrink-0 w-[128px] flex flex-col justify-center items-center gap-2 bg-white/75 border border-white/80 rounded-[18px] active:scale-95 transition-all text-slate-500 font-black h-[136px] self-start shadow-[0_14px_32px_rgba(15,23,42,0.05)]"
-          >
-            <div className="w-10 h-10 rounded-full bg-slate-50 border border-white/80 shadow-sm flex items-center justify-center">
-              <ArrowRight size={18} strokeWidth={2.5} className="text-slate-300" />
-            </div>
-            <span className="text-[11px] uppercase tracking-[0.14em]">View All</span>
-          </button>
+                </div>
+                <div className="mt-2.5 px-1 flex flex-col">
+                  <h4 className="text-[13px] font-black text-slate-800 tracking-tight leading-tight flex items-center justify-between">
+                    {city.title}
+                    <ArrowRight size={11} className="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                  </h4>
+                  <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wider">
+                    {city.label}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
