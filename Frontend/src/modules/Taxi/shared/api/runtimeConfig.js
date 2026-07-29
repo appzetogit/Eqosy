@@ -17,6 +17,7 @@ const sanitizeHost = (urlStr) => {
 };
 
 const DEFAULT_BACKEND_ORIGIN = isBrowser && !isBrowserLocal ? window.location.origin : 'http://localhost:5000';
+const trimTrailingSlash = (value = '') => String(value || '').replace(/\/+$/, '');
 
 const configuredBase = import.meta.env.VITE_API_BASE_URL
   ? sanitizeHost(import.meta.env.VITE_API_BASE_URL)
