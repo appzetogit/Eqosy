@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { adminAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
@@ -117,11 +117,16 @@ export default function AdminLogin() {
       setUnifiedAdminSession({ token: accessToken, user: normalizedAdmin, refreshToken })
       navigate("/admin/food", { replace: true })
     } catch (err) {
-      const message =
+      console.error("[AdminLogin Submit Error]", err)
+      const rawMessage =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
-        "Login failed. Please check your credentials."
+        ""
+      const isRawUrlError = typeof rawMessage === "string" && (rawMessage.includes("Invalid URL") || rawMessage.includes("missing \"//\""));
+      const message = isRawUrlError
+        ? "Unable to connect to server. Please check your network connection."
+        : (rawMessage || "Login failed. Please check your credentials.");
       setError(message)
     } finally {
       setIsLoading(false)

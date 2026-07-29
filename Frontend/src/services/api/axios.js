@@ -22,7 +22,8 @@ const resolveApiBaseUrl = () => {
     return origin ? `${origin}/api/v1` : "/api/v1";
   }
 
-  if (envValue.startsWith("http")) {
+  // Strict check: must start with http:// or https:// with dual slashes
+  if (/^https?:\/\//i.test(envValue)) {
     try {
       const parsed = new URL(envValue);
       if (typeof window !== "undefined") {
@@ -36,12 +37,14 @@ const resolveApiBaseUrl = () => {
     } catch (_) {}
   }
 
-  // If envValue is relative (e.g. "/api/v1"), attach origin in browser so Axios buildURL never throws Invalid URL
-  if (origin && !envValue.startsWith("http")) {
-    return `${origin}${envValue.startsWith("/") ? envValue : "/" + envValue}`;
+  // If envValue is relative or malformed, attach origin in browser
+  if (origin) {
+    const cleanPath = envValue.replace(/^https?:?\/*/, "/").replace(/^\/+/, "/");
+    const path = cleanPath.startsWith("/api") ? cleanPath : "/api/v1";
+    return `${origin}${path}`;
   }
 
-  return envValue;
+  return "/api/v1";
 };
 
 // Prefer explicit env. If not set, use same-origin (works with reverse proxy).

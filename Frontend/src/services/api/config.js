@@ -16,7 +16,7 @@ const resolveConfigApiBaseUrl = () => {
     return origin ? `${origin}/api/v1` : "/api/v1";
   }
 
-  if (envValue.startsWith("http")) {
+  if (/^https?:\/\//i.test(envValue)) {
     try {
       const parsed = new URL(envValue);
       if (typeof window !== "undefined") {
@@ -31,11 +31,13 @@ const resolveConfigApiBaseUrl = () => {
     } catch (_) {}
   }
 
-  if (origin && !envValue.startsWith("http")) {
-    return `${origin}${envValue.startsWith("/") ? envValue : "/" + envValue}`;
+  if (origin) {
+    const cleanPath = envValue.replace(/^https?:?\/*/, "/").replace(/^\/+/, "/");
+    const path = cleanPath.startsWith("/api") ? cleanPath : "/api/v1";
+    return `${origin}${path}`;
   }
 
-  return envValue;
+  return "/api/v1";
 };
 
 export const API_BASE_URL = resolveConfigApiBaseUrl();

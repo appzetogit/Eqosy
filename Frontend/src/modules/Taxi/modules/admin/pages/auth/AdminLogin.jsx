@@ -43,7 +43,10 @@ const AdminLogin = () => {
       });
       setTimeout(() => navigate('/taxi/admin/dashboard'), 300);
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Unable to complete admin login.');
+      console.error("[Taxi AdminLogin Submit Error]", err);
+      const rawMessage = err.response?.data?.message || err.message || '';
+      const isRawUrlError = typeof rawMessage === 'string' && (rawMessage.includes('Invalid URL') || rawMessage.includes('missing "//"'));
+      setError(isRawUrlError ? 'Unable to connect to server. Please check your network connection.' : (rawMessage || 'Unable to complete admin login.'));
     } finally {
       setIsLoading(false);
     }
