@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Link, useNavigate } from "react-router-dom"
-import { ShieldCheck, Loader2, ArrowRight } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
@@ -21,6 +21,14 @@ export default function UnifiedOTPFastLogin() {
   const [pendingAuthData, setPendingAuthData] = useState(null)
   const navigate = useNavigate()
   const submitting = useRef(false)
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(1)
+      return
+    }
+    navigate('/taxi/user', { replace: true })
+  }
 
   const getWebFcmTokenForLogin = async () => {
     if (typeof window === "undefined" || typeof navigator === "undefined") {
@@ -438,8 +446,20 @@ export default function UnifiedOTPFastLogin() {
         </div>
 
         {/* Mobile Header / Form Area */}
-        <div className="flex-1 w-full relative z-20 flex flex-col items-center justify-center py-4 lg:justify-center">
-          <div className="w-full max-w-[420px] px-6 w-full flex flex-col items-center">
+        <div className="flex-1 w-full relative z-20 flex flex-col items-center justify-start pt-4 lg:justify-center">
+          {/* Top Action Bar (Single Back Button) */}
+          <div className="w-full max-w-[420px] px-6 py-2 flex items-center justify-start z-30">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="w-10 h-10 rounded-full bg-black/5 hover:bg-black/10 active:scale-95 flex items-center justify-center text-[#1A1A1A] transition-all border border-gray-200"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="w-full max-w-[420px] px-6 flex flex-col items-center">
             
             <motion.div
               key="auth-view"

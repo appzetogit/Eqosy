@@ -21,8 +21,8 @@ const AuthLayout = ({ children, title, subtitle }) => {
     <div className="h-screen w-screen bg-[#F8F9FA] flex flex-col lg:flex-row font-display overflow-hidden fixed inset-0">
       {/* Left side (Desktop Only) */}
       <div className="hidden lg:flex flex-col justify-between lg:w-[45%] xl:w-[50%] bg-[#1A1A1A] p-12 text-white relative overflow-hidden shadow-[20px_0_40px_rgba(0,0,0,0.1)] z-10">
-        {/* Top Header Actions (Back & Close Buttons) */}
-        <div className="absolute top-6 left-6 right-6 z-30 flex items-center justify-between">
+        {/* Top Header Actions (Single Back Button) */}
+        <div className="absolute top-6 left-6 right-6 z-30 flex items-center justify-start">
           <button
             type="button"
             onClick={handleClose}
@@ -30,14 +30,6 @@ const AuthLayout = ({ children, title, subtitle }) => {
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -102,8 +94,8 @@ const AuthLayout = ({ children, title, subtitle }) => {
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full blur-[40px] -ml-10 -mb-10" />
         </div>
 
-        {/* Mobile Header Actions (Back & Close Buttons) */}
-        <div className="lg:hidden w-full flex items-center justify-between px-6 pt-5 z-30">
+        {/* Mobile Header Actions (Single Back Button) */}
+        <div className="lg:hidden w-full flex items-center justify-start px-6 pt-5 z-30">
           <button
             type="button"
             onClick={handleClose}
@@ -111,14 +103,6 @@ const AuthLayout = ({ children, title, subtitle }) => {
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
           </button>
         </div>
 

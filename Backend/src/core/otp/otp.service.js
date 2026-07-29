@@ -4,6 +4,7 @@ import { FoodOtp } from './otp.model.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { ValidationError } from '../auth/errors.js';
+import { sendOtpSms } from '../../modules/taxi/services/smsService.js';
 
 const generateOtpCode = () => {
     const code = crypto.randomInt(1000, 9999);
@@ -30,68 +31,51 @@ const normalizeOtpScope = (scope) => {
  */
 const sendSmsViaIndiaHub = async (phone, otp) => {
     try {
-        // Normalize phone: strip non-digits, ensure 91 country code prefix
         const digits = String(phone || '').replace(/\D/g, '');
         const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
+        const apiKey = (config.smsApiKey || process.env.SMS_INDIA_HUB_API_KEY || '').trim();
+        const senderId = (config.smsSenderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
+        const peId = (config.smsPeId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
+        const templateId = (config.smsDltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
+        const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 
-        // Professional Eqosy SMS OTP Template
-        const template = process.env.SMS_DLT_TEMPLATE_TEXT || 'Welcome to ##var##. Your OTP for registration is ##var##.BGADEC';
-        let message = '';
-        if (template.includes('##var##')) {
-          const parts = template.split('##var##');
-          if (parts.length > 2) {
-            message = `${parts[0]}Eqosy${parts[1]}${otp}${parts.slice(2).join('')}`;
-          } else {
-            message = `${parts[0]}${otp}${parts.slice(1).join('')}`;
-          }
-        } else {
-          message = `Welcome to Eqosy. Your OTP for verification is ${otp}.`;
-        }
+        logger.info(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
 
-        // SMS India Hub HTTP GET API — query param names are case-sensitive per SOP
-        const url = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
-        url.searchParams.append('APIKey', config.smsApiKey);
-        url.searchParams.append('sid', config.smsSenderId || 'BGADEC');
-        url.searchParams.append('msisdn', msisdn);
-        url.searchParams.append('msg', message);
-        url.searchParams.append('gwid', '2');
-        url.searchParams.append('fl', '0');
-        if (config.smsIndiaHubUsername) {
-            url.searchParams.append('uname', config.smsIndiaHubUsername);
-        }
-        if (config.smsDltTemplateId || '1007282516644508833') {
-            url.searchParams.append('DLT_TE_ID', config.smsDltTemplateId || '1007282516644508833');
-        }
-        if (config.smsPeId || '1001164203633432409') {
-            url.searchParams.append('PEID', config.smsPeId || '1001164203633432409');
-        }
+        // Endpoint 1: Vendor PushSMS GET endpoint
+        const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
+        pushUrl.searchParams.append('APIKey', apiKey);
+        pushUrl.searchParams.append('sid', senderId);
+        pushUrl.searchParams.append('msisdn', msisdn);
+        pushUrl.searchParams.append('msg', message);
+        pushUrl.searchParams.append('gwid', '2');
+        pushUrl.searchParams.append('fl', '0');
+        pushUrl.searchParams.append('DLT_TE_ID', templateId);
+        pushUrl.searchParams.append('PEID', peId);
 
-        logger.info(`[SMS] Sending OTP to ${msisdn} via SMS India Hub...`);
-        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(25000) });
-        const resultText = await response.text();
-        logger.info(`[SMS] Raw response for ${msisdn}: ${resultText}`);
+        // Endpoint 2: MT SendSMS GET endpoint
+        const sendUrl = new URL('http://cloud.smsindiahub.in/api/mt/SendSMS');
+        sendUrl.searchParams.append('APIKey', apiKey);
+        sendUrl.searchParams.append('senderid', senderId);
+        sendUrl.searchParams.append('channel', 'Trans');
+        sendUrl.searchParams.append('DCS', '0');
+        sendUrl.searchParams.append('flashsms', '0');
+        sendUrl.searchParams.append('number', msisdn);
+        sendUrl.searchParams.append('text', message);
+        sendUrl.searchParams.append('TemplateId', templateId);
+        sendUrl.searchParams.append('PEID', peId);
 
-        // SMS India Hub often returns HTTP 200 OK even for errors â€” check response body
-        let parsed = null;
-        try { parsed = JSON.parse(resultText); } catch (_) { /* plain text response is OK */ }
+        const [res1, res2] = await Promise.allSettled([
+            fetch(pushUrl.toString(), { signal: AbortSignal.timeout(20000) }).then(r => r.text()),
+            fetch(sendUrl.toString(), { signal: AbortSignal.timeout(20000) }).then(r => r.text())
+        ]);
 
-        if (parsed && parsed.ErrorCode && parsed.ErrorCode !== '000') {
-            const errMsg = `SMS India Hub ERROR for ${phone}: [${parsed.ErrorCode}] ${parsed.ErrorMessage || resultText}`;
-            logger.error(errMsg);
-            // eslint-disable-next-line no-console
-            console.error(`âŒ [SMS ERROR] ${errMsg}`);
-            if (parsed.ErrorCode === '006') {
-                // eslint-disable-next-line no-console
-                console.error('âŒ [SMS ERROR] ErrorCode 006 = DLT Template mismatch. The message text must EXACTLY match your registered TRAI DLT template. Login to https://cloud.smsindiahub.in and verify the approved template text.');
-            }
-        } else if (!response.ok) {
-            logger.error(`SMS API HTTP error for ${phone}: ${response.status} â€“ ${resultText}`);
-        } else {
-            logger.info(`✅ SMS sent successfully to ${msisdn}`);
-        }
+        const text1 = res1.status === 'fulfilled' ? res1.value : res1.reason?.message;
+        const text2 = res2.status === 'fulfilled' ? res2.value : res2.reason?.message;
+
+        logger.info(`[SMS] Response pushsms.aspx=${text1} | SendSMS=${text2}`);
+        console.log(`[SMS] Dispatch response for ${msisdn}: pushsms.aspx=${text1} | SendSMS=${text2}`);
     } catch (error) {
         logger.error(`Error sending SMS to ${phone}: ${error.message}`);
-        // Do NOT throw â€” OTP is already stored in DB; SMS failure should not block the flow
     }
 };
 

@@ -1523,13 +1523,24 @@ export function useLocation() {
           }
         }
 
-        // If permission is not granted but we have NO initial location, automatically attempt fetching location
-        if (!permissionGranted && hasInitialLocation) {
+        // CRITICAL FIX: Do NOT request browser/device location permission on initial app load before user interacts.
+        // This ensures the Food app loads instantly without blocking popups.
+        if (!permissionGranted) {
           setLoading(false);
+          if (!location) {
+            setLocation({
+              city: "Indore",
+              state: "Madhya Pradesh",
+              address: "Indore, Madhya Pradesh",
+              formattedAddress: "Indore, Madhya Pradesh",
+              latitude: 22.7196,
+              longitude: 75.8577,
+            });
+          }
           return;
         }
 
-        debugLog("?? Fetching/Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
+        debugLog("?? Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
 
         const shouldFetch = shouldForceRefresh || !hasInitialLocation
 

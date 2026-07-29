@@ -121,8 +121,8 @@ export default function SignIn() {
     <AnimatedPage className="min-h-[100dvh] bg-white dark:bg-[#0A0A0B] flex flex-col font-sans overflow-hidden">
       {/* Top Branding Section - 40% height */}
       <div className="relative h-[40dvh] w-full bg-gradient-to-br from-[#07143A] via-[#0D2A6B] to-[#133A8A] overflow-hidden flex flex-col items-center justify-center">
-        {/* Top Header Actions (Back & Close Buttons) */}
-        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between">
+        {/* Top Header Actions (Single Back Button) */}
+        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-start">
           <button
             type="button"
             onClick={handleClose}
@@ -130,14 +130,6 @@ export default function SignIn() {
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
           </button>
         </div>
 

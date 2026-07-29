@@ -43,11 +43,11 @@ export const config = {
     useDefaultOtp: process.env.USE_DEFAULT_OTP === 'true',
 
     // SMS India Hub
-    smsIndiaHubUsername: process.env.SMS_INDIA_HUB_USERNAME,
-    smsApiKey: process.env.SMS_INDIA_HUB_API_KEY,
-    smsSenderId: process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC',
-    smsPeId: process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409',
-    smsDltTemplateId: process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833',
+    smsIndiaHubUsername: (process.env.SMS_INDIA_HUB_USERNAME || '').trim(),
+    smsApiKey: (process.env.SMS_INDIA_HUB_API_KEY || '').trim(),
+    smsSenderId: (process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim(),
+    smsPeId: (process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim(),
+    smsDltTemplateId: (process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim(),
 
     // Rate limiting
     rateLimitWindowMinutes: Number(process.env.RATE_LIMIT_WINDOW || 15),
