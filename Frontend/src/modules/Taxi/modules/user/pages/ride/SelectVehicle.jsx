@@ -1248,10 +1248,15 @@ const SelectVehicle = () => {
   useEffect(() => {
     let active = true;
     const fetchPendingDues = async () => {
+      const token = getLocalUserToken();
+      if (!token) {
+        if (active) setPendingCancellationFee(0);
+        return;
+      }
       try {
         const response = await api.get('/rides/pending-cancellation-dues');
         if (!active) return;
-        const totalDue = Number(response?.data?.data?.totalDueAmount || response?.data?.totalDueAmount || 0);
+        const totalDue = Number(response?.data?.data?.totalDueAmount || response?.data?.totalDueAmount || response?.totalDueAmount || 0);
         setPendingCancellationFee(Math.round(totalDue));
       } catch (_err) {
         if (active) setPendingCancellationFee(0);

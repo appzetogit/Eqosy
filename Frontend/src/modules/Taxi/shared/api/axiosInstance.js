@@ -275,11 +275,14 @@ api.interceptors.response.use(
         const token = String(authHeader).startsWith('Bearer ') ? String(authHeader).slice(7) : '';
         const tokenRole = normalizeAuthRole(getTokenPayload(token)?.role || '');
 
-        const shouldClearAuth =
-          error.response.status === 401 ||
-          isAuthTokenFailure(serverMessage) ||
+        const hasAuthToken = Boolean(token && token.length > 10);
+        const isExplicitTokenExpired = isAuthTokenFailure(serverMessage) ||
           serverMessage === 'Authenticated account no longer exists' ||
           (tokenRole === 'user' && serverMessage === 'User account is not active');
+
+        // Only clear auth if request actually had an authorization token that was invalid/expired.
+        // Unauthenticated guest requests (which get 401 "token required") should NOT force redirect to login.
+        const shouldClearAuth = hasAuthToken && isExplicitTokenExpired;
 
         if (shouldClearAuth) {
           clearStaleAuthState(tokenRole, token);

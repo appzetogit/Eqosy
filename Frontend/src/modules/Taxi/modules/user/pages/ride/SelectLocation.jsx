@@ -144,6 +144,41 @@ const SelectLocation = () => {
     };
   }, [serviceLocationId]);
 
+  // Automatically request GPS location permission on mount if default pickup is loaded
+  useEffect(() => {
+    if ((!routeState.pickup || pickup === 'Pipaliyahana, Indore') && typeof navigator !== 'undefined' && navigator.geolocation) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const coords = [lng, lat];
+          setPickupCoords(coords);
+          setMapCenter({ lat, lng });
+
+          if (window.google?.maps?.Geocoder) {
+            const geocoder = new window.google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+              if (status === 'OK' && results?.[0]) {
+                const addr = results[0].formatted_address;
+                setPickup(addr);
+                saveLocation({ address: addr, lat, lon: lng });
+              }
+              setIsLocating(false);
+            });
+          } else {
+            setIsLocating(false);
+          }
+        },
+        (err) => {
+          console.warn('[SelectLocation] GPS permission denied or error:', err);
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.places?.AutocompleteService) {
       return;
@@ -428,11 +463,9 @@ const SelectLocation = () => {
         sessionToken: getAutocompleteSessionToken(),
       };
 
-      if (zoneBounds) {
-        request.bounds = zoneBounds;
-      }
-
       if (window.google?.maps?.LatLng && Array.isArray(pickupCoords) && pickupCoords.length === 2) {
+        request.location = new window.google.maps.LatLng(pickupCoords[1], pickupCoords[0]);
+        request.radius = 50000;
         request.origin = new window.google.maps.LatLng(pickupCoords[1], pickupCoords[0]);
       }
 
@@ -441,25 +474,44 @@ const SelectLocation = () => {
           return;
         }
 
-        const nextResults = status === 'OK'
-          ? predictions.slice(0, 6).map((prediction) => ({
+        if (status === 'OK' && Array.isArray(predictions) && predictions.length > 0) {
+          const nextResults = predictions.slice(0, 8).map((prediction) => ({
             title: prediction.structured_formatting?.main_text || prediction.description,
             address: prediction.description,
             placeId: prediction.place_id,
             distance: prediction.distance_meters ? prediction.distance_meters / 1000 : null,
-          }))
-          : [];
-
-        searchCacheRef.current.set(cacheKey, nextResults);
-        setRemoteResults(nextResults);
-        setIsSearchingLocations(false);
+          }));
+          searchCacheRef.current.set(cacheKey, nextResults);
+          setRemoteResults(nextResults);
+          setIsSearchingLocations(false);
+        } else {
+          // OpenStreetMap Nominatim Fallback search so query never says "no nearby location"
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query.trim())}&countrycodes=in&limit=6`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (latestSearchRef.current !== requestId) return;
+              const fallbackResults = (Array.isArray(data) ? data : []).map((item) => ({
+                title: item.display_name?.split(',')[0] || item.name || 'Location',
+                address: item.display_name,
+                coords: [parseFloat(item.lon), parseFloat(item.lat)],
+              }));
+              searchCacheRef.current.set(cacheKey, fallbackResults);
+              setRemoteResults(fallbackResults);
+            })
+            .catch(() => {
+              if (latestSearchRef.current === requestId) setRemoteResults([]);
+            })
+            .finally(() => {
+              if (latestSearchRef.current === requestId) setIsSearchingLocations(false);
+            });
+        }
       });
     }, 350);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [query, zoneBounds, pickupCoords]);
+  }, [query, pickupCoords]);
 
   const searchResults = useMemo(() => {
     const merged = [...remoteResults, ...localSearchResults];
