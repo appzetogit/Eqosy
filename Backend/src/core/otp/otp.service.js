@@ -34,9 +34,19 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         const digits = String(phone || '').replace(/\D/g, '');
         const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
 
-        // EXACT DLT TEMPLATE provided by user:
-        // "Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC"
-        const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
+        // Professional Eqosy SMS OTP Template
+        const template = process.env.SMS_DLT_TEMPLATE_TEXT || 'Welcome to ##var##. Your OTP for registration is ##var##.BGADEC';
+        let message = '';
+        if (template.includes('##var##')) {
+          const parts = template.split('##var##');
+          if (parts.length > 2) {
+            message = `${parts[0]}Eqosy${parts[1]}${otp}${parts.slice(2).join('')}`;
+          } else {
+            message = `${parts[0]}${otp}${parts.slice(1).join('')}`;
+          }
+        } else {
+          message = `Welcome to Eqosy. Your OTP for verification is ${otp}.`;
+        }
 
         // SMS India Hub HTTP GET API — query param names are case-sensitive per SOP
         const url = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');

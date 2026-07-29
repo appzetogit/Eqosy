@@ -201,6 +201,22 @@ export const useRestaurantNotifications = () => {
   };
 
   const handleIncomingOrderAlert = (orderData) => {
+    // Ensure order belongs strictly to the currently logged in restaurant
+    const targetRestaurantId = String(
+      orderData?.restaurantId?._id ||
+      orderData?.restaurantId ||
+      orderData?.restaurant_id ||
+      orderData?.restaurant ||
+      ''
+    ).trim();
+
+    const currentRestaurantId = String(restaurantId || '').trim();
+
+    if (currentRestaurantId && targetRestaurantId && targetRestaurantId !== currentRestaurantId) {
+      debugLog(`[RestaurantNotification] Ignored order alert for restaurant ${targetRestaurantId} (current logged in: ${currentRestaurantId})`);
+      return;
+    }
+
     if (!shouldProcessOrderAlert(orderData)) {
       return;
     }

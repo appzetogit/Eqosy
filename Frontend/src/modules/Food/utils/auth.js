@@ -150,6 +150,13 @@ export function clearModuleAuth(module) {
   localStorage.removeItem(`${module}_refreshToken`);
   localStorage.removeItem(`${module}_authenticated`);
   localStorage.removeItem(`${module}_user`);
+  if (module === "user") {
+    localStorage.removeItem("userToken");
+    localStorage.removeItem("token");
+    localStorage.removeItem("userInfo");
+    localStorage.removeItem("role");
+    localStorage.removeItem("chatRole");
+  }
   // Clear cached FCM web token for this module
   localStorage.removeItem(`fcm_web_registered_token_${module}`);
   if (module === "restaurant") {
@@ -255,9 +262,19 @@ export function setAuthData(module, token, user, refreshToken = null) {
     }
     localStorage.setItem(authKey, 'true');
 
+    if (module === "user") {
+      localStorage.setItem("userToken", token);
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", "user");
+      localStorage.setItem("chatRole", "user");
+    }
+
     if (user) {
       try {
         localStorage.setItem(userKey, JSON.stringify(user));
+        if (module === "user") {
+          localStorage.setItem("userInfo", JSON.stringify(user));
+        }
       } catch (userError) {
         console.warn('Failed to store user data, but token was stored:', userError);
         // Don't throw - token storage is more important

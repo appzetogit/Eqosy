@@ -66,7 +66,7 @@ export function useZone(location, options = {}) {
   // Detect zone when location is available
   const detectZone = useCallback(async (lat, lng) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setZoneStatus("OUT_OF_SERVICE");
+      setZoneStatus("loading");
       setZoneId(null);
       setZone(null);
       return;
@@ -163,7 +163,8 @@ export function useZone(location, options = {}) {
         setZone(cachedZone ? JSON.parse(cachedZone) : null);
         setZoneStatus("IN_SERVICE");
       } else {
-        setZoneStatus("OUT_OF_SERVICE");
+        // Do NOT set OUT_OF_SERVICE when location is not available yet!
+        setZoneStatus("loading");
         setZoneId(null);
         setZone(null);
       }

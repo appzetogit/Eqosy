@@ -32,11 +32,14 @@ const readLocalUserToken = () => {
     localStorage.getItem('token'),
   ].filter(Boolean);
 
-  return (
-    candidates.find(
-      (token) => String(getTokenPayload(token)?.role || '').toLowerCase() === 'user',
-    ) || candidates[0] || ''
-  );
+  if (!candidates.length) return '';
+
+  const userRoleToken = candidates.find((token) => {
+    const role = String(getTokenPayload(token)?.role || '').toLowerCase();
+    return role === 'user' || role === '';
+  });
+
+  return userRoleToken || candidates[0] || '';
 };
 
 export const getLocalUserToken = readLocalUserToken;

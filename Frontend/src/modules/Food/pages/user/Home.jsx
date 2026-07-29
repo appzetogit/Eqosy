@@ -483,8 +483,25 @@ const RecommendedFoodImageStrip = React.memo(
         if (slides.length >= 8) break;
       }
 
+      if (slides.length === 0) {
+        const coverImgs = Array.isArray(restaurant?.coverImages) ? restaurant.coverImages : [];
+        const fallbackImgRaw = coverImgs[0]?.url || coverImgs[0] || restaurant?.profileImage?.url || restaurant?.profileImage;
+        const fallbackImg = resolveImageSrc(fallbackImgRaw);
+        if (fallbackImg) {
+          const price = Number(restaurant?.featuredPrice || 165);
+          slides.push({
+            id: `fallback-${restaurant?._id || restaurant?.id}`,
+            image: fallbackImg,
+            name: restaurant?.featuredDish || restaurant?.restaurantName || restaurant?.name || "Special Dish",
+            price,
+            originalPrice: restaurant?.featuredOriginalPrice ? Number(restaurant.featuredOriginalPrice) : Math.round(price * 1.4),
+            foodType: restaurant?.featuredFoodType || (restaurant?.pureVegRestaurant ? "Veg" : "Non-Veg"),
+          });
+        }
+      }
+
       return slides;
-    }, [restaurant?.recommendedImages, restaurant?.featuredDish, restaurant?.featuredPrice, restaurant?.featuredOriginalPrice, restaurant?.featuredFoodType, restaurant?.pureVegRestaurant, restaurant?.name, resolveImageSrc]);
+    }, [restaurant?.recommendedImages, restaurant?.coverImages, restaurant?.profileImage, restaurant?.featuredDish, restaurant?.featuredPrice, restaurant?.featuredOriginalPrice, restaurant?.featuredFoodType, restaurant?.pureVegRestaurant, restaurant?.name, restaurant?.restaurantName, restaurant?._id, restaurant?.id, resolveImageSrc]);
 
     const handleScroll = useCallback(() => {
       const container = scrollContainerRef.current;
@@ -3152,7 +3169,7 @@ export default function Home() {
             <Loader2 className="w-10 h-10 animate-spin text-primary-orange" />
           </div>
         )}
-        {!zoneLoading && isOutOfService && (
+        {!zoneLoading && isOutOfService && Number.isFinite(effectiveLocation?.latitude) && Number.isFinite(effectiveLocation?.longitude) && (
           <motion.div
             key="out-of-service-panel"
             initial={{ opacity: 0, y: 6 }}
@@ -3163,7 +3180,7 @@ export default function Home() {
             <OutOfServiceView />
           </motion.div>
         )}
-        {!zoneLoading && !isOutOfService && superAppVertical === "food" && (
+        {!zoneLoading && (!isOutOfService || !Number.isFinite(effectiveLocation?.latitude) || !Number.isFinite(effectiveLocation?.longitude)) && superAppVertical === "food" && (
           <motion.div
             key="food-panel"
             initial={{ opacity: 0 }}

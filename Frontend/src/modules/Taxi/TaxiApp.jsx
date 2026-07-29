@@ -416,17 +416,14 @@ const UserProtectedRoute = () => {
   const location = useLocation();
 
   if (!getLocalUserToken()) {
-    const loginPath = '/food/user/auth/login';
-    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return <Outlet />;
 };
 
 const UserHomeRoute = ({ taxiPrefixed = true }) => (
-  getLocalUserToken()
-    ? <UserHome />
-    : <Navigate to="/food/user/auth/login" replace />
+  <UserHome />
 );
 
 const UserAccountInvalidationListener = () => {

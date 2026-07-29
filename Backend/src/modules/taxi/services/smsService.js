@@ -4,7 +4,8 @@ import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 
 const SMS_INDIA_HUB_ENDPOINT = 'http://cloud.smsindiahub.in/api/mt/SendSMS';
 const DLT_TEMPLATE_TEXT =
-  'Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC';
+  process.env.SMS_DLT_TEMPLATE_TEXT ||
+  'Welcome to ##var##. Your OTP for registration is ##var##.BGADEC';
 const DEFAULT_BRAND_NAME = 'Eqosy';
 
 const isTruthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -126,8 +127,17 @@ const getConfiguredBrandName = async () => {
   }
 };
 
-const renderOtpMessage = ({ appName, otp }) =>
-  DLT_TEMPLATE_TEXT.replace('##var##', String(appName)).replace('##var##', String(otp));
+const renderOtpMessage = ({ appName = DEFAULT_BRAND_NAME, otp }) => {
+  const template = process.env.SMS_DLT_TEMPLATE_TEXT || DLT_TEMPLATE_TEXT;
+  if (template.includes('##var##')) {
+    const parts = template.split('##var##');
+    if (parts.length > 2) {
+      return `${parts[0]}${appName}${parts[1]}${otp}${parts.slice(2).join('')}`;
+    }
+    return `${parts[0]}${otp}${parts.slice(1).join('')}`;
+  }
+  return `Welcome to ${appName}. Your OTP for registration is ${otp}.`;
+};
 
 const isSuccessfulProviderResponse = (response, responseText) => {
   const parsed = parseProviderResponse(responseText);

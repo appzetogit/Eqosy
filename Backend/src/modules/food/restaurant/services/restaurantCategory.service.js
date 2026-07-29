@@ -172,26 +172,29 @@ export async function listPublicCategories(query = {}) {
     }
 
     const eligibleRestaurantIds = await FoodRestaurant.distinct('_id', restaurantFilter);
-    if (!eligibleRestaurantIds.length) {
-        return { categories: [], total: 0, page, limit };
-    }
 
-    const approvedCategoryIds = await FoodItem.distinct('categoryId', {
-        approvalStatus: 'approved',
-        isActive: { $ne: false },
-        isAvailable: { $ne: false },
-        categoryId: { $ne: null },
-        restaurantId: { $in: eligibleRestaurantIds }
-    });
-
-    if (!approvedCategoryIds.length) {
-        return { categories: [], total: 0, page, limit };
-    }
+    const approvedCategoryIds = eligibleRestaurantIds.length
+        ? await FoodItem.distinct('categoryId', {
+            approvalStatus: 'approved',
+            isActive: { $ne: false },
+            isAvailable: { $ne: false },
+            categoryId: { $ne: null },
+            restaurantId: { $in: eligibleRestaurantIds }
+        })
+        : [];
 
     const filter = {
-        _id: { $in: approvedCategoryIds },
         isActive: true,
-        $and: [{ $or: GLOBAL_CATEGORY_FILTER }, { $or: APPROVED_CATEGORY_FILTER }]
+        $and: [
+            { $or: APPROVED_CATEGORY_FILTER },
+            {
+                $or: [
+                    { restaurantId: null },
+                    { restaurantId: { $exists: false } },
+                    ...(approvedCategoryIds.length ? [{ _id: { $in: approvedCategoryIds } }] : [])
+                ]
+            }
+        ]
     };
 
     if (search) {

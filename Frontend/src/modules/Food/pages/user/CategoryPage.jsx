@@ -1546,7 +1546,7 @@ export default function CategoryPage() {
       </div>
 
       {/* Content */}
-      {isOutOfService ? (
+      {isOutOfService && Number.isFinite(effectiveLocation?.latitude) && Number.isFinite(effectiveLocation?.longitude) ? (
         <OutOfServiceView />
       ) : (
         <div className="px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">

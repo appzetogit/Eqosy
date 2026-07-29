@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react"
 import { locationAPI, userAPI } from "@food/api"
 
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 // BigDataCloud reverse-geocode is expensive/noisy if many components mount `useLocation()`.
 // This module-level guard dedupes concurrent calls + rate-limits starts across the whole app.
@@ -1032,7 +1032,7 @@ export function useLocation() {
                   formattedAddress: "Select location"
                 }
                 setLocation(defaultLocation)
-                
+
                 let userFriendlyError = err.message;
                 if (err.code === 1) {
                   userFriendlyError = "Please turn on location services and allow access in your browser settings.";
@@ -1043,7 +1043,7 @@ export function useLocation() {
                 } else if (!userFriendlyError) {
                   userFriendlyError = "An unexpected error occurred while fetching your location.";
                 }
-                
+
                 setError(userFriendlyError)
                 setPermissionGranted(false)
                 if (showLoading) setLoading(false)
@@ -1052,7 +1052,7 @@ export function useLocation() {
             } catch (fallbackErr) {
               debugWarn("?? Fallback retrieval failed:", fallbackErr)
               setLocation(null)
-              
+
               let userFriendlyError = err.message;
               if (err.code === 1) {
                 userFriendlyError = "Please turn on location services and allow access in your browser settings.";
@@ -1272,7 +1272,7 @@ export function useLocation() {
                     : loc.address,
                 formattedAddress:
                   existingAddress?.formattedAddress &&
-                  existingAddress.formattedAddress !== "Select location"
+                    existingAddress.formattedAddress !== "Select location"
                     ? existingAddress.formattedAddress
                     : loc.formattedAddress,
               }
@@ -1516,33 +1516,21 @@ export function useLocation() {
             if (result.state === 'granted') {
               permissionGranted = true;
             } else {
-              debugLog(`?? Geolocation permission is '${result.state}' - Waiting for user action (avoiding prompt on load)`);
+              debugLog(`?? Geolocation permission is '${result.state}'`);
             }
           } catch (permErr) {
             debugWarn("?? Permission query failed:", permErr);
           }
-        } else {
-          // Fallback for browsers without permissions API - assume not granted to be safe
-          debugLog("?? Permissions API not available - Skipping auto-start");
         }
 
-        // If permission NOT granted, and we don't have a specific user request (this is page load),
-        // we should SKIP automatic fetching/watching to allow the user to choose when to enable it.
-        // UNLESS we already have a valid initial location from localStorage/DB, in which case we might want to refresh?
-        // Actually, even then, we shouldn't prompt.
-        if (!permissionGranted) {
-          // If we have an initial location, we are fine (it's displayed).
-          // If we don't, we show "Select Location".
-          // In either case, we avoid the PROMPT.
-          // Ensure loading is false so UI doesn't hang
+        // If permission is not granted but we have NO initial location, automatically attempt fetching location
+        if (!permissionGranted && hasInitialLocation) {
           setLoading(false);
           return;
         }
 
-        debugLog("?? Permission granted! Fetching/Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
+        debugLog("?? Fetching/Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
 
-        // Only fetch once on initial app open if we have no stored coordinates yet.
-        // Do not keep re-geocoding just because the address text is placeholder.
         const shouldFetch = shouldForceRefresh || !hasInitialLocation
 
         if (shouldFetch) {

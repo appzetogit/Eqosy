@@ -220,20 +220,21 @@ const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
         }));
     }
 
-    const recommendedItems = await FoodItem.find({
+    // Query all approved active food items with valid images (prioritizing isRecommended: true first)
+    const foodItems = await FoodItem.find({
         restaurantId: { $in: restaurantIds },
         approvalStatus: 'approved',
-        isRecommended: true,
         isActive: { $ne: false },
-        isAvailable: { $ne: false }
+        isAvailable: { $ne: false },
+        image: { $exists: true, $ne: '' }
     })
-        .select('restaurantId image name price originalPrice foodType discountAmount discountType')
-        .sort({ createdAt: -1 })
+        .select('restaurantId image name price originalPrice foodType discountAmount discountType isRecommended createdAt')
+        .sort({ isRecommended: -1, createdAt: -1 })
         .lean();
 
     const recommendedByRestaurantId = new Map();
 
-    for (const item of recommendedItems) {
+    for (const item of foodItems) {
         const restaurantId = String(item?.restaurantId || '');
         const image = typeof item?.image === 'string' ? item.image.trim() : '';
         if (!restaurantId || !image) continue;

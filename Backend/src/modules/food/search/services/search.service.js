@@ -232,38 +232,35 @@ export const getAdminCategories = async (query = {}) => {
     }
 
     const eligibleRestaurantIds = await FoodRestaurant.distinct('_id', restaurantFilter);
-    if (!eligibleRestaurantIds.length) {
-        return [];
-    }
 
-    const eligibleCategoryIds = await FoodItem.distinct('categoryId', {
-        approvalStatus: 'approved',
-        isActive: { $ne: false },
-        isAvailable: { $ne: false },
-        categoryId: { $ne: null },
-        restaurantId: { $in: eligibleRestaurantIds }
-    });
-
-    if (!eligibleCategoryIds.length) {
-        return [];
-    }
+    const eligibleCategoryIds = eligibleRestaurantIds.length
+        ? await FoodItem.distinct('categoryId', {
+            approvalStatus: 'approved',
+            isActive: { $ne: false },
+            isAvailable: { $ne: false },
+            categoryId: { $ne: null },
+            restaurantId: { $in: eligibleRestaurantIds }
+        })
+        : [];
 
     const filter = { 
-        isActive: true, 
-        isApproved: true,
-        _id: { $in: eligibleCategoryIds },
+        isActive: true,
         $or: [
-            { restaurantId: { $exists: false } },
             { restaurantId: null },
-            { restaurantId: { $eq: undefined } }
+            { restaurantId: { $exists: false } },
+            ...(eligibleCategoryIds.length ? [{ _id: { $in: eligibleCategoryIds } }] : [])
         ]
     };
 
     if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
-        filter.$or = [
-            { zoneId: new mongoose.Types.ObjectId(query.zoneId) },
-            { zoneId: { $exists: false } },
-            { zoneId: null }
+        filter.$and = [
+            {
+                $or: [
+                    { zoneId: new mongoose.Types.ObjectId(query.zoneId) },
+                    { zoneId: { $exists: false } },
+                    { zoneId: null }
+                ]
+            }
         ];
     }
 

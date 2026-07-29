@@ -289,35 +289,42 @@ export async function notifyRestaurantNewOrder(orderDoc) {
   try {
     if (!orderDoc || !canExposeOrderToRestaurant(orderDoc)) return;
 
+    const targetRestaurantId = resolveRoomOwnerId(orderDoc.restaurantId);
+    if (!targetRestaurantId) {
+      logger.warn(`notifyRestaurantNewOrder: Missing restaurantId for order ${orderDoc._id || ''}`);
+      return;
+    }
+
     const io = getIO();
     if (io) {
       const payload = {
         ...orderDoc.toObject(),
+        restaurantId: targetRestaurantId,
         orderMongoId: orderDoc._id?.toString?.() || undefined,
         orderId: orderDoc.order_id || orderDoc._id?.toString?.(),
       };
       logger.info(
-        `[RestaurantOrders] Emitting new_order to ${rooms.restaurant(orderDoc.restaurantId)} for order ${orderDoc._id?.toString?.() || ''}`,
+        `[RestaurantOrders] Emitting new_order strictly to ${rooms.restaurant(targetRestaurantId)} for order ${orderDoc._id?.toString?.() || ''}`,
       );
-      io.to(rooms.restaurant(orderDoc.restaurantId)).emit("new_order", payload);
+      io.to(rooms.restaurant(targetRestaurantId)).emit("new_order", payload);
     }
 
-    const restaurantOwnerId = resolveRoomOwnerId(orderDoc.restaurantId);
     await notifyOwnersSafely(
-      [{ ownerType: "RESTAURANT", ownerId: restaurantOwnerId }],
+      [{ ownerType: "RESTAURANT", ownerId: targetRestaurantId }],
       {
-        title: "New order received",
+        title: "New order received 🔔",
         body: `Order #${orderDoc.order_id || orderDoc._id} is waiting for review.`,
         data: {
           type: "new_order",
           orderId: orderDoc._id.toString(),
           orderMongoId: orderDoc._id?.toString?.() || "",
+          restaurantId: targetRestaurantId,
           link: `/restaurant/orders/${orderDoc._id?.toString?.() || ""}`,
         },
       },
     );
   } catch (notifyErr) {
-    // Do not block order/payment flow if notification fails.
+    logger.warn(`notifyRestaurantNewOrder failed: ${notifyErr?.message || notifyErr}`);
   }
 }
 

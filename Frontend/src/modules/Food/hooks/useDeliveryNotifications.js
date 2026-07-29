@@ -359,6 +359,25 @@ export const useDeliveryNotifications = () => {
   }, []);
 
   const handleIncomingOrderAlert = useCallback((orderData = {}) => {
+    const currentPartnerId = String(deliveryPartnerId || '').trim();
+    const assignedPartnerId = String(
+      orderData?.dispatch?.deliveryPartnerId?._id ||
+      orderData?.dispatch?.deliveryPartnerId ||
+      orderData?.deliveryPartnerId ||
+      ''
+    ).trim();
+
+    // If order is assigned/accepted by a different delivery partner, ignore!
+    if (currentPartnerId && assignedPartnerId && assignedPartnerId !== currentPartnerId) {
+      debugLog(`[DeliveryNotification] Ignored order alert assigned to partner ${assignedPartnerId} (current partner: ${currentPartnerId})`);
+      return;
+    }
+
+    const dispatchStatus = String(orderData?.dispatch?.status || '').toLowerCase();
+    if (dispatchStatus === 'accepted' && assignedPartnerId !== currentPartnerId) {
+      return;
+    }
+
     if (!shouldProcessOrderAlert(orderData)) {
       return;
     }
@@ -370,7 +389,7 @@ export const useDeliveryNotifications = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       showBackgroundOrderNotification(orderData);
     }
-  }, [playNotificationSound, showBackgroundOrderNotification, startAlertLoop]);
+  }, [deliveryPartnerId, playNotificationSound, showBackgroundOrderNotification, startAlertLoop]);
 
   const recoverDeliveryState = useCallback(async () => {
     if (!deliveryPartnerId) return;
