@@ -16,23 +16,29 @@ const resolveApiBaseUrl = () => {
       ? String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, "")
       : "";
 
-  if (!envValue || !envValue.startsWith("http")) return envValue || "/api/v1";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  // Safety fallback:
-  // If a localhost API URL is baked into a deployed build, the browser on production
-  // machines will try connecting to THEIR localhost and requests will hang/timeout.
-  // In that case, force same-origin API path so production routing/proxy can handle it.
-  try {
-    const parsed = new URL(envValue);
-    if (typeof window !== "undefined") {
-      const isEnvLocal = LOCAL_HOSTS.has(parsed.hostname);
-      const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
-      if (isEnvLocal && !isBrowserLocal) {
-        return "/api/v1";
+  if (!envValue) {
+    return origin ? `${origin}/api/v1` : "/api/v1";
+  }
+
+  if (envValue.startsWith("http")) {
+    try {
+      const parsed = new URL(envValue);
+      if (typeof window !== "undefined") {
+        const isEnvLocal = LOCAL_HOSTS.has(parsed.hostname);
+        const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
+        if (isEnvLocal && !isBrowserLocal) {
+          return `${origin}/api/v1`;
+        }
       }
-    }
-  } catch (_) {
-    // Keep original value when parsing fails (relative/custom values).
+      return envValue;
+    } catch (_) {}
+  }
+
+  // If envValue is relative (e.g. "/api/v1"), attach origin in browser so Axios buildURL never throws Invalid URL
+  if (origin && !envValue.startsWith("http")) {
+    return `${origin}${envValue.startsWith("/") ? envValue : "/" + envValue}`;
   }
 
   return envValue;

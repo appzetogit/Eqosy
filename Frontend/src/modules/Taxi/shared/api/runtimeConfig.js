@@ -18,16 +18,17 @@ const sanitizeHost = (urlStr) => {
 
 const DEFAULT_BACKEND_ORIGIN = isBrowser && !isBrowserLocal ? window.location.origin : 'http://localhost:5000';
 
-const trimTrailingSlash = (value = '') => value.replace(/\/+$/, '');
-
 const configuredBase = import.meta.env.VITE_API_BASE_URL
   ? sanitizeHost(import.meta.env.VITE_API_BASE_URL)
   : '/api/v1';
 
-const rawApiBase = trimTrailingSlash(configuredBase || `${DEFAULT_BACKEND_ORIGIN}/api/v1`);
-export const API_BASE_URL = rawApiBase.endsWith('/taxi') ? rawApiBase : `${rawApiBase}/taxi`;
-
 const relativeOrigin = isBrowser ? window.location.origin : DEFAULT_BACKEND_ORIGIN;
+
+const rawApiBase = configuredBase && configuredBase.startsWith('http')
+  ? trimTrailingSlash(configuredBase)
+  : trimTrailingSlash(`${relativeOrigin}${configuredBase ? (configuredBase.startsWith('/') ? configuredBase : '/' + configuredBase) : '/api/v1'}`);
+
+export const API_BASE_URL = rawApiBase.endsWith('/taxi') ? rawApiBase : `${rawApiBase}/taxi`;
 
 const derivedOrigin = API_BASE_URL.startsWith('http')
   ? API_BASE_URL.replace(/\/api(?:\/v1)?(?:\/taxi)?$/, '')

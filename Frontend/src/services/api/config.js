@@ -7,22 +7,33 @@
 const resolveConfigApiBaseUrl = () => {
   const envValue =
     typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL
-      ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "")
+      ? String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, "")
       : "";
 
-  if (!envValue || !envValue.startsWith("http")) return envValue || "/api/v1";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  try {
-    const parsed = new URL(envValue);
-    if (typeof window !== "undefined") {
-      const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-      const isEnvLocal = LOCAL_HOSTS.has(parsed.hostname);
-      const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
-      if (isEnvLocal && !isBrowserLocal) {
-        return "/api/v1";
+  if (!envValue) {
+    return origin ? `${origin}/api/v1` : "/api/v1";
+  }
+
+  if (envValue.startsWith("http")) {
+    try {
+      const parsed = new URL(envValue);
+      if (typeof window !== "undefined") {
+        const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+        const isEnvLocal = LOCAL_HOSTS.has(parsed.hostname);
+        const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
+        if (isEnvLocal && !isBrowserLocal) {
+          return `${origin}/api/v1`;
+        }
       }
-    }
-  } catch (_) {}
+      return envValue;
+    } catch (_) {}
+  }
+
+  if (origin && !envValue.startsWith("http")) {
+    return `${origin}${envValue.startsWith("/") ? envValue : "/" + envValue}`;
+  }
 
   return envValue;
 };
