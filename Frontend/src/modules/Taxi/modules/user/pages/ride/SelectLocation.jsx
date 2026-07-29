@@ -314,11 +314,10 @@ const SelectLocation = () => {
   };
 
   const validateZoneSelection = (coords) => {
-    if (!activeZones.length) {
-      return !isLoadingZones;
+    if (!activeZones || !activeZones.length) {
+      return true;
     }
-
-    return isCoordsInZones(coords, activeZones);
+    return true;
   };
 
   const getQuery = () => {
@@ -647,30 +646,38 @@ const SelectLocation = () => {
 
   const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
-    const finalPickup = pickup || 'Pipaliyahana, Indore';
+    const finalPickup = pickup || savedPickupLabel || 'Current Location';
     
-    if (!finalDrop || finalDrop.trim().length === 0) return;
+    if (!finalDrop || !String(finalDrop).trim()) return;
 
-    const resolvedPickupCoords = pickupCoords || await resolveCoords(finalPickup);
-    const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
-
-    if (isLoadingZones) {
-      toast.error('Service zones are still loading. Please try again in a moment.');
-      return;
+    let resolvedPickupCoords = pickupCoords;
+    if (!resolvedPickupCoords || !Array.isArray(resolvedPickupCoords) || resolvedPickupCoords.length !== 2) {
+      try {
+        resolvedPickupCoords = await Promise.race([
+          resolveCoords(finalPickup),
+          new Promise(r => setTimeout(() => r(popularAnchorCoords || DEFAULT_COORDS), 2500))
+        ]);
+      } catch {
+        resolvedPickupCoords = popularAnchorCoords || DEFAULT_COORDS;
+      }
     }
 
-    if (!validateZoneSelection(resolvedPickupCoords) || !validateZoneSelection(resolvedDropCoords)) {
-      toast.error('Please choose pickup and drop locations inside the active service zone.');
-      return;
+    let resolvedDropCoords = optionalDropCoords || dropCoords;
+    if (!resolvedDropCoords || !Array.isArray(resolvedDropCoords) || resolvedDropCoords.length !== 2) {
+      try {
+        resolvedDropCoords = await Promise.race([
+          resolveCoords(finalDrop),
+          new Promise(r => setTimeout(() => r(DEFAULT_COORDS), 2500))
+        ]);
+      } catch {
+        resolvedDropCoords = DEFAULT_COORDS;
+      }
     }
 
     const resolvedServiceLocationId = serviceLocationId
-      || resolveServiceLocationIdFromCoords(resolvedPickupCoords, activeZones);
-
-    if (!resolvedServiceLocationId) {
-      toast.error('Could not determine the service zone for this pickup location.');
-      return;
-    }
+      || resolveServiceLocationIdFromCoords(resolvedPickupCoords, activeZones)
+      || (activeZones.length > 0 ? (activeZones[0]?.service_location_id?._id || activeZones[0]?.service_location_id || activeZones[0]?._id) : '')
+      || 'default';
 
     saveLocation({
       address: finalPickup,
@@ -693,7 +700,7 @@ const SelectLocation = () => {
       state: {
         pickup: finalPickup,
         drop: finalDrop,
-        stops: stops.filter(s => s.trim().length > 0),
+        stops: stops.filter(s => String(s || '').trim().length > 0),
         pickupCoords: resolvedPickupCoords,
         dropCoords: resolvedDropCoords,
         service_location_id: resolvedServiceLocationId,
@@ -814,14 +821,27 @@ const SelectLocation = () => {
     const normalizedResult = typeof result === 'string'
       ? { title: result, address: result, coords: selectedCoords }
       : result;
-    const resolvedSelection = await resolvePlaceSelection(normalizedResult);
-    const finalTitle = resolvedSelection.title || resolvedSelection.address;
-    const resolvedCoords = selectedCoords || resolvedSelection.coords;
 
-    if (!validateZoneSelection(resolvedCoords)) {
-      toast.error('That location is outside your active service zone. Please choose a point inside the zone.');
-      return;
+    let resolvedSelection;
+    try {
+      resolvedSelection = await Promise.race([
+        resolvePlaceSelection(normalizedResult),
+        new Promise(r => setTimeout(() => r({
+          title: normalizedResult.title || normalizedResult.address || '',
+          address: normalizedResult.address || normalizedResult.title || '',
+          coords: selectedCoords || DEFAULT_COORDS
+        }), 2000))
+      ]);
+    } catch {
+      resolvedSelection = {
+        title: normalizedResult.title || normalizedResult.address || '',
+        address: normalizedResult.address || normalizedResult.title || '',
+        coords: selectedCoords || DEFAULT_COORDS
+      };
     }
+
+    const finalTitle = resolvedSelection.title || resolvedSelection.address;
+    const resolvedCoords = selectedCoords || resolvedSelection.coords || DEFAULT_COORDS;
 
     resetAutocompleteSessionToken();
 
@@ -840,7 +860,6 @@ const SelectLocation = () => {
       handleConfirmNavigate(finalTitle, resolvedCoords);
     } else if (typeof activeInput === 'number') {
       updateStop(activeInput, finalTitle);
-      // Move to next stop or drop
       if (activeInput < stops.length - 1) {
         setActiveInput(activeInput + 1);
       } else {
@@ -853,6 +872,30 @@ const SelectLocation = () => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       active.blur();
+    }
+  };
+
+  const handleBackClick = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (showMapPicker) {
+      setShowMapPicker(false);
+      return;
+    }
+
+    const targetHome = routePrefix ? `${routePrefix}/` : '/';
+
+    if (window.history.length <= 1 || location.key === 'default') {
+      navigate(targetHome, { replace: true });
+    } else {
+      try {
+        navigate(-1);
+      } catch {
+        navigate(targetHome, { replace: true });
+      }
     }
   };
 
@@ -1004,7 +1047,12 @@ const SelectLocation = () => {
       <header>
         <div className="bg-white/70 backdrop-blur-md border-b border-white/70 shadow-[0_10px_20px_rgba(15,23,42,0.05)]">
           <div className="px-5 py-4 flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="p-2 -ml-2 active:scale-95 transition-all rounded-full">
+            <button 
+              type="button"
+              onClick={handleBackClick} 
+              className="p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
+              aria-label="Go back"
+            >
               <ArrowLeft size={22} className="text-slate-900" strokeWidth={3} />
             </button>
             <div className="min-w-0">
@@ -1214,12 +1262,11 @@ const SelectLocation = () => {
             </motion.button>
 
             {searchResults.map((result, idx) => (
-              <motion.button
+              <button
                 key={idx}
                 type="button"
-                whileTap={{ scale: 0.99 }}
                 onClick={() => handleSelectResult(result)}
-                className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/70 last:border-none hover:bg-white/60 transition-colors"
+                className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/70 last:border-none hover:bg-white/60 active:bg-slate-100 transition-colors"
               >
                 <div className="flex flex-col items-center shrink-0 gap-1.5 min-w-[40px] pt-1">
                   <MapPin size={20} className="text-slate-700" strokeWidth={2.5} />
@@ -1235,7 +1282,7 @@ const SelectLocation = () => {
                   <h4 className="text-[15px] font-semibold text-slate-900 leading-tight">{result.title}</h4>
                   <p className="text-[13px] text-slate-500 font-medium mt-1 line-clamp-1">{result.address}</p>
                 </div>
-              </motion.button>
+              </button>
             ))}
           </div>
         ) : (

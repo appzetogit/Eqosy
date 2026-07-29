@@ -27,12 +27,18 @@ const configuredBase = import.meta.env.VITE_API_BASE_URL
 const rawApiBase = trimTrailingSlash(configuredBase || `${DEFAULT_BACKEND_ORIGIN}/api/v1`);
 export const API_BASE_URL = rawApiBase.endsWith('/taxi') ? rawApiBase : `${rawApiBase}/taxi`;
 
+const relativeOrigin = isBrowser ? window.location.origin : DEFAULT_BACKEND_ORIGIN;
+
+const derivedOrigin = API_BASE_URL.startsWith('http')
+  ? API_BASE_URL.replace(/\/api(?:\/v1)?(?:\/taxi)?$/, '')
+  : relativeOrigin;
+
 export const BACKEND_ORIGIN = trimTrailingSlash(
   sanitizeHost(
     import.meta.env.VITE_BACKEND_ORIGIN ||
       import.meta.env.VITE_SOCKET_URL ||
       import.meta.env.VITE_ASSET_BASE_URL,
-  ) || API_BASE_URL.replace(/\/api(?:\/v1)?(?:\/taxi)?$/, '') || DEFAULT_BACKEND_ORIGIN,
+  ) || derivedOrigin || DEFAULT_BACKEND_ORIGIN,
 );
 
 export const BACKEND_LABEL = BACKEND_ORIGIN || DEFAULT_BACKEND_ORIGIN;

@@ -1,7 +1,13 @@
 import { io } from 'socket.io-client';
 import { BACKEND_ORIGIN } from './runtimeConfig';
 
-const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN;
+const resolveTaxiSocketOrigin = () => {
+  const envUrl = String(import.meta.env.VITE_SOCKET_URL || '').trim();
+  if (envUrl && envUrl.startsWith('http')) return envUrl;
+  if (BACKEND_ORIGIN && BACKEND_ORIGIN.startsWith('http')) return BACKEND_ORIGIN;
+  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
+};
+const SOCKET_ORIGIN = resolveTaxiSocketOrigin();
 
 const decodeBase64Url = (value) => {
   const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');

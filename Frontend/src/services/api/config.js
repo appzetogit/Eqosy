@@ -29,6 +29,23 @@ const resolveConfigApiBaseUrl = () => {
 
 export const API_BASE_URL = resolveConfigApiBaseUrl();
 
+export const resolveSocketOrigin = (apiBaseUrl = API_BASE_URL) => {
+  const isBrowser = typeof window !== 'undefined';
+  const str = String(apiBaseUrl || '').trim();
+  if (!str) {
+    return isBrowser ? window.location.origin : 'http://localhost:5000';
+  }
+  try {
+    const base = str.startsWith('http') ? undefined : (isBrowser ? window.location.origin : undefined);
+    const parsed = new URL(str, base);
+    return parsed.origin;
+  } catch {
+    return isBrowser ? window.location.origin : 'http://localhost:5000';
+  }
+};
+
+export const SOCKET_ORIGIN = resolveSocketOrigin(API_BASE_URL);
+
 // Minimal shape so existing API_ENDPOINTS.* references do not break
 export const API_ENDPOINTS = {
   AUTH: { SEND_OTP: "", VERIFY_OTP: "", REGISTER: "", LOGIN: "", ME: "", LOGOUT: "", REFRESH_TOKEN: "" },

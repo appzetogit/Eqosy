@@ -136,7 +136,7 @@ export const isCoordsInZones = (coords, zones = []) => {
 
 export const resolveServiceLocationIdFromCoords = (coords, zones = []) => {
   if (!Array.isArray(coords) || coords.length !== 2) {
-    return '';
+    return zones.length ? String(getZoneServiceLocationId(zones[0]) || '') : '';
   }
 
   const [lng, lat] = coords;
@@ -156,6 +156,14 @@ export const resolveServiceLocationIdFromCoords = (coords, zones = []) => {
       if (serviceLocationId) {
         return String(serviceLocationId);
       }
+    }
+  }
+
+  // Fallback to first zone's service location ID if available
+  if (zones.length > 0) {
+    for (const zone of zones) {
+      const id = getZoneServiceLocationId(zone);
+      if (id) return String(id);
     }
   }
 

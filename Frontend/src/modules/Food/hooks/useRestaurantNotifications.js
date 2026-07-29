@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
-import { API_BASE_URL } from '@food/api/config';
+import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import { restaurantAPI } from '@food/api';
 import alertSound from '@food/assets/audio/alert.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
@@ -328,138 +328,14 @@ export const useRestaurantNotifications = () => {
   }, []);
 
   useEffect(() => {
-    if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
-      setIsConnected(false);
-      return;
-    }
     if (!restaurantId) {
       debugLog('? Waiting for restaurantId...');
       return;
     }
 
-    // Normalize backend URL - use simpler, more robust approach
-    let backendUrl = API_BASE_URL;
-    
-    // Step 1: Extract protocol and hostname using URL parsing if possible
-    try {
-      const urlObj = new URL(backendUrl);
-      // Remove /api from pathname
-      let pathname = urlObj.pathname.replace(/^\/api\/?$/, '');
-      // Reconstruct clean URL
-      backendUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.port ? `:${urlObj.port}` : ''}${pathname}`;
-    } catch (e) {
-      // If URL parsing fails, use regex-based normalization
-      // Remove /api suffix first
-      backendUrl = backendUrl.replace(/\/api\/?$/, '');
-      backendUrl = backendUrl.replace(/\/+$/, ''); // Remove trailing slashes
-      
-      // Normalize protocol - ensure exactly two slashes after protocol
-      // Fix patterns: https:/, https:///, https://https://
-      if (backendUrl.startsWith('https:') || backendUrl.startsWith('http:')) {
-        // Extract protocol
-        const protocolMatch = backendUrl.match(/^(https?):/i);
-        if (protocolMatch) {
-          const protocol = protocolMatch[1].toLowerCase();
-          // Remove everything up to and including the first valid domain part
-          const afterProtocol = backendUrl.substring(protocol.length + 1);
-          // Remove leading slashes
-          const cleanPath = afterProtocol.replace(/^\/+/, '');
-          // Reconstruct with exactly two slashes
-          backendUrl = `${protocol}://${cleanPath}`;
-        }
-      }
-    }
-    
-    // Final cleanup: ensure exactly two slashes after protocol
-    backendUrl = backendUrl.replace(/^(https?):\/+/gi, '$1://');
-    backendUrl = backendUrl.replace(/\/+$/, ''); // Remove trailing slashes
-    
-    // CRITICAL: Check for localhost in production BEFORE creating socket
-    // Detect production environment more reliably
-    const frontendHostname = window.location.hostname;
-    const isLocalhost = frontendHostname === 'localhost' || 
-                        frontendHostname === '127.0.0.1' ||
-                        frontendHostname === '';
-    const isProductionBuild = import.meta.env.MODE === 'production' || import.meta.env.PROD;
-    // Production deployment: not localhost AND (HTTPS OR has domain name with dots)
-    const isProductionDeployment = !isLocalhost && (
-      window.location.protocol === 'https:' || 
-      (frontendHostname.includes('.') && !frontendHostname.startsWith('192.168.') && !frontendHostname.startsWith('10.'))
-    );
-    
-    // If backend URL is localhost but we're not running locally, BLOCK connection
-    const backendIsLocalhost = backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1');
-    // Block if: backend is localhost AND (production build OR production deployment)
-    // Allow if: frontend is also localhost (development scenario)
-    const shouldBlockConnection = backendIsLocalhost && (isProductionBuild || isProductionDeployment) && !isLocalhost;
-    
-    if (shouldBlockConnection) {
-      // Try to infer backend URL from frontend URL (common pattern: api.domain.com or domain.com/api)
-      const frontendHost = window.location.hostname;
-      const frontendProtocol = window.location.protocol;
-      let suggestedBackendUrl = null;
-      
-      // Common patterns:
-      // - If frontend is on foods.eqosy.com, backend might be api.foods.eqosy.com or foods.eqosy.com
-      if (frontendHost.includes('foods.eqosy.com')) {
-        suggestedBackendUrl = `${frontendProtocol}//api.foods.eqosy.com/api`;
-      } else if (frontendHost.includes('eqosy.com')) {
-        suggestedBackendUrl = `${frontendProtocol}//api.${frontendHost}/api`;
-      }
-      
-      debugError('? CRITICAL: BLOCKING Socket.IO connection to localhost!');
-      debugError('Backend connectivity disabled (UI-only mode).');
-      debugError('?? Current backendUrl:', backendUrl);
-      debugError('?? Current API_BASE_URL:', API_BASE_URL);
-      debugError('?? Frontend hostname:', frontendHost);
-      debugError('?? Frontend protocol:', frontendProtocol);
-      debugError('?? Is production build:', isProductionBuild);
-      debugError('?? Is production deployment:', isProductionDeployment);
-      debugError('?? Backend is localhost:', backendIsLocalhost);
-      if (suggestedBackendUrl) {
-        debugError('?? Suggested backend URL:', suggestedBackendUrl);
-      } else {
-        debugError('?? Backend URL config is disabled in this build.');
-      }
-      debugError('?? Backend URL config is disabled in this build.');
-      
-      // Clean up any existing socket connection
-      if (socketRef.current) {
-        debugLog('?? Cleaning up existing socket connection...');
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      
-      // Don't try to connect to localhost in production - it will fail
-      setIsConnected(false);
-      return; // CRITICAL: Exit early to prevent socket creation
-    }
-    
-    // Validate backend URL format
-    if (!backendUrl || !backendUrl.startsWith('http')) {
-      debugError('? CRITICAL: Invalid backend URL format:', backendUrl);
-      debugError('?? API_BASE_URL:', API_BASE_URL);
-      debugError('?? Expected format: https://your-domain.com or ');
-      setIsConnected(false);
-      return; // Don't try to connect with invalid URL
-    }
-    
-    // Construct Socket.IO URL
-    // IMPORTANT: Socket.IO server is on the origin (not /api/v1).
-    // Our API baseURL is typically like: /api/v1
-    // So for sockets we connect to the server origin.
-    let socketOrigin = backendUrl;
-    try {
-      socketOrigin = new URL(backendUrl).origin;
-    } catch {
-      socketOrigin = String(backendUrl || "")
-        .replace(/\/api\/v\d+\/?$/i, "")
-        .replace(/\/api\/?$/i, "")
-        .replace(/\/+$/, "");
-    }
-
-    // Backend uses default namespace; rooms handle role separation.
-    const socketUrl = `${socketOrigin}`;
+    const backendUrl = resolveSocketOrigin(API_BASE_URL);
+    const socketOrigin = backendUrl;
+    const socketUrl = socketOrigin;
     
     // Validate socket URL format
     try {

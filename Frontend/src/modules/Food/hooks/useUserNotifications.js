@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '@food/api/config';
+import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import { userAPI } from '@food/api';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 
@@ -47,26 +47,11 @@ export const useUserNotifications = () => {
   }, []);
 
   useEffect(() => {
-    if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
-      setIsConnected(false);
-      return;
-    }
     if (!userId) {
       return;
     }
 
-    // Normalize backend URL
-    let backendUrl = API_BASE_URL;
-    try {
-      backendUrl = new URL(backendUrl).origin;
-    } catch {
-      backendUrl = String(backendUrl || "")
-        .replace(/\/api\/v\d+\/?$/i, "")
-        .replace(/\/api\/?$/i, "")
-        .replace(/\/+$/, "");
-    }
-
-    const socketUrl = `${backendUrl}`;
+    const socketUrl = resolveSocketOrigin(API_BASE_URL);
     
     // Auth token
     const token = localStorage.getItem('user_accessToken') || localStorage.getItem('accessToken');

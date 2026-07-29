@@ -7,7 +7,7 @@ import {
 } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader } from '@/modules/Taxi/modules/admin/utils/googleMaps';
 import io from 'socket.io-client';
-import { API_BASE_URL } from '@food/api/config';
+import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import eqosyRestaurantPin from '@food/assets/eqosy-restaurant-pin.png';
 import { subscribeOrderTracking, subscribeDeliveryLocation } from '@food/realtimeTracking';
 import { collectOrderTrackingIds, joinOrderTrackingRooms } from '@food/utils/orderTrackingRooms';
@@ -101,16 +101,7 @@ function resolveDeliveryPartnerId(order) {
 }
 
 function normalizeBackendSocketUrl() {
-  let backendUrl = API_BASE_URL || '';
-  try {
-    backendUrl = new URL(backendUrl).origin;
-  } catch {
-    backendUrl = String(backendUrl)
-      .replace(/\/api\/v\d+\/?$/i, '')
-      .replace(/\/api\/?$/i, '')
-      .replace(/\/+$/, '');
-  }
-  return backendUrl;
+  return resolveSocketOrigin(API_BASE_URL);
 }
 
 function pathPointToLatLng(point) {
