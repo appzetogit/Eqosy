@@ -24,7 +24,10 @@ export const normalizeImageUrl = (imageUrl, backendOrigin = "") => {
     try {
       const parsed = new URL(normalized, window.location.origin);
       if (appHost && !/^(localhost|127\.0\.0\.1)$/i.test(appHost) && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) {
-        const backendUrl = new URL(backendOrigin || window.location.origin);
+        const originToUse = (backendOrigin && String(backendOrigin).startsWith('http'))
+          ? backendOrigin
+          : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+        const backendUrl = new URL(originToUse);
         parsed.protocol = backendUrl.protocol;
         parsed.hostname = backendUrl.hostname;
         parsed.port = backendUrl.port;

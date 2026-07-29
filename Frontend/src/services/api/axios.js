@@ -16,7 +16,7 @@ const resolveApiBaseUrl = () => {
       ? String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, "")
       : "";
 
-  if (!envValue) return "/api/v1";
+  if (!envValue || !envValue.startsWith("http")) return envValue || "/api/v1";
 
   // Safety fallback:
   // If a localhost API URL is baked into a deployed build, the browser on production
@@ -238,9 +238,10 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      // Use relative URL so this works both with an explicit baseURL and with a dev proxy.
       // Use plain axios to avoid interceptor recursion.
-      const refreshUrl = baseURL ? `${baseURL}/food/auth/refresh-token` : "/api/v1/food/auth/refresh-token";
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const path = (baseURL && baseURL.startsWith("http")) ? `${baseURL}/food/auth/refresh-token` : `${origin}${baseURL || '/api/v1'}/food/auth/refresh-token`;
+      const refreshUrl = path.startsWith("http") ? path : `http://localhost:5000${path}`;
       const { data } = await axios.post(refreshUrl, { refreshToken }, { timeout: 10000 });
       const newAccessToken = data?.data?.accessToken || data?.accessToken;
       if (newAccessToken) {

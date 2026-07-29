@@ -753,7 +753,8 @@ export default function Home() {
             /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)
           ) {
             try {
-              const backendUrl = new URL(BACKEND_ORIGIN);
+              const originToUse = BACKEND_ORIGIN && BACKEND_ORIGIN.startsWith('http') ? BACKEND_ORIGIN : window.location.origin;
+              const backendUrl = new URL(originToUse);
               parsed.protocol = backendUrl.protocol;
               parsed.hostname = backendUrl.hostname;
               parsed.port = backendUrl.port;

@@ -10,7 +10,7 @@ const resolveConfigApiBaseUrl = () => {
       ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "")
       : "";
 
-  if (!envValue) return "/api/v1";
+  if (!envValue || !envValue.startsWith("http")) return envValue || "/api/v1";
 
   try {
     const parsed = new URL(envValue);
