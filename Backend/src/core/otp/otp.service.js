@@ -67,7 +67,7 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         }
 
         logger.info(`[SMS] Sending OTP to ${msisdn} via SMS India Hub...`);
-        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(7000) });
+        const response = await fetch(url.toString(), { signal: AbortSignal.timeout(25000) });
         const resultText = await response.text();
         logger.info(`[SMS] Raw response for ${msisdn}: ${resultText}`);
 

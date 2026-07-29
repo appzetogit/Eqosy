@@ -1,26 +1,53 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { ArrowLeft, X, Car } from 'lucide-react';
 import heroImg from '@/assets/landing/hero.png';
 import { useSettings } from '../../../shared/context/SettingsContext';
 
 import mobilityBanner from '@/assets/images/mobility-banner-cartoony.png';
 
 const AuthLayout = ({ children, title, subtitle }) => {
+  const navigate = useNavigate();
   const { settings } = useSettings();
-  const appName = settings.general?.app_name || 'App';
+  const appName = settings.general?.app_name || 'Eqosy';
   const appLogo = settings.general?.logo || settings.customization?.logo || settings.general?.favicon || '';
+
+  const handleClose = () => {
+    navigate('/user', { replace: true });
+  };
 
   return (
     <div className="h-screen w-screen bg-[#F8F9FA] flex flex-col lg:flex-row font-display overflow-hidden fixed inset-0">
       {/* Left side (Desktop Only) */}
       <div className="hidden lg:flex flex-col justify-between lg:w-[45%] xl:w-[50%] bg-[#1A1A1A] p-12 text-white relative overflow-hidden shadow-[20px_0_40px_rgba(0,0,0,0.1)] z-10">
+        {/* Top Header Actions (Back & Close Buttons) */}
+        <div className="absolute top-6 left-6 right-6 z-30 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Subtle orange accent glow */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
           <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-[#F38F24]/5 rounded-full blur-[120px]" />
           <div className="absolute top-[60%] right-[10%] w-[50%] h-[50%] bg-white/5 rounded-full blur-[100px]" />
         </div>
 
-        <div className="relative z-10 w-full h-full flex flex-col justify-between">
+        <div className="relative z-10 w-full h-full flex flex-col justify-between mt-12">
           <div className="flex items-center gap-4 mb-16">
             {appLogo ? (
               <img
@@ -33,7 +60,13 @@ const AuthLayout = ({ children, title, subtitle }) => {
                 <div className="w-6 h-6 bg-[#1A1A1A] rounded-md"></div>
               </div>
             )}
-            <span className="text-3xl font-black tracking-tight">{appName}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-3xl font-black tracking-tight">{appName}</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#F38F24]/20 border border-[#F38F24]/40 text-[#F38F24] text-xs font-black uppercase tracking-widest flex items-center gap-1">
+                <Car size={12} />
+                TAXI
+              </span>
+            </div>
           </div>
           
           <div className="max-w-xl">
@@ -47,19 +80,8 @@ const AuthLayout = ({ children, title, subtitle }) => {
                 <span className="text-[#F38F24]">Safety & Style.</span>
               </h2>
               <p className="text-gray-400 text-lg leading-relaxed mb-12">
-                Experience the next generation of urban mobility with {appName}. Reliable, fast, and always at your service.
+                Experience the next generation of urban mobility with {appName} Taxi. Reliable, fast, and always at your service.
               </p>
-              
-              <div className="flex gap-4">
-                <div className="px-6 py-4 bg-white/5 rounded-2xl border border-white/10">
-                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Global Coverage</p>
-                  <p className="text-white font-semibold">15,000+ Cities</p>
-                </div>
-                <div className="px-6 py-4 bg-white/5 rounded-2xl border border-white/10">
-                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Safe Rides</p>
-                  <p className="text-white font-semibold">Verified Drivers</p>
-                </div>
-              </div>
             </motion.div>
           </div>
 
@@ -80,20 +102,46 @@ const AuthLayout = ({ children, title, subtitle }) => {
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full blur-[40px] -ml-10 -mb-10" />
         </div>
 
+        {/* Mobile Header Actions (Back & Close Buttons) */}
+        <div className="lg:hidden w-full flex items-center justify-between px-6 pt-5 z-30">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Mobile Header (Visible only on small screens) */}
-        <div className="lg:hidden w-full flex flex-col items-center text-center mt-10 mb-8 z-20 px-6">
+        <div className="lg:hidden w-full flex flex-col items-center text-center mt-4 mb-6 z-20 px-6">
             {appLogo ? (
               <img
                 src={appLogo}
                 alt={`${appName} logo`}
-                className="w-16 h-16 rounded-2xl object-contain bg-white p-2 mb-4 shadow-xl"
+                className="w-16 h-16 rounded-2xl object-contain bg-white p-2 mb-3 shadow-xl"
               />
             ) : (
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-xl">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-xl">
                 <div className="w-8 h-8 bg-[#1A1A1A] rounded-lg"></div>
               </div>
             )}
-            <h2 className="text-2xl font-black text-white tracking-tight mb-2">{appName}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-black text-white tracking-tight">{appName}</h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#F38F24] text-white text-xs font-black uppercase tracking-widest flex items-center gap-1 shadow-md">
+                <Car size={12} />
+                TAXI
+              </span>
+            </div>
         </div>
 
         <motion.div 

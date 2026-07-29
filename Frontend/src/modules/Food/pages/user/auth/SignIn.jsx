@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, Link, useSearchParams } from "react-router-dom"
 import { AlertCircle, Loader2 } from "lucide-react"
 import AnimatedPage from "@food/components/user/AnimatedPage"
@@ -26,6 +26,10 @@ export default function SignIn() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const submittingRef = useRef(false)
+
+  const handleClose = () => {
+    navigate("/food/user", { replace: true })
+  }
 
   useEffect(() => {
     const stored = sessionStorage.getItem("userAuthData")
@@ -117,9 +121,29 @@ export default function SignIn() {
     <AnimatedPage className="min-h-[100dvh] bg-white dark:bg-[#0A0A0B] flex flex-col font-sans overflow-hidden">
       {/* Top Branding Section - 40% height */}
       <div className="relative h-[40dvh] w-full bg-gradient-to-br from-[#07143A] via-[#0D2A6B] to-[#133A8A] overflow-hidden flex flex-col items-center justify-center">
-        {/* Subtle Decorative Elements (No Blur) */}
+        {/* Top Header Actions (Back & Close Buttons) */}
+        <div className="absolute top-4 left-4 right-4 z-30 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-0 right-0 w-64 h-64 border-word border-white/20 rounded-full -mr-20 -mt-20" />
+          <div className="absolute top-0 right-0 w-64 h-64 border border-white/20 rounded-full -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-48 h-48 border border-white/10 rounded-full -ml-16 -mb-16" />
         </div>
 
@@ -127,16 +151,19 @@ export default function SignIn() {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          className="relative z-10 flex flex-col items-center gap-4"
+          className="relative z-10 flex flex-col items-center gap-3"
         >
           <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-xl border-4 border-white/25 overflow-hidden">
             <img src={logoImg} alt={`${companyName} logo`} className="w-full h-full object-cover scale-110" />
           </div>
           <div className="text-center">
-            <h1 className="text-white font-black text-4xl tracking-tighter leading-none mb-1 italic">
+            <h1 className="text-white font-black text-3xl tracking-tight leading-none mb-2 italic">
               {companyName.toUpperCase()}
             </h1>
-            <div className="h-0.5 w-12 bg-[#A7E300] mx-auto rounded-full" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/20 border border-orange-400/40 text-orange-300 text-xs font-black uppercase tracking-widest">
+              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <span>FOOD</span>
+            </div>
           </div>
         </motion.div>
       </div>

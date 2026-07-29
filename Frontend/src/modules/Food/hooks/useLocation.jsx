@@ -74,7 +74,7 @@ const reverseGeocodeDirect = async (latitude, longitude) => {
   const run = (async () => {
     try {
       const controller = new AbortController()
-      setTimeout(() => controller.abort(), 3000) // Faster timeout
+      setTimeout(() => controller.abort(), 15000) // 15s safe timeout for mobile connections
 
       const res = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
