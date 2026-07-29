@@ -24,7 +24,20 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 
-const API_ORIGIN = String(globalThis.__LEGACY_BACKEND_ORIGIN__ || BACKEND_ORIGIN || 'http://localhost:5000').replace(/\/+$/, '');
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const resolveApiOrigin = () => {
+  const base = String(globalThis.__LEGACY_BACKEND_ORIGIN__ || BACKEND_ORIGIN || '').replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const isBrowserLocal = LOCAL_HOSTS.has(window.location.hostname);
+    if (!isBrowserLocal) {
+      if (!base || base.includes('localhost') || base.includes('127.0.0.1')) {
+        return window.location.origin;
+      }
+    }
+  }
+  return base || 'http://localhost:5000';
+};
+const API_ORIGIN = resolveApiOrigin();
 const ADMIN_API_BASE = API_ORIGIN + '/api/v1/admin';
 const TAXI_ADMIN_API_BASE = API_ORIGIN + '/api/v1/taxi/admin';
 const BASE = ADMIN_API_BASE + '/promos';

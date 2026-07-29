@@ -15,14 +15,26 @@ import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { searchAPI } from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
 
-// Helper to resolve media URLs consistently
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const getMediaUrl = (url) => {
   if (!url || typeof url !== 'string') return null;
   if (url.startsWith('http')) return url;
   
-  // Use VITE_API_BASE_URL to derive the backend origin
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
-  const origin = apiBase.split('/api/v1')[0];
+  const apiBase = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
+    ? String(import.meta.env.VITE_API_BASE_URL).trim()
+    : "";
+  
+  let origin = "";
+  if (apiBase.startsWith('http')) {
+    try {
+      const parsed = new URL(apiBase);
+      if (typeof window !== 'undefined' && LOCAL_HOSTS.has(parsed.hostname) && !LOCAL_HOSTS.has(window.location.hostname)) {
+        origin = "";
+      } else {
+        origin = parsed.origin;
+      }
+    } catch (_) {}
+  }
   
   return `${origin}${url.startsWith('/') ? url : '/' + url}`;
 };
