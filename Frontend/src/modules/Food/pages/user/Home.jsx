@@ -239,19 +239,7 @@ const RestaurantImageCarousel = React.memo(
 
     const showMultipleImages = images.length > 1;
 
-    useEffect(() => {
-      let intervalId;
-      if (showMultipleImages) {
-        intervalId = setInterval(() => {
-          if (!isSwiping.current) {
-            setCurrentIndex((prev) => (prev + 1) % images.length);
-          }
-        }, 3500);
-      }
-      return () => {
-        if (intervalId) clearInterval(intervalId);
-      };
-    }, [showMultipleImages, images.length]);
+
 
     // Clear sticky successful source only when card identity changes.
     useEffect(() => {
@@ -550,25 +538,7 @@ const RecommendedFoodImageStrip = React.memo(
 
     const scrollContainerRef = useRef(null);
 
-    useEffect(() => {
-      let intervalId;
-      if (stripImages.length > 1) {
-        intervalId = setInterval(() => {
-          const container = scrollContainerRef.current;
-          if (container && !dragStateRef.current.isDragging) {
-            const maxScrollLeft = container.scrollWidth - container.clientWidth;
-            if (container.scrollLeft >= maxScrollLeft - 10) {
-              container.scrollTo({ left: 0, behavior: "smooth" });
-            } else {
-              container.scrollBy({ left: container.clientWidth, behavior: "smooth" });
-            }
-          }
-        }, 3500);
-      }
-      return () => {
-        if (intervalId) clearInterval(intervalId);
-      };
-    }, [stripImages.length]);
+
 
     if (stripImages.length === 0) {
       return (
@@ -917,23 +887,30 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const heroShell = heroShellRef.current;
-      const stickyHeader = stickyHeaderRef.current;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const heroShell = heroShellRef.current;
+        const stickyHeader = stickyHeaderRef.current;
 
-      if (!heroShell) {
-        setHasScrolledPastBanner(false);
-        return;
-      }
+        if (!heroShell) {
+          setHasScrolledPastBanner((prev) => (prev ? false : prev));
+          return;
+        }
 
-      const heroRect = heroShell.getBoundingClientRect();
-      const stickyHeight = stickyHeader?.getBoundingClientRect().height || 0;
-      setHasScrolledPastBanner(heroRect.bottom <= stickyHeight);
+        const heroRect = heroShell.getBoundingClientRect();
+        const stickyHeight = stickyHeader?.getBoundingClientRect().height || 0;
+        const isPast = heroRect.bottom <= stickyHeight;
+        setHasScrolledPastBanner((prev) => (prev !== isPast ? isPast : prev));
+      });
     };
 
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll);
+    window.addEventListener("resize", handleScroll, { passive: true });
 
     return () => {
       window.removeEventListener("scroll", handleScroll);

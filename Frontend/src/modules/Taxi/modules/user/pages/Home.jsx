@@ -249,20 +249,7 @@ const Home = ({ embedded = false }) => {
     }
   };
 
-  useEffect(() => {
-    if (embedded) return undefined;
 
-    const token =
-      localStorage.getItem('userToken') ||
-      localStorage.getItem('user_accessToken') ||
-      localStorage.getItem('token');
-
-    if (!token) {
-      navigate('/food/user/auth/login', { replace: true, state: { from: location.pathname } });
-    }
-
-    return undefined;
-  }, [navigate, embedded]);
 
   const shouldTickClock =
     String(currentRide?.serviceType || '').toLowerCase() === 'rental'

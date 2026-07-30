@@ -27,7 +27,11 @@ export default function UnifiedOTPFastLogin() {
       setStep(1)
       return
     }
-    navigate('/taxi/user', { replace: true })
+    if (typeof window !== 'undefined' && window.history.length > 2) {
+      navigate(-1)
+    } else {
+      navigate('/food/user')
+    }
   }
 
   const getWebFcmTokenForLogin = async () => {
