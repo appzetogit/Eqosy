@@ -6,6 +6,7 @@ import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/a
 import api from '../../../../shared/api/axiosInstance';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userService } from '../../services/userService';
+import { getLocalUserToken } from '../../services/authService';
 import { fetchActiveRideZones, resolveServiceLocationIdFromCoords } from '../../services/rideZoneUtils';
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import BikeIcon from '../../../../assets/icons/bike.png';
@@ -825,7 +826,7 @@ const formatDateTimeDisplay = (value) => {
 
 const formatAvailabilityLine = (availability) => {
   if (!availability?.totalDrivers) {
-    return 'Not available right now';
+    return 'Fastest pickup & drop available';
   }
 
   const etaMinutes = availability.closestDriverEtaMinutes || 1;
@@ -1333,13 +1334,7 @@ const SelectVehicle = () => {
           availability,
         }));
 
-      if (rideMode !== 'schedule') {
-        baseList = rankedVehicles
-          .filter(({ availability }) => (availability.totalDrivers || 0) > 0)
-          .map(({ vehicle }) => vehicle);
-      } else {
-        baseList = rankedVehicles.map(({ vehicle }) => vehicle);
-      }
+      baseList = rankedVehicles.map(({ vehicle }) => vehicle);
     }
 
     if (bookingTab === 'bid') {
@@ -1347,9 +1342,10 @@ const SelectVehicle = () => {
     } else {
       return baseList.filter((vehicle) => !vehicle.supportsBidding || vehicle.dispatchType === 'both' || vehicle.dispatchType === 'normal');
     }
-  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, rideMode, bookingTab]);
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, bookingTab]);
 
-  const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === selected), [pricedVehicles, selected]);
+  const effectiveSelectedId = selected || displayedVehicles[0]?.id || '';
+  const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === effectiveSelectedId) || pricedVehicles[0] || null, [pricedVehicles, effectiveSelectedId]);
   const previewVehicle = useMemo(
     () => pricedVehicles.find((vehicle) => vehicle.id === previewVehicleId) || null,
     [previewVehicleId, pricedVehicles],
@@ -2002,19 +1998,17 @@ const SelectVehicle = () => {
             )}
 
             {!isLoadingVehicles && !vehicleLoadError && displayedVehicles.map((v, i) => {
-              const isSelected = selected === v.id;
+              const isSelected = effectiveSelectedId === v.id;
               const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
               const isUnavailable = !availability.totalDrivers;
-              const canSelectVehicle = rideMode === 'schedule' || !isUnavailable;
+              const canSelectVehicle = true;
               const compactEta = Math.max(
                 1,
                 availability.closestDriverEtaMinutes || tripMetrics.durationMinutes || 1,
               );
-              const fareLabel = isUnavailable && rideMode !== 'schedule'
-                ? 'N/A'
-                : isFarePending
-                  ? '...'
-                  : formatVehicleFare(v);
+              const fareLabel = isFarePending
+                ? '...'
+                : formatVehicleFare(v);
 
               return (
                 <motion.div
@@ -2227,12 +2221,8 @@ const SelectVehicle = () => {
                   ? `Request Bid for ${selectedVehicle.name}`
                   : rideMode === 'schedule'
                     ? `Schedule ${selectedVehicle.name}`
-                    : selectedAvailability.totalDrivers
-                      ? `Book ${selectedVehicle.name}`
-                      : `${selectedVehicle.name} Unavailable`
-              : rideMode !== 'schedule' && !hasBookableVehicles
-                ? 'No Vehicles Available'
-                : 'Select Vehicle'}
+                    : `Book ${selectedVehicle.name}`
+              : 'Select Vehicle'}
           </motion.button>
 
           {rideMode === 'schedule' ? (
