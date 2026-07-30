@@ -1197,6 +1197,7 @@ export async function updateOrderStatusRestaurant(
         );
         
         try {
+            await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
             await tryAutoAssign(order._id);
             // Refresh local order state after assignment search
             order = await FoodOrder.findById(order._id); 

@@ -127,8 +127,26 @@ const ParcelType = () => {
     });
   };
 
+  const handleGoBack = () => {
+    if (window.history.length > 1 && window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate(`${routePrefix || '/taxi/user'}`, { replace: true });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F8FF] max-w-lg mx-auto flex flex-col font-sans relative overflow-x-hidden">
+      
+      {/* Floating Back Button */}
+      <button 
+        type="button"
+        onClick={handleGoBack}
+        className="fixed top-3 left-4 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md text-white border border-white/20 shadow-md active:scale-95 transition-all cursor-pointer"
+      >
+        <ArrowLeft size={16} />
+        <span className="text-xs font-bold">Go Back</span>
+      </button>
       
       {/* Premium Header with Wave Background */}
       <div className="relative bg-[#0047AB] pt-10 pb-20 px-6 overflow-hidden">
@@ -254,14 +272,6 @@ const ParcelType = () => {
         </div>
 
       </main>
-
-      {/* Floating Back Button */}
-      <button 
-        onClick={() => navigate(-1)}
-        className="fixed top-2 left-4 z-50 w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/10"
-      >
-        <ArrowLeft size={16} />
-      </button>
 
     </div>
   );

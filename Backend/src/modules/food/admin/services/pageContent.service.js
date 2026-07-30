@@ -35,31 +35,27 @@ const normalizeAboutForResponse = (about) => {
     };
 };
 
+const DEFAULT_PAGES = {
+    terms: { title: 'Terms and Conditions', content: '' },
+    privacy: { title: 'Privacy Policy', content: '' },
+    refund: { title: 'Refund Policy', content: '' },
+    shipping: { title: 'Shipping Policy', content: '' },
+    cancellation: { title: 'Cancellation Policy', content: 'A cancellation charge will apply as per configured rules once order is confirmed.' }
+};
+
 export const getPublicPageByKey = async (key) => {
     const k = normalizeKey(key);
     const doc = await FoodPageContent.findOne({ key: k }).lean();
     if (!doc) {
-        if (k === 'cancellation') {
-            return {
-                key: k,
-                data: {
-                    title: 'Cancellation Policy',
-                    content: 'A cancellation charge will apply as per configured rules once order is confirmed.'
-                }
-            };
+        if (k === 'about') {
+            return { key: k, data: { appName: 'Eqosy', version: '1.0.0', description: '', logo: '' } };
         }
-        return { key: k, data: null };
+        return { key: k, data: DEFAULT_PAGES[k] || { title: '', content: '' } };
     }
     if (k === 'about') return { key: k, data: normalizeAboutForResponse(doc.about || null) };
     const legalData = normalizeLegalForResponse(doc.legal || null);
-    if (k === 'cancellation' && (!legalData || !legalData.content || !legalData.content.trim())) {
-        return {
-            key: k,
-            data: {
-                title: 'Cancellation Policy',
-                content: 'A cancellation charge will apply as per configured rules once order is confirmed.'
-            }
-        };
+    if (!legalData || !legalData.content || !legalData.content.trim()) {
+        return { key: k, data: DEFAULT_PAGES[k] || legalData || { title: '', content: '' } };
     }
     return { key: k, data: legalData };
 };

@@ -27,11 +27,11 @@ export default function RefundPolicy() {
       setLoading(true)
       const response = await api.get(API_ENDPOINTS.ADMIN.REFUND, { contextModule: "admin" })
       if (response.data.success) {
-        // Convert HTML to plain text for textarea
-        const content = response.data.data.content || ''
+        const pageData = response.data.data || { title: 'Refund Policy', content: '' }
+        const content = pageData.content || ''
         const textContent = legalHtmlToPlainText(content)
         setRefundData({
-          ...response.data.data,
+          ...pageData,
           content: textContent
         })
       }

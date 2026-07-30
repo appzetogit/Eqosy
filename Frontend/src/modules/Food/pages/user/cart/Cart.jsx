@@ -2764,7 +2764,7 @@ export default function Cart() {
                   </div>
 
                   {showCustomTipInput && (
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex items-center gap-2 w-full min-w-0">
                       <input
                         type="number"
                         min="0"
@@ -2772,7 +2772,7 @@ export default function Cart() {
                         value={customTipInput}
                         onChange={(e) => setCustomTipInput(e.target.value)}
                         placeholder="Enter tip amount"
-                        className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-emerald-500"
+                        className="flex-1 min-w-0 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                       <button
                         type="button"
@@ -2781,7 +2781,7 @@ export default function Cart() {
                           setSelectedDeliveryTip(next)
                           setShowCustomTipInput(false)
                         }}
-                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white"
+                        className="shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all cursor-pointer whitespace-nowrap"
                       >
                         Apply
                       </button>

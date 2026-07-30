@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Eye, Loader2, Search, Trash2, Pencil } from "lucide-react"
 import { Switch } from "@food/components/ui/switch"
 import { adminAPI, uploadAPI } from "@food/api"
@@ -50,17 +50,12 @@ export default function AddonsList() {
       try {
         setLoading(true)
         const response = await adminAPI.getRestaurantAddons({
-          // only approved items should be visible in this list
-          approvalStatus: "approved",
           search: searchQuery?.trim() ? searchQuery.trim() : undefined,
           limit: 200,
           page: 1,
         })
         const data = response?.data?.data?.addons || response?.data?.addons || []
-        const approvedOnly = Array.isArray(data)
-          ? data.filter((addon) => String(addon.approvalStatus || "").toLowerCase() === "approved")
-          : []
-        setAddons(approvedOnly)
+        setAddons(Array.isArray(data) ? data : [])
       } catch (error) {
         debugError("Error fetching addons:", error)
         toast.error("Failed to load restaurant add-ons")

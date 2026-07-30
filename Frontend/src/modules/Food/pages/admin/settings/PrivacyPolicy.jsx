@@ -27,11 +27,11 @@ export default function PrivacyPolicy() {
       setLoading(true)
       const response = await api.get(API_ENDPOINTS.ADMIN.PRIVACY, { contextModule: "admin" })
       if (response.data.success) {
-        // Convert HTML to plain text for textarea
-        const content = response.data.data.content || ''
+        const pageData = response.data.data || { title: 'Privacy Policy', content: '' }
+        const content = pageData.content || ''
         const textContent = legalHtmlToPlainText(content)
         setPrivacyData({
-          ...response.data.data,
+          ...pageData,
           content: textContent
         })
       }

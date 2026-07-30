@@ -1,6 +1,6 @@
-// src/context/cart-context.jsx
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react"
 import { buildCartLineId } from "@food/utils/foodVariants"
+import EqosyCartLoader from "@food/components/ui/EqosyCartLoader"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -15,6 +15,7 @@ const defaultCartContext = {
   total: 0,
   lastAddEvent: null,
   lastRemoveEvent: null,
+  triggerEqosyCartLoader: () => {},
   addToCart: () => {
     debugWarn('CartProvider not available - addToCart called');
   },
@@ -159,6 +160,22 @@ export function CartProvider({ children }) {
   // Track last remove event for animation
   const [lastRemoveEvent, setLastRemoveEvent] = useState(null)
 
+  // Eqosy Custom Cart Loader State
+  const [showEqosyLoader, setShowEqosyLoader] = useState(false);
+  const [eqosyLoaderOptions, setEqosyLoaderOptions] = useState({
+    message: "Adding to Cart...",
+    subMessage: "Preparing your fresh delicacies with Eqosy",
+    duration: 850
+  });
+
+  const triggerEqosyCartLoader = useCallback((message = "Adding to Cart...", subMessage = "Preparing your fresh delicacies with Eqosy", durationMs = 850) => {
+    setEqosyLoaderOptions({ message, subMessage, duration: durationMs });
+    setShowEqosyLoader(true);
+    setTimeout(() => {
+      setShowEqosyLoader(false);
+    }, durationMs);
+  }, []);
+
   // Persist to localStorage whenever cart changes
   useEffect(() => {
     try {
@@ -173,6 +190,7 @@ export function CartProvider({ children }) {
   }, [cart])
 
   const addToCart = (item, sourcePosition = null) => {
+    triggerEqosyCartLoader("Adding to Cart...", "Preparing your fresh delicacies with Eqosy", 850);
     const safeCart = normalizeCartData(cart)
     if (safeCart.length > 0) {
       const firstItemRestaurantId = safeCart[0]?.restaurantId
@@ -531,6 +549,7 @@ export function CartProvider({ children }) {
       total: cartForAnimation.total,
       lastAddEvent,
       lastRemoveEvent,
+      triggerEqosyCartLoader,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -541,10 +560,19 @@ export function CartProvider({ children }) {
       cleanCartForRestaurant,
       replaceCart,
     }),
-    [cart, cartForAnimation, lastAddEvent, lastRemoveEvent]
+    [cart, cartForAnimation, lastAddEvent, lastRemoveEvent, triggerEqosyCartLoader]
   )
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>
+  return (
+    <CartContext.Provider value={value}>
+      {children}
+      <EqosyCartLoader
+        show={showEqosyLoader}
+        message={eqosyLoaderOptions.message}
+        subMessage={eqosyLoaderOptions.subMessage}
+      />
+    </CartContext.Provider>
+  )
 }
 
 export function useCart() {

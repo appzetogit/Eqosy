@@ -1811,6 +1811,14 @@ const SelectVehicle = () => {
       return;
     }
 
+    const token = getLocalUserToken();
+    if (!token) {
+      localStorage.setItem('eqosy_active_module', 'taxi');
+      localStorage.setItem('native_last_route', location.pathname);
+      navigate('/login', { state: { from: location.pathname } });
+      return;
+    }
+
     if (rideMode === 'schedule') {
       const parsedSchedule = new Date(scheduledAt);
 

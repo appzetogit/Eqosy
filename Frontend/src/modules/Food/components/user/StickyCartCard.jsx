@@ -1,11 +1,12 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { X, ChevronRight } from "lucide-react"
 import { useCart } from "@food/context/CartContext"
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 
 export default function StickyCartCard() {
-  const { cart, getCartCount } = useCart()
+  const { cart, getCartCount, triggerEqosyCartLoader } = useCart()
+  const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(true)
   const [bottomPosition, setBottomPosition] = useState("bottom-[88px]") // Fixed above bottom navigation
   const cartCount = getCartCount()
@@ -117,15 +118,21 @@ export default function StickyCartCard() {
                 </Link>
 
                 {/* View Cart Button */}
-                <Link
-                  to="/user/cart"
-                  className="flex-shrink-0 bg-green-600 dark:bg-green-700 hover:bg-green-700 text-white px-4 py-2.5 md:px-5 md:py-3 rounded-lg font-semibold transition-colors"
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    triggerEqosyCartLoader("Opening Cart...", "Fetching your selected items...", 850);
+                    setTimeout(() => {
+                      navigate("/food/user/cart");
+                    }, 150);
+                  }}
+                  className="flex-shrink-0 bg-green-600 dark:bg-green-700 hover:bg-green-700 text-white px-4 py-2.5 md:px-5 md:py-3 rounded-lg font-semibold transition-colors cursor-pointer"
                 >
                   <div className="text-center">
                     <div className="text-xs md:text-sm opacity-90">View Cart</div>
                     <div className="text-xs md:text-sm font-bold">{cartCount} {cartCount === 1 ? 'item' : 'items'}</div>
                   </div>
-                </Link>
+                </button>
 
                 {/* Close Button */}
                 <motion.button

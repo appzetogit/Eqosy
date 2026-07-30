@@ -1518,65 +1518,45 @@ export function useLocation() {
             } else {
               debugLog(`?? Geolocation permission is '${result.state}'`);
             }
+
+            result.onchange = () => {
+              if (result.state === 'granted') {
+                debugLog("?? Geolocation permission granted dynamically - auto fetching location");
+                setPermissionGranted(true);
+                setLoading(true);
+                getLocation(true, true, true).then((loc) => {
+                  if (loc) {
+                    setLocation(loc);
+                    if (AUTO_START_LIVE_WATCH) startWatchingLocation();
+                  }
+                  setLoading(false);
+                }).catch(() => setLoading(false));
+              }
+            };
           } catch (permErr) {
             debugWarn("?? Permission query failed:", permErr);
           }
         }
 
-        // CRITICAL FIX: Do NOT request browser/device location permission on initial app load before user interacts.
-        // This ensures the Food app loads instantly without blocking popups.
-        if (!permissionGranted) {
-          setLoading(false);
-          if (!location) {
-            setLocation({
-              city: "Indore",
-              state: "Madhya Pradesh",
-              address: "Indore, Madhya Pradesh",
-              formattedAddress: "Indore, Madhya Pradesh",
-              latitude: 22.7196,
-              longitude: 75.8577,
-            });
-          }
-          return;
-        }
-
-        debugLog("?? Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
-
-        const shouldFetch = shouldForceRefresh || !hasInitialLocation
-
-        if (shouldFetch) {
-          debugLog("?? Fetching location - shouldForceRefresh:", shouldForceRefresh, "hasInitialLocation:", hasInitialLocation)
-          getLocation(true, shouldForceRefresh) // forceFresh = true if cached location is incomplete
-            .then((location) => {
-              if (location &&
-                location.formattedAddress !== "Select location" &&
-                location.city !== "Current Location") {
-                debugLog("? Fresh location fetched:", location)
-                debugLog("? Location details:", {
-                  formattedAddress: location?.formattedAddress,
-                  address: location?.address,
-                  city: location?.city,
-                  state: location?.state,
-                  area: location?.area
-                })
-                // CRITICAL: Update state with fresh location so PageNavbar displays it
-                setLocation(location)
-                setPermissionGranted(true)
-                if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-              } else {
-                // Placeholder result means reverse-geocode failed or was unavailable.
-                // Requirement: no more automatic retries; user can trigger manual refresh.
-                debugWarn("?? Location fetch returned placeholder; not retrying automatically")
+        // Auto-fetch real GPS location if navigator.geolocation is available
+        if (navigator.geolocation) {
+          setLoading(true);
+          getLocation(true, true, true)
+            .then((loc) => {
+              if (loc && loc.latitude && loc.longitude) {
+                debugLog("?? Auto GPS location fetched successfully:", loc);
+                setLocation(loc);
+                setPermissionGranted(true);
+                if (AUTO_START_LIVE_WATCH) startWatchingLocation();
               }
+              setLoading(false);
             })
             .catch((err) => {
-              debugWarn("?? Background location fetch failed (using cached):", err.message)
-              // Don't auto-start live watching; keep cached/localStorage behavior.
-              if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-            })
+              debugWarn("?? Auto GPS fetch failed or denied:", err?.message);
+              setLoading(false);
+            });
         } else {
-          // We have a valid location; no need to start live watching.
-          if (AUTO_START_LIVE_WATCH) startWatchingLocation()
+          setLoading(false);
         }
       } catch (err) {
         debugError("Error in checkPermissionAndStart:", err);

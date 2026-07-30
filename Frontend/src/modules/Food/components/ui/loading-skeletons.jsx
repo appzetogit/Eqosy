@@ -11,8 +11,9 @@ function LoadingSkeletonRegion({ label = "Loading content", className, children 
       aria-live="polite"
       aria-label={label}
       className={className}
+      translate="no"
     >
-      <span className="sr-only">{label}</span>
+      <span className="sr-only notranslate">{label}</span>
       {children}
     </div>
   )

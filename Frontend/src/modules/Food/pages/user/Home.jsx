@@ -670,6 +670,7 @@ export default function Home() {
   const [heroSearch, setHeroSearch] = useState("");
   const { openSearch, closeSearch, searchValue, setSearchValue } =
     useSearchOverlay();
+  const { triggerEqosyCartLoader } = useCart();
   const { openLocationSelector } = useLocationSelector();
   const { vegMode, setVegMode: setVegModeContext } = useProfile();
   const [prevVegMode, setPrevVegMode] = useState(vegMode);
@@ -2636,26 +2637,18 @@ export default function Home() {
     // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
     const base = (restaurantsData || []).filter(matchesVegMode);
-    const hasRankedFeatured = base.some(
-      (restaurant) =>
-        Number(restaurant.zoneFeaturedRank) >= 1 &&
-        Number(restaurant.zoneFeaturedRank) <= 10,
-    );
 
-    if (!hasRankedFeatured) {
-      return base;
-    }
+    return [...base].sort((a, b) => {
+      const aRank = Number(a.zoneFeaturedRank);
+      const bRank = Number(b.zoneFeaturedRank);
+      const aHasRank = aRank >= 1 && aRank <= 10;
+      const bHasRank = bRank >= 1 && bRank <= 10;
 
-    return base
-      .filter(
-        (restaurant) =>
-          Number(restaurant.zoneFeaturedRank) >= 1 &&
-          Number(restaurant.zoneFeaturedRank) <= 10,
-      )
-      .sort(
-        (a, b) =>
-          Number(a.zoneFeaturedRank) - Number(b.zoneFeaturedRank),
-      );
+      if (aHasRank && bHasRank) return aRank - bRank;
+      if (aHasRank) return -1;
+      if (bHasRank) return 1;
+      return 0;
+    });
   }, [restaurantsData, matchesVegMode]);
 
   const restaurantLazyLoadResetKey = useMemo(() => {
@@ -3507,6 +3500,11 @@ export default function Home() {
                       <div className="h-full group">
                         <Link
                           to={`/user/restaurants/${restaurantSlug}`}
+                          onClick={() => {
+                            if (triggerEqosyCartLoader) {
+                              triggerEqosyCartLoader("Opening Restaurant...", "Loading fresh menu & food categories...", 900);
+                            }
+                          }}
                           className="h-full flex">
                           <Card
                             className={`overflow-hidden gap-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] border-background transition-all duration-500 py-0 rounded-[28px] flex flex-col h-full w-full relative shadow-sm hover:shadow-xl ${

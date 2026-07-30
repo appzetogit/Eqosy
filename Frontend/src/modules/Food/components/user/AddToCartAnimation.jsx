@@ -28,7 +28,7 @@ export default function AddToCartAnimation({
   linkTo = '/food/user/cart',
   dynamicBottom = null,
 }) {
-  const { items, itemCount, total, lastAddEvent, lastRemoveEvent } = useCart();
+  const { items, itemCount, total, lastAddEvent, lastRemoveEvent, triggerEqosyCartLoader } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
   const linkRef = useRef(null);
@@ -451,8 +451,12 @@ export default function AddToCartAnimation({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                debugLog('View cart clicked, navigating to:', linkTo);
-                navigate(linkTo);
+                if (triggerEqosyCartLoader) {
+                  triggerEqosyCartLoader("Opening Cart...", "Fetching your selected items...", 850);
+                }
+                setTimeout(() => {
+                  navigate(linkTo);
+                }, 150);
               }}
               className={`bg-gradient-to-r from-[#D94F0C] via-[#EB590E] to-[#D94F0C] text-white rounded-full shadow-xl shadow-orange-900/30 px-3 py-2 flex items-center gap-2 hover:from-[#D94F0C] hover:via-[#EB590E] hover:to-[#D94F0C] transition-all duration-300 pointer-events-auto border border-orange-800/30 backdrop-blur-sm cursor-pointer ${pillClassName}`}
             >

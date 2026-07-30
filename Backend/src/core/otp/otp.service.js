@@ -37,22 +37,11 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         const senderId = (config.smsSenderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
         const peId = (config.smsPeId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
         const templateId = (config.smsDltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
-        const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
+        const message = `Welcome to Eqosy. Your OTP for registration is ${otp}.BGADEC`;
 
         logger.info(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
 
-        // Endpoint 1: Vendor PushSMS GET endpoint
-        const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
-        pushUrl.searchParams.append('APIKey', apiKey);
-        pushUrl.searchParams.append('sid', senderId);
-        pushUrl.searchParams.append('msisdn', msisdn);
-        pushUrl.searchParams.append('msg', message);
-        pushUrl.searchParams.append('gwid', '2');
-        pushUrl.searchParams.append('fl', '0');
-        pushUrl.searchParams.append('DLT_TE_ID', templateId);
-        pushUrl.searchParams.append('PEID', peId);
-
-        // Endpoint 2: MT SendSMS GET endpoint
+        // Primary: MT SendSMS GET endpoint
         const sendUrl = new URL('http://cloud.smsindiahub.in/api/mt/SendSMS');
         sendUrl.searchParams.append('APIKey', apiKey);
         sendUrl.searchParams.append('senderid', senderId);
@@ -64,16 +53,33 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         sendUrl.searchParams.append('TemplateId', templateId);
         sendUrl.searchParams.append('PEID', peId);
 
-        const [res1, res2] = await Promise.allSettled([
-            fetch(pushUrl.toString(), { signal: AbortSignal.timeout(20000) }).then(r => r.text()),
-            fetch(sendUrl.toString(), { signal: AbortSignal.timeout(20000) }).then(r => r.text())
-        ]);
+        try {
+            const res = await fetch(sendUrl.toString(), { signal: AbortSignal.timeout(15000) });
+            const text = await res.text();
+            logger.info(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
+            console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
+            if (res.ok && !/error|invalid|failed|unauthor|reject/i.test(text)) {
+                return;
+            }
+        } catch (primaryErr) {
+            logger.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}. Trying vendor fallback...`);
+        }
 
-        const text1 = res1.status === 'fulfilled' ? res1.value : res1.reason?.message;
-        const text2 = res2.status === 'fulfilled' ? res2.value : res2.reason?.message;
+        // Fallback: Vendor PushSMS GET endpoint
+        const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
+        pushUrl.searchParams.append('APIKey', apiKey);
+        pushUrl.searchParams.append('sid', senderId);
+        pushUrl.searchParams.append('msisdn', msisdn);
+        pushUrl.searchParams.append('msg', message);
+        pushUrl.searchParams.append('gwid', '2');
+        pushUrl.searchParams.append('fl', '0');
+        pushUrl.searchParams.append('DLT_TE_ID', templateId);
+        pushUrl.searchParams.append('PEID', peId);
 
-        logger.info(`[SMS] Response pushsms.aspx=${text1} | SendSMS=${text2}`);
-        console.log(`[SMS] Dispatch response for ${msisdn}: pushsms.aspx=${text1} | SendSMS=${text2}`);
+        const fallbackRes = await fetch(pushUrl.toString(), { signal: AbortSignal.timeout(15000) });
+        const fallbackText = await fallbackRes.text();
+        logger.info(`[SMS] Vendor fallback response for ${msisdn}: ${fallbackText}`);
+        console.log(`[SMS] Vendor fallback response for ${msisdn}: ${fallbackText}`);
     } catch (error) {
         logger.error(`Error sending SMS to ${phone}: ${error.message}`);
     }

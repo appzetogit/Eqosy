@@ -698,6 +698,32 @@ const ContactDetailsSheet = ({
   );
 };
 
+const getItemDistanceKm = (item, pickupCoords) => {
+  if (!pickupCoords || !Array.isArray(pickupCoords) || pickupCoords.length < 2) return null;
+
+  if (typeof item === 'string') {
+    const coords = LOCATION_COORDS[item];
+    if (coords) {
+      const dist = calculateDistanceKm(pickupCoords, coords);
+      return dist > 0 ? dist.toFixed(1) : null;
+    }
+    return null;
+  }
+
+  if (item?.distanceKm) {
+    return String(item.distanceKm);
+  }
+
+  const nameKey = item?.label || item?.name || item?.description || '';
+  const matchedCoords = LOCATION_COORDS[nameKey] || Object.entries(LOCATION_COORDS).find(([k]) => nameKey.toLowerCase().includes(k.toLowerCase()))?.[1];
+  if (matchedCoords) {
+    const dist = calculateDistanceKm(pickupCoords, matchedCoords);
+    return dist > 0 ? dist.toFixed(1) : null;
+  }
+
+  return null;
+};
+
 const SenderReceiverDetails = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -739,6 +765,7 @@ const SenderReceiverDetails = () => {
   const [recoveredSelectedVehicles, setRecoveredSelectedVehicles] = useState([]);
   const [googleDropSuggestions, setGoogleDropSuggestions] = useState([]);
   const [isFetchingDropSuggestions, setIsFetchingDropSuggestions] = useState(false);
+  const [isDropInputFocused, setIsDropInputFocused] = useState(false);
   const autoPickupRequestedRef = useRef(false);
   const livePickupHydratedRef = useRef(false);
   const dropInputRef = useRef(null);
@@ -747,6 +774,32 @@ const SenderReceiverDetails = () => {
   const dropSuggestionCacheRef = useRef(new Map());
   const autocompleteServiceRef = useRef(null);
   const autocompleteSessionTokenRef = useRef(null);
+
+  const handleGoBack = () => {
+    if (activeMapPicker) {
+      setActiveMapPicker(null);
+      return;
+    }
+    if (isContactSheetOpen) {
+      setIsContactSheetOpen(false);
+      return;
+    }
+    if (window.history.length > 1 && window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate(`${routePrefix || '/taxi/user'}/parcel/type`, { replace: true });
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        handleGoBack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeMapPicker, isContactSheetOpen, routePrefix]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1338,60 +1391,63 @@ const SenderReceiverDetails = () => {
         }}
       />
 
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md px-4 py-4 flex items-center">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-slate-100 shadow-xs">
         <button 
-          onClick={() => navigate(-1)} 
-          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-800 hover:bg-slate-50 transition-colors"
+          type="button"
+          onClick={handleGoBack} 
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-800 hover:bg-slate-100/80 active:scale-95 transition-all bg-white border border-slate-200/80 shadow-xs cursor-pointer"
         >
-          <ArrowLeft size={24} />
+          <ArrowLeft size={18} className="text-slate-800" />
+          <span className="text-xs font-bold text-slate-800">Go Back</span>
         </button>
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Select Locations</p>
       </header>
 
       <main className="flex-1 px-4 pt-2 pb-28 z-10">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[32px] bg-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-slate-50 relative"
+          className="rounded-[24px] bg-white p-3.5 sm:p-5 shadow-[0_12px_40px_rgba(0,0,0,0.06)] border border-slate-100 relative"
         >
           {/* Route dots & line on the left */}
-          <div className="absolute left-6 top-10 flex flex-col items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <div className="w-0.5 h-20 border-l-2 border-dashed border-slate-100" />
-            <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+          <div className="absolute left-5 top-7 flex flex-col items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            <div className="w-0.5 h-16 border-l-2 border-dashed border-slate-100" />
+            <div className="w-2 h-2 rounded-full bg-rose-500" />
           </div>
 
-          <div className="pl-8 space-y-6">
+          <div className="pl-6 space-y-3">
             {/* Sender Card */}
-            <div className="bg-slate-50/80 rounded-2xl p-4 flex items-center justify-between gap-3 border border-slate-100/50">
+            <div className="bg-slate-50/80 rounded-xl p-3 flex items-center justify-between gap-2.5 border border-slate-100/50">
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Pickup</p>
-                <div className="flex items-center gap-2">
-                   <p className="text-[14px] font-black text-slate-900">{senderName || 'Sender Details'}</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500">Pickup</p>
+                <div className="flex items-center gap-1.5">
+                   <p className="text-[13px] font-black text-slate-900 truncate">{senderName || 'Sender Details'}</p>
                    {senderMobile && (
                      <>
-                        <div className="w-1 h-1 rounded-full bg-slate-300" />
-                        <p className="text-[12px] font-bold text-slate-500">{senderMobile}</p>
-                     </>
+                        <div className="w-1 h-1 rounded-full bg-slate-300 shrink-0" />
+                        <p className="text-[11px] font-bold text-slate-500 shrink-0">{senderMobile}</p>
+                      </>
                    )}
                 </div>
-                <p className="text-[13px] font-medium text-slate-500 truncate mt-1">{pickup || 'Pickup location'}</p>
+                <p className="text-[12px] font-medium text-slate-500 truncate mt-0.5">{pickup || 'Pickup location'}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveMapPicker('pickup')}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-100 bg-white text-emerald-600 shadow-sm"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-100 bg-white text-emerald-600 shadow-xs"
                   aria-label="Change pickup location"
                 >
-                  <LocateFixed size={18} />
+                  <LocateFixed size={16} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsContactSheetOpen(true)}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 bg-white text-slate-400 shadow-sm"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-100 bg-white text-slate-400 shadow-xs"
                   aria-label="Open sender details"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -1412,7 +1468,7 @@ const SenderReceiverDetails = () => {
                      errors.drop ? 'border-red-500 bg-red-50' : 'border-blue-600 focus:shadow-[0_0_0_4px_rgba(37,99,235,0.1)]'
                    }`}
                  />
-                 <Mic size={20} className="absolute right-5 top-1/2 -translate-y-1/2 text-blue-600" />
+                 <Mic size={20} className="absolute right-5 top-1/2 -translate-y-1/2 text-blue-600 pointer-events-none" />
               </div>
               <button className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100 shrink-0">
                  <Plus size={24} />
@@ -1423,77 +1479,108 @@ const SenderReceiverDetails = () => {
 
         <button 
           onClick={() => setActiveMapPicker('drop')} 
-          className="mt-8 mx-auto flex items-center gap-2 text-blue-600 font-black text-[13px] uppercase tracking-widest hover:bg-blue-50/50 px-4 py-2 rounded-full transition-colors"
+          className="mt-6 mx-auto flex items-center gap-2 text-blue-600 font-black text-[13px] uppercase tracking-widest hover:bg-blue-50/50 px-4 py-2 rounded-full transition-colors"
         >
            <MapPin size={18} fill="currentColor" className="text-blue-600/20" />
            Select on map
         </button>
 
-        <div className="mt-8 space-y-5 px-2">
+        {/* Clean Suggestions List with Distance Badges */}
+        <div className="mt-6 space-y-4 px-1">
           {googleDropSuggestions.length > 0 ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Search Results</p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300">Low API usage mode</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600">Distance from Pickup</p>
               </div>
               <div className="space-y-2">
-                {googleDropSuggestions.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => applySuggestion('drop', item)}
-                    className="flex w-full items-start gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 text-left shadow-sm hover:border-blue-200"
-                  >
-                    <Navigation size={14} className="mt-0.5 shrink-0 text-blue-500" />
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-black text-slate-800">{item.label}</p>
-                      {item.secondaryText ? (
-                        <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">{item.secondaryText}</p>
+                {googleDropSuggestions.map((item) => {
+                  const distKm = item.distanceKm || getItemDistanceKm(item, pickupCoords);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => applySuggestion('drop', item)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-blue-200 transition-all"
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <Navigation size={15} className="mt-0.5 shrink-0 text-blue-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-black text-slate-800">{item.label}</p>
+                          {item.secondaryText ? (
+                            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{item.secondaryText}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      {distKm ? (
+                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-black shrink-0">
+                          {distKm} km
+                        </span>
                       ) : null}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
 
           {!drop && nearbyDropSuggestions.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Near Current Pickup</p>
-              <div className="grid grid-cols-2 gap-2">
-                {nearbyDropSuggestions.map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => applySuggestion('drop', item)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left shadow-sm hover:border-blue-200"
-                  >
-                    <MapPin size={12} className="shrink-0 text-emerald-500" />
-                    <span className="truncate text-[12px] font-bold text-slate-700">{item}</span>
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {nearbyDropSuggestions.map((item) => {
+                  const distKm = getItemDistanceKm(item, pickupCoords);
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => applySuggestion('drop', item)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-emerald-200 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <MapPin size={15} className="shrink-0 text-emerald-500" />
+                        <span className="truncate text-[13px] font-bold text-slate-700">{item}</span>
+                      </div>
+                      {distKm ? (
+                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-black shrink-0">
+                          {distKm} km
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
 
           {!drop && dropSuggestions.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Popular Suggestions</p>
-              <div className="grid grid-cols-2 gap-2">
-                {dropSuggestions.map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => applySuggestion('drop', item)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left shadow-sm hover:border-blue-200"
-                  >
-                    <Navigation size={12} className="text-blue-500 shrink-0" />
-                    <span className="text-[12px] font-bold text-slate-700 truncate">{item}</span>
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {dropSuggestions.map((item) => {
+                  const distKm = getItemDistanceKm(item, pickupCoords);
+                  return (
+                    <button
+                      key={item}
+                      onClick={() => applySuggestion('drop', item)}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-blue-200 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Navigation size={15} className="text-blue-500 shrink-0" />
+                        <span className="text-[13px] font-bold text-slate-700 truncate">{item}</span>
+                      </div>
+                      {distKm ? (
+                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-black shrink-0">
+                          {distKm} km
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
 
           {Boolean(drop) && isFetchingDropSuggestions ? (
-            <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 shadow-sm">
+            <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 shadow-xs">
               Finding nearby drop suggestions...
             </div>
           ) : null}

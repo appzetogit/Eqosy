@@ -57,7 +57,7 @@ export function resolvePostLoginRoute() {
   if (typeof localStorage === 'undefined') return '/food/user'
 
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
-  if (storedRoute.startsWith('/taxi/')) return '/taxi/user'
+  if (storedRoute.startsWith('/taxi/')) return storedRoute.split('?')[0]
   if (storedRoute.startsWith('/food/user')) return '/food/user'
   if (
     storedRoute.startsWith('/food/') &&

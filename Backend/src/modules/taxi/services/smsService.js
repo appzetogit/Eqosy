@@ -5,7 +5,7 @@ import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 const SMS_INDIA_HUB_ENDPOINT = 'http://cloud.smsindiahub.in/api/mt/SendSMS';
 const DLT_TEMPLATE_TEXT =
   process.env.SMS_DLT_TEMPLATE_TEXT ||
-  'Welcome to the ##var## powered by Appzeto.Your OTP for registration is ##var##.BGADEC';
+  'Welcome to ##var##. Your OTP for registration is ##var##.BGADEC';
 const DEFAULT_BRAND_NAME = 'Eqosy';
 
 const isTruthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());

@@ -18,6 +18,7 @@ import api from "@food/api"
 import { restaurantAPI, adminAPI } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { useProfile } from "@food/context/ProfileContext"
+import { useCart } from "@food/context/CartContext"
 import { useLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
@@ -43,6 +44,7 @@ export default function CategoryPage() {
   const { category } = useParams()
   const navigate = useNavigate()
   const { vegMode, getDefaultAddress } = useProfile()
+  const { triggerEqosyCartLoader } = useCart()
   const { location } = useLocation()
   const [deliveryAddressMode, setDeliveryAddressMode] = useState(() => {
     try {
@@ -1568,6 +1570,11 @@ export default function CategoryPage() {
                     <Link
                       key={restaurant.id}
                       to={`/user/restaurants/${restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      onClick={() => {
+                        if (triggerEqosyCartLoader) {
+                          triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
+                        }
+                      }}
                       className="block"
                     >
                       <div className={`group ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
@@ -1671,7 +1678,16 @@ export default function CategoryPage() {
                 const isFavorite = favorites.has(restaurant.id)
 
                 return (
-                  <Link key={restaurant.id} to={`/user/restaurants/${restaurantSlug}`} className="h-full flex">
+                  <Link
+                    key={restaurant.id}
+                    to={`/user/restaurants/${restaurantSlug}`}
+                    onClick={() => {
+                      if (triggerEqosyCartLoader) {
+                        triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
+                      }
+                    }}
+                    className="h-full flex"
+                  >
                     <Card className={`overflow-hidden cursor-pointer gap-0 border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md h-full flex flex-col w-full ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
                       }`}>
                       {/* Image Section */}
