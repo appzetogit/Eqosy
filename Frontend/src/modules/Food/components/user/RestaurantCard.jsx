@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { motion } from "framer-motion";
 import { Star, Clock, IndianRupee, Heart } from "lucide-react";
 import OptimizedImage from "@food/components/OptimizedImage";
+import { normalizeImageUrl } from "../../utils/common";
 
 const WEBVIEW_SESSION_CACHE_BUSTER = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -47,8 +48,8 @@ const RestaurantImageCarousel = React.memo(({ restaurant, priority = false, back
       .map((img) => img.trim())
       .filter(Boolean);
 
-    return validImages.map((img) => withCacheBuster(img));
-  }, [restaurant.images, restaurant.image, withCacheBuster]);
+    return validImages.map((img) => withCacheBuster(normalizeImageUrl(img, backendOrigin)));
+  }, [restaurant.images, restaurant.image, withCacheBuster, backendOrigin]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadedBySrc, setLoadedBySrc] = useState({});
