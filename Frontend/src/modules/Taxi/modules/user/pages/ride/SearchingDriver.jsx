@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star, MapPin, Calendar, Clock3, LoaderCircle } from 'lucide-react';
@@ -248,25 +248,42 @@ const SearchingDriver = () => {
     ));
   };
 
-  const { isLoaded } = useAppGoogleMapsLoader();
+  const searchingMapRef = useRef(null);
 
-  const pickupPos = useMemo(
-    () => (
-      routeState.pickupCoords
-        ? { lng: routeState.pickupCoords[0], lat: routeState.pickupCoords[1] }
-        : { lat: 22.7196, lng: 75.8577 }
-    ),
-    [routeState.pickupCoords],
-  );
+  const fitSearchingMapBounds = useCallback(() => {
+    const map = searchingMapRef.current;
+    if (!map || !window.google?.maps?.LatLngBounds) return;
 
-  const dropPos = useMemo(
-    () => (
-      routeState.dropCoords
-        ? { lng: routeState.dropCoords[0], lat: routeState.dropCoords[1] }
-        : null
-    ),
-    [routeState.dropCoords],
-  );
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoints = false;
+
+    if (pickupPos?.lat && pickupPos?.lng && Number.isFinite(Number(pickupPos.lat)) && Number.isFinite(Number(pickupPos.lng))) {
+      bounds.extend(new window.google.maps.LatLng(Number(pickupPos.lat), Number(pickupPos.lng)));
+      hasPoints = true;
+    }
+
+    if (dropPos?.lat && dropPos?.lng && Number.isFinite(Number(dropPos.lat)) && Number.isFinite(Number(dropPos.lng))) {
+      bounds.extend(new window.google.maps.LatLng(Number(dropPos.lat), Number(dropPos.lng)));
+      hasPoints = true;
+    }
+
+    if (hasPoints) {
+      map.fitBounds(bounds, {
+        top: 100,
+        bottom: 380,
+        left: 48,
+        right: 48,
+      });
+    }
+  }, [pickupPos, dropPos]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = setTimeout(() => {
+      fitSearchingMapBounds();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [fitSearchingMapBounds, isLoaded]);
   const availableVehicleIcon = useMemo(
     () => (
       routeState.vehicleIconUrl ||
@@ -894,6 +911,15 @@ const SearchingDriver = () => {
             center={pickupPos}
             zoom={15}
             options={MAP_OPTIONS}
+            onLoad={(map) => {
+              searchingMapRef.current = map;
+              setTimeout(() => {
+                fitSearchingMapBounds();
+              }, 100);
+            }}
+            onUnmount={() => {
+              searchingMapRef.current = null;
+            }}
           >
             <Marker 
               position={pickupPos}

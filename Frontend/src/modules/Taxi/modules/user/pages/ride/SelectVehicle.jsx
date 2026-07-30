@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle, Calendar } from 'lucide-react';
@@ -156,7 +156,7 @@ const buildFallbackRoute = (origin, destination) => {
   ];
 };
 
-const VehicleMapPreview = React.memo(({ center, dropPosition, stops = [], drivers, selectedVehicle, isLoaded, loadError }) => {
+const VehicleMapPreview = React.memo(({ center, dropPosition, stops = [], drivers, selectedVehicle, isLoaded, loadError, bottomSheetHeight }) => {
   const mapRef = useRef(null);
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
@@ -215,6 +215,50 @@ const VehicleMapPreview = React.memo(({ center, dropPosition, stops = [], driver
     };
   }, [center, dropPosition, isLoaded, waypointRequests]);
 
+  const fitMapBounds = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps?.LatLngBounds) return;
+
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoints = false;
+
+    if (center?.lat && center?.lng && Number.isFinite(Number(center.lat)) && Number.isFinite(Number(center.lng))) {
+      bounds.extend(new window.google.maps.LatLng(Number(center.lat), Number(center.lng)));
+      hasPoints = true;
+    }
+
+    if (dropPosition?.lat && dropPosition?.lng && Number.isFinite(Number(dropPosition.lat)) && Number.isFinite(Number(dropPosition.lng))) {
+      bounds.extend(new window.google.maps.LatLng(Number(dropPosition.lat), Number(dropPosition.lng)));
+      hasPoints = true;
+    }
+
+    if (Array.isArray(routePath) && routePath.length > 0) {
+      routePath.forEach((pt) => {
+        if (pt?.lat && pt?.lng && Number.isFinite(Number(pt.lat)) && Number.isFinite(Number(pt.lng))) {
+          bounds.extend(new window.google.maps.LatLng(Number(pt.lat), Number(pt.lng)));
+        }
+      });
+    }
+
+    if (hasPoints) {
+      const computedSheetHeight = bottomSheetHeight || Math.round(window.innerHeight * 0.65);
+      map.fitBounds(bounds, {
+        top: 90,
+        bottom: Math.round(computedSheetHeight + 20),
+        left: 48,
+        right: 48,
+      });
+    }
+  }, [center, dropPosition, routePath, bottomSheetHeight]);
+
+  useEffect(() => {
+    if (!isLoaded || isMapInteracting) return;
+    const timer = setTimeout(() => {
+      fitMapBounds();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [fitMapBounds, isLoaded, isMapInteracting]);
+
   if (!HAS_VALID_GOOGLE_MAPS_KEY) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
@@ -258,6 +302,9 @@ const VehicleMapPreview = React.memo(({ center, dropPosition, stops = [], driver
         onLoad={(map) => {
           mapRef.current = map;
           setMapZoom(map.getZoom?.() || 13);
+          setTimeout(() => {
+            fitMapBounds();
+          }, 100);
         }}
         onUnmount={() => {
           mapRef.current = null;
@@ -955,6 +1002,30 @@ const SelectVehicle = () => {
   const [isResolvingTripMetrics, setIsResolvingTripMetrics] = useState(true);
   const [showScrollArrow, setShowScrollArrow] = useState(false);
   const scrollRef = React.useRef(null);
+  const bottomSheetRef = useRef(null);
+  const [bottomSheetHeight, setBottomSheetHeight] = useState(480);
+
+  useEffect(() => {
+    const updateSheetHeight = () => {
+      if (bottomSheetRef.current) {
+        const measured = bottomSheetRef.current.getBoundingClientRect().height;
+        if (measured > 0) {
+          setBottomSheetHeight(measured);
+        }
+      }
+    };
+
+    updateSheetHeight();
+    const observer = new ResizeObserver(updateSheetHeight);
+    if (bottomSheetRef.current) {
+      observer.observe(bottomSheetRef.current);
+    }
+    window.addEventListener('resize', updateSheetHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateSheetHeight);
+    };
+  }, []);
   const availabilityHistoryRef = useRef({});
   const scheduledAtInputRef = useRef(null);
   const navigate = useNavigate();
@@ -1860,6 +1931,7 @@ const SelectVehicle = () => {
           selectedVehicle={selectedVehicle}
           isLoaded={isMapLoaded}
           loadError={mapLoadError}
+          bottomSheetHeight={bottomSheetHeight}
         />
 
         <div className="absolute top-6 left-4 right-4 z-20 flex items-center gap-2.5">
@@ -1874,7 +1946,7 @@ const SelectVehicle = () => {
 
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[69dvh] min-h-[360px] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.16)]">
+      <div ref={bottomSheetRef} className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[69dvh] min-h-[360px] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.16)]">
         <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-2.5 mb-2 shrink-0" />
 
         <div className="shrink-0 border-b border-slate-100 px-4 pb-3">
