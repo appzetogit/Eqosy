@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
@@ -20,6 +20,7 @@ export default function UnifiedOTPFastLogin() {
   const [name, setName] = useState("")
   const [pendingAuthData, setPendingAuthData] = useState(null)
   const navigate = useNavigate()
+  const location = useLocation()
   const submitting = useRef(false)
 
   const handleBack = () => {
@@ -27,10 +28,15 @@ export default function UnifiedOTPFastLogin() {
       setStep(1)
       return
     }
+    const fromPath = location.state?.from
+    if (fromPath && fromPath !== '/login') {
+      navigate(fromPath, { replace: true })
+      return
+    }
     if (typeof window !== 'undefined' && window.history.length > 2) {
       navigate(-1)
     } else {
-      navigate('/food/user')
+      navigate('/taxi/user')
     }
   }
 
@@ -291,7 +297,8 @@ export default function UnifiedOTPFastLogin() {
         console.warn("[Auth] FCM save route failed after login:", fcmSaveError?.message || fcmSaveError)
       }
       toast.success("Authentication successful!")
-      navigate(resolvePostLoginRoute())
+      const targetRoute = location.state?.from || resolvePostLoginRoute()
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       const status = err?.response?.status
       let msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Invalid OTP. Please try again."
@@ -349,7 +356,8 @@ export default function UnifiedOTPFastLogin() {
 
       setUnifiedAuthData(nextData)
       toast.success("Profile completed successfully!")
-      navigate(resolvePostLoginRoute())
+      const targetRoute = location.state?.from || resolvePostLoginRoute()
+      navigate(targetRoute, { replace: true })
     } catch (err) {
       const msg =
         err?.response?.data?.message ||

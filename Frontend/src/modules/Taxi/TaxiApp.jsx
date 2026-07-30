@@ -416,7 +416,7 @@ const UserProtectedRoute = () => {
   const location = useLocation();
 
   if (!getLocalUserToken()) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" state={{ from: location.pathname }} />;
   }
 
   return <Outlet />;
@@ -702,12 +702,10 @@ function TaxiApp() {
               <Route path="verify-otp" element={<Navigate to="/login" replace />} />
               <Route path="signup" element={<Signup />} />
 
+              <Route path="ride/select-location" element={<SelectLocation />} />
+              <Route path="ride/select-vehicle" element={<SelectVehicle />} />
+
               <Route element={<UserProtectedRoute />}>
-                <Route
-                  path="ride/select-location"
-                  element={<SelectLocation />}
-                />
-                <Route path="ride/select-vehicle" element={<SelectVehicle />} />
                 <Route path="ride/searching" element={<SearchingDriver />} />
                 <Route path="ride/tracking" element={<RideTracking />} />
                 <Route path="ride/complete" element={<RideComplete />} />
@@ -808,15 +806,10 @@ function TaxiApp() {
               <Route path="user/signup" element={<Signup />} />
               <Route path="user" element={<UserHomeRoute taxiPrefixed />} />
 
+              <Route path="user/ride/select-location" element={<SelectLocation />} />
+              <Route path="user/ride/select-vehicle" element={<SelectVehicle />} />
+
               <Route element={<UserProtectedRoute />}>
-                <Route
-                  path="user/ride/select-location"
-                  element={<SelectLocation />}
-                />
-                <Route
-                  path="user/ride/select-vehicle"
-                  element={<SelectVehicle />}
-                />
                 <Route
                   path="user/ride/searching"
                   element={<SearchingDriver />}
