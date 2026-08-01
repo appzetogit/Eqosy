@@ -5115,8 +5115,8 @@ export const getDriverApprovalStatus = async (req, res) => {
 
   const payload = verifyAccessToken(token);
 
-  if (!["driver", "owner"].includes(String(payload.role || "").toLowerCase())) {
-    throw new ApiError(403, "Insufficient permissions for this resource");
+  if (!["driver", "owner", "bus_driver"].includes(String(payload.role || "").toLowerCase())) {
+    throw new ApiError(403, `Insufficient permissions for this resource. Role '${payload.role}' is not allowed.`);
   }
 
   if (String(payload.role || "").toLowerCase() === "owner") {
@@ -5144,6 +5144,38 @@ export const getDriverApprovalStatus = async (req, res) => {
         documents: owner.documents || {},
         onboarding: owner.onboarding || {},
         isOnline: false,
+        isOnRide: false,
+      },
+    });
+    return;
+  }
+
+  if (String(payload.role || "").toLowerCase() === "bus_driver") {
+    const BusDriver = mongoose.model('BusDriver');
+    const busDriver = await BusDriver.findById(payload.sub);
+
+    if (!busDriver) {
+      throw new ApiError(404, "Bus Driver not found");
+    }
+
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    res.json({
+      success: true,
+      data: {
+        id: busDriver._id,
+        name: busDriver.name,
+        phone: busDriver.phone,
+        approve: busDriver.approve,
+        status: busDriver.status,
+        documents: busDriver.documents || {},
+        onboarding: busDriver.onboarding || {},
+        isOnline: busDriver.active,
         isOnRide: false,
       },
     });
