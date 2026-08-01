@@ -1,49 +1,54 @@
 import React from 'react';
-import { Bus, CalendarDays, ClipboardList, LayoutDashboard, LogOut } from 'lucide-react';
+import { Bus, CalendarDays, ClipboardList, LayoutDashboard, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Home', Icon: LayoutDashboard },
   { id: 'schedule', label: 'Schedule', Icon: CalendarDays },
-  { id: 'desk', label: 'Desk', Icon: Bus },
+  { id: 'desk', label: 'Seat Desk', Icon: Bus },
   { id: 'bookings', label: 'Bookings', Icon: ClipboardList },
-  { id: 'logout', label: 'Logout', Icon: LogOut },
+  { id: 'profile', label: 'Profile', Icon: User },
 ];
 
-const BusDriverBottomNav = ({ activeTab = 'overview', onChangeTab, onLogout }) => (
-  <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-100 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-md shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
-    <div className="mx-auto grid h-[68px] w-full max-w-lg grid-cols-5 items-stretch gap-0.5">
-      {NAV_ITEMS.map((item) => {
-        const isActive = item.id !== 'logout' && activeTab === item.id;
+const BusDriverBottomNav = ({ activeTab = 'overview', onChangeTab }) => (
+  <div className="fixed bottom-4 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center">
+    <nav className="pointer-events-auto w-full max-w-md overflow-hidden rounded-full border border-slate-700/60 bg-[#0F172A]/95 p-1.5 shadow-2xl shadow-slate-950/50 backdrop-blur-xl">
+      <div className="grid grid-cols-5 items-center gap-1 relative">
+        {NAV_ITEMS.map((item) => {
+          const isActive = activeTab === item.id;
+          const Icon = item.Icon;
 
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => (item.id === 'logout' ? onLogout?.() : onChangeTab?.(item.id))}
-            className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-center transition-all duration-300 ${
-              isActive
-                ? 'bg-slate-50 text-black translate-y-[-1px]'
-                : item.id === 'logout'
-                  ? 'text-rose-500/85 font-bold'
-                  : 'text-black/60 font-bold opacity-80'
-            }`}
-          >
-            <div className={`transition-all duration-300 ${isActive ? 'scale-105' : ''}`}>
-              <item.Icon strokeWidth={isActive ? 2.5 : 2} size={20} />
-            </div>
-            <span
-              className={`max-w-full truncate text-[8px] uppercase tracking-[0.04em] transition-all duration-300 ${
-                isActive ? 'opacity-100 scale-100 font-black' : 'opacity-80 scale-95 font-bold'
+          return (
+            <motion.button
+              key={item.id}
+              whileTap={{ scale: 0.92 }}
+              type="button"
+              onClick={() => onChangeTab?.(item.id)}
+              className={`relative flex flex-col items-center justify-center py-2 px-1 rounded-full transition-colors ${
+                isActive ? 'text-white font-black' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {item.label}
-            </span>
-            {isActive ? <div className="absolute -top-2 h-[2px] w-7 rounded-full bg-slate-900" /> : null}
-          </button>
-        );
-      })}
-    </div>
-  </nav>
+              {isActive ? (
+                <motion.div
+                  layoutId="busNavActivePill"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF8533] shadow-lg shadow-[#FF6B00]/40"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                />
+              ) : null}
+
+              <div className="relative z-10 flex flex-col items-center gap-0.5">
+                <Icon size={18} strokeWidth={isActive ? 2.5 : 1.8} className={isActive ? 'text-white' : ''} />
+                <span className="text-[9px] font-black uppercase tracking-wider scale-95 truncate">
+                  {item.label}
+                </span>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+    </nav>
+  </div>
 );
 
 export default BusDriverBottomNav;
+

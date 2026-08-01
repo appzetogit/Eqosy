@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
 import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
@@ -135,10 +136,11 @@ const PendingOwners = () => {
         } else {
           await adminService.approveOwner(id, { approve: true });
         }
+        toast.success('Owner account approved successfully!');
         await fetchPendingOwners();
       }
     } catch (err) {
-      alert(err?.message || `Network error during ${action}`);
+      toast.error(err?.message || `Error during ${action}`);
     } finally {
       closeMenu();
     }

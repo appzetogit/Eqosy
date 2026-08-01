@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 import { adminService } from '../../services/adminService';
 import OwnerFormPanel from './OwnerFormPanel';
@@ -121,14 +122,15 @@ const ManageOwners = () => {
       const response = await adminService.updateOwner(editingId, formData);
 
       if (response.success) {
+        toast.success('Owner profile updated successfully');
         setView('list');
         setFormData(initialFormData);
         fetchInitialData();
       } else {
-        alert(response.message || 'Failed to update owner');
+        toast.error(response.message || 'Failed to update owner');
       }
     } catch (error) {
-      alert(error.message || 'Operation failed');
+      toast.error(error.message || 'Operation failed');
     } finally {
       setSubmitting(false);
     }
@@ -165,15 +167,16 @@ const ManageOwners = () => {
     try {
       const response = await adminService.approveOwner(ownerId, { approve: !currentApproved });
       if (response.success) {
+        toast.success(`Owner ${!currentApproved ? 'approved' : 'unapproved'} successfully`);
         const updatedOwner = response.data;
         setOwners((currentOwners) =>
           currentOwners.map((item) => (item._id === ownerId || item.id === ownerId ? updatedOwner : item))
         );
       } else {
-        alert(response.message || 'Failed to update approval status');
+        toast.error(response.message || 'Failed to update approval status');
       }
     } catch (error) {
-      alert(error.message || 'Failed to update approval status');
+      toast.error(error.message || 'Failed to update approval status');
     }
   };
 
@@ -185,15 +188,16 @@ const ManageOwners = () => {
       });
 
       if (response.success) {
+        toast.success(`Owner status updated to ${status.toUpperCase()}`);
         const updatedOwner = response.data;
         setOwners((currentOwners) =>
           currentOwners.map((item) => (item._id === ownerId || item.id === ownerId ? updatedOwner : item))
         );
       } else {
-        alert(response.message || 'Failed to update owner status');
+        toast.error(response.message || 'Failed to update owner status');
       }
     } catch (error) {
-      alert(error.message || 'Failed to update owner status');
+      toast.error(error.message || 'Failed to update owner status');
     }
   };
 
@@ -203,12 +207,13 @@ const ManageOwners = () => {
     try {
       const response = await adminService.deleteOwner(id);
       if (response.success) {
+        toast.success('Owner account deleted');
         fetchInitialData();
       } else {
-        alert(response.message || 'Delete failed');
+        toast.error(response.message || 'Delete failed');
       }
     } catch (error) {
-      alert(error.message || 'Delete failed');
+      toast.error(error.message || 'Delete failed');
     }
   };
 

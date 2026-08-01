@@ -49,9 +49,9 @@ const calculateHaversineDistance = (coords1, coords2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const d = R * c; // Distance in km
   return d;
@@ -556,7 +556,7 @@ const SelectLocation = () => {
     const startCoord = Array.isArray(pickupCoords) && pickupCoords.length === 2
       ? { lat: pickupCoords[1], lng: pickupCoords[0] }
       : INDIA_CENTER;
-    
+
     setMapCenter(startCoord);
     lastCenterRef.current = startCoord;
     setShowMapPicker(true);
@@ -567,14 +567,14 @@ const SelectLocation = () => {
     const center = mapInstanceRef.current.getCenter();
     const lat = center.lat();
     const lng = center.lng();
-    
+
     // Only update and geocode if the center has actually changed significantly
     const dist = Math.abs(lat - lastCenterRef.current.lat) + Math.abs(lng - lastCenterRef.current.lng);
     if (dist < 0.00001) {
       setIsDragging(false);
       return;
     }
-    
+
     lastCenterRef.current = { lat, lng };
     setIsDragging(false);
 
@@ -594,17 +594,17 @@ const SelectLocation = () => {
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) return;
     setIsLocating(true);
-    
+
     const onSuccess = (pos) => {
       setIsLocating(false);
       const { latitude, longitude } = pos.coords;
       const newCoords = { lat: latitude, lng: longitude };
-      
+
       if (mapInstanceRef.current) {
         mapInstanceRef.current.panTo(newCoords);
         mapInstanceRef.current.setZoom(17);
       }
-      
+
       // Explicitly geocode and update pickedAddress
       setIsGeocoding(true);
       if (window.google?.maps?.Geocoder) {
@@ -621,17 +621,17 @@ const SelectLocation = () => {
         setIsGeocoding(false);
         setPickedAddress(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
       }
-      
+
       lastCenterRef.current = newCoords;
     };
-    
+
     const onError = () => {
       setIsLocating(false);
     };
-    
+
     const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
     const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
-    
+
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
@@ -651,7 +651,7 @@ const SelectLocation = () => {
         setIsLocating(false);
         const { latitude, longitude } = pos.coords;
         const coords = [longitude, latitude];
-        
+
         if (window.google?.maps?.Geocoder) {
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
@@ -676,15 +676,15 @@ const SelectLocation = () => {
           setPickupCoords(coords);
         }
       };
-      
+
       const onError = (err) => {
         console.warn("Auto-location failed:", err);
         setIsLocating(false);
       };
-      
+
       const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
       const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
-      
+
       navigator.geolocation.getCurrentPosition(
         onSuccess,
         (err) => {
@@ -699,7 +699,7 @@ const SelectLocation = () => {
   const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
     const finalPickup = pickup || savedPickupLabel || 'Current Location';
-    
+
     if (!finalDrop || !String(finalDrop).trim()) return;
 
     let resolvedPickupCoords = pickupCoords;
@@ -792,12 +792,12 @@ const SelectLocation = () => {
   const handleUseCurrentLocationResult = () => {
     if (!navigator.geolocation) return;
     setIsLocating(true);
-    
+
     const onSuccess = (pos) => {
       setIsLocating(false);
       const { latitude, longitude } = pos.coords;
       const coords = [longitude, latitude];
-      
+
       if (window.google?.maps?.Geocoder) {
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
@@ -832,14 +832,14 @@ const SelectLocation = () => {
         }
       }
     };
-    
+
     const onError = () => {
       setIsLocating(false);
     };
-    
+
     const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
     const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
-    
+
     navigator.geolocation.getCurrentPosition(
       onSuccess,
       (err) => {
@@ -966,20 +966,20 @@ const SelectLocation = () => {
           >
             {/* Map Header */}
             <div className="absolute top-0 left-0 right-0 z-20 px-5 pt-10 pb-4 bg-gradient-to-b from-white via-white/80 to-transparent">
-               <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setShowMapPicker(false)}
-                    className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-95 transition-all"
-                  >
-                    <ArrowLeft size={20} className="text-slate-900" strokeWidth={2.5} />
-                  </button>
-                  <div className="flex-1 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Select Point</p>
-                    <p className="text-[14px] font-semibold text-slate-900 truncate leading-tight">
-                      {isGeocoding ? 'Locating...' : pickedAddress}
-                    </p>
-                  </div>
-               </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowMapPicker(false)}
+                  className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-95 transition-all"
+                >
+                  <ArrowLeft size={20} className="text-slate-900" strokeWidth={2.5} />
+                </button>
+                <div className="flex-1 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Select Point</p>
+                  <p className="text-[14px] font-semibold text-slate-900 truncate leading-tight">
+                    {isGeocoding ? 'Locating...' : pickedAddress}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Map Area */}
@@ -1037,7 +1037,7 @@ const SelectLocation = () => {
               {/* Central Pin - Uber Style */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[100%] pointer-events-none z-10">
                 <div className="relative">
-                  <motion.div 
+                  <motion.div
                     animate={isDragging || isGeocoding ? { y: -12 } : { y: 0 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                     className="flex flex-col items-center"
@@ -1056,7 +1056,7 @@ const SelectLocation = () => {
               </div>
 
               {/* Current Location FAB */}
-              <button 
+              <button
                 onClick={handleUseCurrentLocation}
                 disabled={isLocating}
                 className="absolute bottom-6 right-5 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 active:scale-90 transition-all z-20"
@@ -1072,13 +1072,13 @@ const SelectLocation = () => {
             {/* Confirm Actions */}
             <div className="px-5 pt-4 pb-10 bg-white border-t border-slate-50 space-y-4">
               <div className="flex items-center gap-3 py-1 px-1">
-                 <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                    <MapPin size={20} className="text-slate-400" />
-                 </div>
-                 <div className="min-w-0 flex-1">
-                    <h4 className="text-[15px] font-bold text-slate-900 leading-none">Confirm Spot</h4>
-                    <p className="text-[12px] font-medium text-slate-400 mt-1 line-clamp-1">{pickedAddress}</p>
-                 </div>
+                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                  <MapPin size={20} className="text-slate-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[15px] font-bold text-slate-900 leading-none">Confirm Spot</h4>
+                  <p className="text-[12px] font-medium text-slate-400 mt-1 line-clamp-1">{pickedAddress}</p>
+                </div>
               </div>
               <button
                 onClick={handleConfirmMapLocation}
@@ -1095,185 +1095,183 @@ const SelectLocation = () => {
 
       {/* Sticky top: header, location inputs, and action pills */}
       <div className="relative z-30 shrink-0 bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_100%)]">
-      {/* Header */}
-      <header>
-        <div className="bg-white/70 backdrop-blur-md border-b border-white/70 shadow-[0_10px_20px_rgba(15,23,42,0.05)]">
-          <div className="px-5 py-4 flex items-center gap-3">
-            <button 
-              type="button"
-              onClick={handleBackClick} 
-              className="p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
-              aria-label="Go back"
-            >
-              <ArrowLeft size={22} className="text-slate-900" strokeWidth={3} />
-            </button>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ride</p>
-              <h1 className="mt-0.5 text-[20px] font-bold text-slate-900 tracking-tight leading-none truncate">Where to?</h1>
+        {/* Header */}
+        <header>
+          <div className="bg-white/70 backdrop-blur-md border-b border-white/70 shadow-[0_10px_20px_rgba(15,23,42,0.05)]">
+            <div className="px-5 py-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleBackClick}
+                className="p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
+                aria-label="Go back"
+              >
+                <ArrowLeft size={22} className="text-slate-900" strokeWidth={3} />
+              </button>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ride</p>
+                <h1 className="mt-0.5 text-[20px] font-bold text-slate-900 tracking-tight leading-none truncate">Where to?</h1>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Input Card */}
-      <div className="relative z-10 px-5 pt-4">
-        <div className="bg-white/80 backdrop-blur-md rounded-[22px] p-4 shadow-[0_18px_44px_rgba(15,23,42,0.08)] border border-white/80">
-          <div className="space-y-3">
+        {/* Input Card */}
+        <div className="relative z-10 px-5 pt-4">
+          <div className="bg-white/80 backdrop-blur-md rounded-[22px] p-4 shadow-[0_18px_44px_rgba(15,23,42,0.08)] border border-white/80">
+            <div className="space-y-3">
 
-            {/* Pickup Row */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center gap-0.5 shrink-0">
-                <div className="w-5 h-5 rounded-full border-2 border-emerald-700 bg-white/70 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-700" />
-                </div>
-              </div>
-              <div
-                className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'pickup' ? 'ring-2 ring-emerald-200' : ''}`}
-                onClick={() => setActiveInput('pickup')}
-              >
-                <input
-                  type="text"
-                  value={pickup}
-                  onChange={(e) => setPickup(sanitizeLocationInput(e.target.value))}
-                  onFocus={() => setActiveInput('pickup')}
-                  placeholder="Your pickup location"
-                  className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
-                />
-                {pickup.length > 0 && (
-                  <button onClick={() => setPickup('')} className="ml-2 shrink-0">
-                    <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Dotted connector */}
-            <div className="ml-[9px] h-2 w-[1.5px] border-l-[1.5px] border-dotted border-slate-300/70" />
-
-            {/* Dynamic Stops */}
-            <AnimatePresence>
-              {stops.map((stop, idx) => (
-                <motion.div
-                  key={`stop-${idx}`}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-center gap-0.5 shrink-0">
-                      <div className="w-5 h-5 rounded-full border-2 border-indigo-500 bg-white/70 flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                      </div>
-                    </div>
-                    <div
-                      className={`flex-1 flex items-center rounded-xl px-3 py-2.5 transition-all ${
-                        stop.trim().length > 0
-                          ? 'bg-white/90 border border-indigo-200 shadow-[0_10px_24px_rgba(99,102,241,0.10)]'
-                          : 'bg-indigo-50/70 border border-indigo-100/70'
-                      } ${activeInput === idx ? 'ring-2 ring-indigo-200' : ''}`}
-                      onClick={() => setActiveInput(idx)}
-                    >
-                      <input
-                        type="text"
-                        value={stop}
-                        autoFocus={activeInput === idx}
-                        placeholder={`Stop ${idx + 1} location...`}
-                        onFocus={() => setActiveInput(idx)}
-                        onChange={(e) => updateStop(idx, sanitizeLocationInput(e.target.value))}
-                        className={`w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none ${
-                          stop.trim().length > 0 ? 'placeholder:text-slate-300' : 'placeholder:text-indigo-300'
-                        }`}
-                      />
-                      {stop.length > 0 && (
-                        <button onClick={() => updateStop(idx, '')} className="ml-2 shrink-0">
-                          <X size={16} className="text-indigo-300 hover:text-indigo-600 transition-colors" />
-                        </button>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => removeStop(idx)}
-                      className="w-7 h-7 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0 active:scale-95 transition-all"
-                    >
-                      <Minus size={14} className="text-rose-500" strokeWidth={3} />
-                    </button>
+              {/* Pickup Row */}
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center gap-0.5 shrink-0">
+                  <div className="w-5 h-5 rounded-full border-2 border-emerald-700 bg-white/70 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-700" />
                   </div>
-                  {/* Connector after each stop */}
-                  <div className="ml-[9px] mt-3 h-2 w-[1.5px] border-l-[1.5px] border-dotted border-slate-300/70" />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-
-            {/* Drop Row */}
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center gap-0.5 shrink-0">
-                <div className="w-5 h-5 rounded-full border-2 border-orange-600 bg-white/70 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+                </div>
+                <div
+                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'pickup' ? 'ring-2 ring-emerald-200' : ''}`}
+                  onClick={() => setActiveInput('pickup')}
+                >
+                  <input
+                    type="text"
+                    value={pickup}
+                    onChange={(e) => setPickup(sanitizeLocationInput(e.target.value))}
+                    onFocus={() => setActiveInput('pickup')}
+                    placeholder="Your pickup location"
+                    className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
+                  />
+                  {pickup.length > 0 && (
+                    <button onClick={() => setPickup('')} className="ml-2 shrink-0">
+                      <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <div
-                className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'drop' ? 'ring-2 ring-orange-200' : ''}`}
-                onClick={() => setActiveInput('drop')}
-              >
-                <input
-                  type="text"
-                  value={drop}
-                  autoFocus={activeInput === 'drop'}
-                  placeholder="Enter drop location..."
-                  onFocus={() => setActiveInput('drop')}
-                  onChange={(e) => setDrop(sanitizeLocationInput(e.target.value))}
-                  className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
-                />
-                {drop.length > 0 && (
-                  <button onClick={() => setDrop('')} className="ml-2 shrink-0">
-                    <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />
-                  </button>
-                )}
+
+              {/* Dotted connector */}
+              <div className="ml-[9px] h-2 w-[1.5px] border-l-[1.5px] border-dotted border-slate-300/70" />
+
+              {/* Dynamic Stops */}
+              <AnimatePresence>
+                {stops.map((stop, idx) => (
+                  <motion.div
+                    key={`stop-${idx}`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        <div className="w-5 h-5 rounded-full border-2 border-indigo-500 bg-white/70 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                        </div>
+                      </div>
+                      <div
+                        className={`flex-1 flex items-center rounded-xl px-3 py-2.5 transition-all ${stop.trim().length > 0
+                            ? 'bg-white/90 border border-indigo-200 shadow-[0_10px_24px_rgba(99,102,241,0.10)]'
+                            : 'bg-indigo-50/70 border border-indigo-100/70'
+                          } ${activeInput === idx ? 'ring-2 ring-indigo-200' : ''}`}
+                        onClick={() => setActiveInput(idx)}
+                      >
+                        <input
+                          type="text"
+                          value={stop}
+                          autoFocus={activeInput === idx}
+                          placeholder={`Stop ${idx + 1} location...`}
+                          onFocus={() => setActiveInput(idx)}
+                          onChange={(e) => updateStop(idx, sanitizeLocationInput(e.target.value))}
+                          className={`w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none ${stop.trim().length > 0 ? 'placeholder:text-slate-300' : 'placeholder:text-indigo-300'
+                            }`}
+                        />
+                        {stop.length > 0 && (
+                          <button onClick={() => updateStop(idx, '')} className="ml-2 shrink-0">
+                            <X size={16} className="text-indigo-300 hover:text-indigo-600 transition-colors" />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeStop(idx)}
+                        className="w-7 h-7 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0 active:scale-95 transition-all"
+                      >
+                        <Minus size={14} className="text-rose-500" strokeWidth={3} />
+                      </button>
+                    </div>
+                    {/* Connector after each stop */}
+                    <div className="ml-[9px] mt-3 h-2 w-[1.5px] border-l-[1.5px] border-dotted border-slate-300/70" />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Drop Row */}
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center gap-0.5 shrink-0">
+                  <div className="w-5 h-5 rounded-full border-2 border-orange-600 bg-white/70 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+                  </div>
+                </div>
+                <div
+                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'drop' ? 'ring-2 ring-orange-200' : ''}`}
+                  onClick={() => setActiveInput('drop')}
+                >
+                  <input
+                    type="text"
+                    value={drop}
+                    autoFocus={activeInput === 'drop'}
+                    placeholder="Enter drop location..."
+                    onFocus={() => setActiveInput('drop')}
+                    onChange={(e) => setDrop(sanitizeLocationInput(e.target.value))}
+                    className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
+                  />
+                  {drop.length > 0 && (
+                    <button onClick={() => setDrop('')} className="ml-2 shrink-0">
+                      <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />
+                    </button>
+                  )}
+                </div>
               </div>
+
             </div>
-
           </div>
         </div>
-      </div>
 
-      {/* Action Pills */}
-      <div className="relative z-10 flex gap-3 px-5 my-4">
-        <button
-          onClick={showMapToast}
-          className="flex-1 flex items-center justify-center gap-2 bg-white/75 backdrop-blur-md border border-white/80 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold text-slate-800"
-        >
-          <MapPin size={16} className="text-slate-900" />
-          <span>Select on map</span>
-        </button>
-        <button
-          onClick={addStop}
-          className="flex-1 flex items-center justify-center gap-2 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold bg-white/75 backdrop-blur-md border border-white/80 text-slate-800"
-        >
-          <div className="w-4 h-4 rounded bg-indigo-500 flex items-center justify-center">
-            <Plus size={12} className="text-white" strokeWidth={3} />
-          </div>
-          <span>Add stop {stops.length > 0 ? `(${stops.length})` : ''}</span>
-        </button>
-      </div>
-
-      {/* Stop count chips */}
-      {stops.length > 0 && (
-        <div className="relative z-10 px-5 mb-2">
-          <div className="flex gap-2 flex-wrap">
-            {stops.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-1.5 bg-white/75 backdrop-blur-md border border-white/80 rounded-full px-3 py-1 shadow-sm">
-                <div className="w-2 h-2 rounded-full bg-indigo-400" />
-                <span className="text-[12px] font-bold text-slate-700 truncate max-w-[110px]">
-                  {s.trim() || `Stop ${idx + 1}`}
-                </span>
-                <button onClick={() => removeStop(idx)}>
-                  <X size={11} className="text-slate-400 hover:text-slate-700" strokeWidth={3} />
-                </button>
-              </div>
-            ))}
-          </div>
+        {/* Action Pills */}
+        <div className="relative z-10 flex gap-3 px-5 my-4">
+          <button
+            onClick={showMapToast}
+            className="flex-1 flex items-center justify-center gap-2 bg-white/75 backdrop-blur-md border border-white/80 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold text-slate-800"
+          >
+            <MapPin size={16} className="text-slate-900" />
+            <span>Select on map</span>
+          </button>
+          <button
+            onClick={addStop}
+            className="flex-1 flex items-center justify-center gap-2 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold bg-white/75 backdrop-blur-md border border-white/80 text-slate-800"
+          >
+            <div className="w-4 h-4 rounded bg-indigo-500 flex items-center justify-center">
+              <Plus size={12} className="text-white" strokeWidth={3} />
+            </div>
+            <span>Add stop {stops.length > 0 ? `(${stops.length})` : ''}</span>
+          </button>
         </div>
-      )}
+
+        {/* Stop count chips */}
+        {stops.length > 0 && (
+          <div className="relative z-10 px-5 mb-2">
+            <div className="flex gap-2 flex-wrap">
+              {stops.map((s, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 bg-white/75 backdrop-blur-md border border-white/80 rounded-full px-3 py-1 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                  <span className="text-[12px] font-bold text-slate-700 truncate max-w-[110px]">
+                    {s.trim() || `Stop ${idx + 1}`}
+                  </span>
+                  <button onClick={() => removeStop(idx)}>
+                    <X size={11} className="text-slate-400 hover:text-slate-700" strokeWidth={3} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scrollable search results / popular locations — dismisses keypad on scroll */}
@@ -1299,18 +1297,18 @@ const SelectLocation = () => {
               onClick={handleUseCurrentLocationResult}
               className="w-full text-left flex items-center gap-3 px-4 py-3.5 border-b border-white/70 bg-emerald-50/30 hover:bg-emerald-50/50 transition-colors group"
             >
-               <div className="w-10 h-10 rounded-2xl bg-white border border-emerald-100 shadow-sm flex items-center justify-center shrink-0">
-                  {isLocating ? (
-                     <LoaderCircle size={18} className="animate-spin text-emerald-500" />
-                  ) : (
-                     <Navigation size={18} className="text-emerald-500 fill-emerald-50" />
-                  )}
-               </div>
-               <div className="flex-1">
-                  <h4 className="text-[15px] font-bold text-slate-900 leading-tight group-hover:text-emerald-600 transition-colors">Use Current Location</h4>
-                  <p className="text-[12px] text-slate-400 font-medium mt-0.5">Perfect for accurate pickup</p>
-               </div>
-               <ChevronRight size={16} className="text-slate-300" />
+              <div className="w-10 h-10 rounded-2xl bg-white border border-emerald-100 shadow-sm flex items-center justify-center shrink-0">
+                {isLocating ? (
+                  <LoaderCircle size={18} className="animate-spin text-emerald-500" />
+                ) : (
+                  <Navigation size={18} className="text-emerald-500 fill-emerald-50" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h4 className="text-[15px] font-bold text-slate-900 leading-tight group-hover:text-emerald-600 transition-colors">Use Current Location</h4>
+                <p className="text-[12px] text-slate-400 font-medium mt-0.5">Perfect for accurate pickup</p>
+              </div>
+              <ChevronRight size={16} className="text-slate-300" />
             </motion.button>
 
             {searchResults.map((result, idx) => (
@@ -1372,4 +1370,5 @@ const SelectLocation = () => {
   );
 };
 
+export default SelectLocation;
 export default SelectLocation;

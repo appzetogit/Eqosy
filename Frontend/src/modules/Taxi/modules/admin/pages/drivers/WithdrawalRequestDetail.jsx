@@ -167,7 +167,7 @@ const WithdrawalRequestDetail = () => {
       console.error(`Unable to ${action} withdrawal request`, error);
       setFeedback(
         error?.response?.data?.message ||
-          `Unable to ${action} this withdrawal request right now.`,
+        `Unable to ${action} this withdrawal request right now.`,
       );
     } finally {
       setActionLoadingId('');
@@ -454,5 +454,7 @@ const WithdrawalRequestDetail = () => {
     </div>
   );
 };
+
+export default WithdrawalRequestDetail;
 
 export default WithdrawalRequestDetail;
