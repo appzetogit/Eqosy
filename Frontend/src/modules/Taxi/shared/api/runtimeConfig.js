@@ -24,13 +24,7 @@ const sanitizeHost = (urlStr) => {
   }
 };
 
-const LOCAL_DEV_BACKEND_ORIGIN = trimTrailingSlash(
-  sanitizeHost(import.meta.env.VITE_BACKEND_PROXY_TARGET) || 'http://localhost:5000',
-);
-
-const DEFAULT_BACKEND_ORIGIN = isBrowserLocal
-  ? LOCAL_DEV_BACKEND_ORIGIN
-  : (isBrowser ? window.location.origin : 'http://localhost:5000');
+const DEFAULT_BACKEND_ORIGIN = isBrowser ? window.location.origin : 'http://localhost:5000';
 
 const rawEnvBase = import.meta.env.VITE_API_BASE_URL
   ? String(import.meta.env.VITE_API_BASE_URL).trim()
