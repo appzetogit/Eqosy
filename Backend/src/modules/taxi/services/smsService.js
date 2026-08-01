@@ -232,7 +232,12 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     finalResponseText = (await primaryRes.text()).trim();
     console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${finalResponseText}`);
     const parsed = parseProviderResponse(finalResponseText);
-    if (primaryRes.ok && (!parsed || String(parsed.ErrorCode || '') === '000' || !/error|invalid|failed|unauthor|reject/i.test(finalResponseText))) {
+    const isSuccess = primaryRes.ok && (
+      (parsed && String(parsed.ErrorCode || '') === '000') ||
+      (!parsed && !/error(?!message)|invalid|failed|unauthor|reject/i.test(finalResponseText)) ||
+      finalResponseText.includes('"ErrorCode":"000"')
+    );
+    if (isSuccess) {
       delivered = true;
       jobId = parsed?.JobId || null;
     }
@@ -240,30 +245,7 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     console.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}. Trying vendor fallback...`);
   }
 
-  if (!delivered) {
-    const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
-    pushUrl.searchParams.append('APIKey', apiKey);
-    pushUrl.searchParams.append('sid', senderId);
-    pushUrl.searchParams.append('msisdn', msisdn);
-    pushUrl.searchParams.append('msg', message);
-    pushUrl.searchParams.append('gwid', '2');
-    pushUrl.searchParams.append('fl', '0');
-    pushUrl.searchParams.append('DLT_TE_ID', templateId);
-    pushUrl.searchParams.append('PEID', peId);
 
-    try {
-      const fallbackRes = await fetch(pushUrl.toString(), { signal: AbortSignal.timeout(15000) });
-      finalResponseText = (await fallbackRes.text()).trim();
-      console.log(`[SMS] Vendor fallback response for ${msisdn}: ${finalResponseText}`);
-      const parsedFallback = parseProviderResponse(finalResponseText);
-      if (fallbackRes.ok && (!parsedFallback || String(parsedFallback.ErrorCode || '') === '000' || !/error|invalid|failed|unauthor|reject/i.test(finalResponseText))) {
-        delivered = true;
-        jobId = parsedFallback?.JobId || null;
-      }
-    } catch (fallbackErr) {
-      console.warn(`[SMS] Vendor fallback failed: ${fallbackErr.message}`);
-    }
-  }
 
   if (!delivered) {
     throw new ApiError(

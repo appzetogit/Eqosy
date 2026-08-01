@@ -58,28 +58,17 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
             const text = await res.text();
             logger.info(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
             console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
-            if (res.ok && !/error|invalid|failed|unauthor|reject/i.test(text)) {
+            // Check for success without blindly matching 'error' due to 'ErrorMessage' key
+            const isSuccess = res.ok && (
+              text.includes('"ErrorCode":"000"') || 
+              !/error(?!message)|invalid|failed|unauthor|reject/i.test(text)
+            );
+            if (isSuccess) {
                 return;
             }
         } catch (primaryErr) {
-            logger.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}. Trying vendor fallback...`);
+            logger.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}`);
         }
-
-        // Fallback: Vendor PushSMS GET endpoint
-        const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
-        pushUrl.searchParams.append('APIKey', apiKey);
-        pushUrl.searchParams.append('sid', senderId);
-        pushUrl.searchParams.append('msisdn', msisdn);
-        pushUrl.searchParams.append('msg', message);
-        pushUrl.searchParams.append('gwid', '2');
-        pushUrl.searchParams.append('fl', '0');
-        pushUrl.searchParams.append('DLT_TE_ID', templateId);
-        pushUrl.searchParams.append('PEID', peId);
-
-        const fallbackRes = await fetch(pushUrl.toString(), { signal: AbortSignal.timeout(15000) });
-        const fallbackText = await fallbackRes.text();
-        logger.info(`[SMS] Vendor fallback response for ${msisdn}: ${fallbackText}`);
-        console.log(`[SMS] Vendor fallback response for ${msisdn}: ${fallbackText}`);
     } catch (error) {
         logger.error(`Error sending SMS to ${phone}: ${error.message}`);
     }

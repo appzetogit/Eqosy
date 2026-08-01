@@ -933,6 +933,11 @@ const SelectLocation = () => {
       e.stopPropagation();
     }
 
+    // Clear active focus to close mobile keyboard immediately
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     if (showMapPicker) {
       setShowMapPicker(false);
       return;
@@ -940,15 +945,19 @@ const SelectLocation = () => {
 
     const targetHome = routePrefix ? `${routePrefix}/` : '/';
 
-    if (window.history.length <= 1 || location.key === 'default') {
-      navigate(targetHome, { replace: true });
-    } else {
-      try {
-        navigate(-1);
-      } catch {
+    // Delay navigation slightly to let keyboard close animation start 
+    // and prevent ghost clicks on the underlying screen on mobile devices
+    setTimeout(() => {
+      if (window.history.length <= 1 || location.key === 'default') {
         navigate(targetHome, { replace: true });
+      } else {
+        try {
+          navigate(-1);
+        } catch {
+          navigate(targetHome, { replace: true });
+        }
       }
-    }
+    }, 150);
   };
 
   return (
@@ -1101,7 +1110,7 @@ const SelectLocation = () => {
             <div className="px-5 py-4 flex items-center gap-3">
               <button
                 type="button"
-                onPointerDown={handleBackClick}
+                onClick={handleBackClick}
                 className="relative p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
                 aria-label="Go back"
               >
