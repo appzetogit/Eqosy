@@ -17,6 +17,7 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 import { getUnifiedAdminToken } from '../../services/adminSession';
+import api from '../../../../shared/api/axiosInstance';
 
 const serviceCategoryOptions = [
   { value: 'taxi', label: 'Taxi' },
@@ -78,7 +79,7 @@ const EditDriver = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
-  const backRoute = location.state?.from || '/admin/drivers';
+  const backRoute = location.state?.from || '/taxi/admin/drivers';
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [locations, setLocations] = useState([]);
@@ -105,48 +106,78 @@ const EditDriver = () => {
     vehicleModel: '',
     vehicleYear: '',
     vehicleColor: '',
-    vehicleNumber: ''
+    vehicleNumber: '',
+    companyName: '',
+    companyAddress: '',
+    city: '',
+    postalCode: '',
+    taxNumber: ''
   });
 
   const [error, setError] = useState('');
 
-  const token = getUnifiedAdminToken();
-
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsFetching(true);
+      
+      // Fetch locations independently
+      let fetchedLocations = [];
       try {
-        const locRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/taxi/admin/service-locations', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const locData = await locRes.json();
+        const locData = await api.get('/admin/service-locations');
         if (locData.success || locData.data) {
           const results = locData.data?.results || locData.data || locData.results || [];
-          setLocations(Array.isArray(results) ? results : []);
+          fetchedLocations = Array.isArray(results) ? results : [];
+          setLocations(fetchedLocations);
         }
+      } catch (err) {
+        console.error('Locations fetch error:', err);
+      }
 
-        const countRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/taxi/countries', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const countData = await countRes.json();
+      // Fetch countries independently
+      let fetchedCountries = [];
+      try {
+        const countData = await api.get('/countries');
         if (countData.success || countData.data) {
           const results = countData.data?.results || countData.data || countData.results || [];
-          setCountries(Array.isArray(results) ? results : []);
+          fetchedCountries = Array.isArray(results) ? results : [];
+          setCountries(fetchedCountries);
         }
+      } catch (err) {
+        console.error('Countries fetch error:', err);
+      }
 
-        // Fetching driver details
-        const response = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/taxi/admin/drivers/${id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
+      // Fetch driver details
+      try {
+        const data = await api.get(`/admin/drivers/${id}`);
         
-        if (response.ok && data.success) {
-          const d = data.data;
+        if (data.success) {
+          const d = data.data || data;
+          
           const onboarding = d.onboarding || {};
           const onboardingPersonal = onboarding.personal || {};
           const onboardingVehicle = onboarding.vehicle || {};
           const savedVehicleTypeId = d.vehicle_type_id || d.vehicleTypeId || onboardingVehicle.vehicleTypeId || '';
           const savedVehicleTypeLabel = d.car_type || d.vehicle_type || d.vehicleType || onboardingVehicle.vehicleType || '';
+
+          const areaId = d.service_location_id?._id || d.service_location_id || d.service_location?._id || d.service_location || onboardingVehicle.locationId || '';
+          let rawCountry = d.country?._id || d.country || d.service_location?.country?._id || d.service_location?.country || '';
+          
+          if (!rawCountry && areaId && fetchedLocations.length > 0) {
+            const matchedLoc = fetchedLocations.find(l => String(l._id) === String(areaId));
+            if (matchedLoc) {
+              rawCountry = matchedLoc.country?._id || matchedLoc.country || '';
+            }
+          }
+
+          let resolvedCountry = rawCountry;
+          if (rawCountry && fetchedCountries.length > 0) {
+            const match = fetchedCountries.find(
+              (c) => String(c._id) === String(rawCountry) || String(c.name).toLowerCase() === String(rawCountry).toLowerCase() || String(c.code).toLowerCase() === String(rawCountry).toLowerCase()
+            );
+            if (match) {
+              resolvedCountry = match._id;
+            }
+          }
 
           setVehicleTypeFallbackOption(
             savedVehicleTypeId || savedVehicleTypeLabel
@@ -158,8 +189,8 @@ const EditDriver = () => {
           );
 
           setFormData({
-            area: d.service_location_id?._id || d.service_location_id || d.service_location?._id || d.service_location || onboardingVehicle.locationId || '',
-            country: d.country?._id || d.country || d.service_location?.country?._id || d.service_location?.country || '',
+            area: areaId,
+            country: resolvedCountry,
             name: d.name || d.user_id?.name || onboardingPersonal.fullName || '',
             mobile: d.phone || d.mobile || d.user_id?.mobile || '',
             gender: d.gender ? d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : 'Male',
@@ -182,13 +213,13 @@ const EditDriver = () => {
             vehicleNumber: d.car_number || d.vehicle_number || d.vehicleNumber || onboardingVehicle.number || '',
             companyName: onboardingVehicle.companyName || '',
             companyAddress: onboardingVehicle.companyAddress || '',
-            city: onboardingVehicle.city || '',
+            city: onboardingVehicle.city || d.city || '',
             postalCode: onboardingVehicle.postalCode || '',
             taxNumber: onboardingVehicle.taxNumber || '',
           });
         }
       } catch (err) {
-        console.error('Fetch error:', err);
+        console.error('Driver fetch error:', err);
       } finally {
         setIsFetching(false);
       }
@@ -210,10 +241,10 @@ const EditDriver = () => {
       if (!formData.area || !formData.transportType) return;
       try {
         const typeFilter = formData.transportType.toLowerCase() === 'delivery' ? 'delivery' : 'taxi';
-        const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/taxi/types/${formData.area}?transport_type=${typeFilter}`);
-        const data = await res.json();
-        if (data.success) {
-          setVehicleTypes(Array.isArray(data.data) ? data.data : (data.data?.results || []));
+        const res = await api.get(`/admin/types/vehicle-types/list`, { params: { transport_type: typeFilter } });
+        const data = res.data || res;
+        if (data.success || Array.isArray(data.data) || Array.isArray(data.results)) {
+          setVehicleTypes(Array.isArray(data.data) ? data.data : (data.results || data.data?.results || []));
         }
       } catch (e) {
         console.error("Vehicle types error:", e);
@@ -251,12 +282,16 @@ const EditDriver = () => {
     const { name, value } = e.target;
     
     if (name === 'area') {
-      const selectedLoc = locations.find(l => l._id === value);
+      const selectedLoc = locations.find(l => String(l._id) === String(value));
       if (selectedLoc) {
+        const rawLocCountry = selectedLoc.country?._id || selectedLoc.country || '';
+        const matchedCountry = countries.find(
+          c => String(c._id) === String(rawLocCountry) || String(c.name).toLowerCase() === String(rawLocCountry).toLowerCase() || String(c.code).toLowerCase() === String(rawLocCountry).toLowerCase()
+        );
         setFormData(prev => ({ 
           ...prev, 
           [name]: value,
-          country: selectedLoc.country?._id || selectedLoc.country || prev.country
+          country: matchedCountry ? matchedCountry._id : (rawLocCountry || prev.country)
         }));
         return;
       }
@@ -341,30 +376,21 @@ const EditDriver = () => {
         },
       };
 
-      const response = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/taxi/admin/drivers/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
+      const response = await api.patch(`/admin/drivers/${id}`, payload);
+      
+      if (response && (response.success || response._id || response.data?._id)) {
         setSuccess(true);
         setTimeout(() => navigate(backRoute), 2000);
       } else {
-        setError(data.message || 'Failed to update driver.');
+        setError(response.message || response.data?.message || 'Failed to update driver.');
       }
     } catch (err) {
-      setError('Network error occurred.');
+      setError(err?.response?.data?.message || err?.message || 'Network error occurred.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- Shared input class ---
   const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
   const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
 
@@ -393,6 +419,7 @@ const EditDriver = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900">Edit Driver</h1>
           <button 
+            type="button"
             onClick={() => navigate(backRoute)}
             className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
@@ -438,24 +465,6 @@ const EditDriver = () => {
                 </select>
               </div>
 
-               <div className="space-y-3">
-                 <label className="text-gray-400 flex items-center gap-2">
-                   <Globe size={14} className="text-indigo-400" /> Country *
-                 </label>
-                 <select 
-                   name="country"
-                   required
-                   value={formData.country}
-                   onChange={handleChange}
-                   style={{ color: '#000000' }}
-                   className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-[14px] font-bold text-gray-950 focus:bg-white focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all shadow-inner"
-                 >
-                   <option value="" className="bg-white text-gray-950 font-bold">Select Country</option>
-                   {countries.map(c => (
-                     <option key={c._id} value={c._id} className="bg-white text-gray-950 font-bold">{c.name}</option>
-                   ))}
-                 </select>
-               </div>
               <div>
                 <label className={labelClass}>
                   <Globe size={12} className="inline mr-1 text-gray-400" />
@@ -463,7 +472,7 @@ const EditDriver = () => {
                 </label>
                 <select 
                   name="country"
-                  required
+                  required={countries.length > 0}
                   value={formData.country}
                   onChange={handleChange}
                   className={inputClass}
@@ -472,6 +481,9 @@ const EditDriver = () => {
                   {countries.map(c => (
                     <option key={c._id} value={c._id}>{c.name}</option>
                   ))}
+                  {formData.country && !countries.some(c => String(c._id) === String(formData.country)) && (
+                    <option value={formData.country}>{formData.country}</option>
+                  )}
                 </select>
               </div>
 
@@ -574,7 +586,7 @@ const EditDriver = () => {
 
               <div className="md:col-span-2">
                 <label className={labelClass}>Service Categories</label>
-                <div className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="flex flex-wrap gap-2.5 rounded-2xl border border-gray-100 bg-gray-50/60 p-3.5">
                   {serviceCategoryOptions.map((option) => {
                     const selected = formData.serviceCategories.includes(option.value);
                     return (
@@ -582,10 +594,10 @@ const EditDriver = () => {
                         key={option.value}
                         type="button"
                         onClick={() => toggleServiceCategory(option.value)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        className={`rounded-full px-5 py-2 text-xs font-semibold transition-all ${
                           selected
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                            ? 'bg-[#4F46E5] text-white shadow-sm'
+                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                         }`}
                       >
                         {option.label}
@@ -593,7 +605,7 @@ const EditDriver = () => {
                     );
                   })}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-400">
                   Matches the service selection used during driver onboarding.
                 </p>
               </div>
@@ -619,11 +631,10 @@ const EditDriver = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Vehicle Make *</label>
+                <label className={labelClass}>Vehicle Make</label>
                 <input 
                   type="text" 
                   name="vehicleMake"
-                  required
                   placeholder="e.g. Maruti Suzuki"
                   value={formData.vehicleMake}
                   onChange={handleChange}
@@ -632,11 +643,10 @@ const EditDriver = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Vehicle Model *</label>
+                <label className={labelClass}>Vehicle Model</label>
                 <input 
                   type="text" 
                   name="vehicleModel"
-                  required
                   placeholder="e.g. Swift Dzire"
                   value={formData.vehicleModel}
                   onChange={handleChange}
@@ -645,11 +655,10 @@ const EditDriver = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Vehicle Year *</label>
+                <label className={labelClass}>Vehicle Year</label>
                 <input 
                   type="text" 
                   name="vehicleYear"
-                  required
                   maxLength={4}
                   placeholder="e.g. 2024"
                   value={formData.vehicleYear}
@@ -664,11 +673,10 @@ const EditDriver = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Vehicle Color *</label>
+                <label className={labelClass}>Vehicle Color</label>
                 <input 
                   type="text" 
                   name="vehicleColor"
-                  required
                   placeholder="e.g. White"
                   value={formData.vehicleColor}
                   onChange={handleChange}
@@ -677,13 +685,87 @@ const EditDriver = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Vehicle Number *</label>
+                <label className={labelClass}>Vehicle Number</label>
                 <input 
                   type="text" 
                   name="vehicleNumber"
-                  required
                   placeholder="e.g. MH 12 AB 1234"
                   value={formData.vehicleNumber}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Company Section */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+              <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                <Globe size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Company Details (Optional)</h3>
+                <p className="text-xs text-gray-400">Business or fleet information</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className={labelClass}>Company Name</label>
+                <input 
+                  type="text" 
+                  name="companyName"
+                  placeholder="e.g. Fleet Travels"
+                  value={formData.companyName}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Tax Number / GSTIN</label>
+                <input 
+                  type="text" 
+                  name="taxNumber"
+                  placeholder="Tax/GST number"
+                  value={formData.taxNumber}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className={labelClass}>Company Address</label>
+                <input 
+                  type="text" 
+                  name="companyAddress"
+                  placeholder="Full address"
+                  value={formData.companyAddress}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>City</label>
+                <input 
+                  type="text" 
+                  name="city"
+                  placeholder="City"
+                  value={formData.city}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Postal Code</label>
+                <input 
+                  type="text" 
+                  name="postalCode"
+                  placeholder="ZIP / PIN Code"
+                  value={formData.postalCode}
                   onChange={handleChange}
                   className={inputClass}
                 />
@@ -739,21 +821,11 @@ const EditDriver = () => {
 
             <button 
               type="button"
-              onClick={() => navigate('/taxi/admin/drivers')}
+              onClick={() => navigate(backRoute)}
               className="w-full py-3 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
             >
               Cancel
             </button>
-
-            <div className="pt-3 border-t border-gray-100">
-              <button 
-                type="button"
-                className="w-full py-2.5 text-red-500 bg-red-50 border border-red-100 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <AlertCircle size={13} />
-                Disable Account
-              </button>
-            </div>
           </div>
 
           {/* Metadata */}
@@ -790,4 +862,3 @@ const EditDriver = () => {
 };
 
 export default EditDriver;
-

@@ -138,6 +138,8 @@ const PhoneRegistration = () => {
     }, []);
 
     const handleSendOTP = async () => {
+        if (loading) return;
+        
         if (phone.length !== 10) {
             setError('Please enter a valid 10-digit mobile number');
             return;

@@ -317,20 +317,27 @@ const DriverProfile = () => {
                                 <p className="text-[12px] font-bold text-slate-900 break-all">{driverEmail}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-medium text-slate-400">Vehicle Type</p>
-                                <p className="text-[12px] font-bold text-slate-900">{driverVehicle}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Transport Type</p>
+                                <p className="text-[12px] font-bold text-slate-900 capitalize">{String(driver?.registerFor || driver?.transport_type || 'taxi').toLowerCase() === 'both' ? 'All' : (driver?.registerFor || driver?.transport_type || 'Taxi')}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-medium text-slate-400">City</p>
-                                <p className="text-[12px] font-bold text-slate-900">{driverLocation}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Active Services</p>
+                                <p className="text-[12px] font-bold text-indigo-600">
+                                    {(Array.isArray(driver?.serviceCategories) && driver.serviceCategories.length > 0
+                                        ? driver.serviceCategories
+                                        : Array.isArray(driver?.service_categories) && driver.service_categories.length > 0
+                                            ? driver.service_categories
+                                            : ['taxi']
+                                    ).map(c => String(c).charAt(0).toUpperCase() + String(c).slice(1)).join(', ')}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-[10px] font-medium text-slate-400">Vehicle No.</p>
                                 <p className="text-[12px] font-bold text-slate-900">{driverNumber}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-medium text-slate-400">Color</p>
-                                <p className="text-[12px] font-bold text-slate-900">{driverColor}</p>
+                                <p className="text-[10px] font-medium text-slate-400">City</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverLocation}</p>
                             </div>
                         </div>
                     )}

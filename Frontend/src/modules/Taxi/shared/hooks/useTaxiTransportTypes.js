@@ -1,8 +1,36 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axiosInstance';
 
+export const defaultTransportTypes = [
+  { id: 'taxi', name: 'taxi', display_name: 'Taxi' },
+  { id: 'delivery', name: 'delivery', display_name: 'Delivery' },
+  { id: 'pooling', name: 'pooling', display_name: 'Pooling' },
+  { id: 'outstation', name: 'outstation', display_name: 'Outstation' },
+  { id: 'all', name: 'all', display_name: 'All' },
+];
+
+const ensureFullTransportTypes = (list = []) => {
+  const normalized = (Array.isArray(list) ? list : []).map((item) => ({
+    ...item,
+    name: String(item.name || item.id || '').toLowerCase() === 'both' ? 'all' : String(item.name || item.id || '').toLowerCase(),
+    display_name:
+      String(item.display_name || item.name || '').toLowerCase() === 'both'
+        ? 'All'
+        : (item.display_name || item.name),
+  }));
+
+  const existingNames = new Set(normalized.map((item) => item.name));
+  for (const def of defaultTransportTypes) {
+    if (!existingNames.has(def.name)) {
+      normalized.push(def);
+    }
+  }
+
+  return normalized;
+};
+
 export const useTaxiTransportTypes = () => {
-  const [transportTypes, setTransportTypes] = useState([]);
+  const [transportTypes, setTransportTypes] = useState(defaultTransportTypes);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -11,19 +39,10 @@ export const useTaxiTransportTypes = () => {
       setLoading(true);
       try {
         const res = await api.get('/admin/types/transport-types');
-        // Handle both direct return and success payload
         const data = res.data || res.results || res;
-        setTransportTypes(Array.isArray(data) ? data : []);
+        setTransportTypes(ensureFullTransportTypes(data));
       } catch (err) {
-        console.error('Failed to fetch transport types:', err);
-        setError(err);
-        // Fallback to defaults to prevent UI breakage
-        setTransportTypes([
-          { name: 'taxi', display_name: 'Taxi' },
-          { name: 'delivery', display_name: 'Delivery' },
-          { name: 'pooling', display_name: 'Pooling' },
-          { name: 'both', display_name: 'Both' }
-        ]);
+        setTransportTypes(defaultTransportTypes);
       } finally {
         setLoading(false);
       }

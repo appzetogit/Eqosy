@@ -112,7 +112,7 @@ const Signup = () => {
 
   const handleStartSignup = async (e) => {
     e.preventDefault();
-    if (!isValidPhone) return;
+    if (otpSending || !isValidPhone) return;
 
     setOtpSending(true);
     setError('');

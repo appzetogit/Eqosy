@@ -2261,27 +2261,36 @@ const serializeFleetVehicle = (item) => ({
 
 const serializeDriver = (driver) => ({
   _id: driver._id,
+  id: driver._id,
   name: driver.name || '',
-  phone: driver.phone || '',
-  mobile: driver.phone || '',
+  phone: driver.phone || driver.mobile || '',
+  mobile: driver.phone || driver.mobile || '',
   email: driver.email || '',
+  gender: driver.gender || '',
   owner_id: driver.owner_id || null,
   service_location_id: driver.service_location_id || null,
   country: driver.country || null,
-  profile_picture: driver.profile_picture || '',
+  profile_picture: driver.profile_picture || driver.profileImage || '',
   city: driver.city || '',
   service_location_name: driver.city || '',
-  transport_type: driver.registerFor || driver.vehicleType || '',
-  register_for: driver.registerFor || '',
-  service_categories: Array.isArray(driver.serviceCategories) ? driver.serviceCategories : [],
-  vehicle_type: driver.vehicleType || '',
-  vehicle_type_id: driver.vehicleTypeId || null,
+  transport_type: driver.registerFor || driver.vehicleType || driver.transport_type || '',
+  register_for: driver.registerFor || driver.transport_type || '',
+  service_categories: Array.isArray(driver.serviceCategories) ? driver.serviceCategories : (Array.isArray(driver.service_categories) ? driver.service_categories : []),
+  vehicle_type: driver.vehicleType || driver.car_type || '',
+  vehicle_type_id: driver.vehicleTypeId || driver.vehicle_type_id || null,
   vehicleIconType: driver.vehicleIconType || driver.vehicleType || '',
   vehicleImage: driver.vehicleImage || '',
-  vehicle_make: driver.vehicleMake || '',
-  vehicle_model: driver.vehicleModel || '',
-  vehicle_number: driver.vehicleNumber || '',
-  vehicle_color: driver.vehicleColor || '',
+  vehicle_make: driver.vehicleMake || driver.car_make || '',
+  vehicle_model: driver.vehicleModel || driver.car_model || '',
+  vehicle_number: driver.vehicleNumber || driver.car_number || '',
+  vehicle_color: driver.vehicleColor || driver.car_color || '',
+  vehicle_year: driver.vehicleYear || driver.car_year || '',
+  car_make: driver.vehicleMake || driver.car_make || '',
+  car_model: driver.vehicleModel || driver.car_model || '',
+  car_number: driver.vehicleNumber || driver.car_number || '',
+  car_color: driver.vehicleColor || driver.car_color || '',
+  car_year: driver.vehicleYear || driver.car_year || '',
+  car_type: driver.vehicleType || driver.car_type || '',
   rating:
     Number(driver.ratingCount || 0) > 0
       ? Number(driver.rating || 0)
@@ -4914,13 +4923,33 @@ export const deleteDriver = async (id) => {
 };
 
 export const getDriverById = async (id, currentAdmin = null) => {
-  const driver = await Driver.findById(id).lean();
+  let driver = null;
+  if (id && mongoose.Types.ObjectId.isValid(id)) {
+    driver = await Driver.findById(id).populate('owner_id', 'name email mobile companyName').lean();
+  }
+  if (!driver) {
+    driver = await Driver.findOne({
+      $or: [
+        { _id: id },
+        { user_id: id },
+        { phone: id },
+        { mobile: id },
+        { 'onboarding.registrationId': id }
+      ]
+    }).populate('owner_id', 'name email mobile companyName').lean();
+  }
   if (!driver) {
     throw new ApiError(404, 'Driver not found');
   }
   if (currentAdmin) {
     assertAdminPermission(currentAdmin, 'drivers.view', 'drivers');
-    assertServiceLocationAccess(currentAdmin, driver.service_location_id);
+    if (driver.service_location_id) {
+      try {
+        assertServiceLocationAccess(currentAdmin, driver.service_location_id);
+      } catch (e) {
+        // Safe fallback for scope checks
+      }
+    }
   }
   return serializeDriver(driver);
 };

@@ -218,9 +218,3 @@ const WithdrawalRequestDrivers = () => {
 
 export default WithdrawalRequestDrivers;
 
-    </div >
-  );
-};
-
-export default WithdrawalRequestDrivers;
-

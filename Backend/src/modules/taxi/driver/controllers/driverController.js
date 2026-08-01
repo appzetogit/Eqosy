@@ -2406,6 +2406,9 @@ export const getCurrentDriver = async (req, res) => {
       vehicleMake: driver.vehicleMake,
       vehicleModel: driver.vehicleModel,
       registerFor: driver.registerFor,
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      serviceCategories: Array.isArray(driver.serviceCategories) ? driver.serviceCategories : [],
+      service_categories: Array.isArray(driver.serviceCategories) ? driver.serviceCategories : [],
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
       vehicleImage: driver.vehicleImage || "",
@@ -2742,6 +2745,23 @@ export const updateCurrentDriver = async (req, res) => {
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "profileImage")) {
     driver.profileImage = String(req.body.profileImage || "").trim();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "registerFor") || Object.prototype.hasOwnProperty.call(req.body || {}, "transport_type") || Object.prototype.hasOwnProperty.call(req.body || {}, "transportType")) {
+    const transportType = req.body.registerFor || req.body.transport_type || req.body.transportType;
+    if (transportType) {
+      driver.registerFor = String(transportType).trim().toLowerCase();
+      driver.vehicleType = driver.registerFor;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, "serviceCategories") || Object.prototype.hasOwnProperty.call(req.body || {}, "service_categories")) {
+    const categories = req.body.serviceCategories || req.body.service_categories;
+    if (Array.isArray(categories)) {
+      driver.serviceCategories = categories;
+    } else if (typeof categories === 'string') {
+      driver.serviceCategories = categories.split(',').map((s) => s.trim()).filter(Boolean);
+    }
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "routeBooking")) {

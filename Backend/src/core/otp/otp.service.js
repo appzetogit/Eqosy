@@ -37,7 +37,7 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         const senderId = (config.smsSenderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
         const peId = (config.smsPeId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
         const templateId = (config.smsDltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
-        const message = `Welcome to Eqosy. Your OTP for registration is ${otp}.BGADEC`;
+        const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 
         logger.info(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
 

@@ -646,18 +646,22 @@ const matchesTransportType = (rule, transportType) => {
     || normalizedRuleTransport === 'both';
 };
 
-const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transportType }) => {
+const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transportType, vehicleName }) => {
   const normalizedVehicleTypeId = normalizeId(vehicleTypeId);
   const normalizedServiceLocationId = normalizeId(serviceLocationId);
   const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
+  const normalizedName = String(vehicleName || '').trim().toLowerCase();
 
-  const candidates = sortPricingRules(rules.filter((rule) => {
-    const matchesVehicle = normalizeId(rule?.vehicle_type?._id || rule?.vehicle_type || rule?.type_id) === normalizedVehicleTypeId;
+  const candidates = sortPricingRules((Array.isArray(rules) ? rules : []).filter((rule) => {
+    const ruleVehicleId = normalizeId(rule?.vehicle_type?._id || rule?.vehicle_type?.id || rule?.vehicle_type || rule?.type_id);
+    const ruleVehicleName = String(rule?.vehicle_type?.name || rule?.vehicle_type?.vehicle_type || rule?.name || '').trim().toLowerCase();
+    const matchesVehicle = (normalizedVehicleTypeId && ruleVehicleId === normalizedVehicleTypeId) || (normalizedName && ruleVehicleName && ruleVehicleName === normalizedName);
     return matchesVehicle && isActiveRidePricingRule(rule) && matchesTransportType(rule, normalizedTransportType);
   }));
 
   if (!candidates.length) {
-    return null;
+    const genericCandidates = sortPricingRules((Array.isArray(rules) ? rules : []).filter((rule) => isActiveRidePricingRule(rule)));
+    return genericCandidates[0] || null;
   }
 
   const exactTransportMatch = (rule) => String(rule?.transport_type || 'taxi').trim().toLowerCase() === normalizedTransportType;
@@ -671,30 +675,15 @@ const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transpor
     return exactServiceLocation;
   }
 
-  const exactServiceLocationAnyTransport = candidates.find((rule) => (
-    normalizedServiceLocationId && getRuleServiceLocationId(rule) === normalizedServiceLocationId
-  ));
-
-  if (exactServiceLocationAnyTransport) {
-    return exactServiceLocationAnyTransport;
-  }
-
-  const genericTransportMatch = candidates.find((rule) => (
-    !getRuleServiceLocationId(rule) && exactTransportMatch(rule)
-  ));
-
-  if (genericTransportMatch) {
-    return genericTransportMatch;
-  }
-
-  const genericBoth = candidates.find((rule) => !getRuleServiceLocationId(rule));
-  return genericBoth || candidates[0];
+  return candidates[0];
 };
 
 const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes }) => {
   const fallbackFare = getFallbackVehicleEstimate(vehicle?.raw || vehicle);
 
   if (!pricingRule) {
+    const rawPrice = Number(vehicle?.raw?.price || vehicle?.raw?.base_price || vehicle?.raw?.base_fare || 0);
+    if (rawPrice > 0) return rawPrice;
     return fallbackFare;
   }
 
@@ -710,16 +699,12 @@ const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, duration
     ? basePrice
     : basePrice + (extraDistanceKm * pricePerDistance) + (Math.max(0, Number(durationMinutes || 0)) * timePrice);
 
-  if (subtotal <= 0) {
-    return fallbackFare;
-  }
-
   const total = subtotal + (subtotal * serviceTax) / 100;
   const rideSurgeAmount = pricingRule.zone_id?.ride_surge_enabled
     ? toFiniteNumber(pricingRule.ride_surge_amount, 0)
     : 0;
 
-  return Math.max(0, Math.round(total + rideSurgeAmount));
+  return Math.max(basePrice > 0 ? basePrice : fallbackFare, Math.round(total + rideSurgeAmount));
 };
 
 const getDropTime = (minutesAway = 0) => {
@@ -1346,6 +1331,7 @@ const SelectVehicle = () => {
           vehicleTypeId: vehicle.vehicleTypeId,
           serviceLocationId: effectiveServiceLocationId,
           transportType: vehicle.transportType || routeState.transport_type || routeState.transportType || 'taxi',
+          vehicleName: vehicle.name,
         });
 
         const baseCalculatedPrice = calculateEstimatedFare({
@@ -1852,8 +1838,8 @@ const SelectVehicle = () => {
         promo_code: appliedPromo?.promo?.code || '',
         promo: appliedPromo?.promo || null,
         promoBreakdown: appliedPromo?.breakdown || null,
-        bookingMode: selectedVehicle.supportsBidding ? 'bidding' : 'normal',
-        pricingNegotiationMode: selectedVehicle.supportsBidding
+        bookingMode: (bookingTab === 'bid' && selectedVehicle.supportsBidding) ? 'bidding' : 'normal',
+        pricingNegotiationMode: (bookingTab === 'bid' && selectedVehicle.supportsBidding)
           ? shouldUseDriverBidding
             ? 'driver_bid'
             : 'user_increment_only'
@@ -1861,8 +1847,8 @@ const SelectVehicle = () => {
         bidStepAmount: selectedBidStepAmount,
         bidFloorFare: selectedBidFloorFare,
         bidCeilingMaxFare: selectedBidCeilingMaxFare,
-        userMaxBidFare: selectedVehicle.supportsBidding && shouldUseDriverBidding ? selectedBidCeiling : finalFare,
-        bidIncrement: selectedVehicle.supportsBidding && shouldUseDriverBidding ? selectedBidIncrement : 0,
+        userMaxBidFare: (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidCeiling : finalFare,
+        bidIncrement: (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidIncrement : 0,
         estimatedDistanceMeters: tripMetrics.distanceMeters,
         estimatedDurationMinutes: tripMetrics.durationMinutes,
         rideMode,
@@ -1912,7 +1898,7 @@ const SelectVehicle = () => {
 
     setScheduleError('');
 
-    if (selectedVehicle.supportsBidding && shouldUseDriverBidding) {
+    if (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) {
       setShowBidModal(true);
       return;
     }

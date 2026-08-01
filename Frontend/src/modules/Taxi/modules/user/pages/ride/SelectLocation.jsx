@@ -1101,8 +1101,8 @@ const SelectLocation = () => {
             <div className="px-5 py-4 flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleBackClick}
-                className="p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
+                onPointerDown={handleBackClick}
+                className="relative p-3 -ml-3 active:scale-90 transition-all rounded-full z-50 flex items-center justify-center shrink-0 cursor-pointer"
                 aria-label="Go back"
               >
                 <ArrowLeft size={22} className="text-slate-900" strokeWidth={3} />
@@ -1370,5 +1370,4 @@ const SelectLocation = () => {
   );
 };
 
-export default SelectLocation;
 export default SelectLocation;

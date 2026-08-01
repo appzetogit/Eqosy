@@ -2,7 +2,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 const isBrowser = typeof window !== 'undefined';
 const isBrowserLocal = isBrowser && LOCAL_HOSTS.has(window.location.hostname);
-const DEFAULT_BACKEND_ORIGIN = isBrowser ? window.location.origin : 'http://localhost:5000';
+
+// Vite proxies /api/v1 to the backend, but Socket.IO must target the backend origin directly in local dev.
 const trimTrailingSlash = (value = '') => String(value || '').replace(/\/+$/, '');
 
 const sanitizeHost = (urlStr) => {
@@ -22,6 +23,14 @@ const sanitizeHost = (urlStr) => {
     return '';
   }
 };
+
+const LOCAL_DEV_BACKEND_ORIGIN = trimTrailingSlash(
+  sanitizeHost(import.meta.env.VITE_BACKEND_PROXY_TARGET) || 'http://localhost:5000',
+);
+
+const DEFAULT_BACKEND_ORIGIN = isBrowserLocal
+  ? LOCAL_DEV_BACKEND_ORIGIN
+  : (isBrowser ? window.location.origin : 'http://localhost:5000');
 
 const rawEnvBase = import.meta.env.VITE_API_BASE_URL
   ? String(import.meta.env.VITE_API_BASE_URL).trim()

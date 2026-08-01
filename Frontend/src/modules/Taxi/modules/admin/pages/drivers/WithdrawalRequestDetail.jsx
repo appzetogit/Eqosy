@@ -456,5 +456,3 @@ const WithdrawalRequestDetail = () => {
 };
 
 export default WithdrawalRequestDetail;
-
-export default WithdrawalRequestDetail;

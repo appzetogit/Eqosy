@@ -283,7 +283,6 @@ api.interceptors.response.use(
         // Only clear auth if request actually had an authorization token that was invalid/expired.
         // Unauthenticated guest requests (which get 401 "token required") should NOT force redirect to login.
         const shouldClearAuth = hasAuthToken && isExplicitTokenExpired;
-
         if (shouldClearAuth) {
           clearStaleAuthState(tokenRole, token);
           window.dispatchEvent(new CustomEvent('app:auth-stale', {

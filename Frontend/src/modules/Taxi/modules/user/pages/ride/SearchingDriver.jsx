@@ -174,9 +174,32 @@ const formatScheduledDateTime = (value) => {
 };
 
 const SearchingDriver = () => {
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = useMemo(() => location.state || {}, [location.state]);
+
+  const pickupPos = useMemo(() => {
+    const coords = routeState.pickupCoords;
+    if (Array.isArray(coords) && coords.length === 2) {
+      return { lat: Number(coords[1]), lng: Number(coords[0]) };
+    }
+    if (coords && typeof coords === 'object' && coords.lat && coords.lng) {
+      return { lat: Number(coords.lat), lng: Number(coords.lng) };
+    }
+    return { lat: 22.7039, lng: 75.9048 };
+  }, [routeState.pickupCoords]);
+
+  const dropPos = useMemo(() => {
+    const coords = routeState.dropCoords;
+    if (Array.isArray(coords) && coords.length === 2) {
+      return { lat: Number(coords[1]), lng: Number(coords[0]) };
+    }
+    if (coords && typeof coords === 'object' && coords.lat && coords.lng) {
+      return { lat: Number(coords.lat), lng: Number(coords.lng) };
+    }
+    return null;
+  }, [routeState.dropCoords]);
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
@@ -1021,7 +1044,7 @@ const SearchingDriver = () => {
         )}
       </div>
 
-      <div className="absolute top-8 left-4 right-16 z-20 bg-white/90 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border border-white/80">
+      <div className="absolute top-16 left-4 right-16 z-20 bg-white/90 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border border-white/80">
         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em] leading-none mb-1">Current Route</p>
         <p className="text-[13px] font-extrabold text-slate-900 leading-tight truncate">{routeState.pickup || 'Pickup'} → {routeState.drop || 'Drop'}</p>
       </div>
@@ -1031,7 +1054,7 @@ const SearchingDriver = () => {
           <motion.div
             initial={{ scale: 0.8, opacity: 0, x: -20 }}
             animate={{ scale: 1, opacity: 1, x: 0 }}
-            className="absolute top-[88px] left-4 z-20 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.12)] rounded-[12px] p-3 min-w-[70px] border border-slate-50"
+            className="absolute top-[120px] left-4 z-20 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.12)] rounded-[12px] p-3 min-w-[70px] border border-slate-50"
           >
             <p className="text-[18px] font-extrabold text-[#1d4ed8] leading-tight text-center tracking-wider">{rideOtp}</p>
             <p className="text-[10px] font-bold text-slate-400 mt-0.5 text-center whitespace-nowrap">Start OTP</p>
@@ -1041,7 +1064,7 @@ const SearchingDriver = () => {
 
       {(isSearching || isAccepted) && (
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowCancelConfirm(true)}
-          className="absolute top-8 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-md rounded-[12px] shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80 flex items-center justify-center">
+          className="absolute top-16 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-md rounded-[12px] shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80 flex items-center justify-center">
           <X size={16} className="text-slate-900" strokeWidth={2.5} />
         </motion.button>
       )}

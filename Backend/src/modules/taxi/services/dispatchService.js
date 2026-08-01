@@ -191,6 +191,7 @@ const emitRideRequestToDrivers = async ({
   const requestExpiresAt = new Date(Date.now() + dispatchConfig.retryDelayMs).toISOString();
 
   for (const driver of targetDrivers) {
+    console.log(`[DISPATCH_SERVICE] Emitting 'rideRequest' to Driver: ${driver._id} (Room: ${getDriverRoom(driver._id)}) for Ride: ${ride._id}`);
     emitToDriver(driver._id, 'rideRequest', {
       rideId: String(ride._id),
       type: ride.serviceType || 'ride',

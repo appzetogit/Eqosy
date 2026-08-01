@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 
 export const connectDB = async () => {
     try {
-        const dnsServers = String(config.mongodbDnsServers || '')
+        const dnsServers = String(config.mongodbDnsServers || '8.8.8.8,1.1.1.1')
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean);

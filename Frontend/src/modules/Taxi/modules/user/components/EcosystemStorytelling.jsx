@@ -151,7 +151,7 @@ const EcosystemStorytelling = () => {
             <circle cx="85" cy="132" r="5" fill="#E53935" />
             <circle cx="85" cy="132" r="2" fill="white" />
             {currentActive === 'food' && (
-              <motion.circle cx="85" cy="132" r="16" stroke="#E53935" strokeWidth="1.5" fill="none" animate={{ scale: [1, 1.4], opacity: [0.8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} />
+              <circle cx="85" cy="132" r="14" stroke="#E53935" strokeWidth="1.5" fill="none" className="animate-ping origin-center opacity-75" />
             )}
           </g>
 
@@ -161,7 +161,7 @@ const EcosystemStorytelling = () => {
             <circle cx="210" cy="148" r="5" fill="#FFB300" />
             <circle cx="210" cy="148" r="2" fill="white" />
             {currentActive === 'parcel' && (
-              <motion.circle cx="210" cy="148" r="16" stroke="#FFB300" strokeWidth="1.5" fill="none" animate={{ scale: [1, 1.4], opacity: [0.8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} />
+              <circle cx="210" cy="148" r="14" stroke="#FFB300" strokeWidth="1.5" fill="none" className="animate-ping origin-center opacity-75" />
             )}
           </g>
 
@@ -171,7 +171,7 @@ const EcosystemStorytelling = () => {
             <circle cx="340" cy="183" r="5" fill="#FF6B00" />
             <circle cx="340" cy="183" r="2" fill="white" />
             {(currentActive === 'ride' || currentActive === 'bus') && (
-              <motion.circle cx="340" cy="183" r="16" stroke="#FF6B00" strokeWidth="1.5" fill="none" animate={{ scale: [1, 1.4], opacity: [0.8, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} />
+              <circle cx="340" cy="183" r="14" stroke="#FF6B00" strokeWidth="1.5" fill="none" className="animate-ping origin-center opacity-75" />
             )}
           </g>
 

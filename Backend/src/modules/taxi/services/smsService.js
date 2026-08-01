@@ -5,7 +5,7 @@ import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 const SMS_INDIA_HUB_ENDPOINT = 'http://cloud.smsindiahub.in/api/mt/SendSMS';
 const DLT_TEMPLATE_TEXT =
   process.env.SMS_DLT_TEMPLATE_TEXT ||
-  'Welcome to ##var##. Your OTP for registration is ##var##.BGADEC';
+  'Welcome to Eqosy. Your OTP for registration is ##var##.BGADEC';
 const DEFAULT_BRAND_NAME = 'Eqosy';
 
 const isTruthy = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -116,27 +116,11 @@ const parseProviderResponse = (responseText) => {
 };
 
 const getConfiguredBrandName = async () => {
-  try {
-    const settings = await AdminBusinessSetting.findOne({ scope: 'default' })
-      .select('general.app_name')
-      .lean();
-
-    return readValue(settings?.general?.app_name, DEFAULT_BRAND_NAME);
-  } catch {
-    return DEFAULT_BRAND_NAME;
-  }
+  return DEFAULT_BRAND_NAME;
 };
 
-const renderOtpMessage = ({ appName = DEFAULT_BRAND_NAME, otp }) => {
-  const template = process.env.SMS_DLT_TEMPLATE_TEXT || DLT_TEMPLATE_TEXT;
-  if (template.includes('##var##')) {
-    const parts = template.split('##var##');
-    if (parts.length > 2) {
-      return `${parts[0]}${appName}${parts[1]}${otp}${parts.slice(2).join('')}`;
-    }
-    return `${parts[0]}${otp}${parts.slice(1).join('')}`;
-  }
-  return `Welcome to ${appName}. Your OTP for registration is ${otp}.`;
+const renderOtpMessage = ({ otp }) => {
+  return `Welcome to Eqosy. Your OTP for registration is ${otp}.BGADEC`;
 };
 
 const isSuccessfulProviderResponse = (response, responseText) => {
@@ -217,116 +201,74 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     };
   }
 
-  const config = getSmsIndiaHubConfig();
-  const brandName = await getConfiguredBrandName();
-  const hasCredentials = Boolean(config.user && config.password);
-  const authModes = config.apiKey
-    ? hasCredentials
-      ? ['apiKey', 'credentials']
-      : ['apiKey']
-    : ['credentials'];
-  let finalResponse = null;
+  const digits = String(phone || '').replace(/\D/g, '');
+  const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
+  const apiKey = (env.sms?.indiaHub?.apiKey || process.env.SMS_INDIA_HUB_API_KEY || 'a1c4cde49bf4444fa858a7c631c7eaa6').trim();
+  const senderId = (env.sms?.indiaHub?.senderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
+  const peId = (env.sms?.indiaHub?.peId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
+  const templateId = (env.sms?.indiaHub?.dltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
+  const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
+
+  console.log(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
+
+  // Primary: GET request on /api/mt/SendSMS (exact method as user sign in)
+  const sendUrl = new URL('http://cloud.smsindiahub.in/api/mt/SendSMS');
+  sendUrl.searchParams.append('APIKey', apiKey);
+  sendUrl.searchParams.append('senderid', senderId);
+  sendUrl.searchParams.append('channel', 'Trans');
+  sendUrl.searchParams.append('DCS', '0');
+  sendUrl.searchParams.append('flashsms', '0');
+  sendUrl.searchParams.append('number', msisdn);
+  sendUrl.searchParams.append('text', message);
+  sendUrl.searchParams.append('TemplateId', templateId);
+  sendUrl.searchParams.append('PEID', peId);
+
   let finalResponseText = '';
   let delivered = false;
+  let jobId = null;
 
-  for (const authMode of authModes) {
-    const payload = buildSmsPayload({
-      phone,
-      otp,
-      appName: brandName,
-      authMode,
-    });
-    const requestBody = payload.toString();
-    const queryRequestUrl = `${SMS_INDIA_HUB_ENDPOINT}?${requestBody}`;
-
-    const primaryResponse = await fetch(SMS_INDIA_HUB_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-      },
-      body: requestBody,
-    });
-    const primaryResponseText = (await primaryResponse.text()).trim();
-    finalResponse = primaryResponse;
-    finalResponseText = primaryResponseText;
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[smsService] SMS India Hub response (${authMode}, form body) =`, primaryResponseText);
-    }
-
-    if (isSuccessfulProviderResponse(primaryResponse, primaryResponseText)) {
+  try {
+    const primaryRes = await fetch(sendUrl.toString(), { signal: AbortSignal.timeout(15000) });
+    finalResponseText = (await primaryRes.text()).trim();
+    console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${finalResponseText}`);
+    const parsed = parseProviderResponse(finalResponseText);
+    if (primaryRes.ok && (!parsed || String(parsed.ErrorCode || '') === '000' || !/error|invalid|failed|unauthor|reject/i.test(finalResponseText))) {
       delivered = true;
-      break;
+      jobId = parsed?.JobId || null;
     }
+  } catch (primaryErr) {
+    console.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}. Trying vendor fallback...`);
+  }
 
-    if (isAuthParsingError(primaryResponse, primaryResponseText)) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[smsService] retrying with POST query-string fallback =', queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`));
-      }
+  if (!delivered) {
+    const pushUrl = new URL('http://cloud.smsindiahub.in/vendorsms/pushsms.aspx');
+    pushUrl.searchParams.append('APIKey', apiKey);
+    pushUrl.searchParams.append('sid', senderId);
+    pushUrl.searchParams.append('msisdn', msisdn);
+    pushUrl.searchParams.append('msg', message);
+    pushUrl.searchParams.append('gwid', '2');
+    pushUrl.searchParams.append('fl', '0');
+    pushUrl.searchParams.append('DLT_TE_ID', templateId);
+    pushUrl.searchParams.append('PEID', peId);
 
-      const fallbackResponse = await fetch(queryRequestUrl, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-        },
-      });
-      const fallbackResponseText = (await fallbackResponse.text()).trim();
-
-      finalResponse = fallbackResponse;
-      finalResponseText = fallbackResponseText;
-
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[smsService] SMS India Hub response (${authMode}, query fallback) =`, fallbackResponseText);
-      }
-
-      if (isSuccessfulProviderResponse(fallbackResponse, fallbackResponseText)) {
+    try {
+      const fallbackRes = await fetch(pushUrl.toString(), { signal: AbortSignal.timeout(15000) });
+      finalResponseText = (await fallbackRes.text()).trim();
+      console.log(`[SMS] Vendor fallback response for ${msisdn}: ${finalResponseText}`);
+      const parsedFallback = parseProviderResponse(finalResponseText);
+      if (fallbackRes.ok && (!parsedFallback || String(parsedFallback.ErrorCode || '') === '000' || !/error|invalid|failed|unauthor|reject/i.test(finalResponseText))) {
         delivered = true;
-        break;
+        jobId = parsedFallback?.JobId || null;
       }
-
-      if (isAuthParsingError(fallbackResponse, fallbackResponseText)) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(
-            '[smsService] retrying with GET query-string fallback =',
-            queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`),
-          );
-        }
-
-        const getFallbackResponse = await fetch(queryRequestUrl, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-          },
-        });
-        const getFallbackResponseText = (await getFallbackResponse.text()).trim();
-
-        finalResponse = getFallbackResponse;
-        finalResponseText = getFallbackResponseText;
-
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[smsService] SMS India Hub response (${authMode}, GET fallback) =`, getFallbackResponseText);
-        }
-
-        if (isSuccessfulProviderResponse(getFallbackResponse, getFallbackResponseText)) {
-          delivered = true;
-          break;
-        }
-      }
+    } catch (fallbackErr) {
+      console.warn(`[SMS] Vendor fallback failed: ${fallbackErr.message}`);
     }
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[smsService] SMS India Hub final response =', finalResponseText);
-  }
-
-  const parsedFinalResponse = parseProviderResponse(finalResponseText);
-  const looksFailed = !delivered || !isSuccessfulProviderResponse(finalResponse, finalResponseText);
-
-  if (looksFailed) {
+  if (!delivered) {
     throw new ApiError(
       502,
-      `SMS India Hub rejected ${purpose} request: ${finalResponseText || finalResponse.statusText}`,
+      `SMS India Hub rejected ${purpose} request: ${finalResponseText}`,
     );
   }
 
@@ -334,6 +276,6 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     mode: 'live',
     message: 'OTP sent successfully',
     providerResponse: finalResponseText,
-    jobId: parsedFinalResponse?.JobId || null,
+    jobId,
   };
 };

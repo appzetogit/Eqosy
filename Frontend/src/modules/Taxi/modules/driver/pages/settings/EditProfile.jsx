@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Camera, User, Phone, Mail, Check, CheckCircle2, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Camera, User, Phone, Mail, Check, CheckCircle2, Loader2, Car, Layers } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import { getCurrentDriver, updateDriverProfile } from '../../services/registrationService';
@@ -13,6 +13,21 @@ const normalizeName = (value) => String(value || '').replace(/[^A-Za-z .'-]/g, '
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const unwrapDriver = (response) => response?.data?.data || response?.data || response || {};
 
+const serviceCategoryOptions = [
+  { value: 'taxi', label: 'Taxi' },
+  { value: 'outstation', label: 'Outstation' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'pooling', label: 'Pooling' },
+];
+
+const transportTypeOptions = [
+  { value: 'taxi', label: 'Taxi' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'pooling', label: 'Pooling' },
+  { value: 'outstation', label: 'Outstation' },
+  { value: 'all', label: 'All' },
+];
+
 const EditProfile = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -24,7 +39,9 @@ const EditProfile = () => {
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
-        email: ''
+        email: '',
+        transportType: 'taxi',
+        serviceCategories: ['taxi'],
     });
     const [errors, setErrors] = useState({});
 
@@ -43,10 +60,17 @@ const EditProfile = () => {
                 const res = await getCurrentDriver();
                 const data = unwrapDriver(res);
                 setDriver(data);
+                const rawCategories = Array.isArray(data.serviceCategories) && data.serviceCategories.length > 0
+                    ? data.serviceCategories
+                    : Array.isArray(data.service_categories) && data.service_categories.length > 0
+                        ? data.service_categories
+                        : ['taxi'];
                 setFormData({
                     name: data.name || '',
                     phone: data.phone || '',
-                    email: data.email || ''
+                    email: data.email || '',
+                    transportType: String(data.registerFor || data.transport_type || 'taxi').toLowerCase() === 'both' ? 'all' : (data.registerFor || data.transport_type || 'taxi'),
+                    serviceCategories: rawCategories,
                 });
             } catch (error) {
                 console.error('Failed to load profile:', error);
@@ -57,6 +81,19 @@ const EditProfile = () => {
         };
         fetchProfile();
     }, []);
+
+    const toggleCategory = (catValue) => {
+        setFormData((prev) => {
+            const exists = prev.serviceCategories.includes(catValue);
+            const nextCategories = exists
+                ? prev.serviceCategories.filter((c) => c !== catValue)
+                : [...prev.serviceCategories, catValue];
+            return {
+                ...prev,
+                serviceCategories: nextCategories.length > 0 ? nextCategories : [catValue],
+            };
+        });
+    };
 
     const handleSave = async () => {
         const nextErrors = {};
@@ -80,10 +117,13 @@ const EditProfile = () => {
         try {
             setSubmitting(true);
             const payload = {
-                ...formData,
                 name: trimmedName,
                 email,
-                profileImage: driver.profileImage
+                registerFor: formData.transportType,
+                transport_type: formData.transportType,
+                serviceCategories: formData.serviceCategories,
+                service_categories: formData.serviceCategories,
+                profileImage: driver?.profileImage || ''
             };
             await updateDriverProfile(payload);
             setShowSuccess(true);
@@ -107,7 +147,7 @@ const EditProfile = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans p-6 pt-10 overflow-hidden">
+        <div className="min-h-screen bg-slate-50 font-sans p-6 pt-10 overflow-hidden pb-24">
             <header className="flex items-center gap-4 mb-8">
                 <button onClick={() => navigate(`${routePrefix}/profile`)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center active:scale-95 transition-transform">
                     <ArrowLeft size={18} />
@@ -130,7 +170,7 @@ const EditProfile = () => {
             </AnimatePresence>
 
             <main className="space-y-6 max-w-sm mx-auto">
-                {/* Profile Image with Cloudinary Upload */}
+                {/* Profile Image with Upload */}
                 <div className="flex flex-col items-center gap-4 mb-8">
                     <div className="relative group">
                         <div className="w-24 h-24 bg-slate-900 rounded-[2rem] flex items-center justify-center shadow-lg relative overflow-hidden">
@@ -163,12 +203,13 @@ const EditProfile = () => {
                     </div>
                     <div className="text-center">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                            {imageUploading ? 'Optimizing For WebP...' : 'Profile Photo'}
+                            {imageUploading ? 'Uploading Image...' : 'Profile Photo'}
                         </p>
                     </div>
                 </div>
 
                 <div className="space-y-4">
+                    {/* Basic Info Fields */}
                     {[
                         { key: 'name', label: 'Full Name', value: formData.name, icon: <User size={16} />, type: 'text' },
                         { key: 'phone', label: 'Mobile Number', value: formData.phone, icon: <Phone size={16} />, type: 'tel', disabled: true },
@@ -199,6 +240,51 @@ const EditProfile = () => {
                             ) : null}
                         </div>
                     ))}
+
+                    {/* Transport Type Select */}
+                    <div className="bg-white p-4 py-5 rounded-2xl border border-slate-100 shadow-sm space-y-2 focus-within:border-slate-900">
+                        <div className="flex items-center gap-2 text-slate-400">
+                            <Car size={16} />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Transport Type</span>
+                        </div>
+                        <select
+                            value={formData.transportType}
+                            onChange={(e) => setFormData(prev => ({ ...prev, transportType: e.target.value }))}
+                            className="w-full text-[15px] font-semibold text-slate-900 bg-transparent border-none p-0 focus:ring-0 tracking-tight cursor-pointer"
+                        >
+                            {transportTypeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Service Categories Interactive Pills */}
+                    <div className="bg-white p-4 py-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                        <div className="flex items-center gap-2 text-slate-400">
+                            <Layers size={16} />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Service Categories</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {serviceCategoryOptions.map((opt) => {
+                                const isSelected = formData.serviceCategories.includes(opt.value);
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => toggleCategory(opt.value)}
+                                        className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                                            isSelected
+                                                ? 'bg-[#4F46E5] text-white shadow-sm scale-105'
+                                                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium pt-1">Tap categories to enable/disable future service requests</p>
+                    </div>
                 </div>
 
                 <div className="pt-6">
