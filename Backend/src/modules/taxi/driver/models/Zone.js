@@ -89,6 +89,10 @@ const zoneSchema = new mongoose.Schema(
         required: true,
       },
     },
+    disabled_modules: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiAppModule',
+    }],
   },
   { 
     timestamps: true,

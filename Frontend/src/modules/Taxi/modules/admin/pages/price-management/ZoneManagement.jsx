@@ -49,6 +49,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   const [view, setView] = useState(initialMode);
   const [zones, setZones] = useState([]);
   const [serviceLocations, setServiceLocations] = useState([]);
+  const [appModules, setAppModules] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -113,7 +114,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     ride_surge_enabled: false,
     maximum_distance_for_regular_rides: '',
     maximum_distance_for_outstation_rides: '',
-    status: 'active'
+    status: 'active',
+    disabled_modules: []
   });
 
   useEffect(() => {
@@ -127,10 +129,11 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     setLoading(true);
     setFetchError('');
     try {
-      const [zoneRes, slRes, driverRes] = await Promise.all([
+      const [zoneRes, slRes, driverRes, modulesRes] = await Promise.all([
         adminService.getZones(),
         adminService.getServiceLocations(),
         adminService.getDrivers(1, 200),
+        adminService.getAppModules(),
       ]);
 
       let fetchedZones = [];
@@ -151,6 +154,11 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
       if (driverRes) {
         const driverItems = driverRes.success ? (driverRes.data?.results || driverRes.data) : driverRes;
         setDrivers(Array.isArray(driverItems) ? driverItems : []);
+      }
+
+      if (modulesRes) {
+        const mods = modulesRes.success ? (modulesRes.data?.results || modulesRes.data) : modulesRes.data || modulesRes;
+        setAppModules(Array.isArray(mods) ? mods : []);
       }
 
       if (id && initialMode === 'edit') {
@@ -411,7 +419,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
       ride_surge_enabled: false,
       maximum_distance_for_regular_rides: '',
       maximum_distance_for_outstation_rides: '',
-      status: 'active'
+      status: 'active',
+      disabled_modules: []
     });
     setBoundaryMode('polygon');
     setPolygonCoords([]);
@@ -483,7 +492,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
       ride_surge_enabled: zone.ride_surge_enabled === true,
       maximum_distance_for_regular_rides: zone.maximum_distance_for_regular_rides || '',
       maximum_distance_for_outstation_rides: zone.maximum_distance_for_outstation_rides || '',
-      status: zone.active ? 'active' : 'inactive'
+      status: zone.active ? 'active' : 'inactive',
+      disabled_modules: zone.disabled_modules || []
     });
     let parsedCoords = [];
     if (Array.isArray(zone.coordinates)) {
@@ -802,6 +812,41 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                             placeholder={`Name in ${activeTab}`}
                             className={inputClass}
                           />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={labelClass}>Disabled Services</label>
+                        <p className="text-[10px] text-gray-500 mb-2">Select services to disable in this zone. By default, all are enabled.</p>
+                        <div className="flex flex-wrap gap-2">
+                          {appModules.map((module) => {
+                            const modId = String(module._id || module.id);
+                            const modName = module.name || 'Unknown';
+                            const isDisabled = formData.disabled_modules.includes(modId);
+                            
+                            return (
+                              <button
+                                key={modId}
+                                type="button"
+                                onClick={() => {
+                                  const newDisabled = isDisabled 
+                                    ? formData.disabled_modules.filter(id => id !== modId)
+                                    : [...formData.disabled_modules, modId];
+                                  setFormData({ ...formData, disabled_modules: newDisabled });
+                                }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                                  isDisabled 
+                                    ? 'bg-rose-50 text-rose-600 border-rose-200 shadow-sm' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                {modName} {isDisabled ? '(Disabled)' : ''}
+                              </button>
+                            );
+                          })}
+                          {appModules.length === 0 && (
+                            <span className="text-xs text-gray-400">No services found.</span>
+                          )}
                         </div>
                       </div>
 

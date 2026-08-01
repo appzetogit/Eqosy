@@ -7567,6 +7567,7 @@ export const getDashboardData = async () => {
       circle_center: normalizedGeometry.circle_center,
       circle_radius_meters: normalizedGeometry.circle_radius_meters,
       geometry: normalizedGeometry.geometry,
+      disabled_modules: Array.isArray(payload.disabled_modules) ? normalizeObjectIdList(payload.disabled_modules) : [],
     });
 
     const populatedZone = await Zone.findById(zone._id)
@@ -7627,6 +7628,9 @@ export const getDashboardData = async () => {
     if (payload.status !== undefined) {
       zone.status = payload.status || 'active';
       zone.active = zone.status === 'active';
+    }
+    if (payload.disabled_modules !== undefined) {
+      zone.disabled_modules = Array.isArray(payload.disabled_modules) ? normalizeObjectIdList(payload.disabled_modules) : [];
     }
     if (
       payload.coordinates !== undefined ||
@@ -9652,13 +9656,35 @@ export const buildDriverDutyReport = async (query = {}) => {
     const safeLimit = Number(query.limit) || 10;
     const start = (safePage - 1) * safeLimit;
 
+    let filter = {};
+    const lat = Number(query.lat);
+    const lng = Number(query.lng);
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const activeZone = await Zone.findOne({
+        active: true,
+        geometry: {
+          $geoIntersects: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [lng, lat],
+            },
+          },
+        },
+      }).lean();
+
+      if (activeZone && Array.isArray(activeZone.disabled_modules) && activeZone.disabled_modules.length > 0) {
+        filter = { _id: { $nin: activeZone.disabled_modules } };
+      }
+    }
+
     const [modules, total] = await Promise.all([
-      TaxiAppModule.find()
+      TaxiAppModule.find(filter)
         .sort({ order_by: 1, createdAt: -1 })
         .skip(start)
         .limit(safeLimit)
         .lean(),
-      TaxiAppModule.countDocuments(),
+      TaxiAppModule.countDocuments(filter),
     ]);
 
     const results = modules.map(m => ({

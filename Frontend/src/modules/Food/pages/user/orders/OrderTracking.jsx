@@ -732,7 +732,7 @@ export default function OrderTracking({ isSharedView = false }) {
           return candidates.includes(needle)
         })
         if (matched) return matched
-      } catch {}
+      } catch { }
       return null
     },
     fetchOrderDetailsWithFallback: async (options = {}) => {
@@ -989,7 +989,7 @@ export default function OrderTracking({ isSharedView = false }) {
               const candidates = [parsed?.id, parsed?._id, parsed?.mongoId, parsed?.orderId].filter(Boolean).map(s => String(s).trim().toLowerCase());
               if (candidates.includes(needle)) rawContext = parsed;
             }
-          } catch {}
+          } catch { }
         }
         if (rawContext) {
           setOrder(transformOrderForTracking(rawContext));
@@ -1150,7 +1150,7 @@ export default function OrderTracking({ isSharedView = false }) {
           deliveryState: payload.deliveryState,
         });
         setOrderStatus(next);
-        
+
         // Optimistically update order state from socket payload
         if (payload.note || payload.orderStatus || payload.status) {
           setOrder(prev => {
@@ -1490,11 +1490,11 @@ export default function OrderTracking({ isSharedView = false }) {
       {/* Order Confirmed Modal */}
       <AnimatePresence>
         {showConfirmation && (
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-white dark:bg-[#0a0a0a] flex flex-col items-center justify-center"
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-white dark:bg-[#0a0a0a] flex flex-col items-center justify-center"
           >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -1539,29 +1539,29 @@ export default function OrderTracking({ isSharedView = false }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-      {/* Header */}
-      <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50 border-b border-gray-100 dark:border-zinc-800">
-        <div className="flex items-center gap-3">
-          <Link to={isShared ? '/food/user' : '/user/orders'}>
-            <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
-              <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-            </button>
-          </Link>
-          <div>
-            <h1 className="text-lg font-bold text-gray-800 dark:text-white">Track Order</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Order #{displayOrderRef}</p>
+        {/* Header */}
+        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50 border-b border-gray-100 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
+            <Link to={isShared ? '/food/user' : '/user/orders'}>
+              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+                <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-200" />
+              </button>
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold text-gray-800 dark:text-white">Track Order</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Order #{displayOrderRef}</p>
+            </div>
           </div>
+          {!isShared && (
+            <motion.button
+              className="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-700 dark:text-gray-200"
+              whileTap={{ scale: 0.9 }}
+              onClick={handleShare}
+            >
+              <Share2 className="w-5 h-5" />
+            </motion.button>
+          )}
         </div>
-        {!isShared && (
-        <motion.button
-          className="w-10 h-10 flex items-center justify-center cursor-pointer text-gray-700 dark:text-gray-200"
-          whileTap={{ scale: 0.9 }}
-          onClick={handleShare}
-        >
-          <Share2 className="w-5 h-5" />
-        </motion.button>
-        )}
-      </div>
       </motion.div>
 
       {/* Map Section */}
@@ -1581,7 +1581,7 @@ export default function OrderTracking({ isSharedView = false }) {
 
       {/* Scrollable Content */}
       <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
-        
+
         {/* Main Status Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
           <div className="flex items-start justify-between relative z-10">
@@ -1862,7 +1862,7 @@ export default function OrderTracking({ isSharedView = false }) {
               <span>{"\u20B9"}{Number(order.totalAmount || order.total || 0).toFixed(2)}</span>
             </div>
           </div>
-          
+
           {!isDeliveredOrder && (
             <>
               <div className="h-px bg-gray-50 dark:bg-zinc-800 my-4" />
@@ -1895,58 +1895,58 @@ export default function OrderTracking({ isSharedView = false }) {
 
       {/* Cancel Order Dialog */}
       {!isShared && (
-      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] bg-white dark:bg-zinc-900 border-none rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">
-              Cancel Order
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4 px-2">
-            {cancellationPolicyText && (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3 text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                {cancellationPolicyText}
+        <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+          <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] bg-white dark:bg-zinc-900 border-none rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">
+                Cancel Order
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4 px-2">
+              {cancellationPolicyText && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3 text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                  {cancellationPolicyText}
+                </div>
+              )}
+              <div className="space-y-2 w-full">
+                <Textarea
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  placeholder="e.g., Changed my mind, Wrong address, etc."
+                  className="w-full min-h-[100px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors"
+                  disabled={isCancelling}
+                />
               </div>
-            )}
-            <div className="space-y-2 w-full">
-              <Textarea
-                value={cancellationReason}
-                onChange={(e) => setCancellationReason(e.target.value)}
-                placeholder="e.g., Changed my mind, Wrong address, etc."
-                className="w-full min-h-[100px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors"
-                disabled={isCancelling}
-              />
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCancelDialog(false);
+                    setCancellationReason("");
+                  }}
+                  disabled={isCancelling}
+                  className="flex-1 dark:bg-zinc-800 dark:text-white dark:border-zinc-700"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmCancel}
+                  disabled={isCancelling || !cancellationReason.trim()}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white border-none"
+                >
+                  {isCancelling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    'Confirm'
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCancelDialog(false);
-                  setCancellationReason("");
-                }}
-                disabled={isCancelling}
-                className="flex-1 dark:bg-zinc-800 dark:text-white dark:border-zinc-700"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmCancel}
-                disabled={isCancelling || !cancellationReason.trim()}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white border-none"
-              >
-                {isCancelling ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Cancelling...
-                  </>
-                ) : (
-                  'Confirm'
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Delivery Instructions Modal */}
@@ -2067,11 +2067,10 @@ export default function OrderTracking({ isSharedView = false }) {
                       className="p-1 transition-transform hover:scale-125 focus:outline-none"
                     >
                       <Star
-                        className={`w-8 h-8 ${
-                          star <= deliveryRating
+                        className={`w-8 h-8 ${star <= deliveryRating
                             ? 'text-amber-400 fill-amber-400'
                             : 'text-gray-300 dark:text-zinc-600'
-                        }`}
+                          }`}
                       />
                     </button>
                   ))}
@@ -2088,11 +2087,10 @@ export default function OrderTracking({ isSharedView = false }) {
                           prev.includes(tag) ? prev.replace(tag, '').trim() : `${prev} ${tag}`.trim()
                         )
                       }
-                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
-                        deliveryComment.includes(tag)
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${deliveryComment.includes(tag)
                           ? 'bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-600 dark:text-orange-400'
                           : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
-                      }`}
+                        }`}
                     >
                       {tag}
                     </button>
@@ -2132,11 +2130,10 @@ export default function OrderTracking({ isSharedView = false }) {
                     className="p-1 transition-transform hover:scale-125 focus:outline-none"
                   >
                     <Star
-                      className={`w-8 h-8 ${
-                        star <= restaurantRating
+                      className={`w-8 h-8 ${star <= restaurantRating
                           ? 'text-amber-400 fill-amber-400'
                           : 'text-gray-300 dark:text-zinc-600'
-                      }`}
+                        }`}
                     />
                   </button>
                 ))}
@@ -2153,11 +2150,10 @@ export default function OrderTracking({ isSharedView = false }) {
                         prev.includes(tag) ? prev.replace(tag, '').trim() : `${prev} ${tag}`.trim()
                       )
                     }
-                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
-                      restaurantComment.includes(tag)
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${restaurantComment.includes(tag)
                         ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-600 dark:text-emerald-400'
                         : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
-                    }`}
+                      }`}
                   >
                     {tag}
                   </button>

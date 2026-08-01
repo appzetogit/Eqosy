@@ -1,8 +1,8 @@
 import api from '../../../shared/api/axiosInstance';
 
 export const userService = {
-  getAppModules: async () => {
-    const response = await api.get('/users/app-modules');
+  getAppModules: async (params = {}) => {
+    const response = await api.get('/users/app-modules', { params });
     return response;
   },
   getRentalVehicles: async () => {

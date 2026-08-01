@@ -5,6 +5,7 @@ import { userService } from '../services/userService';
 import { POOLING_ENABLED, RENTAL_ENABLED } from '../../../shared/featureFlags';
 import toast from 'react-hot-toast';
 import { ArrowRight, Compass, Car, Package, Users, Bus } from 'lucide-react';
+import { getSavedLocationCoords } from '../services/locationStore';
 
 // Asset Imports
 import busImg from '../../../assets/3d images/AutoCab/bus.png';
@@ -129,7 +130,13 @@ const ServiceGrid = ({ plain = false }) => {
     const fetchServices = async () => {
       try {
         setLoading(true);
-        const res = await userService.getAppModules();
+        const coords = getSavedLocationCoords();
+        const params = {};
+        if (coords) {
+          params.lng = coords[0];
+          params.lat = coords[1];
+        }
+        const res = await userService.getAppModules(params);
         const results = res?.results || res?.data?.results || [];
         
         // Filter active app modules
