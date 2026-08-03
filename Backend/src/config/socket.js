@@ -290,7 +290,7 @@ export const initSocket = async (server) => {
 
                 if (trackingQueue && redis) {
                     const coordString = JSON.stringify({ lat, lng, timestamp: now });
-                    
+
                     // 1. Immediately buffer the newest location in high-speed Redis Hash (HOT storage)
                     await Promise.all([
                         redis.hSet('rider:locations:hot', String(userId), coordString),
@@ -301,8 +301,8 @@ export const initSocket = async (server) => {
                     // jobId debulks updates: if a job is already waiting, BullMQ ignores the new add()
                     // Delay (30s) ensures we don't spam MongoDB while the rider is moving fast
                     const syncJobId = `sync:loc:${data.orderId}`;
-                    trackingQueue.add('sync-hot-locations', 
-                        { userId, orderId: data.orderId }, 
+                    trackingQueue.add('sync-hot-locations',
+                        { userId, orderId: data.orderId },
                         { jobId: syncJobId, delay: 30000, removeOnComplete: true }
                     ).catch(e => logger.error(`BullMQ sync schedule failed: ${e.message}`));
                 }
@@ -363,51 +363,51 @@ export const initSocket = async (server) => {
 
         // 🆕 Resync State on Reconnect
         socket.on('resync', async () => {
-          try {
-            if (role === 'DELIVERY_PARTNER') {
-              logDeliverySocket('Resync requested', {
-                socketId: socket.id,
-                deliveryPartnerId: String(userId || ''),
-              });
+            try {
+                if (role === 'DELIVERY_PARTNER') {
+                    logDeliverySocket('Resync requested', {
+                        socketId: socket.id,
+                        deliveryPartnerId: String(userId || ''),
+                    });
+                }
+                const { resyncState } = await import('../modules/food/orders/services/order.service.js');
+                const state = await resyncState(userId, role);
+                if (state.activeOrder) {
+                    const eventName = role === 'USER' ? 'order_state' : 'active_order';
+                    socket.emit(eventName, state.activeOrder);
+                    if (role === 'DELIVERY_PARTNER') {
+                        logDeliverySocket('Resync emitted active order', {
+                            socketId: socket.id,
+                            deliveryPartnerId: String(userId || ''),
+                            orderId: String(
+                                state.activeOrder?.orderId ||
+                                state.activeOrder?.orderMongoId ||
+                                ''
+                            ),
+                            eventName,
+                        });
+                    }
+
+                    // Re-emit OTP if user is in drop phase
+                    if (role === 'USER' && state.activeOrder.handoverOtp) {
+                        socket.emit('delivery_drop_otp', {
+                            orderId: state.activeOrder.orderId,
+                            otp: state.activeOrder.handoverOtp,
+                            message: 'Share this OTP with your delivery partner.'
+                        });
+                    }
+                }
+                socket.emit('resync_complete', { timestamp: Date.now() });
+                if (role === 'DELIVERY_PARTNER') {
+                    logDeliverySocket('Resync complete', {
+                        socketId: socket.id,
+                        deliveryPartnerId: String(userId || ''),
+                        hasActiveOrder: Boolean(state.activeOrder),
+                    });
+                }
+            } catch (err) {
+                logger.error(`Resync failed for ${role}:${userId} — ${err.message}`);
             }
-            const { resyncState } = await import('../modules/food/orders/services/order.service.js');
-            const state = await resyncState(userId, role);
-            if (state.activeOrder) {
-              const eventName = role === 'USER' ? 'order_state' : 'active_order';
-              socket.emit(eventName, state.activeOrder);
-              if (role === 'DELIVERY_PARTNER') {
-                logDeliverySocket('Resync emitted active order', {
-                  socketId: socket.id,
-                  deliveryPartnerId: String(userId || ''),
-                  orderId: String(
-                    state.activeOrder?.orderId ||
-                    state.activeOrder?.orderMongoId ||
-                    ''
-                  ),
-                  eventName,
-                });
-              }
-              
-              // Re-emit OTP if user is in drop phase
-              if (role === 'USER' && state.activeOrder.handoverOtp) {
-                socket.emit('delivery_drop_otp', {
-                  orderId: state.activeOrder.orderId,
-                  otp: state.activeOrder.handoverOtp,
-                  message: 'Share this OTP with your delivery partner.'
-                });
-              }
-            }
-            socket.emit('resync_complete', { timestamp: Date.now() });
-            if (role === 'DELIVERY_PARTNER') {
-              logDeliverySocket('Resync complete', {
-                socketId: socket.id,
-                deliveryPartnerId: String(userId || ''),
-                hasActiveOrder: Boolean(state.activeOrder),
-              });
-            }
-          } catch (err) {
-            logger.error(`Resync failed for ${role}:${userId} — ${err.message}`);
-          }
         });
     });
 

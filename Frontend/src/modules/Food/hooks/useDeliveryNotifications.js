@@ -174,7 +174,7 @@ const triggerWebViewNativeNotification = async (orderData = {}) => {
 export const useDeliveryNotifications = () => {
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
-  
+
   // Step 1: All refs first (unconditional)
   const socketRef = useRef(null);
   const audioRef = useRef(null);
@@ -185,7 +185,7 @@ export const useDeliveryNotifications = () => {
   const userInteractedRef = useRef(false);
   const lastAlertAtByOrderRef = useRef(new Map());
   const lastBrowserNotificationAtByOrderRef = useRef(new Map());
-  
+
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
   const [orderReady, setOrderReady] = useState(null);
@@ -257,7 +257,7 @@ export const useDeliveryNotifications = () => {
       }
     }, ALERT_LOOP_INTERVAL_MS);
   }, [stopAlertLoop]);
-  
+
   const playNotificationSound = useCallback(async (orderData = {}) => {
     try {
       const usedNativeBridge = await triggerWebViewNativeNotification(orderData);
@@ -275,7 +275,7 @@ export const useDeliveryNotifications = () => {
       const soundFile = selectedSound === 'original'
         ? resolveAudioSource(originalSound, 'delivery-original')
         : resolveAudioSource(alertSound, 'delivery-alert');
-      
+
       // Update audio source if preference changed or initialize if not exists
       if (audioRef.current) {
         const currentSrc = audioRef.current.src;
@@ -296,7 +296,7 @@ export const useDeliveryNotifications = () => {
         audioRef.current.load();
         debugLog('?? Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Eqosy Tone', 'Source:', soundFile);
       }
-      
+
       if (audioRef.current) {
         audioRef.current.muted = false;
         audioRef.current.volume = 0.9;
@@ -403,8 +403,8 @@ export const useDeliveryNotifications = () => {
       const currentTrip =
         currentTripResult.status === 'fulfilled'
           ? currentTripResult.value?.data?.data ??
-            currentTripResult.value?.data ??
-            null
+          currentTripResult.value?.data ??
+          null
           : null;
 
       if (currentTrip) {
@@ -419,8 +419,8 @@ export const useDeliveryNotifications = () => {
       const availablePayload =
         availableResult.status === 'fulfilled'
           ? availableResult.value?.data?.data ??
-            availableResult.value?.data ??
-            {}
+          availableResult.value?.data ??
+          {}
           : {};
       const availableOrders = Array.isArray(availablePayload?.docs)
         ? availablePayload.docs
@@ -580,11 +580,11 @@ export const useDeliveryNotifications = () => {
           audioRef.current.muted = true;
           // Ensure src is set even if it was just initialized
           if (!audioRef.current.src || audioRef.current.src === window.location.href) {
-             const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-             const soundFile = selectedSound === 'original'
-                ? resolveAudioSource(originalSound)
-                : resolveAudioSource(alertSound);
-             audioRef.current.src = soundFile;
+            const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
+            const soundFile = selectedSound === 'original'
+              ? resolveAudioSource(originalSound)
+              : resolveAudioSource(alertSound);
+            audioRef.current.src = soundFile;
           }
           audioRef.current.load();
           await audioRef.current.play();
@@ -610,13 +610,13 @@ export const useDeliveryNotifications = () => {
       document.removeEventListener('keydown', handleUserInteraction);
       window.removeEventListener('pointerdown', handleUserInteraction);
     };
-    
+
     // Listen for user interaction
     document.addEventListener('click', handleUserInteraction, { once: true });
     document.addEventListener('touchstart', handleUserInteraction, { once: true });
     document.addEventListener('keydown', handleUserInteraction, { once: true });
     window.addEventListener('pointerdown', handleUserInteraction, { once: true, passive: true });
-    
+
     return () => {
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
@@ -624,7 +624,7 @@ export const useDeliveryNotifications = () => {
       window.removeEventListener('pointerdown', handleUserInteraction);
     };
   }, []);
-  
+
   // Initialize audio on mount - use selected preference from localStorage
   useEffect(() => {
     // Get selected alert sound preference from localStorage
@@ -632,7 +632,7 @@ export const useDeliveryNotifications = () => {
     const soundFile = selectedSound === 'original'
       ? resolveAudioSource(originalSound, 'delivery-original')
       : resolveAudioSource(alertSound, 'delivery-alert');
-    
+
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
       audioRef.current.preload = 'auto';
@@ -649,7 +649,7 @@ export const useDeliveryNotifications = () => {
         debugLog('?? Audio updated to:', selectedSound === 'original' ? 'Original' : 'Eqosy Tone');
       }
     }
-    
+
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -672,9 +672,9 @@ export const useDeliveryNotifications = () => {
         if (response.data?.success && response.data.data) {
           const deliveryPartner = response.data.data.user || response.data.data.deliveryPartner;
           if (deliveryPartner) {
-            const id = deliveryPartner.id?.toString() || 
-                      deliveryPartner._id?.toString() || 
-                      deliveryPartner.deliveryId;
+            const id = deliveryPartner.id?.toString() ||
+              deliveryPartner._id?.toString() ||
+              deliveryPartner.deliveryId;
             if (id) {
               setDeliveryPartnerId(id);
               debugLog('? Delivery Partner ID fetched:', id);
@@ -698,13 +698,13 @@ export const useDeliveryNotifications = () => {
   useEffect(() => {
     const backendUrl = resolveSocketOrigin(API_BASE_URL);
     const socketUrl = backendUrl;
-    
+
     debugLog('?? Attempting to connect to Delivery Socket.IO:', socketUrl);
     debugLog('?? Backend URL:', backendUrl);
     debugLog('?? API_BASE_URL:', API_BASE_URL);
     debugLog('?? Delivery Partner ID:', deliveryPartnerId);
     debugLog('?? Environment: (ui-only mode)');
-    
+
     // Block localhost only in production builds. In dev, localhost is expected.
     if (import.meta.env.PROD && backendUrl.includes('localhost')) {
       debugError('? CRITICAL: Trying to connect Socket.IO to localhost in production!');
@@ -713,7 +713,7 @@ export const useDeliveryNotifications = () => {
       setIsConnected(false);
       return;
     }
-    
+
     // Validate backend URL format
     if (!backendUrl || !backendUrl.startsWith('http')) {
       debugError('? CRITICAL: Invalid backend URL format:', backendUrl);
@@ -721,7 +721,7 @@ export const useDeliveryNotifications = () => {
       debugError('?? Expected format: https://your-domain.com or ');
       return; // Don't try to connect with invalid URL
     }
-    
+
     // Validate socket URL format
     try {
       new URL(socketUrl); // This will throw if URL is invalid
@@ -818,7 +818,7 @@ export const useDeliveryNotifications = () => {
       });
       setIsConnected(false);
       joinedDeliveryRoomRef.current = null;
-      
+
       if (reason === 'io server disconnect') {
         socketRef.current.connect();
       }
@@ -920,7 +920,7 @@ export const useDeliveryNotifications = () => {
       debugLog('?? Order claimed by another partner:', data);
       const currentActiveId = getOrderAlertKey(activeOrderRef.current);
       const claimedId = getOrderAlertKey(data);
-      
+
       if (currentActiveId && claimedId && currentActiveId === claimedId) {
         debugLog('?? Removing claimed order from local state');
         clearNewOrder();

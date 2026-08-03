@@ -247,7 +247,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       return order;
     }
     const offeredIds = (order.dispatch?.offeredTo || []).map(o => o.partnerId.toString());
-    
+
     // RADIUS EXPANSION LOGIC
     // Attempt 1: 15km, Attempt 2: 25km, Attempt 3: 40km, Attempt 4+: 60km
     let maxKm = 15;
@@ -257,7 +257,7 @@ export async function tryAutoAssign(orderId, options = {}) {
 
     const searchOptions = { maxKm, limit: 15 };
     const { partners } = await listNearbyOnlineDeliveryPartners(order.restaurantId, searchOptions);
-    
+
     // TIERED ALERT LOGIC
     // Phase 2: Broadcast to all (Attempt 3+)
     // Phase 3: Admin Alert (Attempt 5+ or roughly 5 mins)
@@ -285,7 +285,7 @@ export async function tryAutoAssign(orderId, options = {}) {
 
     if (eligible.length === 0) {
       logger.info(`tryAutoAssign: No NEW eligible partners in ${maxKm}km for order ${order._id}. Restarting hunt...`);
-      
+
       // If we ran out of new eligible partners, we might want to re-offer to everyone (Phase 2 style)
       const io = getIO();
       if (io && codEligiblePartners.length > 0) {
@@ -384,7 +384,7 @@ export async function processDispatchTimeout(orderId, partnerId) {
     order.dispatch.status = 'unassigned';
     order.dispatch.deliveryPartnerId = null;
     await order.save();
-    
+
     const attempt = (order.dispatch?.offeredTo?.length || 0) + 1;
     await tryAutoAssign(orderId, { attempt });
   } else if (order.dispatch?.status === 'unassigned') {
