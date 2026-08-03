@@ -28,7 +28,7 @@ const resolveConfigApiBaseUrl = () => {
         }
       }
       return envValue;
-    } catch (_) {}
+    } catch (_) { }
   }
 
   if (origin) {
@@ -108,8 +108,8 @@ export const API_ENDPOINTS = {
     FOOD_APPROVALS: "", FOOD_APPROVAL_APPROVE: "", FOOD_APPROVAL_REJECT: "",
     DELIVERY_PARTNER_REVIEWS: "", DELIVERY_EMERGENCY_HELP: "", DELIVERY_SUPPORT_TICKETS: "", DELIVERY_SUPPORT_TICKET_BY_ID: "",
     EARNING_ADDON: "", EARNING_ADDON_BY_ID: "", EARNING_ADDON_HISTORY: "", EARNING_ADDON_HISTORY_BY_ID: "",
-    WITHDRAWAL_REQUESTS: "", WITHDRAWAL_APPROVE: "", WITHDRAWAL_REJECT: "", 
-    BUSINESS_SETTINGS: "/food/admin/business-settings", 
+    WITHDRAWAL_REQUESTS: "", WITHDRAWAL_APPROVE: "", WITHDRAWAL_REJECT: "",
+    BUSINESS_SETTINGS: "/food/admin/business-settings",
     BUSINESS_SETTINGS_PUBLIC: "/food/admin/business-settings/public",
   },
   ORDER: { CREATE: "", LIST: "", DETAILS: "", CANCEL: "", VERIFY_PAYMENT: "", CALCULATE: "" },

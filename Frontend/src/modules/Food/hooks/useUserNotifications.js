@@ -52,7 +52,7 @@ export const useUserNotifications = () => {
     }
 
     const socketUrl = resolveSocketOrigin(API_BASE_URL);
-    
+
     // Auth token
     const token = localStorage.getItem('user_accessToken') || localStorage.getItem('accessToken');
     if (!token) return;

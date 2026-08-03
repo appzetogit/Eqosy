@@ -446,7 +446,7 @@ function setSavedToken(moduleName, token) {
 }
 
 async function saveTokenByModule(moduleName, token, platform = "web") {
-  pushDebugLog(PUSH_DEBUG_PREFIX, "saveTokenByModule starting", { moduleName, platform, tokenPreview: `${token?.slice(0, 10)}...` });
+  pushDebugLog(PUSH_DEBUG_PREFIX, "saveTokenByModule starting", { moduleName, platform });
   if (moduleName === "restaurant") {
     await restaurantAPI.saveFcmToken(token, platform);
     return;
@@ -478,7 +478,6 @@ async function registerNativeWebViewFcmToken(moduleName) {
       pushDebugLog(PUSH_DEBUG_PREFIX, "Registered native WebView FCM token", {
         moduleName,
         handlerName,
-        tokenPreview: `${normalizedToken.slice(0, 12)}...`,
       });
       return;
     } catch {
@@ -743,13 +742,12 @@ export async function registerWebPushForCurrentModule(pathname = window.location
       if (!token) return;
       pushDebugLog(PUSH_DEBUG_PREFIX, "FCM token resolved", {
         moduleName,
-        tokenPreview: `${token.slice(0, 12)}...`,
       });
 
       // Removed localStorage caching (getSavedToken/setSavedToken) as per user requirements.
       // The backend 'upsert' already handles duplicates efficiently.
       try {
-        pushDebugLog(PUSH_DEBUG_PREFIX, "Synchronizing FCM token with backend database", { moduleName, tokenPreview: `${token?.slice(0, 10)}...` });
+        pushDebugLog(PUSH_DEBUG_PREFIX, "Synchronizing FCM token with backend database", { moduleName });
         await saveTokenByModule(moduleName, token);
         pushDebugLog(PUSH_DEBUG_PREFIX, "FCM token synchronized with backend successfully");
       } catch (e) {

@@ -180,8 +180,14 @@ export const PickupActionModal = ({
             <div className="space-y-4">
               {/* Real-time Food Preparation Status Banner */}
               {(() => {
-                const normalizedStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
-                const isFoodReady = normalizedStatus === 'ready_for_pickup' || normalizedStatus === 'ready';
+                const normalizedStatus = String(order?.orderStatus || order?.status || order?.deliveryState?.currentPhase || '').toLowerCase();
+                const isFoodReady = 
+                  normalizedStatus === 'ready_for_pickup' || 
+                  normalizedStatus === 'ready' || 
+                  normalizedStatus === 'at_pickup' ||
+                  normalizedStatus === 'reached_pickup' ||
+                  Boolean(order?.isFoodReady) || 
+                  Boolean(order?.deliveryState?.isFoodReady);
 
                 return (
                   <div className={`p-4 rounded-[2rem] border transition-all ${
