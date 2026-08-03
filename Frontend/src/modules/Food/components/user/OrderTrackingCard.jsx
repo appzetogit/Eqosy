@@ -318,14 +318,19 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
   const restaurantName =
     activeOrder.restaurant || activeOrder.restaurantName || "Restaurant";
   const statusText = (() => {
-    const s = String(orderStatus);
-    const p = String(orderPhase);
+    const s = String(orderStatus).toLowerCase();
+    const p = String(orderPhase).toLowerCase();
 
     if (s === "confirmed") return "Order confirmed";
-    if (s === "preparing" || s === "created" || s === "pending") return "Preparing your order";
-    if (s === "ready_for_pickup") return "Ready for pickup";
+    if (s === "preparing" || s === "created" || s === "pending") {
+      if (p === "at_pickup" || s === "reached_pickup") {
+        return "Partner waiting at restaurant (Food preparing)";
+      }
+      return "Preparing your order";
+    }
+    if (s === "ready_for_pickup" || s === "ready") return "Food ready for pickup 🟢";
 
-    if (s === "reached_pickup" || p === "at_pickup") return "Delivery partner reached restaurant";
+    if (s === "reached_pickup" || p === "at_pickup") return "Partner reached restaurant";
     if (s === "picked_up" || p === "en_route_to_delivery") return "On the way";
     if (s === "reached_drop" || p === "at_drop") return "Arrived near you";
 

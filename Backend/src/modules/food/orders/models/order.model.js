@@ -151,7 +151,10 @@ const deliveryStateSchema = new mongoose.Schema(
         reachedPickupAt: { type: Date, default: null },
         reachedDropAt: { type: Date, default: null },
         pickedUpAt: { type: Date, default: null },
-        deliveredAt: { type: Date, default: null }
+        deliveredAt: { type: Date, default: null },
+        foodPrepStartedAt: { type: Date, default: null },
+        foodReadyAt: { type: Date, default: null },
+        riderWaitDurationMs: { type: Number, default: 0 }
     },
     { _id: false }
 );

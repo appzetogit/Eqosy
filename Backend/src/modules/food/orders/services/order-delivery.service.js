@@ -528,24 +528,30 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
       .select('name')
       .lean();
 
+    const isFoodPreparing = ['confirmed', 'preparing'].includes(order.orderStatus);
+
     await notifyOwnersSafely(
-      [{ ownerType: 'RESTAURANT', ownerId: order.restaurantId }],
+      [
+        { ownerType: 'RESTAURANT', ownerId: order.restaurantId },
+        ...(isFoodPreparing ? [{ ownerType: 'USER', ownerId: order.userId }] : []),
+      ],
       {
-        title: 'Rider arrived!',
-        body: `${partner?.name || 'The delivery partner'} has arrived at ${restaurant?.restaurantName || 'your restaurant'
-          } to pick up Order #${order._id.toString()}.`,
+        title: isFoodPreparing ? 'Food preparation is taking longer 🟠' : 'Rider arrived!',
+        body: isFoodPreparing
+          ? 'Your delivery partner has arrived at the restaurant and is waiting for your order to be ready.'
+          : `${partner?.name || 'The delivery partner'} has arrived at ${restaurant?.restaurantName || 'your restaurant'} to pick up Order #${order.order_id || order._id.toString()}.`,
         data: {
           type: 'rider_arrived',
           orderId: String(order._id.toString()),
           orderMongoId: String(order._id),
           partnerName: partner?.name || '',
+          riderWaiting: isFoodPreparing,
         },
       },
     );
   } catch (error) {
     logger.error(
-      `Error notifying restaurant about rider arrival for ${order._id}: ${error?.message || error
-      }`,
+      `Error notifying restaurant/customer about rider arrival for ${order._id}: ${error?.message || error}`,
     );
   }
 
@@ -576,11 +582,19 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
     throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
   }
   order.orderStatus = nextStatus;
+  const pickedUpAt = new Date();
+  const reachedPickupAt = order.deliveryState?.reachedPickupAt;
+  const foodReadyAt = order.deliveryState?.foodReadyAt;
+  const waitDurationMs = (reachedPickupAt && foodReadyAt)
+    ? Math.max(0, new Date(foodReadyAt).getTime() - new Date(reachedPickupAt).getTime())
+    : 0;
+
   order.deliveryState = {
     ...(order.deliveryState?.toObject?.() || order.deliveryState || {}),
     currentPhase: 'en_route_to_delivery',
     status: 'picked_up',
-    pickedUpAt: new Date(),
+    pickedUpAt,
+    riderWaitDurationMs: waitDurationMs,
     billImageUrl,
   };
 

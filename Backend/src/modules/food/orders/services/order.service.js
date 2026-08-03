@@ -1071,6 +1071,14 @@ export async function updateOrderStatusRestaurant(
     order.note = String(note).trim();
   }
 
+  // Real-time preparation timestamp tracking
+  order.deliveryState = order.deliveryState || {};
+  if (['confirmed', 'preparing'].includes(orderStatus) && !order.deliveryState.foodPrepStartedAt) {
+    order.deliveryState.foodPrepStartedAt = new Date();
+  } else if (orderStatus === 'ready_for_pickup') {
+    order.deliveryState.foodReadyAt = new Date();
+  }
+
   pushStatusHistory(order, {
     byRole: "RESTAURANT",
     byId: restaurantId,

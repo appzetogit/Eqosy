@@ -1426,27 +1426,35 @@ export default function OrderTracking({ isSharedView = false }) {
       iconType: 'food'
     },
     preparing: {
-      title: "Food is being prepared",
-      subtitle: typeof estimatedTime === 'number' ? `Arriving in ${estimatedTime} mins` : "Cooking your meal",
-      color: "bg-green-600",
+      title: (order?.deliveryState?.currentPhase === 'at_pickup' || order?.deliveryState?.status === 'reached_pickup')
+        ? "Food preparation in progress 🟠"
+        : "Food is being prepared",
+      subtitle: (order?.deliveryState?.currentPhase === 'at_pickup' || order?.deliveryState?.status === 'reached_pickup')
+        ? "Your delivery partner has arrived at the restaurant and is waiting for your order to be ready."
+        : (typeof estimatedTime === 'number' ? `Arriving in ${estimatedTime} mins` : "Cooking your meal"),
+      color: "bg-orange-500",
       iconType: 'food'
     },
     assigned: {
       title: "Rider is arriving",
       subtitle: "A delivery partner is arriving at the restaurant",
-      color: "bg-green-600",
+      color: "bg-orange-500",
       iconType: 'rider'
     },
     at_pickup: {
-      title: "Rider at restaurant",
-      subtitle: "Rider is waiting for your order",
-      color: "bg-green-600",
+      title: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready') 
+        ? "Food is ready for pickup 🟢" 
+        : "Food preparation in progress 🟠",
+      subtitle: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
+        ? "Your order is ready and your delivery partner is collecting it."
+        : "Your delivery partner has arrived at the restaurant and is waiting for your order to be ready.",
+      color: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready') ? "bg-emerald-600" : "bg-amber-600",
       iconType: 'rider'
     },
     ready: {
-      title: "Handover in progress",
-      subtitle: "Rider is picking up your order",
-      color: "bg-green-600",
+      title: "Food is ready for pickup 🟢",
+      subtitle: "Your order is ready and your delivery partner is collecting it.",
+      color: "bg-emerald-600",
       iconType: 'rider'
     },
     on_way: {

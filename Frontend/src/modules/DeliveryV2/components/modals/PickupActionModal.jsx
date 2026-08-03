@@ -177,7 +177,47 @@ export const PickupActionModal = ({
             </div>
 
             {/* Content Area */}
-            <div className="space-y-8">
+            <div className="space-y-4">
+              {/* Real-time Food Preparation Status Banner */}
+              {(() => {
+                const normalizedStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
+                const isFoodReady = normalizedStatus === 'ready_for_pickup' || normalizedStatus === 'ready';
+
+                return (
+                  <div className={`p-4 rounded-[2rem] border transition-all ${
+                    isFoodReady 
+                      ? 'bg-emerald-50/90 border-emerald-200 shadow-sm' 
+                      : 'bg-amber-50/90 border-amber-200 shadow-sm'
+                  }`}>
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                        isFoodReady ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white animate-pulse'
+                      }`}>
+                        {isFoodReady ? <CheckCircle2 className="w-5 h-5" /> : <ChefHat className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-xs font-black uppercase tracking-widest ${
+                            isFoodReady ? 'text-emerald-800' : 'text-amber-800'
+                          }`}>
+                            {isFoodReady ? '🟢 Food Ready for Pickup' : '🟠 Food Preparation in Progress'}
+                          </p>
+                          <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                            isFoodReady ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-amber-100 border-amber-300 text-amber-800'
+                          }`}>
+                            {isFoodReady ? 'Ready' : 'Preparing'}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-700 mt-1 leading-relaxed">
+                          {isFoodReady 
+                            ? 'Your order is ready. Please collect the order from the restaurant.'
+                            : 'The restaurant is still preparing your order. You can wait outside until the order is marked ready.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Delivery Instructions (User Note) */}
               {order?.note && (
                 <div className="bg-orange-50/50 border border-orange-100 rounded-[2rem] p-5 flex gap-4 items-start relative overflow-hidden group">

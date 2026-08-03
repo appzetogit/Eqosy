@@ -81,6 +81,7 @@ const normalizeTransportType = (value = '') => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'delivery') return 'delivery';
   if (normalized === 'pooling') return 'pooling';
+  if (normalized === 'outstation') return 'outstation';
   if (normalized === 'both' || normalized === 'all') return 'both';
   return 'taxi';
 };
@@ -264,25 +265,11 @@ const VehicleType = ({ mode: propMode }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState({ ...defaultFormData, transport_type: '' });
   const { transportTypes } = useTaxiTransportTypes();
-  const transportTypeOptions = useMemo(() => {
-    const normalized = new Map();
-
-    [...TRANSPORT_TYPE_OPTIONS, ...(Array.isArray(transportTypes) ? transportTypes : [])].forEach((item) => {
-      const value = normalizeTransportType(item?.name || item?.transport_type || item?.id || '');
-      if (!value || value === 'pooling') return;
-
-      normalized.set(value, {
-        id: item?.id || item?._id || value,
-        name: value,
-        display_name:
-          value === 'both'
-            ? 'Both'
-            : (item?.display_name || item?.label || value.charAt(0).toUpperCase() + value.slice(1)),
-      });
-    });
-
-    return Array.from(normalized.values());
-  }, [transportTypes]);
+  const transportTypeOptions = useMemo(() => [
+    { id: 'taxi', name: 'taxi', display_name: 'Taxi / Ride' },
+    { id: 'delivery', name: 'delivery', display_name: 'Delivery' },
+    { id: 'both', name: 'both', display_name: 'Both (Taxi & Delivery)' },
+  ], []);
 
   useEffect(() => {
     let mounted = true;

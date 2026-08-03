@@ -66,19 +66,23 @@ const HeatMap = () => {
   }, []);
 
   const heatmapData = useMemo(() => {
-    if (!zones.length || !window.google) return [];
+    if (!zones.length || !isLoaded || typeof window === 'undefined' || !window.google?.maps?.LatLng) return [];
     return zones.flatMap((zone) => {
       const coord = zone.coordinates?.[0]?.[0] || [75.8577, 22.7196];
       const lat = Number(coord[1]);
       const lng = Number(coord[0]);
       
-      return Array.from({ length: 12 }).map(() => ({
-        location: new window.google.maps.LatLng(
-          lat + (Math.random() - 0.5) * 0.08,
-          lng + (Math.random() - 0.5) * 0.08
-        ),
-        weight: Math.random() * 10
-      }));
+      try {
+        return Array.from({ length: 12 }).map(() => ({
+          location: new window.google.maps.LatLng(
+            lat + (Math.random() - 0.5) * 0.08,
+            lng + (Math.random() - 0.5) * 0.08
+          ),
+          weight: Math.random() * 10
+        }));
+      } catch (err) {
+        return [];
+      }
     });
   }, [zones, isLoaded]);
 
@@ -106,11 +110,11 @@ const HeatMap = () => {
       <div className="space-y-8">
         
         {/* 2. Map Canvas Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm overflow-hidden p-2">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-2">
            <div className="rounded-lg overflow-hidden relative">
               {loadError ? (
                  <div className="h-[400px] flex items-center justify-center bg-gray-50 text-rose-500 font-semibold">Map Error</div>
-              ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+              ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded && typeof window !== 'undefined' && window.google?.maps?.visualization ? (
                  <GoogleMap
                     mapContainerStyle={MAP_CONTAINER_STYLE} center={INDIA_CENTER} zoom={11} options={mapOptions}
                  >
@@ -119,7 +123,9 @@ const HeatMap = () => {
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center bg-gray-50 gap-4">
                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm text-indigo-600"><MapIcon size={32} /></div>
-                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Map API Key Required</p>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                     {!HAS_VALID_GOOGLE_MAPS_KEY ? "Map API Key Required" : "Loading Map & Heatmap Visualization..."}
+                   </p>
                 </div>
               )}
               

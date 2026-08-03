@@ -135,7 +135,9 @@ const FoodSubadminCreate = lazy(() => import("@food/pages/admin/management/FoodS
 
 const FoodPermissionOutlet = () => (
   <FoodAdminPermissionRoute>
-    <Outlet />
+    <Suspense fallback={<Loader />}>
+      <Outlet />
+    </Suspense>
   </FoodAdminPermissionRoute>
 );
 

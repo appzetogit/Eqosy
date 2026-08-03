@@ -2920,6 +2920,12 @@ function OrderCard({
               {deliveryPartnerId ? "Assigned" : "Not Assigned"}
             </span>
           )}
+          {(normalizedDispatchStatus === "reached_pickup" || normalizedDispatchStatus === "at_pickup") && isPreparing && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+              🛵 Rider Waiting Outside
+            </span>
+          )}
           {dispatchStatus !== "accepted" && (isPreparing || isReady || normalizedStatus === "confirmed") && (
             <ResendNotificationButton orderId={orderId} mongoId={mongoId} onSuccess={onSelect} />
           )}
