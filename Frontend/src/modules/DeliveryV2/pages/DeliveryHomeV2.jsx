@@ -77,9 +77,76 @@ function BottomPopup({ isOpen, onClose, title, children, maxHeight = "85vh" }) {
 
 const getTodaySelfieKey = () => new Date().toISOString().slice(0, 10);
 
-const hasSelfieForToday = (onlineSelfie = null) =>
-  String(onlineSelfie?.forDate || '').trim() === getTodaySelfieKey() &&
-  Boolean(String(onlineSelfie?.imageUrl || '').trim());
+const SELFIE_MAX_AGE_MS = 60 * 60 * 1000; // 1 Hour Interval
+
+const hasSelfieForToday = (onlineSelfie = null) => {
+  if (!onlineSelfie || !String(onlineSelfie.imageUrl || '').trim()) return false;
+  if (String(onlineSelfie.forDate || '').trim() !== getTodaySelfieKey()) return false;
+
+  if (onlineSelfie.capturedAt) {
+    const capturedMs = new Date(onlineSelfie.capturedAt).getTime();
+    if (Number.isFinite(capturedMs)) {
+      const ageMs = Date.now() - capturedMs;
+      if (ageMs > SELFIE_MAX_AGE_MS) return false; // Expired after 1 hour
+    }
+  }
+  return true;
+};
+
+const validateHumanFaceInImage = async (dataUrl) => {
+  if (typeof document === 'undefined') return true;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const w = 120;
+        const h = 120;
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(img, 0, 0, w, h);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
+
+        let totalR = 0, totalG = 0, totalB = 0;
+        const pixelCount = w * h;
+        for (let i = 0; i < data.length; i += 4) {
+          totalR += data[i];
+          totalG += data[i + 1];
+          totalB += data[i + 2];
+        }
+        const avgR = totalR / pixelCount;
+        const avgG = totalG / pixelCount;
+        const avgB = totalB / pixelCount;
+
+        let varR = 0, varG = 0, varB = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          varR += Math.pow(data[i] - avgR, 2);
+          varG += Math.pow(data[i + 1] - avgG, 2);
+          varB += Math.pow(data[i + 2] - avgB, 2);
+        }
+        const stdDevR = Math.sqrt(varR / pixelCount);
+        const stdDevG = Math.sqrt(varG / pixelCount);
+        const stdDevB = Math.sqrt(varB / pixelCount);
+        const totalStdDev = (stdDevR + stdDevG + stdDevB) / 3;
+
+        // Solid object, thumb, or blank wall has low stdDev (< 18)
+        if (totalStdDev < 20) {
+          reject(new Error('Face verification failed! Thumb/object photo detected. Please capture a clear live photo of your face.'));
+          return;
+        }
+
+        resolve(true);
+      } catch (err) {
+        resolve(true);
+      }
+    };
+    img.onerror = () => reject(new Error('Invalid image file'));
+    img.src = dataUrl;
+  });
+};
 
 const readFileAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -638,6 +705,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     setSelfieError('');
 
     try {
+      await validateHumanFaceInImage(sourceDataUrl);
       const compressedDataUrl = await compressSelfieDataUrl(sourceDataUrl);
       const imageBlob = await dataUrlToBlob(compressedDataUrl);
       const imageFile = new File([imageBlob], `selfie-${Date.now()}.jpg`, {
@@ -809,6 +877,20 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation]);
+
+  // 1-Hour Periodic Selfie Security Guard: Force re-verification every 60 minutes
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const interval = setInterval(() => {
+      if (!hasSelfieForToday(onlineSelfie)) {
+        toast.warning('Security Check: 1 hour has elapsed. Please verify your face to stay online.');
+        setShowSelfieVerificationModal(true);
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [isOnline, onlineSelfie]);
 
   // 3.5. Background Ping / Heartbeat
   // If watchPosition stops firing (e.g. app in background or device stationary),

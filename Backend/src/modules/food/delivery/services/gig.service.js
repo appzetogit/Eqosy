@@ -8,7 +8,7 @@ const parseDateTime = (dateStr, timeStr) => {
   // dateStr: YYYY-MM-DD, timeStr: HH:mm
   const [year, month, day] = dateStr.split('-').map(Number);
   const [hours, minutes] = timeStr.split(':').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+  return new Date(year, month - 1, day, hours, minutes, 0);
 };
 
 export const createGig = async (payload, adminId = null) => {
@@ -299,21 +299,25 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
 
 export const getActiveGigForPartner = async (deliveryPartnerId) => {
   const now = new Date();
+  const nowMs = now.getTime();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // Find booking for a gig where current time falls within gig window (or starts within 15 mins)
+  // Find booking for a gig where current time falls within gig window (or starts within 60 mins / booked for today)
   const bookings = await FoodGigBooking.find({
     deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
     status: { $in: ['booked', 'completed'] }
   }).populate('gigId').lean();
 
-  const nowMs = now.getTime();
-  const GRACE_BEFORE_MS = 15 * 60 * 1000; // Allow going online 15 mins before gig start time
+  const GRACE_BEFORE_MS = 60 * 60 * 1000; // Allow going online 60 mins before gig start time
 
   const activeBooking = bookings.find(b => {
     if (!b.gigId || b.gigId.status !== 'active') return false;
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
-    return (nowMs >= startMs - GRACE_BEFORE_MS) && (nowMs <= endMs);
+
+    const isInTimeWindow = (nowMs >= startMs - GRACE_BEFORE_MS) && (nowMs <= endMs);
+    const isTodayGig = b.gigId.date === todayStr && nowMs <= endMs;
+    return isInTimeWindow || isTodayGig;
   });
 
   return activeBooking ? activeBooking.gigId : null;

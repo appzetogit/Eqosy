@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 export const GigsManagement = () => {
   const [gigs, setGigs] = useState([]);
   const [stats, setStats] = useState(null);
+  const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [statusFilter, setStatusFilter] = useState('all');
@@ -16,6 +17,7 @@ export const GigsManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGig, setEditingGig] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCustomZone, setIsCustomZone] = useState(false);
 
   const [formData, setFormData] = useState({
     title: 'Lunch Peak Shift',
@@ -54,9 +56,22 @@ export const GigsManagement = () => {
     }
   };
 
+  const fetchZones = async () => {
+    try {
+      const res = await apiClient.get('/food/admin/zones');
+      const list = res.data?.data?.zones || res.data?.zones || [];
+      if (Array.isArray(list)) {
+        setZones(list);
+      }
+    } catch (err) {
+      console.warn('Failed to load zones:', err);
+    }
+  };
+
   useEffect(() => {
     fetchGigs();
     fetchStats();
+    fetchZones();
   }, [selectedDate, statusFilter]);
 
   const handleCreateOrUpdateGig = async (e) => {
@@ -95,13 +110,16 @@ export const GigsManagement = () => {
 
   const openEditModal = (gig) => {
     setEditingGig(gig);
+    const zName = gig.zoneName || 'All Zones';
+    const knownNames = ['All Zones', ...zones.map((z) => z.name || z.serviceLocation || z.zoneName).filter(Boolean)];
+    setIsCustomZone(!knownNames.includes(zName));
     setFormData({
       title: gig.title || 'Shift',
       date: gig.date || selectedDate,
       startTime: gig.startTime || '12:00',
       endTime: gig.endTime || '16:00',
       capacity: gig.capacity || 20,
-      zoneName: gig.zoneName || 'All Zones',
+      zoneName: zName,
       cancellationCutoffMinutes: gig.cancellationCutoffMinutes ?? 60
     });
     setShowCreateModal(true);
@@ -120,6 +138,7 @@ export const GigsManagement = () => {
         <button
           onClick={() => {
             setEditingGig(null);
+            setIsCustomZone(false);
             setFormData({
               title: 'Shift',
               date: selectedDate,
@@ -331,13 +350,54 @@ export const GigsManagement = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Zone Name</label>
-                  <input
-                    type="text"
-                    value={formData.zoneName}
-                    onChange={(e) => setFormData({ ...formData, zoneName: e.target.value })}
-                    placeholder="e.g. Salar"
-                    className="w-full px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500"
-                  />
+                  {!isCustomZone ? (
+                    <select
+                      value={formData.zoneName}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setIsCustomZone(true);
+                          setFormData({ ...formData, zoneName: '' });
+                        } else {
+                          setFormData({ ...formData, zoneName: e.target.value });
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500 bg-white cursor-pointer"
+                    >
+                      <option value="All Zones">All Zones</option>
+                      {Array.from(
+                        new Set(
+                          zones
+                            .map((z) => z.name || z.serviceLocation || z.zoneName)
+                            .filter(Boolean)
+                        )
+                      ).map((zoneName) => (
+                        <option key={zoneName} value={zoneName}>
+                          {zoneName}
+                        </option>
+                      ))}
+                      <option value="__custom__">+ Enter Custom Zone Name...</option>
+                    </select>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.zoneName}
+                        onChange={(e) => setFormData({ ...formData, zoneName: e.target.value })}
+                        placeholder="e.g. Salar"
+                        className="flex-1 px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomZone(false);
+                          setFormData({ ...formData, zoneName: 'All Zones' });
+                        }}
+                        className="px-2.5 py-2 rounded-xl border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-50 shrink-0"
+                      >
+                        List
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
