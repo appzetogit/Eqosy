@@ -389,8 +389,8 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
                 arriving in
               </p>
               <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">
-                {timeRemaining !== null
-                  ? `${Math.max(1, timeRemaining)} min`
+                {timeRemaining !== null && !isNaN(timeRemaining) && Number.isFinite(timeRemaining) && timeRemaining > 0
+                  ? `${Math.max(1, Math.round(timeRemaining))} min`
                   : "--"}
               </p>
             </div>

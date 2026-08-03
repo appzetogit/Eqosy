@@ -1101,7 +1101,7 @@ const DeliveryTrackingMap = ({
 
       {/* 4. LIVE ARRIVAL BADGE (Pro Orange) */}
       <AnimatePresence>
-        {riderLocation && currentEta && (
+        {riderLocation && currentEta && (!String(currentEta).toLowerCase().includes('nan')) && (
           <motion.div 
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}

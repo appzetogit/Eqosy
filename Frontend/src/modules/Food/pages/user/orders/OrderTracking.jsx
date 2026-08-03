@@ -509,6 +509,36 @@ function normalizeLookupId(value) {
   return raw
 }
 
+function formatEtaText(estimatedTime, fallbackText) {
+  if (estimatedTime == null) return fallbackText;
+
+  let minutes = null;
+
+  if (typeof estimatedTime === "number") {
+    if (Number.isFinite(estimatedTime) && !isNaN(estimatedTime) && estimatedTime > 0) {
+      minutes = Math.round(estimatedTime);
+    }
+  } else if (typeof estimatedTime === "string") {
+    const cleaned = estimatedTime.trim();
+    if (cleaned.toLowerCase().includes("nan")) {
+      return fallbackText;
+    }
+    const match = cleaned.match(/(\d+)/);
+    if (match) {
+      const parsed = parseInt(match[1], 10);
+      if (Number.isFinite(parsed) && !isNaN(parsed) && parsed > 0) {
+        minutes = parsed;
+      }
+    }
+  }
+
+  if (minutes !== null && minutes > 0) {
+    return `Arriving in ${minutes} min${minutes === 1 ? '' : 's'}`;
+  }
+
+  return fallbackText;
+}
+
 export default function OrderTracking({ isSharedView = false }) {
   const companyName = useCompanyName()
   const { orderId: orderIdParam, shareId: shareIdParam } = useParams()
@@ -615,7 +645,19 @@ export default function OrderTracking({ isSharedView = false }) {
   }
   const [resolvedLookupId, setResolvedLookupId] = useState("")
   const [timerNow, setTimerNow] = useState(Date.now())
-  const handleEtaUpdate = useCallback((newEta) => setEstimatedTime(newEta), [])
+  const handleEtaUpdate = useCallback((newEta) => {
+    if (newEta == null) return;
+    const str = String(newEta).trim();
+    if (str.toLowerCase().includes("nan")) return;
+
+    const match = str.match(/(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (Number.isFinite(num) && !isNaN(num) && num > 0) {
+        setEstimatedTime(num);
+      }
+    }
+  }, []);
   const lastRealtimeRefreshRef = useRef(0)
   const trackingOrderIdsRef = useRef(new Set())
   const terminalPollStopRef = useRef(false)
@@ -1431,7 +1473,7 @@ export default function OrderTracking({ isSharedView = false }) {
         : "Food is being prepared",
       subtitle: (order?.deliveryState?.currentPhase === 'at_pickup' || order?.deliveryState?.status === 'reached_pickup')
         ? "Your delivery partner has arrived at the restaurant and is waiting for your order to be ready."
-        : (typeof estimatedTime === 'number' ? `Arriving in ${estimatedTime} mins` : "Cooking your meal"),
+        : formatEtaText(estimatedTime, "Cooking your meal"),
       color: "bg-orange-500",
       iconType: 'food'
     },
@@ -1459,7 +1501,7 @@ export default function OrderTracking({ isSharedView = false }) {
     },
     on_way: {
       title: "Out for delivery",
-      subtitle: typeof estimatedTime === 'number' ? `Arriving in ${estimatedTime} mins` : "Rider is out for delivery",
+      subtitle: formatEtaText(estimatedTime, "Rider is out for delivery"),
       color: "bg-green-600",
       iconType: 'rider'
     },
