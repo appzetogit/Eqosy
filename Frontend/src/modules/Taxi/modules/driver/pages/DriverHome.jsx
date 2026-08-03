@@ -50,6 +50,7 @@ import PremiumIcon from '@/assets/icons/Premium.png';
 import SuvIcon from '@/assets/icons/SUV.png';
 
 import { socketService } from '../../../shared/api/socket';
+import { pushDriverLocationRealtime } from '../../../shared/services/rideRealtime';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { cancelDriverScheduledRide, getCurrentDriver, getDriverDocumentTemplates, getDriverNotifications, getDriverScheduledRides, getLocalDriverToken } from '../services/registrationService';
 import { addLocalDriverNotification, getUnreadDriverNotificationCount, getVisibleDriverNotifications } from '../utils/notificationState';
@@ -750,6 +751,76 @@ const DriverHome = () => {
             window.removeEventListener('focus', handleFocus);
         };
     }, [loadScheduledRides, refreshNotificationCount]);
+
+    // Auto-fetch driver GPS location on App Mount and when app re-opens / tab focuses
+    useEffect(() => {
+        const fetchDriverLocationAuto = async () => {
+            try {
+                const coords = await getCurrentCoords({ purpose: 'auto' });
+                setDriverCoords(coords);
+                driverCoordsRef.current = coords;
+                if (isOnline) {
+                    socketService.emit('driver_location_update', {
+                        coordinates: coords,
+                        latitude: coords[1],
+                        longitude: coords[0]
+                    });
+                }
+            } catch (err) {
+                console.warn('Driver auto location fetch warning:', err);
+            }
+        };
+
+        fetchDriverLocationAuto();
+
+        const handleReopen = () => {
+            if (document.visibilityState === 'visible') {
+                fetchDriverLocationAuto();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleReopen);
+        window.addEventListener('focus', handleReopen);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleReopen);
+            window.removeEventListener('focus', handleReopen);
+        };
+    }, [isOnline]);
+
+    // Live continuous GPS watcher for Taxi Driver (runs in background & syncs Socket + Firebase Realtime DB)
+    useEffect(() => {
+        if (!isOnline || typeof navigator === 'undefined' || !navigator.geolocation) {
+            return undefined;
+        }
+
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const { latitude: lat, longitude: lng, heading, speed } = pos.coords;
+                const coords = [lng, lat];
+                setDriverCoords(coords);
+                driverCoordsRef.current = coords;
+
+                // 1. Emit via Socket.IO
+                socketService.emit('driver_location_update', {
+                    coordinates: coords,
+                    latitude: lat,
+                    longitude: lng,
+                    heading: heading || 0,
+                    speed: speed || 0
+                });
+
+                // 2. Emit via Firebase Realtime if ride active
+                if (currentRequestRef.current?.rideId) {
+                    pushDriverLocationRealtime(currentRequestRef.current.rideId, { lat, lng }, { heading, speed });
+                }
+            },
+            (err) => console.warn('Taxi driver live location watch warning:', err),
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [isOnline]);
 
     useEffect(() => {
         if (scheduledRides.length === 0) {

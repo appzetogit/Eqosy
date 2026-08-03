@@ -15,6 +15,8 @@ import { NewOrderModal } from '@/modules/DeliveryV2/components/modals/NewOrderMo
 import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/PickupActionModal';
 import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modals/DeliveryVerificationModal';
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
+import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
+import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
 import ActionSlider from '@/modules/DeliveryV2/components/ui/ActionSlider';
 
 // Sub Pages
@@ -183,6 +185,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   const [showVerification, setShowVerification] = useState(false);
   const [showEmergencyPopup, setShowEmergencyPopup] = useState(false);
+  const [showBookGigModal, setShowBookGigModal] = useState(false);
+  const [showSelfieVerificationModal, setShowSelfieVerificationModal] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
   const [showOnlineSelfiePrompt, setShowOnlineSelfiePrompt] = useState(false);
   const [showSelfieCameraCapture, setShowSelfieCameraCapture] = useState(false);
@@ -602,16 +606,32 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       return;
     }
 
-    if (hasSelfieForToday(onlineSelfie)) {
-      await goOnline();
-      return;
-    }
+    setIsTogglingDuty(true);
+    try {
+      // Step 1: Check for active booked gig
+      const gigRes = await deliveryAPI.getActiveGig();
+      const activeGig = gigRes.data?.data?.activeGig;
 
-    setSelfieError('');
-    setShowSelfieCameraCapture(false);
-    stopSelfieCameraStream();
-    setShowOnlineSelfiePrompt(true);
-  }, [goOffline, goOnline, isOnline, isTogglingDuty, onlineSelfie, stopSelfieCameraStream]);
+      if (!activeGig) {
+        toast.error("You don't have an active gig. Please book a gig before going online.");
+        setShowBookGigModal(true);
+        setIsTogglingDuty(false);
+        return;
+      }
+
+      // Step 2: Check Selfie Verification
+      if (hasSelfieForToday(onlineSelfie)) {
+        await goOnline();
+      } else {
+        setShowSelfieVerificationModal(true);
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Error checking gig status';
+      toast.error(msg);
+    } finally {
+      setIsTogglingDuty(false);
+    }
+  }, [goOffline, goOnline, isOnline, isTogglingDuty, onlineSelfie]);
 
   const uploadSelfieDataUrl = useCallback(async (sourceDataUrl) => {
     setSelfieUploading(true);
@@ -830,7 +850,45 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }, 10000); // Check every 10 seconds
     
     return () => clearInterval(pingInterval);
-  }, [isOnline]);
+  }, [isOnline, publishLiveRiderLocation]);
+
+  // 3.6 Auto-fetch GPS location on App Mount and whenever App/Tab is Re-opened (visibilitychange / focus)
+  useEffect(() => {
+    const autoFetchCurrentLocation = () => {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude: lat, longitude: lng, heading, speed, accuracy } = pos.coords;
+            setRiderLocation({ lat, lng });
+            lastCoordRef.current = { lat, lng };
+            if (isOnline) {
+              publishLiveRiderLocation(lat, lng, heading || 0, speed || 0, accuracy);
+            }
+          },
+          (err) => console.warn('Auto location re-fetch error:', err),
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+    };
+
+    // Trigger on initial mount
+    autoFetchCurrentLocation();
+
+    // Trigger on app re-open / tab switch back
+    const handleReopen = () => {
+      if (document.visibilityState === 'visible') {
+        autoFetchCurrentLocation();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleReopen);
+    window.addEventListener('focus', handleReopen);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleReopen);
+      window.removeEventListener('focus', handleReopen);
+    };
+  }, [isOnline, setRiderLocation, publishLiveRiderLocation]);
 
   useEffect(() => { setIncomingOrder(newOrder); }, [newOrder]);
 
@@ -1017,16 +1075,22 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   </div>
                 </div>
               ) : (
-                <div className="bg-white/5 rounded-2xl p-4 flex items-center border border-white/5 shadow-sm backdrop-blur-md">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
+                <div className="bg-white/5 rounded-2xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm backdrop-blur-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-green-500/10 rounded-full flex items-center justify-center">
                       <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
                     </div>
                     <div>
                       <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-1">{isOnline ? 'System Online' : 'System Offline'}</h3>
-                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-tight">{isOnline ? 'Waiting for order requests' : 'Go online to receive jobs'}</p>
+                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-tight">{isOnline ? 'Waiting for order requests' : 'Book a shift to start working'}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setShowBookGigModal(true)}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all shadow-lg active:scale-95 shrink-0 border border-emerald-400/30"
+                  >
+                    Book Gig
+                  </button>
                 </div>
               )}
             </motion.div>
@@ -1298,7 +1362,32 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         </AnimatePresence>
       )}
 
-      {/* â”€â”€â”€ MODALS RESTORED FROM OLD UI â”€â”€â”€ */}
+      {/* Gig Booking Modal */}
+      <BookGigModal
+        isOpen={showBookGigModal}
+        onClose={() => setShowBookGigModal(false)}
+        onGigBooked={() => {
+          setShowBookGigModal(false);
+          setShowSelfieVerificationModal(true);
+        }}
+      />
+
+      {/* Selfie Verification Modal */}
+      <SelfieVerificationModal
+        isOpen={showSelfieVerificationModal}
+        onClose={() => setShowSelfieVerificationModal(false)}
+        onSuccess={async (result) => {
+          setShowSelfieVerificationModal(false);
+          setOnlineSelfie({
+            imageUrl: result?.imageUrl || '',
+            capturedAt: new Date().toISOString(),
+            forDate: getTodaySelfieKey(),
+          });
+          await goOnline();
+        }}
+      />
+
+      {/* OVERLAYS & POPUPS */}
       <BottomPopup isOpen={showEmergencyPopup} title="Emergency Help" onClose={() => setShowEmergencyPopup(false)}>
          <div className="grid gap-4 py-2">
            {emergencyOptions.map((opt, i) => (

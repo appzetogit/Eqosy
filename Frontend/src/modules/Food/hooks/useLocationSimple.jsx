@@ -265,8 +265,9 @@ export function useLocationSimple() {
   }
 
   // Initialize: Load cached location; only fetch if missing.
+  // Auto-fetch fresh GPS location on App Mount and when app re-opens / tab focuses
   useEffect(() => {
-    // Load cached location immediately (no loading state)
+    // Load cached location immediately for instant UI render
     const cached = localStorage.getItem("userLocation")
     if (cached) {
       try {
@@ -280,20 +281,37 @@ export function useLocationSimple() {
       setLoading(false)
     }
 
-    // IMPORTANT: Do NOT fetch on every reload.
-    // Only fetch once when userLocation is missing; after that, rely on localStorage
-    // unless the user explicitly requests a refresh via requestLocation().
-    if (!cached) {
-      getCurrentLocation()
+    const refreshLocationAuto = () => {
+      getCurrentLocation(true)
         .then((locationData) => {
           setLocation(locationData)
           setPermissionGranted(true)
           setError(null)
         })
         .catch((err) => {
-          setError(err.message)
-          setPermissionGranted(false)
+          if (!cached) {
+            setError(err.message)
+            setPermissionGranted(false)
+          }
         })
+    }
+
+    // Always fetch fresh GPS location on mount
+    refreshLocationAuto()
+
+    // Re-fetch whenever app becomes visible or active again
+    const handleReopen = () => {
+      if (document.visibilityState === "visible") {
+        refreshLocationAuto()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleReopen)
+    window.addEventListener("focus", handleReopen)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleReopen)
+      window.removeEventListener("focus", handleReopen)
     }
   }, [])
 

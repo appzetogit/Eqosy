@@ -24,6 +24,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
+import { pushDriverLocationRealtime } from '../../../shared/services/rideRealtime';
 import api from '../../../shared/api/axiosInstance';
 import carIcon from '../../../assets/icons/car.png';
 import { getLocalDriverToken } from '../services/registrationService';
@@ -820,6 +821,37 @@ const ActiveTrip = () => {
             socketService.off('rideRequestClosed', onRideCancelled);
         };
     }, [rideId, exitToDriverHome]);
+
+    // Live continuous GPS watcher for Active Trip (runs in background & syncs Firebase Realtime DB + Socket.IO)
+    useEffect(() => {
+        if (!rideId || typeof navigator === 'undefined' || !navigator.geolocation) {
+            return undefined;
+        }
+
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const { latitude: lat, longitude: lng, heading, speed } = pos.coords;
+                const coords = [lng, lat];
+
+                // 1. Emit via Socket.IO
+                socketService.emit('driver_location_update', {
+                    rideId,
+                    coordinates: coords,
+                    latitude: lat,
+                    longitude: lng,
+                    heading: heading || 0,
+                    speed: speed || 0
+                });
+
+                // 2. Emit via Firebase Realtime DB for live passenger tracking map
+                pushDriverLocationRealtime(rideId, { lat, lng }, { heading, speed });
+            },
+            (err) => console.warn('ActiveTrip continuous background GPS watcher warning:', err),
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
+    }, [rideId]);
 
     const pickupAddressLabel = String(
         liveRaw?.pickupAddress ||

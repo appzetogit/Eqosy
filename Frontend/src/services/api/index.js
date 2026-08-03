@@ -3,6 +3,7 @@
  */
 
 import apiClient from "./axios.js";
+export { apiClient };
 import { API_ENDPOINTS } from "./config.js";
 import * as authService from "./auth.js";
 
@@ -2087,6 +2088,29 @@ export const deliveryAPI = {
   getZonesInRadius: (lat, lng, radiusKm = 10) =>
     apiClient.get("/food/zones/nearby", {
       params: { lat, lng, radius: radiusKm },
+      contextModule: "delivery",
+    }),
+
+  /** Gig Booking & Selfie Verification */
+  getPartnerGigs: (params = {}) =>
+    apiClient.get("/food/gigs/partner/gigs", {
+      params,
+      contextModule: "delivery",
+    }),
+  bookGig: (gigId) =>
+    apiClient.post("/food/gigs/partner/gigs/book", { gigId }, {
+      contextModule: "delivery",
+    }),
+  cancelGig: (gigId) =>
+    apiClient.delete(`/food/gigs/partner/gigs/cancel/${String(gigId)}`, {
+      contextModule: "delivery",
+    }),
+  getActiveGig: () =>
+    apiClient.get("/food/gigs/partner/gigs/active", {
+      contextModule: "delivery",
+    }),
+  verifySelfie: (payload) =>
+    apiClient.post("/food/gigs/partner/gigs/verify-selfie", payload ?? {}, {
       contextModule: "delivery",
     }),
 };

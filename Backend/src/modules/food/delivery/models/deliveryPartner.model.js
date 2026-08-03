@@ -97,7 +97,10 @@ const deliveryPartnerSchema = new mongoose.Schema(
             imageUrl: { type: String, default: '', trim: true },
             capturedAt: { type: Date, default: null },
             uploadedAt: { type: Date, default: null },
-            forDate: { type: String, default: '' }
+            forDate: { type: String, default: '' },
+            verifiedStatus: { type: String, enum: ['unverified', 'verified', 'failed', 'locked'], default: 'unverified' },
+            failedAttempts: { type: Number, default: 0 },
+            lockedUntil: { type: Date, default: null }
         },
         lastLocation: {
             type: { type: String, enum: ['Point'] },

@@ -1568,9 +1568,21 @@ export function useLocation() {
     // This does NOT trigger browser prompt by itself; it only auto-fetches when permission is already granted.
     checkPermissionAndStart();
 
-    // Cleanup timeout and watcher
+    // Re-fetch location automatically whenever app/tab is re-opened
+    const handleReopen = () => {
+      if (document.visibilityState === 'visible') {
+        checkPermissionAndStart();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleReopen);
+    window.addEventListener('focus', handleReopen);
+
+    // Cleanup timeout, listeners, and watcher
     return () => {
       clearTimeout(loadingTimeout)
+      document.removeEventListener('visibilitychange', handleReopen);
+      window.removeEventListener('focus', handleReopen);
       debugLog("?? Cleaning up location watcher")
       stopWatchingLocation()
     }

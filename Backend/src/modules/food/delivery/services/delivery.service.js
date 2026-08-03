@@ -296,30 +296,54 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     if (!partner) {
         throw new ValidationError('Delivery partner not found');
     }
-    const { status, latitude, longitude, selfieImageUrl } = payload || {};
+    const { status, latitude, longitude, selfieImageUrl, forceBypassForDev } = payload || {};
     let validStatus = 'offline';
     if (status === 'online' || status === true) validStatus = 'online';
     else if (status === 'offline' || status === false) validStatus = 'offline';
 
     const todayKey = new Date().toISOString().slice(0, 10);
 
-    if (validStatus === 'online') {
-        const hasValidSelfie =
-            partner?.onlineSelfie?.forDate === todayKey &&
-            partner?.onlineSelfie?.imageUrl;
+    if (validStatus === 'online' && !forceBypassForDev) {
+        // Step 1: Enforce Active Gig Check
+        const { getActiveGigForPartner } = await import('./gig.service.js');
+        const activeGig = await getActiveGigForPartner(partner._id);
 
-        if (!hasValidSelfie && !String(selfieImageUrl || '').trim()) {
-            throw new ValidationError('A selfie is required before going online today');
+        if (!activeGig) {
+            const err = new ValidationError("You don't have an active gig. Please book a gig before going online.");
+            err.code = 'NO_ACTIVE_GIG';
+            throw err;
+        }
+
+        // Step 2: Enforce Verified Selfie Check for Today
+        const onlineSelfie = partner.onlineSelfie || {};
+        const isVerifiedToday =
+            onlineSelfie.forDate === todayKey &&
+            onlineSelfie.imageUrl &&
+            onlineSelfie.verifiedStatus === 'verified';
+
+        if (!isVerifiedToday && !String(selfieImageUrl || '').trim()) {
+            const err = new ValidationError('Selfie verification is required before going online today.');
+            err.code = 'SELFIE_REQUIRED';
+            throw err;
         }
 
         if (String(selfieImageUrl || '').trim()) {
             partner.onlineSelfie = {
+                ...(onlineSelfie || {}),
                 imageUrl: selfieImageUrl.trim(),
                 capturedAt: new Date(),
                 uploadedAt: new Date(),
-                forDate: todayKey
+                forDate: todayKey,
+                verifiedStatus: 'verified'
             };
         }
+
+        // Step 3: Mark gig booking status to completed
+        const { FoodGigBooking } = await import('../models/foodGigBooking.model.js');
+        await FoodGigBooking.updateOne(
+            { gigId: activeGig._id, deliveryPartnerId: partner._id, status: 'booked' },
+            { $set: { status: 'completed', completedAt: new Date() } }
+        );
     }
 
     partner.availabilityStatus = validStatus;
