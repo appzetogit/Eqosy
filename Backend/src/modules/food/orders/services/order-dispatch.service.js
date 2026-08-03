@@ -330,7 +330,12 @@ export async function tryAutoAssign(orderId, options = {}) {
           {
             title: 'New order available!',
             body: `Order #${order.order_id || order._id} is available. You have 60 seconds to accept!`,
-            data: { type: 'new_order', orderId: order._id.toString() },
+            data: { 
+              type: 'new_order', 
+              orderId: order._id.toString(),
+              order_id: order.order_id || order.orderId || order._id.toString(),
+              displayOrderId: order.order_id || order.orderId || order._id.toString()
+            },
           }
         );
       } catch (err) {

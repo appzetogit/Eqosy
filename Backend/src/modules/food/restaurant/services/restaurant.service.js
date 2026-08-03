@@ -1462,32 +1462,44 @@ export const listApprovedRestaurants = async (query = {}) => {
     }
 
     // Zone filter for user listing:
-    // If zoneId is provided, return restaurants mapped to that zone,
-    // restaurants matching the zone's service location (e.g. Indore),
-    // as well as restaurants with unassigned/global zone status (zoneId null/undefined).
+    // When zoneId is provided, match restaurants assigned to that target zone or matching the zone's service location city.
+    // Prevents restaurants assigned to Indore from bleeding into Dewas or other zones.
     const zoneIdRaw = String(query.zoneId || '').trim();
     if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
         const targetZoneId = new mongoose.Types.ObjectId(zoneIdRaw);
         const zoneMatchConditions = [
-            { zoneId: targetZoneId },
-            { zoneId: { $exists: false } },
-            { zoneId: null }
+            { zoneId: targetZoneId }
         ];
 
         try {
             const targetZone = await FoodZone.findById(targetZoneId).select('name zoneName serviceLocation').lean();
             const locationName = targetZone?.serviceLocation || targetZone?.name || targetZone?.zoneName;
             if (locationName && typeof locationName === 'string' && locationName.trim()) {
-                const locRx = { $regex: escapeRegex(locationName.trim()), $options: 'i' };
+                const locClean = locationName.trim();
+                const locRx = { $regex: escapeRegex(locClean), $options: 'i' };
                 zoneMatchConditions.push(
                     { city: locRx },
                     { 'location.city': locRx },
                     { area: locRx },
-                    { 'location.area': locRx }
+                    { 'location.area': locRx },
+                    {
+                        $and: [
+                            { $or: [{ zoneId: { $exists: false } }, { zoneId: null }] },
+                            { $or: [{ city: locRx }, { 'location.city': locRx }] }
+                        ]
+                    }
+                );
+            } else {
+                zoneMatchConditions.push(
+                    { zoneId: { $exists: false } },
+                    { zoneId: null }
                 );
             }
         } catch {
-            // ignore lookup error
+            zoneMatchConditions.push(
+                { zoneId: { $exists: false } },
+                { zoneId: null }
+            );
         }
 
         if (filter.$or) {
@@ -1898,5 +1910,45 @@ export const getRestaurantReviewsForCurrent = async (restaurantId) => {
         totalRatings: totalRatings,
         reviews
     };
+};
+
+export const syncUnassignedRestaurantZones = async () => {
+    try {
+        const activeZones = await FoodZone.find({ isActive: true }).select('_id name zoneName serviceLocation coordinates').lean();
+        if (!activeZones || activeZones.length === 0) return;
+
+        const unassignedRestaurants = await FoodRestaurant.find({
+            $or: [{ zoneId: null }, { zoneId: { $exists: false } }]
+        }).select('_id restaurantName city location').lean();
+
+        for (const rest of unassignedRestaurants) {
+            const restCity = String(rest.city || rest.location?.city || rest.area || rest.location?.area || '').trim().toLowerCase();
+            const lat = toFiniteNumber(rest.location?.latitude || rest.location?.coordinates?.[1]);
+            const lng = toFiniteNumber(rest.location?.longitude || rest.location?.coordinates?.[0]);
+
+            let matchedZone = null;
+
+            if (lat !== null && lng !== null) {
+                matchedZone = activeZones.find(z => isPointInZonePolygon(lat, lng, z.coordinates));
+            }
+
+            if (!matchedZone && restCity) {
+                matchedZone = activeZones.find(z => {
+                    const zName = String(z.serviceLocation || z.zoneName || z.name || '').trim().toLowerCase();
+                    return zName && (restCity.includes(zName) || zName.includes(restCity));
+                });
+            }
+
+            if (matchedZone?._id) {
+                await FoodRestaurant.updateOne(
+                    { _id: rest._id },
+                    { $set: { zoneId: matchedZone._id } }
+                );
+                console.log(`[ZoneSync] Mapped restaurant "${rest.restaurantName}" to zone "${matchedZone.name || matchedZone.serviceLocation}" (${matchedZone._id})`);
+            }
+        }
+    } catch (err) {
+        console.error('[ZoneSync] Error syncing unassigned restaurant zones:', err?.message || err);
+    }
 };
 

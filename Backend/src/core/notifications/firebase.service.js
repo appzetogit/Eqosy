@@ -303,7 +303,7 @@ export const listOwnerTokens = async ({ ownerType, ownerId, platform }) => {
 
 export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, platform = 'web' }) => {
     const normalizedToken = sanitizeString(token);
-    
+
     if (!ownerType || !ownerId || !normalizedToken) {
         throw new Error('ownerType, ownerId, and token are required.');
     }
@@ -332,10 +332,10 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
     logger.info(
         `[FCM Service] upsert start ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} existingCount=${existingTokens.length} tokenPreview=${previewToken(normalizedToken)}`
     );
-    
+
     const tokens = normalizeTokenList([...existingTokens, normalizedToken]);
     writeTokenFieldFromList(doc, field, tokens);
-    
+
     await doc.save();
     logger.info(
         `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${tokens.length} tokenPresent=${tokens.includes(normalizedToken)}`
@@ -440,12 +440,12 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
     const enrichedPayload = { ...payload };
 
     // 🏷️ Add Highlighter Prefix to the Title
-// Zomato/Swiggy style: keep notification title as is without emoji prefixes or custom highlighter
-// If title is missing, fallback to notification.title or a generic placeholder
-if (!enrichedPayload.title && enrichedPayload.notification?.title) {
-    enrichedPayload.title = enrichedPayload.notification.title;
-}
-// No additional prefixes are added
+    // Zomato/Swiggy style: keep notification title as is without emoji prefixes or custom highlighter
+    // If title is missing, fallback to notification.title or a generic placeholder
+    if (!enrichedPayload.title && enrichedPayload.notification?.title) {
+        enrichedPayload.title = enrichedPayload.notification.title;
+    }
+    // No additional prefixes are added
 
     const tokens = await listOwnerTokens({ ownerType, ownerId, platform });
     if (!tokens.length) {
@@ -491,7 +491,7 @@ if (!enrichedPayload.title && enrichedPayload.notification?.title) {
 export const sendNotificationToOwners = async (targets = [], payload = {}) => {
     // 🔍 Tip #6: Deduplicate targets by ownerType:ownerId before sending
     // This prevents duplicate notifications if the same person is listed twice (e.g. as USER and partner)
-    const uniqueTargets = Array.isArray(targets) 
+    const uniqueTargets = Array.isArray(targets)
         ? [...new Map(targets.filter(t => t?.ownerType && t?.ownerId).map(t => [`${t.ownerType}:${t.ownerId}`, t])).values()]
         : [];
 
@@ -513,12 +513,12 @@ export const notifyAdminsSafely = async (payload = {}) => {
     try {
         const admins = await FoodAdmin.find({ isActive: true }).select('_id').lean();
         if (!admins.length) return [];
-        
+
         const targets = admins.map(a => ({
             ownerType: 'ADMIN',
             ownerId: String(a._id)
         }));
-        
+
         return await sendNotificationToOwners(targets, payload);
     } catch (e) {
         logger.error(`Error notifying admins: ${e.message}`);

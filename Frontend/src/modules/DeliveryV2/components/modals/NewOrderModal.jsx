@@ -168,6 +168,12 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`
         : null;
 
+  const displayOrderId =
+    order.order_id ||
+    order.orderId ||
+    order.orderMongoId ||
+    (order._id ? String(order._id).slice(-6) : null);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -195,7 +201,14 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
           {/* Header Ribbon (Compact Premium) */}
           <div className="bg-linear-to-br from-emerald-500 via-green-500 to-emerald-600 px-6 py-5 flex justify-between items-center text-white">
             <div>
-              <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em] mb-1">New Order Request</p>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">New Order Request</p>
+                {displayOrderId && (
+                  <span className="bg-white/20 text-white text-[10px] font-black px-2 py-0.5 rounded-full tracking-wider">
+                    #{displayOrderId}
+                  </span>
+                )}
+              </div>
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-bold opacity-80">₹</span>
                 <h2 className="text-4xl font-black tracking-tighter">{Number(earnings || 0).toFixed(2)}</h2>

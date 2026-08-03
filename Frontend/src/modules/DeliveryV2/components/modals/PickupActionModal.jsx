@@ -71,6 +71,7 @@ export const PickupActionModal = ({
   }
 
   const isAtPickup = status === 'REACHED_PICKUP';
+  const displayOrderId = order.order_id || order.orderId || order.displayOrderId || order.orderMongoId || (order._id ? String(order._id).slice(-6) : null);
   const restaurantName = order.restaurantName || order.restaurant_name || order.restaurantId?.restaurantName || order.restaurantId?.name || 'Restaurant';
   const restLoc = order.restaurantLocation || order.restaurantId?.location || {};
   const restLat = order.restaurant_lat || order.restaurantLat || restLoc.latitude || restLoc.lat || (Array.isArray(restLoc.coordinates) ? restLoc.coordinates[1] : null);
@@ -132,16 +133,23 @@ export const PickupActionModal = ({
                   <img src={restaurantLogo} alt="Logo" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h3 className="text-gray-950 text-2xl font-black tracking-tight leading-none mb-2">{restaurantName}</h3>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <h3 className="text-gray-950 text-2xl font-black tracking-tight leading-none">{restaurantName}</h3>
+                    {displayOrderId && (
+                      <span className="bg-gray-100 text-gray-800 text-xs font-black px-2.5 py-1 rounded-lg border border-gray-200 shrink-0">
+                        #{displayOrderId}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     {isAtPickup ? (
                       <div className="bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                        <span className="text-emerald-600 text-[10px] font-black uppercase tracking-widest">At Restaurant âˆš</span>
+                        <span className="text-emerald-600 text-[10px] font-black uppercase tracking-widest">At Restaurant ✓</span>
                       </div>
                     ) : (
                       <div className="bg-orange-50 px-3 py-1 rounded-full border border-orange-100">
                         <span className="text-orange-600 text-[10px] font-black uppercase tracking-widest">
-                          {(distanceToTarget / 1000).toFixed(1)} km â€¢ {eta || '--'} min
+                          {(distanceToTarget / 1000).toFixed(1)} km • {eta || '--'} min
                         </span>
                       </div>
                     )}
@@ -276,7 +284,7 @@ export const PickupActionModal = ({
                  {billImageUploaded && (
                     <div className="w-full flex items-center justify-center gap-3 py-5 rounded-[1.5rem] bg-emerald-50 text-emerald-700 border border-emerald-100 font-black text-[11px] uppercase tracking-widest shadow-inner">
                        <CheckCircle2 className="w-5 h-5" />
-                       <span>Bill Verified âœ“</span>
+                       <span>Bill Verified ✓</span>
                     </div>
                  )}
 

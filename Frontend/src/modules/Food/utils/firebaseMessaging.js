@@ -1,4 +1,4 @@
-﻿import { toast } from "sonner";
+import { toast } from "sonner";
 import { userAPI, restaurantAPI, deliveryAPI, adminAPI } from "@food/api";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import fallbackNotificationSound from "@food/assets/audio/alert.mp3";
@@ -370,7 +370,7 @@ export async function enablePushNotificationSound() {
       pushSoundUnlocked = true;
       localStorage.setItem(pushSoundEnabledStorageKey, "true");
       window.dispatchEvent(new CustomEvent("push-sound-enabled"));
-      }
+    }
     catch (beepError) {
       pushDebugWarn(PUSH_DEBUG_PREFIX, "Synth beep fallback failed", {
         error: beepError?.message || beepError,
@@ -755,15 +755,15 @@ export async function registerWebPushForCurrentModule(pathname = window.location
       } catch (e) {
         pushDebugWarn(PUSH_DEBUG_PREFIX, "Failed to synchronize FCM token to backend", { error: e?.message || e, stack: e?.stack });
       }
-      
+
       await attachForegroundListener(app);
     })()
-    .catch((e) => {
-      console.error("FCM web registration failed:", e);
-    })
-    .finally(() => {
-      registrationInFlight = null;
-    });
+      .catch((e) => {
+        console.error("FCM web registration failed:", e);
+      })
+      .finally(() => {
+        registrationInFlight = null;
+      });
 
     return registrationInFlight;
   }

@@ -68,6 +68,8 @@ const startServer = async () => {
         try {
             const { recoverStuckOrders } = await import('./src/modules/food/orders/services/order.service.js');
             await recoverStuckOrders();
+            const { syncUnassignedRestaurantZones } = await import('./src/modules/food/restaurant/services/restaurant.service.js');
+            await syncUnassignedRestaurantZones();
         } catch (err) {
             logger.error(`Watchdog startup error: ${err.message}`);
         }

@@ -1187,8 +1187,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                                    alt="User"
                                  />
                               </div>
-                              <div>
-                                 <h3 className="text-gray-950 text-2xl font-black tracking-tight leading-none mb-2 underline decoration-emerald-500/30 decoration-4 underline-offset-4">Handover Drop</h3>
+                               <div>
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <h3 className="text-gray-950 text-2xl font-black tracking-tight leading-none underline decoration-emerald-500/30 decoration-4 underline-offset-4">Handover Drop</h3>
+                                    {(activeOrder?.order_id || activeOrder?.orderId) && (
+                                      <span className="bg-gray-100 text-gray-800 text-xs font-black px-2.5 py-1 rounded-lg border border-gray-200 shrink-0">
+                                        #{activeOrder?.order_id || activeOrder?.orderId}
+                                      </span>
+                                    )}
+                                  </div>
                                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${isWithinRange ? 'bg-emerald-50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
                                    <div className={`w-1.5 h-1.5 rounded-full ${isWithinRange ? 'bg-emerald-500 animate-pulse' : 'bg-orange-500'}`} />
                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isWithinRange ? 'text-emerald-600' : 'text-orange-500'}`}>
@@ -1206,7 +1213,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                                      {customerAddress}
                                    </p>
                                  )}
-                              </div>
+                               </div>
                             </div>
                             <div className="flex items-center gap-2.5 shrink-0">
                               {customerPhone && (
@@ -1253,7 +1260,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                           <div className="pt-6">
                             <ActionSlider 
                               label="Slide to Arrive" 
-                              successLabel="Arrived âœ“" 
+                              successLabel="Arrived ✓" 
                               disabled={!isWithinRange} 
                               onConfirm={reachDrop} 
                               color="bg-emerald-600" 
