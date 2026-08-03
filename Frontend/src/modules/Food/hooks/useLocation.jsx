@@ -118,10 +118,20 @@ const reverseGeocodeDirect = async (latitude, longitude) => {
 }
 
 export function useLocation() {
-  const [location, setLocation] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [permissionGranted, setPermissionGranted] = useState(false)
+  const [location, setLocation] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("userLocation");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.latitude && parsed?.longitude) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+  const [loading, setLoading] = useState(() => !location);
+  const [error, setError] = useState(null);
+  const [permissionGranted, setPermissionGranted] = useState(() => Boolean(location));
 
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
@@ -1079,9 +1089,9 @@ export function useLocation() {
     // If forceFresh is true, don't use cached location (maximumAge: 0)
     // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
-      enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 6000,             // Reduced to 6 seconds so it falls back to low accuracy faster if GPS is weak
-      maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
+      enableHighAccuracy: false,  // Fast network location (~200ms) instead of long hardware GPS lock
+      timeout: 2500,             // 2.5s fast timeout
+      maximumAge: forceFresh ? 0 : 180000  // 3-minute location cache allowed
     })
   }
 
