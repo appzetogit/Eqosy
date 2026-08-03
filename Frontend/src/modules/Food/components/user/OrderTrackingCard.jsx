@@ -355,7 +355,7 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className={`fixed ${hasBottomNav ? "bottom-24" : "bottom-6"} left-4 right-4 z-[9999]`}
       >
-        <div 
+        <div
           onClick={() =>
             navigate(
               `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
@@ -365,10 +365,10 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
         >
           {/* Subtle gradient background mesh */}
           <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
-          
-          <button 
-             onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
-             className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-orange-600 hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-orange-600 hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
           >
             <X className="w-3.5 h-3.5 pointer-events-none" />
           </button>
@@ -400,6 +400,6 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     </AnimatePresence>
   );
 }
-
+``
 const OrderTrackingCard = memo(OrderTrackingCardInner);
 export default OrderTrackingCard;

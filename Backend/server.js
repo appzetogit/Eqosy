@@ -11,6 +11,8 @@ import { initSocket } from './src/config/socket.js';
 import { initializeQueues, closeBullMQConnection } from './src/queues/index.js';
 import { expireExpiredOffers } from './src/modules/food/admin/services/admin.service.js';
 import { syncExpiredFssaiNotifications } from './src/modules/food/restaurant/services/fssaiExpiry.service.js';
+import { checkAndSendGigReminders } from './src/modules/food/delivery/services/gigReminder.service.js';
+import { processNoShows } from './src/modules/food/delivery/services/gig.service.js';
 
 import { logger } from './src/utils/logger.js';
 import { initializeFirebaseRealtime } from './src/config/firebase.js';
@@ -19,6 +21,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
 let server = null;
 let expireOffersInterval = null;
 let fssaiExpiryInterval = null;
+let gigReminderInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -33,6 +36,7 @@ const gracefulShutdown = async (signal) => {
             await closeBullMQConnection();
             if (expireOffersInterval) clearInterval(expireOffersInterval);
             if (fssaiExpiryInterval) clearInterval(fssaiExpiryInterval);
+            if (gigReminderInterval) clearInterval(gigReminderInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -136,6 +140,17 @@ const startServer = async () => {
         };
         runFssaiExpirySync();
         fssaiExpiryInterval = setInterval(runFssaiExpirySync, 60 * 60 * 1000);
+
+        const runGigReminderCheck = async () => {
+            try {
+                await checkAndSendGigReminders();
+                await processNoShows();
+            } catch (err) {
+                logger.error(`Gig reminder check error: ${err.message}`);
+            }
+        };
+        runGigReminderCheck();
+        gigReminderInterval = setInterval(runGigReminderCheck, 60 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

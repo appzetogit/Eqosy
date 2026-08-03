@@ -31,6 +31,26 @@ const foodGigBookingSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
       default: null
+    },
+    reminder10MinSent: {
+      type: Boolean,
+      default: false
+    },
+    reminder10MinSentAt: {
+      type: Date,
+      default: null
+    },
+    shiftStartedRingSent: {
+      type: Boolean,
+      default: false
+    },
+    lastRingAt: {
+      type: Date,
+      default: null
+    },
+    ringCount: {
+      type: Number,
+      default: 0
     }
   },
   {

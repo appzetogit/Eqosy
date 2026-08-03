@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Clock, Plus, Users, CheckCircle2, AlertTriangle, XCircle, 
-  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck 
+  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List
 } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { toast } from 'sonner';
@@ -12,10 +12,12 @@ export const GigsManagement = () => {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [viewMode, setViewMode] = useState('card');
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGig, setEditingGig] = useState(null);
+  const [deactivatingGig, setDeactivatingGig] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCustomZone, setIsCustomZone] = useState(false);
 
@@ -97,10 +99,10 @@ export const GigsManagement = () => {
   };
 
   const handleDeactivateGig = async (gigId) => {
-    if (!window.confirm('Are you sure you want to deactivate this gig slot?')) return;
     try {
       await apiClient.delete(`/food/gigs/admin/gigs/${gigId}`);
-      toast.success('Gig deactivated');
+      toast.success('Gig slot deactivated successfully');
+      setGigs((prev) => prev.filter((g) => g._id !== gigId));
       fetchGigs();
       fetchStats();
     } catch (err) {
@@ -205,37 +207,68 @@ export const GigsManagement = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500"
+            className="px-4 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 bg-white cursor-pointer"
           >
+            <option value="active">Active Gigs</option>
+            <option value="inactive">Inactive Gigs</option>
             <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
           </select>
         </div>
 
-        <button
-          onClick={fetchGigs}
-          className="p-2.5 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-          title="Refresh List"
-        >
-          <RefreshCcw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+          {/* View Mode Toggle: Card vs List */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'card'
+                  ? 'bg-white text-emerald-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Card View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>Cards</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'list'
+                  ? 'bg-white text-emerald-700 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+              <span>List</span>
+            </button>
+          </div>
+
+          <button
+            onClick={fetchGigs}
+            className="p-2.5 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            title="Refresh List"
+          >
+            <RefreshCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Gigs List / Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {loading ? (
-          <div className="col-span-full py-16 text-center text-slate-400 font-bold text-xs">
-            Loading gigs list...
-          </div>
-        ) : gigs.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200">
-            <Calendar className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-            <p className="font-bold text-slate-700">No Gigs Found for Selected Date</p>
-            <p className="text-xs text-slate-400 mt-1">Click "Create New Gig" to add shift slots.</p>
-          </div>
-        ) : (
-          gigs.map((gig) => (
+      {/* Gigs View: Card vs List */}
+      {loading ? (
+        <div className="py-16 text-center text-slate-400 font-bold text-xs bg-white rounded-3xl border border-slate-100">
+          Loading gigs list...
+        </div>
+      ) : gigs.length === 0 ? (
+        <div className="py-16 text-center text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200">
+          <Calendar className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+          <p className="font-bold text-slate-700">No Gigs Found for Selected Date</p>
+          <p className="text-xs text-slate-400 mt-1">Click "Create New Gig" to add shift slots.</p>
+        </div>
+      ) : viewMode === 'card' ? (
+        /* CARD VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {gigs.map((gig) => (
             <div
               key={gig._id}
               className={`p-6 rounded-3xl bg-white border shadow-sm flex flex-col justify-between transition-all ${
@@ -294,7 +327,7 @@ export const GigsManagement = () => {
                 </button>
                 {gig.status === 'active' && (
                   <button
-                    onClick={() => handleDeactivateGig(gig._id)}
+                    onClick={() => setDeactivatingGig(gig)}
                     className="p-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
                     title="Deactivate Gig"
                   >
@@ -303,9 +336,131 @@ export const GigsManagement = () => {
                 )}
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        /* LIST VIEW */
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <th className="py-4 px-6">Gig / Shift Title</th>
+                  <th className="py-4 px-6">Zone</th>
+                  <th className="py-4 px-6">Time Slot</th>
+                  <th className="py-4 px-6 text-center">Capacity</th>
+                  <th className="py-4 px-6 text-center">Booked</th>
+                  <th className="py-4 px-6 text-center">No-Shows</th>
+                  <th className="py-4 px-6 text-center">Status</th>
+                  <th className="py-4 px-6 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {gigs.map((gig) => (
+                  <tr
+                    key={gig._id}
+                    className={`hover:bg-slate-50/60 transition-colors ${
+                      gig.status === 'inactive' ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <td className="py-4 px-6 font-bold text-slate-900">
+                      {gig.title}
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                        {gig.zoneName || 'All Zones'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 font-bold text-slate-700">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{gig.startTime} – {gig.endTime}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-center font-black text-slate-900">
+                      {gig.capacity}
+                    </td>
+                    <td className="py-4 px-6 text-center font-black text-blue-600">
+                      {gig.bookedCount}
+                    </td>
+                    <td className="py-4 px-6 text-center font-black text-rose-600">
+                      {gig.stats?.noShow || 0}
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                      <span
+                        className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border inline-block ${
+                          gig.status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-rose-50 text-rose-600 border-rose-200'
+                        }`}
+                      >
+                        {gig.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(gig)}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1 font-bold text-xs"
+                          title="Edit Gig"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        {gig.status === 'active' && (
+                          <button
+                            onClick={() => setDeactivatingGig(gig)}
+                            className="p-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Deactivate Gig"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Deactivation Confirmation Modal (Replaces native browser window.confirm popup) */}
+      {deactivatingGig && (
+        <div className="fixed inset-0 z-[500] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Deactivate Gig Slot</h3>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Are you sure you want to deactivate <span className="font-bold text-slate-800">"{deactivatingGig.title}"</span> ({deactivatingGig.startTime} - {deactivatingGig.endTime})?
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeactivatingGig(null)}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleDeactivateGig(deactivatingGig._id);
+                  setDeactivatingGig(null);
+                }}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-95 transition-all"
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create / Edit Modal */}
       {showCreateModal && (
@@ -317,7 +472,7 @@ export const GigsManagement = () => {
               </h3>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -455,7 +610,7 @@ export const GigsManagement = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider"
+                  className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
