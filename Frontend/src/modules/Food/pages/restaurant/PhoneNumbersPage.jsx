@@ -66,24 +66,49 @@ export default function PhoneNumbersPage() {
   }
 
   const handleOtpChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return // Only allow digits
-    
+    const digits = String(value || "").replace(/\D/g, "")
     const newOtp = [...otp]
-    newOtp[index] = value.slice(-1) // Only take last character
-    
-    // Auto-focus next input
-    if (value && index < 5) {
+
+    if (!digits) {
+      newOtp[index] = ""
+      setOtp(newOtp)
+      if (index > 0) {
+        const prevInput = document.getElementById(`otp-${index - 1}`)
+        if (prevInput) prevInput.focus()
+      }
+      return
+    }
+
+    if (digits.length >= 6) {
+      const pasted = digits.slice(0, 6).split("")
+      const fullPastedOtp = ["", "", "", "", "", ""]
+      pasted.forEach((char, i) => { fullPastedOtp[i] = char })
+      setOtp(fullPastedOtp)
+      const lastInput = document.getElementById(`otp-5`)
+      if (lastInput) lastInput.focus()
+      return
+    }
+
+    const newDigit = digits.slice(-1)
+    newOtp[index] = newDigit
+    setOtp(newOtp)
+
+    if (newDigit && index < 5) {
       const nextInput = document.getElementById(`otp-${index + 1}`)
       if (nextInput) nextInput.focus()
     }
-    
-    setOtp(newOtp)
   }
 
   const handleOtpKeyDown = (index, e) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`)
-      if (prevInput) prevInput.focus()
+    if (e.key === "Backspace") {
+      if (!otp[index] && index > 0) {
+        e.preventDefault()
+        const newOtp = [...otp]
+        newOtp[index - 1] = ""
+        setOtp(newOtp)
+        const prevInput = document.getElementById(`otp-${index - 1}`)
+        if (prevInput) prevInput.focus()
+      }
     }
   }
 

@@ -2188,19 +2188,50 @@ const ActiveTrip = () => {
     }, [activeDestination, driverPosition, isSimulationRunning, map, routePath]);
 
     const handleOTPChange = (index, value) => {
-        if (!/^\d*$/.test(value)) return;
+        const digits = String(value || '').replace(/\D/g, '');
         const nextOtp = [...otp];
-        nextOtp[index] = value;
-        setOtp(nextOtp);
 
-        if (value && index < 3) {
+        if (!digits) {
+            nextOtp[index] = '';
+            setOtp(nextOtp);
+            setOtpError('');
+            if (index > 0) {
+                const previousInput = document.getElementById(`otp-${index - 1}`);
+                if (previousInput) previousInput.focus();
+            }
+            return;
+        }
+
+        if (digits.length >= 4) {
+            const pasted = digits.slice(0, 4).split('');
+            const fullPastedOtp = ['', '', '', ''];
+            pasted.forEach((char, i) => { fullPastedOtp[i] = char; });
+            setOtp(fullPastedOtp);
+            setOtpError('');
+            const lastInput = document.getElementById(`otp-3`);
+            if (lastInput) lastInput.focus();
+            const pastedCode = fullPastedOtp.join('');
+            if (pastedCode.length === 4) {
+                if (pastedCode === expectedOtp) {
+                    setTimeout(() => startTripAfterOtp(pastedCode), 250);
+                } else {
+                    setOtpError('Incorrect PIN. Please enter the PIN shown to the passenger.');
+                }
+            }
+            return;
+        }
+
+        const newDigit = digits.slice(-1);
+        nextOtp[index] = newDigit;
+        setOtp(nextOtp);
+        setOtpError('');
+
+        if (newDigit && index < 3) {
             const nextInput = document.getElementById(`otp-${index + 1}`);
             if (nextInput) {
                 nextInput.focus();
             }
         }
-
-        setOtpError('');
 
         const enteredOtp = nextOtp.join('');
 
@@ -2215,22 +2246,17 @@ const ActiveTrip = () => {
     };
 
     const handleOTPKeyDown = (index, event) => {
-        if (event.key !== 'Backspace') {
-            return;
-        }
-
-        if (otp[index]) {
-            const nextOtp = [...otp];
-            nextOtp[index] = '';
-            setOtp(nextOtp);
-            setOtpError('');
-            return;
-        }
-
-        if (index > 0) {
-            const previousInput = document.getElementById(`otp-${index - 1}`);
-            if (previousInput) {
-                previousInput.focus();
+        if (event.key === 'Backspace') {
+            if (!otp[index] && index > 0) {
+                event.preventDefault();
+                const nextOtp = [...otp];
+                nextOtp[index - 1] = '';
+                setOtp(nextOtp);
+                setOtpError('');
+                const previousInput = document.getElementById(`otp-${index - 1}`);
+                if (previousInput) {
+                    previousInput.focus();
+                }
             }
         }
     };

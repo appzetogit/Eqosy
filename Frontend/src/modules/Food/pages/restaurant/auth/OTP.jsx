@@ -79,13 +79,37 @@ export default function RestaurantOTP() {
   }, [])
 
   const handleChange = (index, value) => {
-    if (value && !/^\d$/.test(value)) return
+    const digits = String(value || "").replace(/\D/g, "")
     const newOtp = [...otp]
-    newOtp[index] = value
+
+    if (!digits) {
+      newOtp[index] = ""
+      setOtp(newOtp)
+      setError("")
+      if (index > 0) inputRefs.current[index - 1]?.focus()
+      return
+    }
+
+    if (digits.length >= 4) {
+      const pasted = digits.slice(0, 4).split("")
+      const fullPastedOtp = ["", "", "", ""]
+      pasted.forEach((char, i) => { fullPastedOtp[i] = char })
+      setOtp(fullPastedOtp)
+      setError("")
+      inputRefs.current[3]?.focus()
+      if (!hasSubmittedRef.current) {
+        hasSubmittedRef.current = true
+        handleVerify(fullPastedOtp.join(""))
+      }
+      return
+    }
+
+    const newDigit = digits.slice(-1)
+    newOtp[index] = newDigit
     setOtp(newOtp)
     setError("")
 
-    if (value && index < 3) {
+    if (newDigit && index < 3) {
       inputRefs.current[index + 1]?.focus()
     }
 
@@ -99,15 +123,12 @@ export default function RestaurantOTP() {
 
   const handleKeyDown = (index, e) => {
     if (e.key === "Backspace") {
-      if (otp[index]) {
-        const newOtp = [...otp]
-        newOtp[index] = ""
-        setOtp(newOtp)
-      } else if (index > 0) {
-        inputRefs.current[index - 1]?.focus()
+      if (!otp[index] && index > 0) {
+        e.preventDefault()
         const newOtp = [...otp]
         newOtp[index - 1] = ""
         setOtp(newOtp)
+        inputRefs.current[index - 1]?.focus()
       }
     }
   }

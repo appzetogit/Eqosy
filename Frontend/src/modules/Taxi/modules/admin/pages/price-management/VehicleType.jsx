@@ -264,12 +264,23 @@ const VehicleType = ({ mode: propMode }) => {
   const [pagination, setPagination] = useState({ total: 0, current_page: 1 });
   const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState({ ...defaultFormData, transport_type: '' });
-  const { transportTypes } = useTaxiTransportTypes();
-  const transportTypeOptions = useMemo(() => [
-    { id: 'taxi', name: 'taxi', display_name: 'Taxi / Ride' },
-    { id: 'delivery', name: 'delivery', display_name: 'Delivery' },
-    { id: 'both', name: 'both', display_name: 'Both (Taxi & Delivery)' },
-  ], []);
+  const { transportTypes: dbTransportTypes } = useTaxiTransportTypes();
+  const transportTypeOptions = useMemo(() => {
+    if (Array.isArray(dbTransportTypes) && dbTransportTypes.length > 0) {
+      return dbTransportTypes.map((t) => ({
+        id: String(t.id || t._id || t.name || '').toLowerCase(),
+        name: String(t.name || t.id || '').toLowerCase(),
+        display_name: t.display_name || t.name || t.id,
+      }));
+    }
+    return [
+      { id: 'taxi', name: 'taxi', display_name: 'Taxi / Ride' },
+      { id: 'delivery', name: 'delivery', display_name: 'Delivery' },
+      { id: 'both', name: 'both', display_name: 'Both (Taxi & Delivery)' },
+      { id: 'pooling', name: 'pooling', display_name: 'Pooling' },
+      { id: 'outstation', name: 'outstation', display_name: 'Outstation' },
+    ];
+  }, [dbTransportTypes]);
 
   useEffect(() => {
     let mounted = true;
@@ -1008,8 +1019,8 @@ const VehicleType = ({ mode: propMode }) => {
             <label className={labelClass}>Operational Scope *</label>
             <select value={formData.is_taxi} onChange={(e) => updateForm('is_taxi', e.target.value)} className={inputClass}>
               <option value="">Select Scope</option>
-              {transportTypes.map(t => (
-                <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+              {transportTypeOptions.map((t) => (
+                <option key={t.id || t._id || t.name} value={t.name}>{t.display_name}</option>
               ))}
             </select>
           </div>

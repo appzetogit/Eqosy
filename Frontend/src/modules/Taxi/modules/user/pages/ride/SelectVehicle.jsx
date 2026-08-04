@@ -778,27 +778,48 @@ const alignBidAmountToStep = ({ baseFare, amount, stepAmount, direction = 'up' }
   return Math.max(0, safeBaseFare + (Math.sign(delta) * normalizedSteps * safeStepAmount));
 };
 
-const getBidFareBounds = (vehicle, stepCount) => {
+const getVehicleBidBounds = (vehicle, bidRideSettings = {}) => {
   const baseFare = Math.max(0, Math.round(Number(vehicle?.price) || 0));
-  const maxSteps = Math.max(0, Number(vehicle?.maxBidSteps) || 0);
-  const safeStepCount = Math.min(
-    maxSteps,
-    Math.max(0, Number.isFinite(Number(stepCount)) ? Number(stepCount) : maxSteps),
-  );
-  const stepAmount = Math.max(0, Math.round(Number(vehicle?.bidStepAmount) || 0));
+  if (!baseFare || !vehicle?.supportsBidding) {
+    return { min: baseFare, max: baseFare, stepAmount: 10, lowPct: 10, highPct: 20 };
+  }
 
-  return {
-    min: baseFare,
-    max: baseFare + (safeStepCount * stepAmount),
-  };
+  const stepAmount = toConfiguredPositiveInteger(
+    bidRideSettings?.bidding_amount_increase_or_decrease,
+    Number(vehicle?.bidStepAmount || 10),
+  );
+
+  const bidLowPercentage = clampPercentage(bidRideSettings?.user_bidding_low_percentage, 10);
+  const bidHighPercentage = clampPercentage(bidRideSettings?.user_bidding_high_percentage, 20);
+  const lowPct = Math.min(bidLowPercentage, bidHighPercentage);
+  const highPct = Math.max(bidLowPercentage, bidHighPercentage);
+
+  const min = alignBidAmountToStep({
+    baseFare,
+    amount: baseFare * (1 + (lowPct / 100)),
+    stepAmount,
+    direction: 'up',
+  });
+
+  const max = alignBidAmountToStep({
+    baseFare,
+    amount: baseFare * (1 + (highPct / 100)),
+    stepAmount,
+    direction: 'up',
+  });
+
+  return { min, max, stepAmount, lowPct, highPct };
 };
 
-const formatVehicleFare = (vehicle, stepCount) => {
-  if (!vehicle?.supportsBidding) {
+const formatVehicleFare = (vehicle, bidRideSettings = {}, currentBookingTab = 'instant') => {
+  if (currentBookingTab === 'instant' || !vehicle?.supportsBidding) {
     return formatCurrency(vehicle?.price);
   }
 
-  const { min, max } = getBidFareBounds(vehicle, stepCount);
+  const { min, max } = getVehicleBidBounds(vehicle, bidRideSettings);
+  if (min === max) {
+    return formatCurrency(min);
+  }
   return `${formatCurrency(min)}-${formatCurrency(max)}`;
 };
 
@@ -1461,7 +1482,7 @@ const SelectVehicle = () => {
       })
     : Number(selectedVehicle?.price || 0);
   const selectedBidSteps = shouldUseDriverBidding
-    ? Math.max(0, Math.round((selectedBidCeilingMaxFare - selectedBidFloorFare) / selectedBidStepAmount))
+    ? Math.max(3, Math.round((selectedBidCeilingMaxFare - selectedBidFloorFare) / selectedBidStepAmount))
     : Number(selectedVehicle?.maxBidSteps || 5);
   const selectedBidIncrement = (selectedVehicle?.supportsBidding ? bidStepCount : 0) * selectedBidStepAmount;
   const selectedBidCeiling = shouldUseDriverBidding
@@ -2066,7 +2087,9 @@ const SelectVehicle = () => {
               );
               const fareLabel = isFarePending
                 ? '...'
-                : formatVehicleFare(v);
+                : formatVehicleFare(v, bidRideSettings, bookingTab);
+
+              const vehicleBidBounds = getVehicleBidBounds(v, bidRideSettings);
 
               return (
                 <motion.div
@@ -2074,10 +2097,10 @@ const SelectVehicle = () => {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: i * 0.04, ease: [0.23, 1, 0.32, 1] }}
-                  className={`overflow-hidden rounded-[18px] border transition-all ${
+                  className={`overflow-hidden rounded-[18px] border-2 transition-all duration-200 ${
                     isSelected
-                      ? 'border-slate-200 bg-[#fbfaf8] shadow-[0_6px_16px_rgba(15,23,42,0.08)]'
-                      : 'border-transparent bg-white'
+                      ? 'border-slate-900 bg-slate-100/80 shadow-[0_6px_20px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/10'
+                      : 'border-slate-200/60 bg-white hover:border-slate-300'
                   }`}
                 >
                   <div
@@ -2112,9 +2135,16 @@ const SelectVehicle = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <span className="block truncate text-[14px] font-semibold leading-tight text-slate-900">
-                            {v.name}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="block truncate text-[14px] font-bold leading-tight text-slate-900">
+                              {v.name}
+                            </span>
+                            {isSelected && (
+                              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white shadow-xs">
+                                ✓
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
                             {v.sublabel}
                           </p>
@@ -2330,7 +2360,7 @@ const SelectVehicle = () => {
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Estimated fare</p>
                   <p className="mt-1 text-[17px] font-extrabold text-slate-900">
-                    {isFarePending ? 'Calculating...' : formatVehicleFare(previewVehicle)}
+                    {isFarePending ? 'Calculating...' : formatVehicleFare(previewVehicle, bookingTab === 'bid' ? bidStepCount : undefined, bookingTab)}
                   </p>
                 </div>
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">
@@ -2410,19 +2440,45 @@ const SelectVehicle = () => {
                   </div>
                 </div>
 
-                <input
-                  type="range"
-                  min={0}
-                  max={selectedBidSteps}
-                  step={1}
-                  value={Math.min(bidStepCount, selectedBidSteps)}
-                  onChange={(event) => setBidStepCount(Number(event.target.value || 0))}
-                  className="mt-4 h-2 w-full cursor-pointer accent-orange-500"
-                />
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setBidStepCount((prev) => Math.max(0, prev - 1))}
+                    disabled={bidStepCount <= 0}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-xl font-extrabold text-slate-800 shadow-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    -
+                  </button>
 
-                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-500">
-                  <span>Floor {formatCurrency(selectedBidFloorFare)}</span>
-                  <span>Ceiling {formatCurrency(selectedBidCeilingMaxFare)}</span>
+                  <div className="relative flex-1">
+                    <input
+                      type="range"
+                      min={0}
+                      max={selectedBidSteps}
+                      step={1}
+                      value={Math.min(bidStepCount, selectedBidSteps)}
+                      onChange={(event) => setBidStepCount(Number(event.target.value || 0))}
+                      className="h-3 w-full cursor-pointer accent-orange-500 rounded-lg bg-slate-200"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setBidStepCount((prev) => Math.min(selectedBidSteps, prev + 1))}
+                    disabled={bidStepCount >= selectedBidSteps}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-xl font-extrabold text-slate-800 shadow-xs hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-[11px] font-extrabold text-slate-700">
+                  <span>Min Bid (Floor): {formatCurrency(selectedBidFloorFare)}</span>
+                  <span>Max Bid (Ceiling): {formatCurrency(selectedBidCeilingMaxFare)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] font-semibold text-slate-500 border-t border-orange-200/50 pt-2">
+                  <span>Admin Step: +{formatCurrency(selectedBidStepAmount)}</span>
+                  <span>Admin Policy Range: {normalizedBidLowPercentage}%–{normalizedBidHighPercentage}%</span>
                 </div>
               </div>
 

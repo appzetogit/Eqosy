@@ -8,6 +8,7 @@ import api from '../../../../shared/api/axiosInstance';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
+import toast from 'react-hot-toast';
 import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
 
 const MAP_OPTIONS = {
@@ -819,6 +820,18 @@ const SearchingDriver = () => {
   };
 
   const handleIncreaseBid = async () => {
+    if (!canIncreaseFare && fareIncreaseCountdownMs > 0) {
+      const waitMins = biddingSummary.fareIncreaseWaitMinutes || 2;
+      const totalSecs = Math.max(1, Math.ceil(fareIncreaseCountdownMs / 1000));
+      const mins = Math.floor(totalSecs / 60);
+      const secs = totalSecs % 60;
+      const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      const msg = `You can increase the fare after ${waitMins} minute(s). Please wait ${timeStr} remaining.`;
+      toast.error(msg);
+      setSearchStatus(msg);
+      return;
+    }
+
     const rideId = activeRideIdRef.current;
     if (!rideId || bidActionLoading) {
       return;
@@ -848,7 +861,9 @@ const SearchingDriver = () => {
           : 'Raised your max fare by one step.',
       );
     } catch (error) {
-      setSearchStatus(error?.message || 'Could not increase bid ceiling.');
+      const errMsg = error?.message || 'Could not increase bid ceiling.';
+      setSearchStatus(errMsg);
+      toast.error(errMsg);
     } finally {
       setBidActionLoading(false);
     }
@@ -1107,7 +1122,11 @@ const SearchingDriver = () => {
                       type="button"
                       disabled={bidActionLoading}
                       onClick={handleIncreaseBid}
-                      className="shrink-0 rounded-full bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white disabled:opacity-60"
+                      className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition ${
+                        !canIncreaseFare
+                          ? 'bg-slate-300 text-slate-600 hover:bg-slate-400'
+                          : 'bg-slate-950 text-white hover:bg-slate-800'
+                      }`}
                     >
                       +{formatCurrency(biddingSummary.bidStepAmount)}
                     </button>
@@ -1150,9 +1169,13 @@ const SearchingDriver = () => {
                     </div>
                     <button
                       type="button"
-                      disabled={bidActionLoading || !canIncreaseFare}
+                      disabled={bidActionLoading}
                       onClick={handleIncreaseBid}
-                      className="shrink-0 rounded-full bg-slate-950 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-white disabled:opacity-60"
+                      className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition ${
+                        !canIncreaseFare
+                          ? 'bg-slate-300 text-slate-600 hover:bg-slate-400'
+                          : 'bg-slate-950 text-white hover:bg-slate-800'
+                      }`}
                     >
                       +{formatCurrency(biddingSummary.bidStepAmount)}
                     </button>

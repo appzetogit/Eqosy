@@ -551,17 +551,40 @@ export default function UnifiedOTPFastLogin() {
                               autoFocus={index === 0}
                               value={otp[index] || ""}
                               onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "").slice(-1);
-                                if (!val) return;
-                                const newOtp = otp.split("");
-                                newOtp[index] = val;
-                                const combined = newOtp.join("").slice(0, 4);
-                                setOtp(combined);
-                                if (index < 3 && val) document.getElementById(`otp-${index + 1}`)?.focus();
+                                const digits = e.target.value.replace(/\D/g, "");
+                                const current = (otp || "").split("");
+                                while (current.length < 4) current.push("");
+
+                                if (!digits) {
+                                  current[index] = "";
+                                  setOtp(current.join(""));
+                                  if (index > 0) document.getElementById(`otp-${index - 1}`)?.focus();
+                                  return;
+                                }
+
+                                if (digits.length >= 4) {
+                                  setOtp(digits.slice(0, 4));
+                                  document.getElementById(`otp-3`)?.focus();
+                                  return;
+                                }
+
+                                const newDigit = digits.slice(-1);
+                                current[index] = newDigit;
+                                setOtp(current.join(""));
+                                if (index < 3 && newDigit) {
+                                  document.getElementById(`otp-${index + 1}`)?.focus();
+                                }
                               }}
                               onKeyDown={(e) => {
-                                if (e.key === "Backspace" && !otp[index] && index > 0) {
-                                  document.getElementById(`otp-${index - 1}`)?.focus();
+                                if (e.key === "Backspace") {
+                                  if (!otp[index] && index > 0) {
+                                    e.preventDefault();
+                                    const current = (otp || "").split("");
+                                    while (current.length < 4) current.push("");
+                                    current[index - 1] = "";
+                                    setOtp(current.join(""));
+                                    document.getElementById(`otp-${index - 1}`)?.focus();
+                                  }
                                 }
                               }}
                               className="w-full aspect-square text-center text-[28px] font-black bg-white border border-gray-200 focus:border-[#F38F24] rounded-2xl outline-none transition-all text-slate-900 shadow-sm"
