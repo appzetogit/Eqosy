@@ -105,6 +105,8 @@ export const createDeliveryRecord = async ({
   vehicleIconUrl,
   paymentMethod,
   parcel,
+  estimatedDistanceMeters,
+  estimatedDurationMinutes,
 }) => {
   await ensureDeliveryVehicleAllowed({ vehicleTypeId, parcel });
 
@@ -123,6 +125,8 @@ export const createDeliveryRecord = async ({
     transport_type: 'delivery',
     serviceType: 'parcel',
     parcel,
+    estimatedDistanceMeters,
+    estimatedDurationMinutes,
   });
 
   await startDispatchFlow(ride);

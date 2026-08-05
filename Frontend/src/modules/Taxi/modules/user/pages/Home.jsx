@@ -17,6 +17,7 @@ import indiaGateRealImg from '@/assets/india_gate_real.png';
 import autoIcon from '../../../assets/icons/auto.png';
 import deliveryIcon from '../../../assets/icons/Delivery.png';
 import api from '../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { userService } from '../services/userService';
 import { RENTAL_ENABLED } from '../../../shared/featureFlags';
@@ -27,6 +28,14 @@ import {
   saveCurrentRide,
   clearCurrentRide,
 } from '../services/currentRideService';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 
 const Motion = motion;
 const ACTIVE_RIDE_SYNC_INTERVAL_MS = 12000;
@@ -43,7 +52,7 @@ const getCurrentRideIcon = (ride) => {
   ).trim();
 
   if (customIcon) {
-    return customIcon;
+    return resolveAssetUrl(customIcon);
   }
 
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();

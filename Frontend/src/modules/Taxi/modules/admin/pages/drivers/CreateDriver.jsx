@@ -1136,14 +1136,16 @@ const CreateDriver = () => {
                                   onChange={(event) => handleDocumentFileChange(template.id, field.key, event)}
                                 />
                               </label>
-                              <label className="relative flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[1rem] bg-slate-900 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/10 transition-colors hover:bg-black">
+                               <label className="relative flex h-11 cursor-pointer items-center justify-center gap-2 rounded-[1rem] bg-slate-900 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/10 transition-colors hover:bg-black">
                                 <Camera size={15} />
                                 Camera
                                 <input
                                   type="file"
                                   accept="image/*"
-                                  capture="environment"
                                   className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                  onClick={(event) => {
+                                    event.target.value = '';
+                                  }}
                                   onChange={(event) => handleDocumentFileChange(template.id, field.key, event)}
                                 />
                               </label>

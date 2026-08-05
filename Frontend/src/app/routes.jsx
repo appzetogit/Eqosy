@@ -67,6 +67,31 @@ const AppRoutes = () => {
     if (!isNativeLikeShell) return
 
     const route = `${location.pathname || ''}${location.search || ''}`
+
+    // Do NOT persist transient ride-flow routes that rely on React Router state.
+    // If the app reopens on these pages the state is lost, showing stale data.
+    const TRANSIENT_ROUTE_SEGMENTS = [
+      '/ride/select-vehicle',
+      '/ride/select-location',
+      '/ride/searching',
+      '/ride/tracking',
+      '/ride/complete',
+      '/ride/chat',
+      '/parcel/searching',
+      '/parcel/tracking',
+      '/parcel/details',
+      '/parcel/contacts',
+      '/intercity/details',
+      '/intercity/confirm',
+      '/rental/vehicle',
+      '/rental/schedule',
+      '/rental/kyc',
+      '/rental/deposit',
+      '/rental/confirmed',
+    ]
+    const isTransient = TRANSIENT_ROUTE_SEGMENTS.some(seg => route.includes(seg))
+    if (isTransient) return
+
     if (route.startsWith('/taxi/') || route.startsWith('/food/') || route.startsWith('/admin')) {
       localStorage.setItem(NATIVE_LAST_ROUTE_KEY, route)
     }

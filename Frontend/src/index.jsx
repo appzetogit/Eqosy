@@ -48,14 +48,25 @@ function resolveNativeInitialRoute() {
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
 
-  if (pathname.startsWith('/taxi/')) return pathname
+  // Routes that depend on React Router state (pickup/drop etc.) must never
+  // be restored after an app restart — the state is gone, showing stale data.
+  const TRANSIENT_SEGMENTS = [
+    '/ride/select-vehicle', '/ride/select-location', '/ride/searching',
+    '/ride/tracking', '/ride/complete', '/ride/chat',
+    '/parcel/searching', '/parcel/tracking', '/parcel/details', '/parcel/contacts',
+    '/intercity/details', '/intercity/confirm',
+    '/rental/vehicle', '/rental/schedule', '/rental/kyc', '/rental/deposit', '/rental/confirmed',
+  ]
+  const isTransient = (r) => TRANSIENT_SEGMENTS.some((s) => r.includes(s))
+
+  if (pathname.startsWith('/taxi/')) return isTransient(pathname) ? '/taxi/user' : pathname
   if (pathname.startsWith('/food/')) return pathname
   if (pathname.startsWith('/restaurant')) return `/food${pathname}`
   if (pathname.startsWith('/delivery')) return `/food${pathname}`
   if (pathname.startsWith('/user')) return `/food${pathname}`
   if (pathname.startsWith('/admin')) return pathname
   if (storedRoute.startsWith('/taxi/')) {
-    return storedRoute
+    return isTransient(storedRoute) ? '/taxi/user' : storedRoute
   }
   if (storedRoute.startsWith('/food/') || storedRoute.startsWith('/admin')) {
     return storedRoute

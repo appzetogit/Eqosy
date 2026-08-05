@@ -48,8 +48,10 @@ export default function NotificationBroadcast() {
     title: "",
     message: "",
     targetType: "ALL",
+    zoneId: "",
   });
   const [history, setHistory] = useState([]);
+  const [zones, setZones] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [recipientLoading, setRecipientLoading] = useState(false);
@@ -66,6 +68,16 @@ export default function NotificationBroadcast() {
       setHistory([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const loadZones = async () => {
+    try {
+      const response = await adminAPI.getZones({ limit: 1000 });
+      const rawZones = response?.data?.data?.zones || response?.data?.zones || response?.data?.data?.items || response?.data?.items || response?.data || [];
+      setZones(Array.isArray(rawZones) ? rawZones : []);
+    } catch {
+      setZones([]);
     }
   };
 
@@ -109,6 +121,7 @@ export default function NotificationBroadcast() {
 
   useEffect(() => {
     loadHistory();
+    loadZones();
   }, []);
 
   useEffect(() => {
@@ -160,6 +173,7 @@ export default function NotificationBroadcast() {
         title: form.title.trim(),
         message: form.message.trim(),
         targetType: form.targetType,
+        zoneId: form.zoneId || undefined,
         targetIds:
           form.targetType === "CUSTOM"
             ? selectedRecipients.map((item) => item.ownerId)
@@ -174,7 +188,7 @@ export default function NotificationBroadcast() {
               }))
             : [],
       });
-      setForm({ title: "", message: "", targetType: "ALL" });
+      setForm({ title: "", message: "", targetType: "ALL", zoneId: "" });
       setSelectedRecipients([]);
       setSearch("");
       window.dispatchEvent(new Event("adminBroadcastUpdated"));
@@ -209,7 +223,7 @@ export default function NotificationBroadcast() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Title</span>
               <input
@@ -230,6 +244,22 @@ export default function NotificationBroadcast() {
                 {TARGET_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Zone</span>
+              <select
+                value={form.zoneId}
+                onChange={(event) => setForm((prev) => ({ ...prev, zoneId: event.target.value }))}
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">All Zones</option>
+                {zones.map((zone) => (
+                  <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                    {zone.name}
                   </option>
                 ))}
               </select>
@@ -339,6 +369,7 @@ export default function NotificationBroadcast() {
                   <th className="py-3 pr-4 font-semibold">Title</th>
                   <th className="py-3 pr-4 font-semibold">Message</th>
                   <th className="py-3 pr-4 font-semibold">Target</th>
+                  <th className="py-3 pr-4 font-semibold">Zone</th>
                   <th className="py-3 pr-4 font-semibold">Recipients</th>
                   <th className="py-3 pr-4 font-semibold">Date</th>
                   <th className="py-3 text-right font-semibold">Action</th>
@@ -350,6 +381,7 @@ export default function NotificationBroadcast() {
                     <td className="py-4 pr-4 font-semibold text-slate-900">{item?.title || "Notification"}</td>
                     <td className="py-4 pr-4 text-slate-600 max-w-sm">{item?.message || "-"}</td>
                     <td className="py-4 pr-4 text-slate-700">{item?.targetLabel || item?.targetType}</td>
+                    <td className="py-4 pr-4 text-slate-700">{item?.zoneName || "All Zones"}</td>
                     <td className="py-4 pr-4 text-slate-700">{item?.targetCount || item?.targets?.length || 0}</td>
                     <td className="py-4 pr-4 text-slate-500 whitespace-nowrap">{toDateLabel(item?.createdAt)}</td>
                     <td className="py-4 text-right">

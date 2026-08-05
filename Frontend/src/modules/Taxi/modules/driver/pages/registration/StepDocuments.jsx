@@ -580,10 +580,12 @@ const StepDocuments = () => {
                                     <input
                                     type="file"
                                     accept="image/*"
-                                    capture="environment"
                                     disabled={isUploading}
                                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                                     aria-label={`Capture ${field.label} from camera`}
+                                    onClick={(event) => {
+                                      event.target.value = '';
+                                    }}
                                     onChange={(event) => handleFileChange(template.id, field.key, event)}
                                     />
                                 </label>

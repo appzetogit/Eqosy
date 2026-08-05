@@ -513,8 +513,10 @@ const VehicleFleet = () => {
                                         ref={cameraInputRef}
                                         type="file"
                                         accept="image/*"
-                                        capture="environment"
                                         className="sr-only"
+                                        onClick={(e) => {
+                                            e.target.value = "";
+                                        }}
                                         onChange={handleVehicleImageSelected}
                                         disabled={imageUploading}
                                     />

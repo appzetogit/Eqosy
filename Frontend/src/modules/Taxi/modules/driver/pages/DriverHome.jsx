@@ -1681,13 +1681,6 @@ const DriverHome = () => {
                     setShowRequest(false);
                     setCurrentRequest(null);
                     stopRideRequestAlertSound();
-                    if (reason === 'user-cancelled') {
-                        setStatusMessage(message || 'User cancelled the ride.');
-                    } else if (reason === 'deleted-by-admin') {
-                        setStatusMessage('Ride was cancelled by admin.');
-                    } else if (reason === 'unmatched') {
-                        setStatusMessage('Ride request expired without a match.');
-                    }
                 }
             };
 

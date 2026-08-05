@@ -47,6 +47,33 @@ export function prefetchTaxiAdmin() {
 }
 
 /**
+ * Routes that rely on React Router state and must never be restored
+ * after an app restart — the state would be lost, showing stale data.
+ */
+const TRANSIENT_ROUTE_SEGMENTS = [
+  '/ride/select-vehicle',
+  '/ride/select-location',
+  '/ride/searching',
+  '/ride/tracking',
+  '/ride/complete',
+  '/ride/chat',
+  '/parcel/searching',
+  '/parcel/tracking',
+  '/parcel/details',
+  '/parcel/contacts',
+  '/intercity/details',
+  '/intercity/confirm',
+  '/rental/vehicle',
+  '/rental/schedule',
+  '/rental/kyc',
+  '/rental/deposit',
+  '/rental/confirmed',
+]
+
+const isTransientRoute = (route) =>
+  TRANSIENT_ROUTE_SEGMENTS.some((seg) => route.includes(seg))
+
+/**
  * Post-login destination for the consumer (/login) auth flow only.
  * Must never send users to admin/restaurant/delivery panels — those have
  * their own login screens. Leftover `eqosy_active_module=admin` or
@@ -57,6 +84,13 @@ export function resolvePostLoginRoute() {
   if (typeof localStorage === 'undefined') return '/food/user'
 
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
+
+  // Never restore transient ride-flow routes — state is lost on restart.
+  if (isTransientRoute(storedRoute)) {
+    if (storedRoute.startsWith('/taxi/')) return '/taxi/user'
+    return '/food/user'
+  }
+
   if (storedRoute.startsWith('/taxi/')) return storedRoute.split('?')[0]
   if (storedRoute.startsWith('/food/user')) return '/food/user'
   if (

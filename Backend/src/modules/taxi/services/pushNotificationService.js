@@ -1,6 +1,7 @@
 import { getFirebaseMessaging } from '../../../config/firebase.js';
 import { Driver } from '../driver/models/Driver.js';
 import { User } from '../user/models/User.js';
+import { Ride } from '../user/models/Ride.js';
 import { listEntityPushTokens } from './pushTokenService.js';
 
 const INVALID_TOKEN_CODES = new Set([
@@ -25,11 +26,18 @@ const collectAudienceTargets = async ({ sendTo, serviceLocationId }) => {
   const targets = [];
 
   if (includeUsers) {
-    const users = await User.find({
+    const userQuery = {
       deletedAt: null,
       isActive: { $ne: false },
       active: { $ne: false },
-    })
+    };
+
+    if (serviceLocationId) {
+      const userIds = await Ride.distinct('userId', { service_location_id: serviceLocationId });
+      userQuery._id = { $in: userIds };
+    }
+
+    const users = await User.find(userQuery)
       .select('_id fcmTokens fcmTokenMobile')
       .lean();
 

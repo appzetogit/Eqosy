@@ -4,10 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, CheckCircle2, AlertTriangle, Star } from 'lucide-react';
 import { GoogleMap, Marker, OverlayView, Polyline } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { socketService } from '../../../../shared/api/socket';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 import LuxuryIcon from '@/assets/icons/Luxury.png';
 import PremiumIcon from '@/assets/icons/Premium.png';
 import SuvIcon from '@/assets/icons/SUV.png';
@@ -354,15 +363,20 @@ const ParcelSearchingDriver = () => {
     [resolvedDropCoords],
   );
 
-  const availableVehicleIcon = useMemo(
-    () => (
+  const availableVehicleIcon = useMemo(() => {
+    const raw = String(
       routeState.vehicleIconUrl ||
       routeState.vehicle?.vehicleIconUrl ||
       routeState.vehicle?.icon ||
-      getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || preferredVehicleType || 'bike')
-    ),
-    [preferredVehicleType, routeState.vehicle, routeState.vehicleIconType, routeState.vehicleIconUrl],
-  );
+      ''
+    ).trim();
+
+    if (raw) {
+      return resolveAssetUrl(raw);
+    }
+
+    return getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || preferredVehicleType || 'bike');
+  }, [preferredVehicleType, routeState.vehicle, routeState.vehicleIconType, routeState.vehicleIconUrl]);
 
   const availableVehicleMarkers = useMemo(
     () => buildAvailableVehicleMarkers(pickupPos, nearbyVehicleCount),
@@ -626,6 +640,8 @@ const ParcelSearchingDriver = () => {
           pickupAddress: routeState.pickup || '',
           dropAddress: routeState.drop || '',
           fare: routeState.fare ?? routeState.estimatedFare?.min ?? null,
+          estimatedDistanceMeters: routeState.estimatedDistanceKm ? Math.round(routeState.estimatedDistanceKm * 1000) : 0,
+          estimatedDurationMinutes: routeState.estimatedDistanceKm ? Math.round(routeState.estimatedDistanceKm * 2.5) : 0,
           vehicleTypeId: selectedVehicleTypeIds[0],
           vehicleTypeIds: selectedVehicleTypeIds,
           vehicleIconType: selectedVehicleType.icon_types || 'bike',

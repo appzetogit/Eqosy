@@ -4,11 +4,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle, Calendar } from 'lucide-react';
 import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userService } from '../../services/userService';
 import { getLocalUserToken } from '../../services/authService';
 import { fetchActiveRideZones, resolveServiceLocationIdFromCoords } from '../../services/rideZoneUtils';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 import BikeIcon from '../../../../assets/icons/bike.png';
 import AutoIcon from '../../../../assets/icons/auto.png';
 import CarIcon from '../../../../assets/icons/car.png';
@@ -450,7 +459,7 @@ const getIconValue = (type) => String(type?.icon_types || type?.vehicleIconType 
 const getVehicleMapIcon = (type) => {
   const customIcon = String(type?.map_icon || type?.icon || type?.vehicleIconUrl || '').trim();
   if (customIcon) {
-    return customIcon;
+    return resolveAssetUrl(customIcon);
   }
 
   const value = getIconValue(type);
@@ -501,7 +510,7 @@ const getVehicleMapIcon = (type) => {
 const getVehiclePreviewImage = (type) => {
   const previewImage = String(type?.image || type?.preview_image || type?.previewImage || '').trim();
   if (previewImage) {
-    return previewImage;
+    return resolveAssetUrl(previewImage);
   }
 
   const value = getIconValue(type);
@@ -945,6 +954,7 @@ const ScrollIndicator = ({ show }) => (
   <AnimatePresence>
     {show && (
       <motion.div
+        key="scroll-indicator"
         initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
@@ -1176,11 +1186,15 @@ const SelectVehicle = () => {
     let active = true;
 
     const loadVehicleTypes = async () => {
+      if (!effectiveServiceLocationId) return;
+
       setIsLoadingVehicles(true);
       setVehicleLoadError('');
 
       try {
-        const response = await api.get('/users/vehicle-types');
+        const response = await api.get('/users/vehicle-types', {
+          params: { service_location_id: effectiveServiceLocationId }
+        });
 
         if (!active) {
           return;
@@ -1190,6 +1204,7 @@ const SelectVehicle = () => {
           .filter((type) => {
             const isActive = type.active !== false && Number(type.status ?? 1) !== 0;
             const transportType = String(type.transport_type || 'taxi').toLowerCase();
+            console.log('Vehicle:', type.name, 'transport:', transportType, 'isActive:', isActive, 'active:', type.active, 'status:', type.status);
             return isActive && (transportType === 'taxi' || transportType === 'both');
           })
           .map(normalizeVehicleType);
@@ -1212,7 +1227,7 @@ const SelectVehicle = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [effectiveServiceLocationId]);
 
   useEffect(() => {
     let active = true;
@@ -1888,7 +1903,6 @@ const SelectVehicle = () => {
     const token = getLocalUserToken();
     if (!token) {
       localStorage.setItem('eqosy_active_module', 'taxi');
-      localStorage.setItem('native_last_route', location.pathname);
       navigate('/login', { state: { from: location.pathname } });
       return;
     }
@@ -1953,7 +1967,7 @@ const SelectVehicle = () => {
 
       </div>
 
-      <div ref={bottomSheetRef} className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[69dvh] min-h-[360px] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.16)]">
+      <div ref={bottomSheetRef} className="absolute bottom-0 left-0 right-0 z-40 flex h-[72dvh] max-h-[72dvh] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.16)]">
         <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-2.5 mb-2 shrink-0" />
 
         <div className="shrink-0 border-b border-slate-100 px-4 pb-3">
@@ -2035,11 +2049,11 @@ const SelectVehicle = () => {
           </div>
         </div>
 
-        <div className="relative flex-1 overflow-hidden">
+        <div className="relative flex-1 min-h-0 overflow-hidden">
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto no-scrollbar px-3 pt-3 pb-2 space-y-2.5"
+            className="h-full w-full overflow-y-auto px-3 pt-3 pb-4 space-y-2.5"
           >
             {isLoadingVehicles && (
               <div className="min-h-[180px] flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -2080,7 +2094,7 @@ const SelectVehicle = () => {
               const isSelected = effectiveSelectedId === v.id;
               const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
               const isUnavailable = !availability.totalDrivers;
-              const canSelectVehicle = true;
+              const canSelectVehicle = !isUnavailable || rideMode === 'schedule';
               const compactEta = Math.max(
                 1,
                 availability.closestDriverEtaMinutes || tripMetrics.durationMinutes || 1,
@@ -2101,7 +2115,7 @@ const SelectVehicle = () => {
                     isSelected
                       ? 'border-slate-900 bg-slate-100/80 shadow-[0_6px_20px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/10'
                       : 'border-slate-200/60 bg-white hover:border-slate-300'
-                  }`}
+                  } ${!canSelectVehicle ? 'blur-[1.5px] grayscale opacity-70 pointer-events-none' : ''}`}
                 >
                   <div
                     role={canSelectVehicle ? 'button' : undefined}
@@ -2122,7 +2136,7 @@ const SelectVehicle = () => {
                       }
                     }}
                     className={`flex items-center gap-3 px-3 py-3 text-left ${
-                      canSelectVehicle ? 'cursor-pointer' : 'cursor-default opacity-55'
+                      canSelectVehicle ? 'cursor-pointer' : 'cursor-default'
                     }`}
                   >
                     <div className="flex w-[52px] shrink-0 flex-col items-center">

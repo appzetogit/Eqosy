@@ -104,7 +104,6 @@ export const openBrowserCameraFallback = (onSelectFile) => {
     openTransientImageInput({
       onSelectFile,
       accept: "image/*",
-      capture: "environment",
     })
   } catch (error) {
     console.error("Browser camera fallback failed:", error)
