@@ -942,10 +942,12 @@ const InspectionPhotoSlots = ({
                     id={buildInspectionCameraInputId(field, index)}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     disabled={busy}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     aria-label={`${imageUrl ? 'Retake' : 'Take'} ${slot.label} photo`}
+                    onClick={(event) => {
+                      event.target.value = '';
+                    }}
                     onChange={(event) => {
                       const files = Array.from(event.target.files || []);
                       onFileSelect(field, index, files, 'camera');

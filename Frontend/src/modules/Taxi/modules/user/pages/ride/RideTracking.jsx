@@ -105,7 +105,7 @@ const getTrackingVehicleIcon = (ride, driver) => {
     '',
   ).trim();
 
-  if (customIcon) return customIcon;
+  if (customIcon) return resolveAssetUrl(customIcon);
 
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
   const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();

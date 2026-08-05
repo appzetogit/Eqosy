@@ -6234,7 +6234,7 @@ export const createSetPrice = async (payload, currentAdmin = null) => {
     service_tax: Number(payload.service_tax ?? 0),
     airport_surge: Number(payload.airport_surge ?? 0),
     support_airport_fee: Number(payload.support_airport_fee ?? 0),
-    support_outstation: Number(payload.support_outstation ?? 0),
+    support_outstation: Number(payload.support_outstation ?? 0), 
     enable_airport_ride: payload.enable_airport_ride ?? !!payload.support_airport_fee,
     enable_outstation_ride: payload.enable_outstation_ride ?? !!payload.support_outstation,
 

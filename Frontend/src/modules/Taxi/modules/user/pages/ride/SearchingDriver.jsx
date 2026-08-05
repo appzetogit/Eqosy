@@ -5,10 +5,19 @@ import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation,
 import { GoogleMap, Marker, OverlayView, Polyline } from '@react-google-maps/api';
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import toast from 'react-hot-toast';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
 
 const MAP_OPTIONS = {
@@ -308,15 +317,20 @@ const SearchingDriver = () => {
     }, 150);
     return () => clearTimeout(timer);
   }, [fitSearchingMapBounds, isLoaded]);
-  const availableVehicleIcon = useMemo(
-    () => (
+  const availableVehicleIcon = useMemo(() => {
+    const raw = String(
       routeState.vehicleIconUrl ||
       routeState.vehicle?.vehicleIconUrl ||
       routeState.vehicle?.icon ||
-      getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || routeState.vehicle?.name)
-    ),
-    [routeState.vehicle?.icon, routeState.vehicle?.iconType, routeState.vehicle?.name, routeState.vehicle?.vehicleIconUrl, routeState.vehicleIconType, routeState.vehicleIconUrl],
-  );
+      ''
+    ).trim();
+
+    if (raw) {
+      return resolveAssetUrl(raw);
+    }
+
+    return getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || routeState.vehicle?.name);
+  }, [routeState.vehicle, routeState.vehicleIconType, routeState.vehicleIconUrl]);
   const availableVehicleMarkers = useMemo(
     () => buildAvailableVehicleMarkers(pickupPos, nearbyVehicleCount),
     [nearbyVehicleCount, pickupPos],

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { User } from '../models/User.js';
+import { Ride } from '../models/Ride.js';
 import { UserWallet } from '../models/UserWallet.js';
 import { AdminBusinessSetting } from '../../admin/models/AdminBusinessSetting.js';
 import { Notification } from '../../admin/promotions/models/Notification.js';
@@ -1270,12 +1271,21 @@ export const getUserNotifications = async (req, res) => {
     throw new ApiError(404, 'User not found');
   }
 
-  // Users don't typically have a service_location_id in their profile like drivers do in this schema,
-  // but if they did, we would use it. For now, we fetch all user-targeted notifications.
+  // Find all service locations where the user has active or past rides
+  const userRidesServiceLocationIds = await Ride.distinct('service_location_id', {
+    userId: user._id,
+    service_location_id: { $ne: null }
+  });
+
   const query = {
     status: 'sent',
     send_to: { $in: ['all', 'users'] },
   };
+
+  // If the user has history in specific locations, only show notifications for those locations
+  if (userRidesServiceLocationIds.length > 0) {
+    query.service_location_id = { $in: userRidesServiceLocationIds };
+  }
 
   const notifications = await Notification.find(query)
     .sort({ sent_at: -1, createdAt: -1 })

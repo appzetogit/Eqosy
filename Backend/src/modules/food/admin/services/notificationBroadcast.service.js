@@ -8,6 +8,10 @@ import { FoodNotification } from '../../../../core/notifications/models/notifica
 import { createInboxNotifications } from '../../../../core/notifications/notification.service.js';
 import { notifyOwnersSafely } from '../../../../core/notifications/firebase.service.js';
 import { getIO, rooms } from '../../../../config/socket.js';
+import { FoodOrder } from '../../orders/models/order.model.js';
+import { FoodGig } from '../../delivery/models/foodGig.model.js';
+import { FoodGigBooking } from '../../delivery/models/foodGigBooking.model.js';
+import { FoodZone } from '../../admin/models/zone.model.js';
 
 const TARGET_TYPE_MAP = {
     ALL: 'ALL',
@@ -105,13 +109,43 @@ const dedupeTargets = (targets = []) => {
     return [...map.values()];
 };
 
-const loadTargetsByOwnerType = async (ownerType) => {
-    const config = modelConfigMap[ownerType];
+const loadTargetsByOwnerType = async (ownerType, zoneId) => {
+    const config = modelConfigMap[ownerType === 'DELIVERY' ? 'DELIVERY_PARTNER' : ownerType];
     if (!config) return [];
 
-    const rows = await config.model.find(config.query).select(config.select).lean();
+    let query = { ...config.query };
+
+    if (zoneId) {
+        const zoneObjectId = new mongoose.Types.ObjectId(String(zoneId));
+        if (ownerType === 'USER') {
+            const userIds = await FoodOrder.distinct('userId', { zoneId: zoneObjectId });
+            query._id = { $in: userIds };
+        } else if (ownerType === 'RESTAURANT') {
+            query.zoneId = zoneObjectId;
+        } else if (ownerType === 'DELIVERY' || ownerType === 'DELIVERY_PARTNER') {
+            const gigsInZone = await FoodGig.find({ zoneId: zoneObjectId }).select('_id').lean();
+            const gigIds = gigsInZone.map(g => g._id);
+            
+            const bookedPartnerIds = await FoodGigBooking.distinct('deliveryPartnerId', {
+                gigId: { $in: gigIds },
+                status: 'booked'
+            });
+
+            const orderPartnerIds = await FoodOrder.distinct('dispatch.deliveryPartnerId', {
+                zoneId: zoneObjectId,
+                'dispatch.deliveryPartnerId': { $ne: null }
+            });
+
+            const partnerIds = [...new Set([...bookedPartnerIds.map(String), ...orderPartnerIds.map(String)])]
+                .map(id => new mongoose.Types.ObjectId(id));
+
+            query._id = { $in: partnerIds };
+        }
+    }
+
+    const rows = await config.model.find(query).select(config.select).lean();
     return rows.map((row) => ({
-        ownerType,
+        ownerType: ownerType === 'DELIVERY' ? 'DELIVERY_PARTNER' : ownerType,
         ownerId: String(row._id),
         ...config.buildLabel(row)
     }));
@@ -134,19 +168,19 @@ const resolveCustomTargets = async ({ targets = [], targetIds = [] } = {}) => {
     }));
 };
 
-const resolveTargets = async ({ targetType, targetIds = [], targets = [] } = {}) => {
+const resolveTargets = async ({ targetType, targetIds = [], targets = [], zoneId } = {}) => {
     if (targetType === 'ALL') {
         const [users, restaurants, deliveryPartners] = await Promise.all([
-            loadTargetsByOwnerType('USER'),
-            loadTargetsByOwnerType('RESTAURANT'),
-            loadTargetsByOwnerType('DELIVERY_PARTNER')
+            loadTargetsByOwnerType('USER', zoneId),
+            loadTargetsByOwnerType('RESTAURANT', zoneId),
+            loadTargetsByOwnerType('DELIVERY', zoneId)
         ]);
         return [...users, ...restaurants, ...deliveryPartners];
     }
 
-    if (targetType === 'USER') return loadTargetsByOwnerType('USER');
-    if (targetType === 'RESTAURANT') return loadTargetsByOwnerType('RESTAURANT');
-    if (targetType === 'DELIVERY') return loadTargetsByOwnerType('DELIVERY_PARTNER');
+    if (targetType === 'USER') return loadTargetsByOwnerType('USER', zoneId);
+    if (targetType === 'RESTAURANT') return loadTargetsByOwnerType('RESTAURANT', zoneId);
+    if (targetType === 'DELIVERY') return loadTargetsByOwnerType('DELIVERY', zoneId);
     if (targetType === 'CUSTOM') return resolveCustomTargets({ targets, targetIds });
 
     throw new ValidationError('Unsupported targetType');
@@ -211,10 +245,21 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
     const message = normalizeText(body?.message, 'message');
     const link = normalizeText(body?.link, 'link', false);
     const targetType = normalizeTargetType(body?.targetType);
+    const zoneId = body?.zoneId && mongoose.Types.ObjectId.isValid(String(body.zoneId)) ? String(body.zoneId) : null;
+    let zoneName = '';
+    
+    if (zoneId) {
+        const zone = await FoodZone.findById(zoneId).lean();
+        if (zone) {
+            zoneName = zone.name || '';
+        }
+    }
+
     const resolvedTargets = await resolveTargets({
         targetType,
         targetIds: body?.targetIds,
-        targets: body?.targets
+        targets: body?.targets,
+        zoneId
     });
 
     if (!resolvedTargets.length) {
@@ -235,6 +280,8 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
             subLabel: target.subLabel || ''
         })),
         link,
+        zoneId: zoneId ? toObjectId(zoneId, 'zoneId') : null,
+        zoneName,
         createdBy: toObjectId(adminId, 'createdBy'),
         targetCount: resolvedTargets.length
     });
