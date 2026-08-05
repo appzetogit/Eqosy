@@ -2575,7 +2575,11 @@ function RestaurantDetailsContent() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       if (!shouldShowGrayscale) {
-                                        updateItemQuantity(item, Math.max(0, quantity - 1), e)
+                                        if (hasFoodVariants(item)) {
+                                          handleItemClick(item)
+                                        } else {
+                                          updateItemQuantity(item, Math.max(0, quantity - 1), e)
+                                        }
                                       }
                                     }}
                                     disabled={shouldShowGrayscale}
@@ -2588,7 +2592,11 @@ function RestaurantDetailsContent() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       if (!shouldShowGrayscale) {
-                                        updateItemQuantity(item, quantity + 1, e)
+                                        if (hasFoodVariants(item)) {
+                                          handleItemClick(item)
+                                        } else {
+                                          updateItemQuantity(item, quantity + 1, e)
+                                        }
                                       }
                                     }}
                                     disabled={shouldShowGrayscale}
@@ -2606,7 +2614,11 @@ function RestaurantDetailsContent() {
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     if (!shouldShowGrayscale) {
-                                      updateItemQuantity(item, 1, e)
+                                      if (hasFoodVariants(item)) {
+                                        handleItemClick(item)
+                                      } else {
+                                        updateItemQuantity(item, 1, e)
+                                      }
                                     }
                                   }}
                                   disabled={shouldShowGrayscale}
@@ -2790,7 +2802,11 @@ function RestaurantDetailsContent() {
                                               onClick={(e) => {
                                                 e.stopPropagation()
                                                 if (!shouldShowGrayscale) {
-                                                  updateItemQuantity(item, Math.max(0, quantity - 1), e)
+                                                  if (hasFoodVariants(item)) {
+                                                    handleItemClick(item)
+                                                  } else {
+                                                    updateItemQuantity(item, Math.max(0, quantity - 1), e)
+                                                  }
                                                 }
                                               }}
                                               disabled={shouldShowGrayscale}
@@ -2803,7 +2819,11 @@ function RestaurantDetailsContent() {
                                               onClick={(e) => {
                                                 e.stopPropagation()
                                                 if (!shouldShowGrayscale) {
-                                                  updateItemQuantity(item, quantity + 1, e)
+                                                  if (hasFoodVariants(item)) {
+                                                    handleItemClick(item)
+                                                  } else {
+                                                    updateItemQuantity(item, quantity + 1, e)
+                                                  }
                                                 }
                                               }}
                                               disabled={shouldShowGrayscale}
@@ -2821,7 +2841,11 @@ function RestaurantDetailsContent() {
                                             onClick={(e) => {
                                               e.stopPropagation()
                                               if (!shouldShowGrayscale) {
-                                                updateItemQuantity(item, 1, e)
+                                                if (hasFoodVariants(item)) {
+                                                  handleItemClick(item)
+                                                } else {
+                                                  updateItemQuantity(item, 1, e)
+                                                }
                                               }
                                             }}
                                             disabled={shouldShowGrayscale}
@@ -3575,18 +3599,21 @@ function RestaurantDetailsContent() {
                           }`}
                         onClick={(e) => {
                           if (!shouldShowGrayscale) {
-                            updateItemQuantity(
-                              selectedItem,
-                              getDishQuantity(selectedItem, selectedVariantId) + 1,
-                              e,
-                              getVariantForDish(selectedItem, selectedVariantId),
-                            )
+                            const currentQty = getDishQuantity(selectedItem, selectedVariantId)
+                            if (currentQty === 0) {
+                              updateItemQuantity(
+                                selectedItem,
+                                1,
+                                e,
+                                getVariantForDish(selectedItem, selectedVariantId),
+                              )
+                            }
                             setShowItemDetail(false)
                           }
                         }}
                         disabled={shouldShowGrayscale}
                       >
-                        <span>Add item</span>
+                        <span>{getDishQuantity(selectedItem, selectedVariantId) > 0 ? 'Done' : 'Add item'}</span>
                         <div className="flex items-center gap-1">
                           {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
                             <span className="text-sm line-through text-red-200">
@@ -3595,8 +3622,8 @@ function RestaurantDetailsContent() {
                           )}
                           <span className="text-base font-bold">
                             {hasFoodVariants(selectedItem)
-                              ? `${getVariantForDish(selectedItem, selectedVariantId)?.name || "Default"} · ${RUPEE_SYMBOL}${Math.round(getVariantForDish(selectedItem, selectedVariantId)?.price || selectedItem.price)}`
-                              : `${RUPEE_SYMBOL}${Math.round(selectedItem.price)}`}
+                              ? `${getVariantForDish(selectedItem, selectedVariantId)?.name || "Default"} · ${RUPEE_SYMBOL}${Math.round(getVariantForDish(selectedItem, selectedVariantId)?.price || selectedItem.price) * (getDishQuantity(selectedItem, selectedVariantId) || 1)}`
+                              : `${RUPEE_SYMBOL}${Math.round(selectedItem.price) * (getDishQuantity(selectedItem, selectedVariantId) || 1)}`}
                           </span>
                         </div>
                       </Button>

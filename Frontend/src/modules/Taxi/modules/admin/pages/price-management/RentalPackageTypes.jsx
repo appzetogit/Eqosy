@@ -55,12 +55,24 @@ const RentalPackageTypes = ({ mode: propMode }) => {
     status: 'active',
   });
 
+  const [transportTypes, setTransportTypes] = useState([
+    { transport_type: 'taxi', name: 'Taxi / Ride-Hailing' },
+    { transport_type: 'delivery', name: 'Logistics / Delivery' }
+  ]);
+
+  const friendlyNames = useMemo(() => ({
+    taxi: 'Taxi / Ride-Hailing',
+    delivery: 'Logistics / Delivery',
+    intercity: 'Outstation / Intercity',
+    rental: 'Rental / Hourly Packages',
+    pooling: 'Car Pooling'
+  }), []);
+
   const fetchPackages = async () => {
     try {
       setLoading(true);
       const res = await adminService.getRentalPackageTypes();
       if (res && res.success) {
-        // Backend pattern consistency: check data.results or rental_packages.results
         const rawPackages = res.data?.rental_packages?.results || res.data?.rental_packages || res.rental_packages?.results || res.rental_packages || res.results || res.data?.results || [];
         setPackages(Array.isArray(rawPackages) ? rawPackages : []);
       }
@@ -74,33 +86,55 @@ const RentalPackageTypes = ({ mode: propMode }) => {
   useEffect(() => {
     if (isList) {
       fetchPackages();
-    } else if (isEdit && id) {
-      const fetchItem = async () => {
+    } else {
+      const bootstrap = async () => {
         try {
-          const res = await adminService.getRentalPackageTypes();
-          const items = res.data?.rental_packages?.results || res.data?.rental_packages || res.rental_packages?.results || res.rental_packages || res.results || res.data?.results || [];
-          const itemsArr = Array.isArray(items) ? items : [];
-          const item = itemsArr.find(p => String(p._id || p.id) === String(id));
-          if (item) {
-            setFormData({
-              name: item.name || '',
-              transport_type: item.transport_type || 'taxi',
-              short_description: item.short_description || '',
-              description: item.description || '',
-              status: item.status || 'active',
-            });
+          setLoading(true);
+          const [modulesRes, packageTypesRes] = await Promise.all([
+            adminService.getRideModules(),
+            isEdit && id ? adminService.getRentalPackageTypes() : Promise.resolve(null)
+          ]);
+
+          if (modulesRes && modulesRes.success) {
+            const rawModules = modulesRes.data;
+            const mappedModules = Array.isArray(rawModules)
+              ? rawModules.map(m => ({
+                  transport_type: m.transport_type || m,
+                  name: friendlyNames[m.transport_type || m] || m.name || m.transport_type || m
+                }))
+              : Object.keys(rawModules || {}).map((key) => ({
+                  transport_type: key,
+                  name: friendlyNames[key] || key
+                }));
+
+            if (mappedModules.length > 0) {
+              setTransportTypes(mappedModules);
+            }
+          }
+
+          if (isEdit && id && packageTypesRes) {
+            const items = packageTypesRes.data?.rental_packages?.results || packageTypesRes.data?.rental_packages || packageTypesRes.rental_packages?.results || packageTypesRes.rental_packages || packageTypesRes.results || packageTypesRes.data?.results || [];
+            const itemsArr = Array.isArray(items) ? items : [];
+            const item = itemsArr.find(p => String(p._id || p.id) === String(id));
+            if (item) {
+              setFormData({
+                name: item.name || '',
+                transport_type: item.transport_type || 'taxi',
+                short_description: item.short_description || '',
+                description: item.description || '',
+                status: item.status || 'active',
+              });
+            }
           }
         } catch (err) {
-          toast.error('Failed to fetch package details');
+          toast.error('Failed to load form initial data');
         } finally {
           setLoading(false);
         }
       };
-      fetchItem();
-    } else {
-      setLoading(false);
+      bootstrap();
     }
-  }, [isList, isEdit, id]);
+  }, [isList, isEdit, id, friendlyNames]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -291,8 +325,11 @@ const RentalPackageTypes = ({ mode: propMode }) => {
                 <label className={labelClass}>Transport Type *</label>
                 <select name="transport_type" value={formData.transport_type} onChange={handleInputChange} className={selectClass}>
                   <option value="">Select Transport Type</option>
-                  <option value="taxi">Taxi / Ride-Hailing</option>
-                  <option value="delivery">Logistics / Delivery</option>
+                  {transportTypes.map((type) => (
+                    <option key={type.transport_type} value={type.transport_type}>
+                      {type.name || type.transport_type}
+                    </option>
+                  ))}
                 </select>
               </div>
 

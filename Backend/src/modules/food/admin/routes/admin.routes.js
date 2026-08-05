@@ -10,6 +10,7 @@ import * as diningAdminController from '../../dining/controllers/diningAdmin.con
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { getAdminPageController, upsertAdminPageController } from '../controllers/pageContent.controller.js';
 import { upload } from '../../../../middleware/upload.js';
+import { invalidateCache } from '../../../../middleware/cache.js';
 import { attachFoodAdminContext, requireFoodResourceAccess } from '../middlewares/foodAdmin.middleware.js';
 import * as foodAdminManagementController from '../controllers/foodAdminManagement.controller.js';
 
@@ -109,14 +110,62 @@ router.patch('/addons/:id/reject', addonsApprovalController.rejectRestaurantAddo
 
 // ----- Foods -----
 router.get('/foods', adminController.getFoods);
-router.post('/foods', adminController.createFood);
-router.patch('/foods/:id', adminController.updateFood);
-router.delete('/foods/:id', adminController.deleteFood);
+router.post('/foods', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, adminController.createFood);
+router.patch('/foods/:id', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, adminController.updateFood);
+router.delete('/foods/:id', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, adminController.deleteFood);
 // Food approval queue (pending items created by restaurants)
 router.get('/foods/pending-approvals', foodApprovalController.getPendingFoodApprovals);
-router.patch('/foods/:id/approve', foodApprovalController.approveFoodItemController);
-router.patch('/foods/:id/reject', foodApprovalController.rejectFoodItemController);
-router.post('/foods/bulk-approve', adminController.bulkApproveFoodItems);
+router.patch('/foods/:id/approve', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, foodApprovalController.approveFoodItemController);
+router.patch('/foods/:id/reject', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, foodApprovalController.rejectFoodItemController);
+router.post('/foods/bulk-approve', async (req, res, next) => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_menu:*');
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (err) { console.error('Cache invalidation error', err); }
+    next();
+}, adminController.bulkApproveFoodItems);
 
 
 // ----- Offers & Coupons -----

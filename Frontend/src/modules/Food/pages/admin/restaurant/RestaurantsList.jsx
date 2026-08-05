@@ -256,6 +256,7 @@ export default function RestaurantsList() {
             approvalStatus: normalizeApprovalStatus(restaurant),
             isActive: restaurant.isActive !== false,
             isRestaurant: restaurant.isRestaurant !== false,
+            isSponsored: restaurant.isSponsored === true,
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: getPrimaryRestaurantImage(restaurant, PLACEHOLDER_40),
             originalData: restaurant,
@@ -769,6 +770,7 @@ export default function RestaurantsList() {
       openingTime: openingTimeValue,
       closingTime: closingTimeValue,
       isActive: restaurant.isActive !== false,
+      isSponsored: restaurant.isSponsored === true,
     }
   }
 
@@ -833,6 +835,7 @@ export default function RestaurantsList() {
         openingTime: normalizedOpeningTime,
         closingTime: normalizedClosingTime,
         isActive: detailsForm.isActive,
+        isSponsored: detailsForm.isSponsored,
       }
 
       if (profileImage) {
@@ -854,6 +857,7 @@ export default function RestaurantsList() {
                 ownerPhone: updatedRestaurant.ownerPhone || updatedRestaurant.phone || item.ownerPhone,
                 zone: updatedRestaurant.location?.area || updatedRestaurant.location?.city || item.zone,
                 isActive: updatedRestaurant.isActive !== false,
+                isSponsored: updatedRestaurant.isSponsored === true,
                 approvalStatus: normalizeApprovalStatus(updatedRestaurant),
                 logo: getPrimaryRestaurantImage(updatedRestaurant, item.logo),
                 originalData: {
@@ -971,6 +975,43 @@ export default function RestaurantsList() {
       alert("Failed to update restaurant type. Please try again.")
     } finally {
       setTogglingIsRestaurantId(null)
+    }
+  }
+
+  const [togglingIsSponsoredId, setTogglingIsSponsoredId] = useState(null)
+  
+  const handleToggleIsSponsored = async (restaurant) => {
+    const restaurantId = restaurant._id || restaurant.id
+    if (!restaurantId) return
+
+    const nextValue = !restaurant.isSponsored
+    try {
+      setTogglingIsSponsoredId(restaurantId)
+      await adminAPI.updateRestaurant(restaurantId, { isSponsored: nextValue })
+      setRestaurants((prevRestaurants) =>
+        prevRestaurants.map((r) =>
+          r.id === restaurantId || r._id === restaurantId
+            ? { ...r, isSponsored: nextValue }
+            : r
+        )
+      )
+      setRestaurantDetails((prev) => {
+        if (prev && (prev._id === restaurantId || prev.id === restaurantId)) {
+          return { ...prev, isSponsored: nextValue }
+        }
+        return prev
+      })
+      setSelectedRestaurant((prev) => {
+        if (prev && (prev._id === restaurantId || prev.id === restaurantId)) {
+          return { ...prev, isSponsored: nextValue }
+        }
+        return prev
+      })
+    } catch (err) {
+      debugError("Error toggling isSponsored:", err)
+      alert("Failed to update sponsored status. Please try again.")
+    } finally {
+      setTogglingIsSponsoredId(null)
     }
   }
 
@@ -1201,6 +1242,11 @@ export default function RestaurantsList() {
                       isRestaurant
                     </th>
                     <th
+                      className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider"
+                    >
+                      Sponsored
+                    </th>
+                    <th
                       className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                       onClick={() => handleSort('status')}
                     >
@@ -1292,6 +1338,23 @@ export default function RestaurantsList() {
                             />
                           </button>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleIsSponsored(restaurant)}
+                            disabled={togglingIsSponsoredId === (restaurant._id || restaurant.id)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              restaurant.isSponsored ? "bg-amber-500" : "bg-slate-300"
+                            } ${togglingIsSponsoredId === (restaurant._id || restaurant.id) ? "opacity-60 cursor-not-allowed" : ""}`}
+                            title={restaurant.isSponsored ? "Sponsored" : "Not Sponsored"}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                restaurant.isSponsored ? "translate-x-6" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${approvalStatusBadgeClass(restaurant.approvalStatus)}`}>
@@ -1358,12 +1421,34 @@ export default function RestaurantsList() {
               </div>
               <div className="flex items-center gap-2">
                 {!isEditingDetails ? (
-                  <button
-                    onClick={handleStartEditDetails}
-                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-                  >
-                    Edit Details
-                  </button>
+                  <>
+                    <div className="flex items-center gap-2 mr-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100">
+                      <span className="text-sm font-semibold text-amber-700">Sponsored</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rToToggle = restaurantDetails || selectedRestaurant
+                          if (rToToggle) handleToggleIsSponsored(rToToggle)
+                        }}
+                        disabled={togglingIsSponsoredId === ((selectedRestaurant || restaurantDetails)?._id || (selectedRestaurant || restaurantDetails)?.id)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          (restaurantDetails || selectedRestaurant)?.isSponsored ? "bg-amber-500" : "bg-slate-300"
+                        } ${togglingIsSponsoredId === ((selectedRestaurant || restaurantDetails)?._id || (selectedRestaurant || restaurantDetails)?.id) ? "opacity-60 cursor-not-allowed" : ""}`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                            (restaurantDetails || selectedRestaurant)?.isSponsored ? "translate-x-5" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleStartEditDetails}
+                      className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                    >
+                      Edit Details
+                    </button>
+                  </>
                 ) : (
                   <>
                     <button
@@ -1540,17 +1625,31 @@ export default function RestaurantsList() {
                       <label className="block text-xs text-slate-500 mb-1">Estimated Delivery Time</label>
                       <input type="text" value={detailsForm.estimatedDeliveryTime} onChange={(e) => setDetailsForm((prev) => ({ ...prev, estimatedDeliveryTime: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm" />
                     </div>
-                    <div className="md:col-span-2 flex items-center gap-3">
-                      <input
-                        id="restaurant-status-active"
-                        type="checkbox"
-                        checked={detailsForm.isActive}
-                        onChange={(e) => setDetailsForm((prev) => ({ ...prev, isActive: e.target.checked }))}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                      />
-                      <label htmlFor="restaurant-status-active" className="text-sm text-slate-700">
-                        Restaurant is active
-                      </label>
+                    <div className="md:col-span-2 flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="restaurant-status-active"
+                          type="checkbox"
+                          checked={detailsForm.isActive}
+                          onChange={(e) => setDetailsForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                        />
+                        <label htmlFor="restaurant-status-active" className="text-sm text-slate-700">
+                          Restaurant is active
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="restaurant-status-sponsored"
+                          type="checkbox"
+                          checked={detailsForm.isSponsored}
+                          onChange={(e) => setDetailsForm((prev) => ({ ...prev, isSponsored: e.target.checked }))}
+                          className="h-4 w-4 rounded border-slate-300 text-amber-500"
+                        />
+                        <label htmlFor="restaurant-status-sponsored" className="text-sm text-slate-700">
+                          Restaurant is sponsored
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1632,6 +1731,12 @@ export default function RestaurantsList() {
                           <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${r?.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                             {r?.isActive !== false ? 'Active' : 'Inactive'}
                           </span>
+                          {r?.isSponsored && (
+                            <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-current" />
+                              Sponsored
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center justify-center md:justify-start gap-6 flex-wrap">

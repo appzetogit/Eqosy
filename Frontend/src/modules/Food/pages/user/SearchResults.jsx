@@ -1065,9 +1065,16 @@ export default function SearchResults() {
                           </h3>
                         </div>
                         {restaurant.rating && (
-                          <div className="flex-shrink-0 bg-green-600 text-white px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg flex items-center gap-1">
-                            <span className="text-sm lg:text-base font-bold">{restaurant.rating}</span>
-                            <Star className="h-3 w-3 lg:h-4 lg:w-4 fill-white text-white" />
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex-shrink-0 bg-green-600 text-white px-2 py-1 lg:px-3 lg:py-1.5 rounded-lg flex items-center gap-1">
+                              <span className="text-sm lg:text-base font-bold">{restaurant.rating}</span>
+                              <Star className="h-3 w-3 lg:h-4 lg:w-4 fill-white text-white" />
+                            </div>
+                            {Number(restaurant.rating) > 0 && restaurant.totalRatings && Number(restaurant.totalRatings) > 0 && (
+                              <span className="text-[10px] text-gray-500 font-medium">
+                                By {Number(restaurant.totalRatings) >= 1000 ? `${(Number(restaurant.totalRatings) / 1000).toFixed(1)}K+` : `${restaurant.totalRatings}+`}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

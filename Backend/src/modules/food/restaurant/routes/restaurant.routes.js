@@ -88,6 +88,7 @@ router.post('/register', uploadFields, registerRestaurantController);
 router.post('/upload-attachment', upload.single('file'), uploadRestaurantAttachmentController);
 
 // Public: approved restaurants list (for user app)
+
 router.get('/restaurants', cacheResponse(300, 'restaurants'), listApprovedRestaurantsController);
 router.get('/restaurants/:id', cacheResponse(600, 'restaurant_detail'), getApprovedRestaurantController);
 router.get('/restaurants/:id/menu', cacheResponse(600, 'restaurant_menu'), getPublicRestaurantMenuController);

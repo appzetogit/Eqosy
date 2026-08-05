@@ -271,6 +271,17 @@ const RestaurantImageCarousel = React.memo(
       return () => clearTimeout(shimmerTimeout);
     }, [renderSrc]);
 
+    // Auto-slide effect for RestaurantImageCarousel
+    useEffect(() => {
+      if (images.length <= 1) return;
+      const intervalId = setInterval(() => {
+        if (!isSwiping.current) {
+          setCurrentIndex((prev) => (prev + 1) % images.length);
+        }
+      }, 3500);
+      return () => clearInterval(intervalId);
+    }, [images.length]);
+
     // Handle touch events for swipe
     const handleTouchStart = (e) => {
       touchStartX.current = e.touches[0].clientX;
@@ -538,6 +549,27 @@ const RecommendedFoodImageStrip = React.memo(
 
     const scrollContainerRef = useRef(null);
 
+    // Auto-slide effect for RecommendedFoodImageStrip
+    useEffect(() => {
+      if (stripImages.length <= 1) return;
+      const intervalId = setInterval(() => {
+        if (dragStateRef.current.isDragging) return;
+        const container = scrollContainerRef.current;
+        if (!container || container.clientWidth === 0) return;
+        
+        let nextIndex = activeSlideIndex + 1;
+        if (nextIndex >= stripImages.length) {
+          nextIndex = 0;
+        }
+        
+        container.scrollTo({
+          left: nextIndex * container.clientWidth,
+          behavior: "smooth"
+        });
+      }, 3500);
+      
+      return () => clearInterval(intervalId);
+    }, [stripImages.length, activeSlideIndex]);
 
 
     if (stripImages.length === 0) {
@@ -2307,6 +2339,28 @@ export default function Home() {
 
             const image = allImages[0] || profileImageUrl || menuImageCandidates[0] || "";
 
+            const recommendedImages = Array.isArray(rest.recommendedImages)
+              ? rest.recommendedImages
+                  .map((item, itemIndex) => {
+                    const image = normalizeImageUrl(
+                      item?.image || item?.url || item?.src || "",
+                    );
+                    if (!image) return null;
+                    return {
+                      id:
+                        item?.id ||
+                        item?._id ||
+                        `${rest.restaurantId || rest._id || "restaurant"}-recommended-${itemIndex}`,
+                      image,
+                      name: item?.name || "",
+                      price: Number(item?.price || 0),
+                      originalPrice: item?.originalPrice ? Number(item.originalPrice) : null,
+                      foodType: item?.foodType || "Non-Veg",
+                    };
+                  })
+                  .filter(Boolean)
+              : [];
+
             uniqueMap.set(rest._id, {
               id: rest._id,
               mongoId: rest._id,
@@ -2317,6 +2371,7 @@ export default function Home() {
               menuImages: rest.menuImages || null,
               image: image,
               images: allImages,
+              recommendedImages: recommendedImages,
               rating: Number(rest.rating) || 0,
               cuisines: Array.isArray(rest.cuisines) ? rest.cuisines : [],
               cuisine: Array.isArray(rest.cuisines) && rest.cuisines.length > 0 ? rest.cuisines[0] : "Multi-cuisine",
@@ -2712,6 +2767,28 @@ export default function Home() {
       ]);
       const image = imageCandidates[0] || foodImages[0];
 
+      const recommendedImages = Array.isArray(restaurant?.recommendedImages)
+        ? restaurant.recommendedImages
+            .map((item, itemIndex) => {
+              const image = normalizeImageUrl(
+                item?.image || item?.url || item?.src || "",
+              );
+              if (!image) return null;
+              return {
+                id:
+                  item?.id ||
+                  item?._id ||
+                  `${restaurant.restaurantId || restaurant._id || "restaurant"}-recommended-${itemIndex}`,
+                image,
+                name: item?.name || "",
+                price: Number(item?.price || 0),
+                originalPrice: item?.originalPrice ? Number(item.originalPrice) : null,
+                foodType: item?.foodType || "Non-Veg",
+              };
+            })
+            .filter(Boolean)
+        : [];
+
       return {
         id: restaurant?.restaurantId || restaurantId,
         mongoId: restaurantId,
@@ -2722,6 +2799,7 @@ export default function Home() {
         deliveryTime: "",
         image: normalizeImageUrl(image) || foodImages[0],
         images: imageCandidates.length > 0 ? imageCandidates : [foodImages[0]],
+        recommendedImages: recommendedImages,
         slug: restaurant?.slug || restaurant?.restaurantId || restaurantId,
         offer: null,
         pureVegRestaurant: restaurant?.pureVegRestaurant === true,
@@ -3558,11 +3636,18 @@ export default function Home() {
                                         )}
                                     </div>
                                   </div>
-                                  <div className={`flex-shrink-0 ${Number(restaurant.rating) > 0 ? "bg-[#259539]" : "bg-gray-400"} text-white px-3 py-1.5 rounded-2xl flex items-center gap-1.5 shadow-md transform transition-transform duration-300 group-hover:scale-110`}>
-                                    <span className="text-sm lg:text-lg font-medium tracking-tight">
-                                      {Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "NEW"}
-                                    </span>
-                                    {Number(restaurant.rating) > 0 && <Star className="h-3.5 w-3.5 lg:h-4.5 lg:w-4.5 fill-white text-white" strokeWidth={0} />}
+                                  <div className="flex flex-col items-end gap-1">
+                                    <div className={`flex-shrink-0 ${Number(restaurant.rating) > 0 ? "bg-[#259539]" : "bg-gray-400"} text-white px-3 py-1.5 rounded-2xl flex items-center gap-1.5 shadow-md transform transition-transform duration-300 group-hover:scale-110`}>
+                                      <span className="text-sm lg:text-lg font-medium tracking-tight">
+                                        {Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "NEW"}
+                                      </span>
+                                      {Number(restaurant.rating) > 0 && <Star className="h-3.5 w-3.5 lg:h-4.5 lg:w-4.5 fill-white text-white" strokeWidth={0} />}
+                                    </div>
+                                    {Number(restaurant.rating) > 0 && restaurant.totalRatings && Number(restaurant.totalRatings) > 0 && (
+                                      <span className="text-[10px] text-gray-500 font-medium">
+                                        By {Number(restaurant.totalRatings) >= 1000 ? `${(Number(restaurant.totalRatings) / 1000).toFixed(1)}K+` : `${restaurant.totalRatings}+`}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
 

@@ -73,7 +73,7 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
           adminService.getVehicleTypes(),
         ]);
 
-        const locations = locationsRes?.data?.locations || locationsRes?.data?.results || locationsRes?.results || [];
+        const locations = Array.isArray(locationsRes?.data) ? locationsRes.data : (locationsRes?.data?.locations || locationsRes?.data?.results || locationsRes?.results || []);
         const packages =
           packagesRes?.data?.rental_packages?.results ||
           packagesRes?.data?.rental_packages ||

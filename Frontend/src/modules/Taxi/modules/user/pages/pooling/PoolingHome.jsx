@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, 
@@ -16,6 +16,30 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService } from '../../services/userService';
 import toast from 'react-hot-toast';
+
+const toRadians = (degree) => (degree * Math.PI) / 180;
+const calculateDistanceKm = (from, to) => {
+  if (!Array.isArray(from) || from.length < 2 || !Array.isArray(to) || to.length < 2) return 0;
+  const fromCoords = { lat: Number(from[1]), lng: Number(from[0]) };
+  const toCoords = { lat: Number(to[1]), lng: Number(to[0]) };
+  
+  if (!Number.isFinite(fromCoords.lat) || !Number.isFinite(fromCoords.lng) || !Number.isFinite(toCoords.lat) || !Number.isFinite(toCoords.lng)) {
+    return 0;
+  }
+
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(toCoords.lat - fromCoords.lat);
+  const dLng = toRadians(toCoords.lng - fromCoords.lng);
+
+  const lat1 = toRadians(fromCoords.lat);
+  const lat2 = toRadians(toCoords.lat);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
 
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
@@ -79,8 +103,23 @@ const PoolingHome = () => {
   const [showFromSuggestions, setShowFromSuggestions] = useState(false);
   const [showToSuggestions, setShowToSuggestions] = useState(false);
   
+  const [userCoords, setUserCoords] = useState(null);
+  const [locationCoords, setLocationCoords] = useState({});
+  
   const fromRef = useRef(null);
   const toRef = useRef(null);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserCoords([pos.coords.longitude, pos.coords.latitude]);
+        },
+        null,
+        { enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -92,6 +131,24 @@ const PoolingHome = () => {
         const origins = [...new Set(routes.map(r => r.originLabel).filter(Boolean))];
         const destinations = [...new Set(routes.map(r => r.destinationLabel).filter(Boolean))];
         setAllSuggestions({ origins, destinations });
+
+        // Map city names to coordinates
+        const coordsMap = {};
+        routes.forEach((route) => {
+          if (route.originLabel && Array.isArray(route.pickupPoints) && route.pickupPoints.length > 0) {
+            const firstStop = route.pickupPoints[0];
+            if (Number.isFinite(firstStop.longitude) && Number.isFinite(firstStop.latitude)) {
+              coordsMap[route.originLabel] = [firstStop.longitude, firstStop.latitude];
+            }
+          }
+          if (route.destinationLabel && Array.isArray(route.dropPoints) && route.dropPoints.length > 0) {
+            const firstStop = route.dropPoints[0];
+            if (Number.isFinite(firstStop.longitude) && Number.isFinite(firstStop.latitude)) {
+              coordsMap[route.destinationLabel] = [firstStop.longitude, firstStop.latitude];
+            }
+          }
+        });
+        setLocationCoords(coordsMap);
 
         const activeRoutes = routes
           .filter((route) => String(route?.status || '').toLowerCase() === 'active' && route?.active !== false)
@@ -129,13 +186,27 @@ const PoolingHome = () => {
     setSearch(prev => ({ ...prev, from: prev.to, to: prev.from }));
   };
 
-  const filteredFrom = allSuggestions.origins.filter(loc => 
-    loc.toLowerCase().includes(search.from.toLowerCase()) && loc !== search.from
-  );
+  const getSortedFilteredSuggestions = (type, query) => {
+    const list = type === 'from' ? allSuggestions.origins : allSuggestions.destinations;
+    const filtered = list.filter(loc => 
+      loc.toLowerCase().includes(query.toLowerCase()) && loc !== query
+    );
+    
+    if (userCoords) {
+      return filtered
+        .map(name => {
+          const coords = locationCoords[name];
+          const distance = coords ? calculateDistanceKm(userCoords, coords) : Infinity;
+          return { name, distance };
+        })
+        .sort((a, b) => a.distance - b.distance);
+    }
+    
+    return filtered.map(name => ({ name, distance: null }));
+  };
 
-  const filteredTo = allSuggestions.destinations.filter(loc => 
-    loc.toLowerCase().includes(search.to.toLowerCase()) && loc !== search.to
-  );
+  const filteredFrom = useMemo(() => getSortedFilteredSuggestions('from', search.from), [allSuggestions.origins, search.from, userCoords, locationCoords]);
+  const filteredTo = useMemo(() => getSortedFilteredSuggestions('to', search.to), [allSuggestions.destinations, search.to, userCoords, locationCoords]);
 
   return (
     <div className="min-h-screen bg-white pb-24 max-w-lg mx-auto font-sans selection:bg-indigo-100">
@@ -215,17 +286,24 @@ const PoolingHome = () => {
                     className="absolute left-0 right-0 top-full mt-2 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
                   >
                     <p className="px-5 pt-4 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Suggestions</p>
-                    {filteredFrom.map((loc, idx) => (
+                    {filteredFrom.map((item, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
-                          setSearch({ ...search, from: loc });
+                          setSearch({ ...search, from: item.name });
                           setShowFromSuggestions(false);
                         }}
-                        className="w-full px-5 py-4 text-left flex items-center gap-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+                        className="w-full px-5 py-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                       >
-                        <History size={16} className="text-slate-300" />
-                        <span className="text-sm font-black text-slate-900">{loc}</span>
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <History size={16} className="text-slate-300 shrink-0" />
+                          <span className="text-sm font-black text-slate-900 truncate">{item.name}</span>
+                        </div>
+                        {item.distance && item.distance !== Infinity && (
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/80 rounded-lg text-[10px] font-black shrink-0">
+                            {item.distance.toFixed(1)} km
+                          </span>
+                        )}
                       </button>
                     ))}
                   </motion.div>
@@ -269,17 +347,24 @@ const PoolingHome = () => {
                     className="absolute left-0 right-0 top-full mt-2 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
                   >
                     <p className="px-5 pt-4 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Suggestions</p>
-                    {filteredTo.map((loc, idx) => (
+                    {filteredTo.map((item, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
-                          setSearch({ ...search, to: loc });
+                          setSearch({ ...search, to: item.name });
                           setShowToSuggestions(false);
                         }}
-                        className="w-full px-5 py-4 text-left flex items-center gap-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+                        className="w-full px-5 py-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                       >
-                        <History size={16} className="text-slate-300" />
-                        <span className="text-sm font-black text-slate-900">{loc}</span>
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <History size={16} className="text-slate-300 shrink-0" />
+                          <span className="text-sm font-black text-slate-900 truncate">{item.name}</span>
+                        </div>
+                        {item.distance && item.distance !== Infinity && (
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/80 rounded-lg text-[10px] font-black shrink-0">
+                            {item.distance.toFixed(1)} km
+                          </span>
+                        )}
                       </button>
                     ))}
                   </motion.div>

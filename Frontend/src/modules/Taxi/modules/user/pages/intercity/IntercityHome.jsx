@@ -22,8 +22,9 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { userService } from '../../services/userService';
-import { Autocomplete, GoogleMap, MarkerF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY, INDIA_CENTER } from '../../../admin/utils/googleMaps';
+import toast from 'react-hot-toast';
 
 const normalizeSearchValue = (value) => String(value || '').trim().toLowerCase();
 
@@ -83,6 +84,11 @@ const IntercityHome = () => {
 
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
+  const [googleSuggestions, setGoogleSuggestions] = useState([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const autocompleteServiceRef = useRef(null);
+  const autocompleteSessionTokenRef = useRef(null);
+
   useEffect(() => {
     const loadPackages = async () => {
       try {
@@ -141,6 +147,8 @@ const IntercityHome = () => {
           const matched = packages.find(p => p.serviceLocationName.toLowerCase() === cityName.toLowerCase());
           if (matched) {
             setFromCity(matched.serviceLocationName);
+          } else {
+            setFromCity(cityName);
           }
         }
       }
@@ -196,6 +204,80 @@ const IntercityHome = () => {
 
     return packages;
   }, [packages, searchQuery]);
+
+  useEffect(() => {
+    const trimmedQuery = String(searchQuery || '').trim();
+
+    if (!trimmedQuery || trimmedQuery.length < 3 || !isLoaded) {
+      setGoogleSuggestions([]);
+      setIsFetchingSuggestions(false);
+      return;
+    }
+
+    if (!window.google?.maps?.places?.AutocompleteService) {
+      setGoogleSuggestions([]);
+      setIsFetchingSuggestions(false);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(() => {
+      if (!autocompleteServiceRef.current) {
+        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      }
+      if (!autocompleteSessionTokenRef.current && window.google?.maps?.places?.AutocompleteSessionToken) {
+        autocompleteSessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+      }
+
+      setIsFetchingSuggestions(true);
+      const request = {
+        input: trimmedQuery,
+        componentRestrictions: { country: 'in' },
+        sessionToken: autocompleteSessionTokenRef.current || undefined,
+      };
+
+      autocompleteServiceRef.current.getPlacePredictions(request, (predictions = [], status) => {
+        if (!active) return;
+        setIsFetchingSuggestions(false);
+        if (status === 'OK' && Array.isArray(predictions)) {
+          setGoogleSuggestions(
+            predictions.map((p) => ({
+              id: p.place_id || p.description,
+              label: p.structured_formatting?.main_text || p.description,
+              secondaryText: p.structured_formatting?.secondary_text || '',
+              description: p.description || '',
+              placeId: p.place_id || '',
+            }))
+          );
+        } else {
+          setGoogleSuggestions([]);
+        }
+      });
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, isLoaded]);
+
+  const handleGoogleSuggestionSelect = (item) => {
+    const destinationName = item.label;
+    setSearchQuery(destinationName);
+
+    // Look for a package that matches this destination city
+    const matched = packages.find(p => 
+      normalizeSearchValue(p.destination).includes(normalizeSearchValue(destinationName)) ||
+      normalizeSearchValue(destinationName).includes(normalizeSearchValue(p.destination))
+    );
+
+    if (matched) {
+      setFromCity(matched.serviceLocationName);
+      handlePackageSelect(matched);
+    } else {
+      toast.error(`No intercity package is configured for the route to ${destinationName}. Please contact admin or configure it in the admin panel.`);
+    }
+  };
 
   const handlePackageSelect = (pkg) => {
     const flowPackage = serializePackageForFlow(pkg);
@@ -416,31 +498,36 @@ const IntercityHome = () => {
                   </button>
                 )}
 
-                {/* Local Suggestions Dropdown */}
+                {/* Local & Google Suggestions Dropdown */}
                 <AnimatePresence>
-                  {searchQuery && filteredPackages.length > 0 && (
+                  {searchQuery && (filteredPackages.length > 0 || googleSuggestions.length > 0) && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
                       className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 max-h-80 overflow-y-auto"
                     >
+                      {/* Active Packages */}
                       {filteredPackages.map((pkg) => (
                         <button
                           key={pkg.id}
+                          type="button"
                           onClick={() => {
                             setFromCity(pkg.serviceLocationName);
                             setSearchQuery(pkg.destination);
                             handlePackageSelect(pkg);
                           }}
-                          className="w-full px-5 py-4 text-left hover:bg-slate-50 flex items-center justify-between group border-b border-slate-50 last:border-0 transition-colors"
+                          className="w-full px-5 py-4 text-left hover:bg-slate-50 flex items-center justify-between group border-b border-slate-50 transition-colors"
                         >
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                              <Navigation size={18} className="text-slate-400 group-hover:text-blue-500" />
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                              <Navigation size={18} className="text-blue-500" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[9px] font-black uppercase tracking-wider">
+                                  Package
+                                </span>
                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[120px]">
                                   From {pkg.serviceLocationName}
                                 </p>
@@ -458,6 +545,33 @@ const IntercityHome = () => {
                           </div>
                         </button>
                       ))}
+
+                      {/* Google Places Autocomplete */}
+                      {googleSuggestions
+                        .filter(g => !filteredPackages.some(pkg => normalizeSearchValue(pkg.destination).includes(normalizeSearchValue(g.label))))
+                        .map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleGoogleSuggestionSelect(item)}
+                            className="w-full px-5 py-4 text-left hover:bg-slate-50 flex items-center justify-between group border-b border-slate-50 last:border-0 transition-colors"
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 group-hover:bg-blue-50 transition-colors">
+                                <MapPin size={18} className="text-slate-400 group-hover:text-blue-500" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[15px] font-black text-slate-900 group-hover:text-blue-600 transition-colors">
+                                  {item.label}
+                                </p>
+                                {item.secondaryText ? (
+                                  <p className="text-[11px] font-semibold text-slate-400 truncate mt-0.5">{item.secondaryText}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors shrink-0" />
+                          </button>
+                        ))}
                     </motion.div>
                   )}
                 </AnimatePresence>

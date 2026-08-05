@@ -2431,6 +2431,10 @@ export async function updateRestaurantById(id, body = {}) {
         doc.isAcceptingOrders = parseBooleanLike(body.isAcceptingOrders, 'isAcceptingOrders');
     }
 
+    if (body.isSponsored !== undefined) {
+        doc.isSponsored = parseBooleanLike(body.isSponsored, 'isSponsored');
+    }
+
     if (body.isRestaurant !== undefined) {
         doc.isRestaurant = parseBooleanLike(body.isRestaurant, 'isRestaurant');
     }

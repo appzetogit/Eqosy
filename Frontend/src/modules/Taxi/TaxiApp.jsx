@@ -1442,6 +1442,18 @@ function TaxiApp() {
                     path="vehicle-type/edit/:id"
                     element={<AdminVehicleType mode="edit" />}
                   />
+                  <Route
+                    path="rental-packages"
+                    element={<AdminRentalPackageTypes />}
+                  />
+                  <Route
+                    path="rental-packages/create"
+                    element={<AdminRentalPackageTypes mode="create" />}
+                  />
+                  <Route
+                    path="rental-packages/edit/:id"
+                    element={<AdminRentalPackageTypes mode="edit" />}
+                  />
                   {RENTAL_ENABLED ? (
                     <>
                       <Route
@@ -1476,18 +1488,6 @@ function TaxiApp() {
                         path="rental-quotes"
                         element={<AdminRentalQuoteRequests />}
                       />
-                      <Route
-                        path="rental-packages"
-                        element={<AdminRentalPackageTypes />}
-                      />
-                      <Route
-                        path="rental-packages/create"
-                        element={<AdminRentalPackageTypes mode="create" />}
-                      />
-                      <Route
-                        path="rental-packages/edit/:id"
-                        element={<AdminRentalPackageTypes mode="edit" />}
-                      />
                     </>
                   ) : null}
                   <Route path="set-price" element={<AdminSetPrices />} />
@@ -1511,22 +1511,18 @@ function TaxiApp() {
                     path="set-price/packages/edit/:packageId"
                     element={<AdminCreatePackagePrice mode="edit" />}
                   />
-                  {RENTAL_ENABLED ? (
-                    <>
-                      <Route
-                        path="package-pricing"
-                        element={<AdminSetPackagePrices />}
-                      />
-                      <Route
-                        path="package-pricing/create"
-                        element={<AdminCreatePackagePrice mode="create" />}
-                      />
-                      <Route
-                        path="package-pricing/edit/:packageId"
-                        element={<AdminCreatePackagePrice mode="edit" />}
-                      />
-                    </>
-                  ) : null}
+                  <Route
+                    path="package-pricing"
+                    element={<AdminSetPackagePrices />}
+                  />
+                  <Route
+                    path="package-pricing/create"
+                    element={<AdminCreatePackagePrice mode="create" />}
+                  />
+                  <Route
+                    path="package-pricing/edit/:packageId"
+                    element={<AdminCreatePackagePrice mode="edit" />}
+                  />
                   <Route
                     path="set-price/incentive/:id"
                     element={<AdminDriverIncentive />}

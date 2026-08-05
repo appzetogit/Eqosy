@@ -205,7 +205,7 @@ const normalizeCuisine = (value) => String(value || '').trim().slice(0, 80);
 
 const MAX_RECOMMENDED_IMAGES_PER_RESTAURANT = 8;
 
-const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
+export const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
     if (!Array.isArray(restaurants) || restaurants.length === 0) return [];
 
     const restaurantIds = restaurants

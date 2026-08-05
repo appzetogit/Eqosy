@@ -72,6 +72,7 @@ export const useHomeData = (location, zoneId) => {
             distanceInKm: distInKm,
             image: allImgs[0] || "",
             images: allImgs,
+            recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : [],
             rating: Number(r.rating || 0),
             cuisine: r.cuisines?.[0] || "Multi-cuisine"
           };

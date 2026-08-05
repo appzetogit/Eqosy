@@ -137,6 +137,11 @@ const restaurantSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    isSponsored: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     panNumber: {
       type: String,
     },

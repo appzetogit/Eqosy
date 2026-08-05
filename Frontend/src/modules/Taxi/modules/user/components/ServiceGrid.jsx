@@ -70,19 +70,19 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
         />
 
         {/* Center: Icon container with continuous floating animation */}
-        <div className="flex flex-col items-center justify-center flex-1 w-full">
+        <div className="flex flex-col items-center justify-center flex-1 w-full pt-1">
           <motion.div
-            animate={{ y: [0, -3, 0] }}
+            animate={{ y: [0, -4, 0] }}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            className={`flex h-9 w-9 items-center justify-center rounded-[8px] bg-gradient-to-br ${iconGradient} shadow-md shadow-black/10`}
+            className="flex items-center justify-center"
           >
             <motion.img
-              animate={isHovered ? { rotate: [0, 4, 0] } : {}}
+              animate={isHovered ? { rotate: [0, 4, 0], scale: 1.1 } : { scale: 1 }}
               transition={{ duration: 0.3 }}
               src={imgSrc || icon}
               onError={() => fallbackIcon && setImgSrc(fallbackIcon)}
               alt={label || ''}
-              className="h-6 w-6 object-contain drop-shadow-sm"
+              className="h-14 w-14 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
             />
           </motion.div>
         </div>
@@ -138,7 +138,7 @@ const ServiceGrid = ({ plain = false }) => {
         }
         const res = await userService.getAppModules(params);
         const results = res?.results || res?.data?.results || [];
-        
+
         // Filter active app modules
         const activeModules = results.filter((m) => {
           if (!m.active) return false;
@@ -221,8 +221,8 @@ const ServiceGrid = ({ plain = false }) => {
 
   // Dynamic subtitle listing loaded services
   const serviceListText = services.map(s => s.label).join(', ');
-  const dynamicSubtitle = loading 
-    ? 'Everything you need in one app.' 
+  const dynamicSubtitle = loading
+    ? 'Everything you need in one app.'
     : `${serviceListText} and more in one app.`;
 
   const containerClass = plain
@@ -279,14 +279,14 @@ const ServiceGrid = ({ plain = false }) => {
       {/* 3. Header Section */}
       <div className="relative z-10 flex items-start justify-between gap-4 mb-4">
         <div>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-600"
           >
             SERVICES
           </motion.p>
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
@@ -294,7 +294,7 @@ const ServiceGrid = ({ plain = false }) => {
           >
             Choose your next ride
           </motion.h2>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -324,10 +324,10 @@ const ServiceGrid = ({ plain = false }) => {
           ))
         ) : (
           services.map((service, index) => (
-            <ServiceCard 
-              key={service.id} 
+            <ServiceCard
+              key={service.id}
               delay={0.2 + index * 0.06}
-              {...service} 
+              {...service}
             />
           ))
         )}

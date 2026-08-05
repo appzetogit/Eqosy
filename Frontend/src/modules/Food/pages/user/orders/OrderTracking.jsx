@@ -1217,8 +1217,9 @@ export default function OrderTracking({ isSharedView = false }) {
       if (message) {
         toast.success(message, {
           duration: 5000,
-          icon: '???',
+          icon: '🛎️',
           position: 'top-center',
+          id: `order-status-${evtOrderId || orderMongoId}-${status}`,
           description: estimatedDeliveryTime
             ? `Estimated delivery in ${Math.round(estimatedDeliveryTime / 60)} minutes`
             : undefined

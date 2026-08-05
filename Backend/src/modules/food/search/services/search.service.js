@@ -160,7 +160,7 @@ export const searchUnified = async (query = {}, options = {}) => {
     } else {
         // No search text -> List all restaurants matching filters (category/zone)
         const allMatching = await FoodRestaurant.find(restaurantFilter)
-            .sort({ rating: -1, createdAt: -1 })
+            .sort({ isSponsored: -1, rating: -1, createdAt: -1 })
             .limit(limit * 2)
             .lean();
             
@@ -188,14 +188,30 @@ export const searchUnified = async (query = {}, options = {}) => {
                 res.distanceScore = 999;
             }
         });
-        results.sort((a, b) => (a.distanceScore || 999) - (b.distanceScore || 999));
+        results.sort((a, b) => {
+            if (a.isSponsored && !b.isSponsored) return -1;
+            if (!a.isSponsored && b.isSponsored) return 1;
+            return (a.distanceScore || 999) - (b.distanceScore || 999);
+        });
+    } else if (results.length > 0) {
+        // Even if no distance, we need to sort to ensure sponsored are on top because regex matched results are prepended
+        results.sort((a, b) => {
+            if (a.isSponsored && !b.isSponsored) return -1;
+            if (!a.isSponsored && b.isSponsored) return 1;
+            return 0; // retain existing mongo sort
+        });
     }
 
     // ... (rest of logic up to result formation)
+    // 5. Attach recommended images for the auto slider
+    const { attachRecommendedImagesToRestaurants } = await import('../../restaurant/services/restaurant.service.js');
+    let paginatedRestaurants = results.slice(skip, skip + limit);
+    paginatedRestaurants = await attachRecommendedImagesToRestaurants(paginatedRestaurants);
+
     const finalResult = {
         success: true,
         data: {
-            restaurants: results.slice(skip, skip + limit),
+            restaurants: paginatedRestaurants,
             total: results.length,
             page: parseInt(page),
             limit: parseInt(limit),
