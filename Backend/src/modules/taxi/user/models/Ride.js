@@ -666,6 +666,28 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      comment: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      flaggedForAdminReview: {
+        type: Boolean,
+        default: false,
+      },
+      flagReason: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      driverArrivalDistanceMeters: {
+        type: Number,
+        default: 0,
+      },
+      driverArrivalTimeSeconds: {
+        type: Number,
+        default: 0,
+      },
       stage: {
         type: String,
         enum: ['searching', 'accepted', 'arrived', 'started', ''],

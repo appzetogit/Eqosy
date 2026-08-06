@@ -188,18 +188,36 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
   };
 };
 
-export const processRideCancellation = async ({ ride, cancelledBy = 'user', reason = '', cancellerId = null, session = null }) => {
+const FLAGGED_DRIVER_REASONS = [
+  'driver asked me to cancel',
+  'driver asked for extra fare',
+  'driver is not coming',
+  "don't feel comfortable",
+  'driver is behaving improperly',
+  'driver is moving away',
+  'driver is not responding'
+];
+
+export const processRideCancellation = async ({ ride, cancelledBy = 'user', reason = '', comment = '', cancellerId = null, session = null }) => {
   if (!ride) {
     return null;
   }
 
-  const cancellationBill = await calculateCancellationBill({ ride, cancelledBy, reason });
+  const cleanReason = String(reason || '').trim();
+  const cleanComment = String(comment || '').trim();
+  const lowerReason = cleanReason.toLowerCase();
+  const isFlagged = FLAGGED_DRIVER_REASONS.some(r => lowerReason.includes(r));
+
+  const cancellationBill = await calculateCancellationBill({ ride, cancelledBy, reason: cleanReason });
   const { billBreakdown, driverBreakdown, paymentDetails, cancellationStage } = cancellationBill;
 
   ride.cancellation = {
     cancelled_by: cancelledBy,
     canceller_id: cancellerId || null,
-    reason: String(reason || '').trim(),
+    reason: cleanReason,
+    comment: cleanComment,
+    flaggedForAdminReview: isFlagged,
+    flagReason: isFlagged ? cleanReason : '',
     stage: cancellationStage,
     cancelled_at: new Date(),
     is_fee_applied: !billBreakdown.isWaived,

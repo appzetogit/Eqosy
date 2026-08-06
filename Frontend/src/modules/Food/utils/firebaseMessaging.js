@@ -734,10 +734,18 @@ export async function registerWebPushForCurrentModule(pathname = window.location
       });
       const messaging = getMessaging(app);
 
-      const token = await getToken(messaging, {
-        vapidKey: firebasePublicEnv.vapidKey,
-        serviceWorkerRegistration: registration,
-      });
+      let token = null;
+      try {
+        token = await getToken(messaging, {
+          vapidKey: firebasePublicEnv.vapidKey,
+          serviceWorkerRegistration: registration,
+        });
+      } catch (fcmErr) {
+        pushDebugWarn(PUSH_DEBUG_PREFIX, "FCM Web Push token generation failed (403 Forbidden or VAPID key mismatch)", {
+          error: fcmErr?.message || fcmErr,
+        });
+        return;
+      }
 
       if (!token) return;
       pushDebugLog(PUSH_DEBUG_PREFIX, "FCM token resolved", {

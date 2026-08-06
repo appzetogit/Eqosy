@@ -173,13 +173,21 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                     {order.orderStatus}
                   </span>
                   {order.cancellationReason && (
-                    <p className="text-xs text-red-600 mt-1">
-                      <span className="font-medium">
-                        {order.cancelledBy === 'user' ? 'Cancelled by User - ' : 
-                         order.cancelledBy === 'restaurant' ? 'Cancelled by Restaurant - ' : 
-                         'Cancellation '}Reason:
-                      </span> {order.cancellationReason}
-                    </p>
+                    <div className="mt-1.5 p-2 bg-red-50 rounded-lg border border-red-100 text-xs text-red-600">
+                      <p className="font-bold">
+                        {String(order.cancelledBy || '').toUpperCase() === 'USER' ? 'Cancelled by Customer' : 
+                         String(order.cancelledBy || '').toUpperCase() === 'RESTAURANT' ? 'Cancelled by Restaurant' : 
+                         'Cancelled'}
+                      </p>
+                      <p className="text-slate-700 font-medium mt-0.5">
+                        <span className="font-semibold text-red-600">Reason:</span> {order.cancellationReason}
+                      </p>
+                      {order.cancellationComment && order.cancellationComment !== order.cancellationReason && (
+                        <p className="text-slate-600 italic mt-0.5 text-[11px]">
+                          Note: "{order.cancellationComment}"
+                        </p>
+                      )}
+                    </div>
                   )}
                   {order.cancelledAt && (
                     <p className="text-xs text-slate-500 mt-1">

@@ -205,6 +205,7 @@ import {
   getAdmins,
   getTransportTypes,
   deleteFleetVehicle,
+  getTaxiCancellationAnalytics,
 } from '../controllers/adminController.js';
 import {
   getPoolingVehicles,
@@ -395,6 +396,7 @@ adminRouter.get('/admin/dashboard/admin-earnings', getAdminEarnings);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
+adminRouter.get('/admin/cancellation-analytics', getTaxiCancellationAnalytics);
 adminRouter.get('/admin/safety/alerts', authenticate(['admin']), listSafetyAlerts);
 adminRouter.patch('/admin/safety/alerts/:id/resolve', authenticate(['admin']), resolveSafetyAlert);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);

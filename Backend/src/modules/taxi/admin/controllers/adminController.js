@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import { BusBooking } from '../../user/models/BusBooking.js';
 import { BusService } from '../models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
+import { Ride } from '../../user/models/Ride.js';
 
 const ok = (res, data, extra = {}) =>
   res.json({ success: true, data, ...extra });
@@ -1574,3 +1575,112 @@ export const updateGeneralSettingsCategory = asyncHandler(async (req, res) =>
 export const getTransportTypes = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listTransportTypes()),
 );
+
+export const getTaxiCancellationAnalytics = asyncHandler(async (req, res) => {
+  const totalRidesCount = await Ride.countDocuments();
+  const cancelledRides = await Ride.find({
+    $or: [
+      { status: 'cancelled' },
+      { 'cancellation.cancelled_by': { $ne: '' } }
+    ]
+  })
+    .populate('userId', 'name phone email')
+    .populate('driverId', 'name phone vehicleNumber rating')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const totalCancelledRides = cancelledRides.length;
+  const cancellationRate = totalRidesCount > 0
+    ? Math.round((totalCancelledRides / totalRidesCount) * 100 * 10) / 10
+    : 0;
+
+  let customerCancellations = 0;
+  let driverCancellations = 0;
+  let adminSystemCancellations = 0;
+  let totalRevenueLost = 0;
+  let totalCancellationFeesCollected = 0;
+
+  const reasonsCountMap = {};
+  const stageCountMap = { searching: 0, accepted: 0, arrived: 0, started: 0, unknown: 0 };
+  const driverCancellationMap = {};
+  const flaggedRides = [];
+
+  cancelledRides.forEach((ride) => {
+    const cancelledBy = String(ride.cancellation?.cancelled_by || '').toLowerCase();
+    if (cancelledBy === 'user' || cancelledBy === 'customer') {
+      customerCancellations += 1;
+    } else if (cancelledBy === 'driver') {
+      driverCancellations += 1;
+
+      if (ride.driverId?._id) {
+        const dId = String(ride.driverId._id);
+        if (!driverCancellationMap[dId]) {
+          driverCancellationMap[dId] = {
+            driverId: dId,
+            driverName: ride.driverId.name || 'Unknown Driver',
+            driverPhone: ride.driverId.phone || '',
+            cancellationCount: 0,
+          };
+        }
+        driverCancellationMap[dId].cancellationCount += 1;
+      }
+    } else {
+      adminSystemCancellations += 1;
+    }
+
+    const stage = String(ride.cancellation?.stage || '').toLowerCase() || 'unknown';
+    if (stageCountMap[stage] !== undefined) {
+      stageCountMap[stage] += 1;
+    } else {
+      stageCountMap.unknown += 1;
+    }
+
+    const reason = ride.cancellation?.reason || 'No reason specified';
+    reasonsCountMap[reason] = (reasonsCountMap[reason] || 0) + 1;
+
+    totalRevenueLost += Number(ride.fare || ride.baseFare || 0);
+
+    if (ride.cancellation?.is_fee_applied) {
+      totalCancellationFeesCollected += Number(ride.cancellation?.cancellation_charge || 0);
+    }
+
+    if (ride.cancellation?.flaggedForAdminReview) {
+      flaggedRides.push({
+        rideId: String(ride._id),
+        customerName: ride.userId?.name || 'Customer',
+        customerPhone: ride.userId?.phone || '',
+        driverName: ride.driverId?.name || 'N/A',
+        driverPhone: ride.driverId?.phone || '',
+        reason: ride.cancellation?.reason || '',
+        comment: ride.cancellation?.comment || '',
+        flagReason: ride.cancellation?.flagReason || '',
+        cancelledAt: ride.cancellation?.cancelled_at || ride.updatedAt,
+        stage: ride.cancellation?.stage || '',
+        cancellationCharge: ride.cancellation?.cancellation_charge || 0,
+      });
+    }
+  });
+
+  const reasonsBreakdown = Object.entries(reasonsCountMap)
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const topDriverCancellations = Object.values(driverCancellationMap)
+    .sort((a, b) => b.cancellationCount - a.cancellationCount)
+    .slice(0, 10);
+
+  ok(res, {
+    totalRidesCount,
+    totalCancelledRides,
+    cancellationRate,
+    customerCancellations,
+    driverCancellations,
+    adminSystemCancellations,
+    totalRevenueLost: Math.round(totalRevenueLost),
+    totalCancellationFeesCollected: Math.round(totalCancellationFeesCollected),
+    reasonsBreakdown,
+    stageBreakdown: stageCountMap,
+    topDriverCancellations,
+    flaggedRides,
+  });
+});

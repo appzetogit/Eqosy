@@ -953,11 +953,14 @@ export const getRideAppTipSettings = async (_req, res) => {
 };
 
 export const cancelRide = async (req, res) => {
-  const reason = req.body?.reason || req.query?.reason || '';
+  const reason = req.body?.cancellationReason || req.body?.reason || req.query?.reason || '';
+  const comment = req.body?.cancellationComment || req.body?.comment || req.query?.comment || '';
+
   const ride = await cancelRideByUser({
     rideId: req.params.rideId,
     userId: req.auth.sub,
     reason,
+    comment,
   });
 
   if (!ride) {
@@ -970,12 +973,15 @@ export const cancelRide = async (req, res) => {
     reason,
   });
 
-res.json({
+  res.json({
     success: true,
     data: {
       rideId: String(ride._id),
       status: ride.status,
       liveStatus: ride.liveStatus,
+      cancellationCharge: cancellationBill?.billBreakdown?.totalAmount || 0,
+      isFeeApplied: !cancellationBill?.billBreakdown?.isWaived,
+      cancellationBill,
     },
   });
 };

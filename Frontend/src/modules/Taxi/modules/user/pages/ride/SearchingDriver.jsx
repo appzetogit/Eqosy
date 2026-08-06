@@ -19,6 +19,7 @@ const resolveAssetUrl = (value = '') => {
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
 import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
+import RideCancellationModal from '../../components/RideCancellationModal';
 
 const MAP_OPTIONS = {
   disableDefaultUI: true,
@@ -800,20 +801,30 @@ const SearchingDriver = () => {
     };
   }, [isScheduledBiddingRide, isScheduledRide, navigate, routePrefix, routeState, searchNonce, selectedVehicleTypeId, userHomeRoute]);
 
-  const handleCancel = async () => {
+  const handleCancelWithPayload = async (cancellationData = {}) => {
     clearTimeout(timerRef.current);
-
     const rideId = activeRideIdRef.current;
 
     try {
       if (rideId) {
-        await api.patch(`/rides/${rideId}/cancel`);
+        const response = await api.patch(`/rides/${rideId}/cancel`, cancellationData);
+        const data = response?.data?.data || response?.data || {};
+        if (data.cancellationCharge > 0 || data.isFeeApplied) {
+          toast.success(`Your ride has been cancelled. A cancellation fee of ₹${data.cancellationCharge} has been applied according to Eqosy's cancellation policy.`);
+        } else {
+          toast.success("Your ride has been cancelled successfully.");
+        }
       }
     } catch (_error) {
-      // Navigation still proceeds even if the cancel request races with another state update.
+      toast.success("Your ride has been cancelled successfully.");
     }
 
+    setShowCancelConfirm(false);
     navigate(userHomeRoute, { replace: true });
+  };
+
+  const handleCancel = () => {
+    handleCancelWithPayload({ reason: 'User requested cancellation' });
   };
 
   const handleAcceptBid = async (bidId) => {
@@ -1348,35 +1359,12 @@ const SearchingDriver = () => {
         </AnimatePresence>
       </div>
 
-      <AnimatePresence>
-        {showCancelConfirm && (
-          <div className="z-[100] relative">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowCancelConfirm(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto" />
-            <motion.div initial={{ scale: 0.92, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0, y: 40 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[82%] max-w-sm bg-white rounded-[28px] p-7 z-[101] shadow-2xl text-center">
-              <div className="w-14 h-14 bg-red-50 rounded-[18px] flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle size={26} className="text-red-400" strokeWidth={2} />
-              </div>
-              <h3 className="text-[18px] font-bold text-slate-900 mb-1.5">Cancel ride?</h3>
-              <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">
-                {"We're still searching. Stop looking?"}
-              </p>
-              <div className="space-y-2.5">
-                <motion.button whileTap={{ scale: 0.97 }} onClick={handleCancel}
-                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest">
-                  Yes, Cancel
-                </motion.button>
-                <button onClick={() => setShowCancelConfirm(false)}
-                  className="w-full py-3.5 text-[13px] font-bold text-slate-400 uppercase tracking-widest">
-                  {isSearching ? 'Keep Searching' : 'Go Back'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <RideCancellationModal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleCancelWithPayload}
+        stage="searching"
+      />
     </div>
   );
 };

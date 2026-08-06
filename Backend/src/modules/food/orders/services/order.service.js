@@ -696,7 +696,7 @@ export async function resyncState(userId, role) {
   return {};
 }
 
-export async function cancelOrder(orderId, userId, reason) {
+export async function cancelOrder(orderId, userId, payload = {}) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
@@ -706,18 +706,27 @@ export async function cancelOrder(orderId, userId, reason) {
   });
   if (!order) throw new NotFoundError("Order not found");
 
-  const allowed = ["created"];
+  const allowed = ["created", "placed", "pending", "pending_payment"];
   if (!allowed.includes(order.orderStatus))
-    throw new ValidationError("Order cannot be cancelled");
+    throw new ValidationError("Order cannot be cancelled because the restaurant has already accepted or processed it.");
+
+  const cancellationReason = typeof payload === 'string' ? payload : (payload.cancellationReason || payload.reason || '');
+  const cancellationComment = typeof payload === 'object' ? (payload.cancellationComment || '') : '';
+  const displayReason = cancellationReason === 'Other' && cancellationComment ? cancellationComment : (cancellationReason || cancellationComment || 'No reason provided');
 
   const from = order.orderStatus;
   order.orderStatus = "cancelled_by_user";
+  order.cancellationReason = cancellationReason;
+  order.cancellationComment = cancellationComment;
+  order.cancelledAt = new Date();
+  order.cancelledBy = "USER";
+
   pushStatusHistory(order, {
     byRole: "USER",
     byId: userId,
     from,
     to: "cancelled_by_user",
-    note: reason || "",
+    note: displayReason,
   });
 
   const paymentMethod = String(order.payment?.method || "cash").toLowerCase();

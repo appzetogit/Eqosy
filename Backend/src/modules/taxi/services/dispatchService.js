@@ -380,7 +380,7 @@ export const cancelRideByAdmin = async (rideId) => {
   return ride;
 };
 
-export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
+export const cancelRideByUser = async ({ rideId, userId, reason = '', comment = '' }) => {
   const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId);
   const session = await mongoose.startSession();
@@ -410,6 +410,7 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
       ride,
       cancelledBy: 'user',
       reason,
+      comment,
       cancellerId: userId,
       session,
     });

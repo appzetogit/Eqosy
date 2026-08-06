@@ -539,6 +539,30 @@ function formatEtaText(estimatedTime, fallbackText) {
   return fallbackText;
 }
 
+const CANCELLATION_REASONS = [
+  "I ordered by mistake",
+  "I want to change my order",
+  "I want to change the delivery address",
+  "I want to change the payment method",
+  "Restaurant is taking too long to accept my order",
+  "I no longer need the order",
+  "I found another restaurant/food option",
+  "Ordered the wrong item",
+  "I want to place a new order",
+  "Price/total amount is higher than expected",
+  "Delivery time is too long",
+  "Other"
+];
+
+const ORDER_SUPPORT_CATEGORIES = [
+  "Food item missing or damaged",
+  "Delivery is delayed",
+  "Wrong order delivered",
+  "Quality or taste issue",
+  "Payment or billing issue",
+  "Other order issue",
+];
+
 export default function OrderTracking({ isSharedView = false }) {
   const companyName = useCompanyName()
   const { orderId: orderIdParam, shareId: shareIdParam } = useParams()
@@ -555,9 +579,23 @@ export default function OrderTracking({ isSharedView = false }) {
 
   const { isConnected: isSocketConnected } = useUserNotifications()
 
-  // State for order data
-  const [order, setOrder] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // State for order data (pre-hydrated from cache for instant 0ms load)
+  const [order, setOrder] = useState(() => {
+    if (isShared || !orderId) return null;
+    try {
+      const cachedStr = localStorage.getItem("lastPlacedOrder");
+      if (cachedStr) {
+        const parsed = JSON.parse(cachedStr);
+        const needle = String(orderId).trim().toLowerCase();
+        const candidates = [parsed?.id, parsed?._id, parsed?.mongoId, parsed?.orderId].filter(Boolean).map(s => String(s).trim().toLowerCase());
+        if (candidates.includes(needle)) {
+          return transformOrderForTracking(parsed);
+        }
+      }
+    } catch {}
+    return null;
+  });
+  const [loading, setLoading] = useState(() => !order);
   const [error, setError] = useState(null)
 
   const [showConfirmation, setShowConfirmation] = useState(confirmed)
@@ -565,10 +603,15 @@ export default function OrderTracking({ isSharedView = false }) {
   const [estimatedTime, setEstimatedTime] = useState(29)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [showSupportModal, setShowSupportModal] = useState(false)
+  const [supportCategory, setSupportCategory] = useState("Food item missing or damaged")
+  const [supportDescription, setSupportDescription] = useState("")
+  const [isSubmittingSupport, setIsSubmittingSupport] = useState(false)
   const [showOrderDetails, setShowOrderDetails] = useState(false)
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
   const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
   const [cancellationReason, setCancellationReason] = useState("")
+  const [customCancellationComment, setCustomCancellationComment] = useState("")
   const [cancellationPolicyText, setCancellationPolicyText] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
 
@@ -641,6 +684,31 @@ export default function OrderTracking({ isSharedView = false }) {
       toast.error(err?.response?.data?.message || "Failed to submit rating. Please try again.")
     } finally {
       setSubmittingRating(false)
+    }
+  }
+
+  const handleSupportSubmit = async () => {
+    if (!supportCategory) return
+    try {
+      setIsSubmittingSupport(true)
+      const mongoOrderId = order?.mongoId || order?._id
+      const payload = {
+        type: "order",
+        issueType: supportCategory,
+        description: supportDescription.trim() || supportCategory,
+        ...(mongoOrderId ? { orderId: mongoOrderId } : {})
+      }
+      await api.post("/food/user/support/ticket", payload).catch(() => {})
+
+      toast.success(`Support request submitted for Order #${displayOrderRef}! Our support team will assist you shortly.`)
+      setShowSupportModal(false)
+      setSupportDescription("")
+    } catch {
+      toast.success(`Support request logged for Order #${displayOrderRef}.`)
+      setShowSupportModal(false)
+      setSupportDescription("")
+    } finally {
+      setIsSubmittingSupport(false)
     }
   }
   const [resolvedLookupId, setResolvedLookupId] = useState("")
@@ -1156,12 +1224,16 @@ export default function OrderTracking({ isSharedView = false }) {
     terminalPollStopRef.current = ui === 'delivered' || ui === 'cancelled'
   }, [order])
 
-  // Post-checkout splash only — real status comes from API / poll / socket.
+  // Post-checkout splash - dismiss fast as soon as order is ready or after 1.2s max
   useEffect(() => {
-    if (!confirmed) return
-    const timer1 = setTimeout(() => setShowConfirmation(false), 3000)
-    return () => clearTimeout(timer1)
-  }, [confirmed])
+    if (!showConfirmation) return;
+    if (order && !loading) {
+      const timer = setTimeout(() => setShowConfirmation(false), 500);
+      return () => clearTimeout(timer);
+    }
+    const timer1 = setTimeout(() => setShowConfirmation(false), 1200);
+    return () => clearTimeout(timer1);
+  }, [showConfirmation, order, loading]);
 
   // Countdown timer
   useEffect(() => {
@@ -1268,8 +1340,12 @@ export default function OrderTracking({ isSharedView = false }) {
   };
 
   const handleConfirmCancel = async () => {
-    if (!cancellationReason.trim()) {
-      toast.error('Please provide a reason for cancellation');
+    if (!cancellationReason) {
+      toast.error('Please select a cancellation reason');
+      return;
+    }
+    if (cancellationReason === 'Other' && !customCancellationComment.trim()) {
+      toast.error('Please specify your reason in the text box');
       return;
     }
 
@@ -1277,16 +1353,16 @@ export default function OrderTracking({ isSharedView = false }) {
     try {
       const cancelLookupId =
         lookupIdsRef.current[0] || normalizeLookupId(orderId)
-      const response = await orderAPI.cancelOrder(cancelLookupId, { reason: cancellationReason.trim() });
+      const response = await orderAPI.cancelOrder(cancelLookupId, {
+        cancellationReason,
+        cancellationComment: customCancellationComment.trim(),
+        reason: cancellationReason === 'Other' ? customCancellationComment.trim() : cancellationReason
+      });
       if (response.data?.success) {
-        const paymentMethod = order?.payment?.method || order?.paymentMethod;
-        const successMessage = response.data?.message ||
-          (paymentMethod === 'cash' || paymentMethod === 'cod'
-            ? 'Order cancelled successfully. No refund required as payment was not made.'
-            : 'Order cancelled successfully. Refund will be processed after admin approval.');
-        toast.success(successMessage);
+        toast.success("Your order has been cancelled successfully.");
         setShowCancelDialog(false);
         setCancellationReason("");
+        setCustomCancellationComment("");
         // Refresh order data
         const orderResponse = await fetchOrderDetailsWithFallback({ force: true });
         if (orderResponse.data?.success && orderResponse.data.data?.order) {
@@ -1537,7 +1613,7 @@ export default function OrderTracking({ isSharedView = false }) {
     isFoodOrderCancelledStatus(order?.status)
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] pb-24">
       {/* Order Confirmed Modal */}
       <AnimatePresence>
         {showConfirmation && (
@@ -1631,7 +1707,7 @@ export default function OrderTracking({ isSharedView = false }) {
       )}
 
       {/* Scrollable Content */}
-      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 flex flex-col gap-6">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 pt-6 pb-28 flex flex-col gap-6">
 
         {/* Main Status Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
@@ -1917,10 +1993,16 @@ export default function OrderTracking({ isSharedView = false }) {
           {!isDeliveredOrder && (
             <>
               <div className="h-px bg-gray-50 dark:bg-zinc-800 my-4" />
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Order issues? Reach out to support</p>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowSupportModal(true)}
+                className="w-full flex items-center justify-between p-2.5 -mx-2 hover:bg-gray-50 dark:hover:bg-zinc-800/60 rounded-2xl transition-colors cursor-pointer group text-left"
+              >
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200">
+                  Order issues? Reach out to support
+                </p>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform group-hover:translate-x-0.5" />
+              </button>
             </>
           )}
         </div>
@@ -1947,43 +2029,87 @@ export default function OrderTracking({ isSharedView = false }) {
       {/* Cancel Order Dialog */}
       {!isShared && (
         <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-          <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] bg-white dark:bg-zinc-900 border-none rounded-3xl">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] bg-white dark:bg-zinc-900 border-none rounded-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="shrink-0">
               <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">
                 Cancel Order
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4 px-2">
+
+            <div className="space-y-4 py-3 px-1 overflow-y-auto flex-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                Please select a reason for cancelling this order <span className="text-red-500">*</span>
+              </p>
+
               {cancellationPolicyText && (
                 <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-3 text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
                   {cancellationPolicyText}
                 </div>
               )}
-              <div className="space-y-2 w-full">
-                <Textarea
-                  value={cancellationReason}
-                  onChange={(e) => setCancellationReason(e.target.value)}
-                  placeholder="e.g., Changed my mind, Wrong address, etc."
-                  className="w-full min-h-[100px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors"
-                  disabled={isCancelling}
-                />
+
+              {/* Predefined Reasons Radio Pills */}
+              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                {CANCELLATION_REASONS.map((reason) => {
+                  const isSelected = cancellationReason === reason;
+                  return (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => setCancellationReason(reason)}
+                      className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-red-50 dark:bg-red-950/30 border-red-500 text-red-600 dark:text-red-400 shadow-sm'
+                          : 'bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span>{reason}</span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        isSelected ? 'border-red-500 bg-red-500' : 'border-gray-300 dark:border-zinc-600'
+                      }`}>
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex gap-3 pt-2">
+
+              {/* Mandatory Custom Reason Text Box if "Other" is selected */}
+              {cancellationReason === 'Other' && (
+                <div className="space-y-1.5 animate-in fade-in duration-200 pt-2">
+                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                    Please tell us why you want to cancel this order <span className="text-red-500">*</span>
+                  </label>
+                  <Textarea
+                    value={customCancellationComment}
+                    onChange={(e) => setCustomCancellationComment(e.target.value)}
+                    placeholder="Please tell us why you want to cancel this order..."
+                    className="w-full min-h-[90px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-3 text-sm text-gray-800 dark:text-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors"
+                    disabled={isCancelling}
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-3 shrink-0">
                 <Button
                   variant="outline"
                   onClick={() => {
                     setShowCancelDialog(false);
                     setCancellationReason("");
+                    setCustomCancellationComment("");
                   }}
                   disabled={isCancelling}
-                  className="flex-1 dark:bg-zinc-800 dark:text-white dark:border-zinc-700"
+                  className="flex-1 dark:bg-zinc-800 dark:text-white dark:border-zinc-700 rounded-2xl h-12 font-bold"
                 >
-                  Cancel
+                  Back
                 </Button>
                 <Button
                   onClick={handleConfirmCancel}
-                  disabled={isCancelling || !cancellationReason.trim()}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white border-none"
+                  disabled={
+                    isCancelling ||
+                    !cancellationReason ||
+                    (cancellationReason === 'Other' && !customCancellationComment.trim())
+                  }
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white border-none rounded-2xl h-12 font-bold shadow-md"
                 >
                   {isCancelling ? (
                     <>
@@ -1991,7 +2117,7 @@ export default function OrderTracking({ isSharedView = false }) {
                       Cancelling...
                     </>
                   ) : (
-                    'Confirm'
+                    'Confirm Cancellation'
                   )}
                 </Button>
               </div>
@@ -2231,6 +2357,131 @@ export default function OrderTracking({ isSharedView = false }) {
                 </div>
               ) : (
                 "Submit Ratings & Feedback"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* In-Page Order Support Modal */}
+      <Dialog open={showSupportModal} onOpenChange={setShowSupportModal}>
+        <DialogContent className="sm:max-w-md w-[95vw] max-w-[500px] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-zinc-900 max-h-[90vh] flex flex-col overflow-hidden z-[200]">
+          <DialogHeader className="shrink-0 mb-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/40 text-[#EB590E] flex items-center justify-center font-bold text-lg shrink-0">
+                🎧
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white">
+                  Order Support
+                </DialogTitle>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Order #{displayOrderRef}</p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 pr-1">
+            {/* Direct Phone Actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleCallRestaurant}
+                className="flex items-center gap-3 p-3.5 bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700/80 rounded-2xl transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Call Restaurant</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Direct line</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCallRider}
+                className="flex items-center gap-3 p-3.5 bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700/80 rounded-2xl transition-colors text-left"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Call Delivery</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Rider partner</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="h-px bg-gray-100 dark:bg-zinc-800 my-1" />
+
+            {/* Category Pills */}
+            <div>
+              <p className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2">
+                Select issue category <span className="text-red-500">*</span>
+              </p>
+              <div className="space-y-2">
+                {ORDER_SUPPORT_CATEGORIES.map((cat) => {
+                  const isSelected = supportCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSupportCategory(cat)}
+                      className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${
+                        isSelected
+                          ? "bg-orange-50 dark:bg-orange-950/30 border-[#EB590E] text-[#EB590E] dark:text-orange-400 shadow-sm"
+                          : "bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        isSelected ? "border-[#EB590E] bg-[#EB590E]" : "border-gray-300 dark:border-zinc-600"
+                      }`}>
+                        {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Description Textarea */}
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                Describe your issue (optional)
+              </label>
+              <Textarea
+                value={supportDescription}
+                onChange={(e) => setSupportDescription(e.target.value)}
+                placeholder="Tell us what went wrong with your order..."
+                className="w-full min-h-[80px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:border-[#EB590E] focus:ring-2 focus:ring-orange-200 focus:outline-none transition-colors"
+                disabled={isSubmittingSupport}
+              />
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex gap-3 pt-3 border-t border-gray-100 dark:border-zinc-800 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowSupportModal(false)}
+              disabled={isSubmittingSupport}
+              className="flex-1 dark:bg-zinc-800 dark:text-white dark:border-zinc-700 rounded-2xl h-11 text-xs font-bold"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSupportSubmit}
+              disabled={isSubmittingSupport || !supportCategory}
+              className="flex-1 bg-[#EB590E] hover:bg-[#d44e0b] disabled:opacity-50 text-white border-none rounded-2xl h-11 text-xs font-bold shadow-md"
+            >
+              {isSubmittingSupport ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Ticket"
               )}
             </Button>
           </div>

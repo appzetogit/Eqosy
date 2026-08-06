@@ -147,10 +147,17 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
 
   const serviceWorkerRegistration = await navigator.serviceWorker.register(createServiceWorkerUrl());
   const messaging = getMessaging(app);
-  const token = await getToken(messaging, {
-    vapidKey: VAPID_KEY,
-    serviceWorkerRegistration,
-  });
+
+  let token = null;
+  try {
+    token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration,
+    });
+  } catch (fcmErr) {
+    console.warn('[FCM Web Push] Token retrieval skipped/failed (VAPID key mismatch or 403 Forbidden):', fcmErr?.message || fcmErr);
+    return { ok: false, reason: 'fcm-token-error', error: fcmErr };
+  }
 
   if (!token) {
     return { ok: false, reason: 'missing-token' };

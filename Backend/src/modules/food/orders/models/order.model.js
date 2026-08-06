@@ -297,6 +297,10 @@ const orderSchema = new mongoose.Schema(
             default: () => ({})
         },
         note: { type: String, default: '', trim: true },
+        cancellationReason: { type: String, default: '', trim: true },
+        cancellationComment: { type: String, default: '', trim: true },
+        cancelledAt: { type: Date, default: null },
+        cancelledBy: { type: String, enum: ['USER', 'RESTAURANT', 'ADMIN', 'SYSTEM', ''], default: '' },
         sendCutlery: { type: Boolean, default: true },
         deliveryFleet: { type: String, default: 'standard', trim: true },
         scheduledAt: { type: Date, default: null },

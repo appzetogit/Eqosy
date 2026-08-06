@@ -18,6 +18,7 @@ import {
 } from '../services/adminSession';
 import toast from 'react-hot-toast';
 import {
+  Ban,
   BarChart3,
   Bell,
   Briefcase,
@@ -813,6 +814,7 @@ const AdminLayout = () => {
             ],
           },
           { icon: Car, label: 'Trip Requests', path: '/taxi/admin/trips', permission: 'trips.view' },
+          { icon: Ban, label: 'Cancellation Analytics', path: '/taxi/admin/cancellation-analytics', permission: 'dashboard.view' },
           { icon: Package, label: 'Delivery Requests', path: '/taxi/admin/deliveries', permission: 'deliveries.view' },
           { icon: Clock, label: 'Ongoing Requests', path: '/taxi/admin/ongoing', permission: 'ongoing.view' },
         ],

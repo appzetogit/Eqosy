@@ -170,6 +170,7 @@ const AddDriver = lazy(() => import('./modules/driver/pages/settings/AddDriver')
 const AdminLayout = lazy(() => import('./modules/admin/components/AdminLayout'));
 const AdminLogin = lazy(() => import('./modules/admin/pages/auth/AdminLogin'));
 const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDashboard'));
+const AdminCancellationAnalytics = lazy(() => import('./modules/admin/pages/CancellationAnalytics'));
 const AdminEarnings = lazy(() => import('./modules/admin/pages/dashboard/AdminEarnings'));
 const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
@@ -1112,6 +1113,7 @@ function TaxiApp() {
               <Route path="admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/taxi/admin/dashboard" />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="cancellation-analytics" element={<AdminCancellationAnalytics />} />
                 <Route path="earnings" element={<AdminEarnings />} />
                 <Route path="chat" element={<AdminChat />} />
                 <Route path="trips" element={<AdminTrips />} />
