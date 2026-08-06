@@ -907,6 +907,7 @@ const SenderReceiverDetails = () => {
   const pickupGeocodeTimerRef = useRef(null);
   const pickupSuggestionTimerRef = useRef(null);
   const pickupSuggestionCacheRef = useRef(new Map());
+  const dropSuggestionCacheRef = useRef(new Map());
 
   const [dynamicNearbySuggestions, setDynamicNearbySuggestions] = useState([]);
   const [dynamicPopularSuggestions, setDynamicPopularSuggestions] = useState([]);
