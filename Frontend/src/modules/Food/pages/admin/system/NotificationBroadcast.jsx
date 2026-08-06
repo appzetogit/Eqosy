@@ -49,15 +49,91 @@ export default function NotificationBroadcast() {
     message: "",
     targetType: "ALL",
     zoneId: "",
+    restaurantId: "",
+    productId: "",
+    redirectUrl: "",
   });
   const [history, setHistory] = useState([]);
   const [zones, setZones] = useState([]);
+  const [restaurants, setRestaurants] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [recipientLoading, setRecipientLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [allRecipients, setAllRecipients] = useState([]);
   const [selectedRecipients, setSelectedRecipients] = useState([]);
+
+  const loadRestaurants = async () => {
+    try {
+      const response = await adminAPI.getRestaurants({ page: 1, limit: 500, status: 'approved' });
+      const items = response?.data?.data?.restaurants || response?.data?.restaurants || response?.data?.items || [];
+      setRestaurants(Array.isArray(items) ? items : []);
+    } catch {
+      setRestaurants([]);
+    }
+  };
+
+  const loadMenuForRestaurant = async (restaurantId) => {
+    if (!restaurantId) {
+      setMenuItems([]);
+      return;
+    }
+    try {
+      setLoadingMenu(true);
+      const itemsMap = new Map();
+
+      // 1. Fetch from Food collection (/food/admin/foods)
+      try {
+        const foodsRes = await adminAPI.getFoods({ restaurantId, limit: 1000 });
+        const rawFoods = foodsRes?.data?.data?.foods || foodsRes?.data?.foods || foodsRes?.data?.items || foodsRes?.data?.data || [];
+        if (Array.isArray(rawFoods)) {
+          rawFoods.forEach((item) => {
+            const key = String(item._id || item.id || "");
+            if (key) itemsMap.set(key, item);
+          });
+        }
+      } catch {}
+
+      // 2. Fetch from Restaurant Menu (/food/admin/restaurants/:id/menu)
+      try {
+        const res = await adminAPI.getRestaurantMenuById(restaurantId);
+        const rawData = res?.data?.data || res?.data?.menu || res?.data || {};
+        const sections = Array.isArray(rawData.sections)
+          ? rawData.sections
+          : Array.isArray(rawData.menuSections)
+          ? rawData.menuSections
+          : Array.isArray(rawData)
+          ? rawData
+          : [];
+
+        const extractItems = (itemList) => {
+          if (Array.isArray(itemList)) {
+            itemList.forEach((item) => {
+              const key = String(item._id || item.id || "");
+              if (key && !itemsMap.has(key)) itemsMap.set(key, item);
+            });
+          }
+        };
+
+        if (sections.length > 0) {
+          sections.forEach((sec) => {
+            extractItems(sec.items);
+            if (Array.isArray(sec.subsections)) {
+              sec.subsections.forEach((sub) => extractItems(sub.items));
+            }
+          });
+        } else if (Array.isArray(rawData.items)) {
+          extractItems(rawData.items);
+        }
+      } catch {}
+
+      setMenuItems([...itemsMap.values()]);
+    } finally {
+      setLoadingMenu(false);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -122,7 +198,53 @@ export default function NotificationBroadcast() {
   useEffect(() => {
     loadHistory();
     loadZones();
+    loadRestaurants();
   }, []);
+
+  const handleRestaurantSelect = (restaurantId) => {
+    const restaurant = restaurants.find((r) => String(r._id || r.id) === String(restaurantId));
+    if (restaurant) {
+      const slug = restaurant.slug || restaurant.restaurantName?.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+      setForm((prev) => ({
+        ...prev,
+        restaurantId,
+        productId: "",
+        redirectUrl: `/food/user/restaurants/${slug}`,
+      }));
+      loadMenuForRestaurant(restaurantId);
+    } else {
+      setMenuItems([]);
+      setForm((prev) => ({
+        ...prev,
+        restaurantId: "",
+        productId: "",
+        redirectUrl: "",
+      }));
+    }
+  };
+
+  const handleProductSelect = (itemId) => {
+    const item = menuItems.find((i) => String(i._id || i.id) === String(itemId));
+    const restaurant = restaurants.find((r) => String(r._id || r.id) === String(form.restaurantId));
+    if (!restaurant) return;
+
+    const slug = restaurant.slug || restaurant.restaurantName?.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+    const idToUse = item?._id || item?.id || itemId;
+
+    if (itemId) {
+      setForm((prev) => ({
+        ...prev,
+        productId: itemId,
+        redirectUrl: `/food/user/restaurants/${slug}?item=${idToUse}`,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        productId: "",
+        redirectUrl: `/food/user/restaurants/${slug}`,
+      }));
+    }
+  };
 
   useEffect(() => {
     if (form.targetType !== "CUSTOM") return;
@@ -174,6 +296,9 @@ export default function NotificationBroadcast() {
         message: form.message.trim(),
         targetType: form.targetType,
         zoneId: form.zoneId || undefined,
+        redirectUrl: form.redirectUrl || undefined,
+        restaurantId: form.restaurantId || undefined,
+        productId: form.productId || undefined,
         targetIds:
           form.targetType === "CUSTOM"
             ? selectedRecipients.map((item) => item.ownerId)
@@ -188,7 +313,8 @@ export default function NotificationBroadcast() {
               }))
             : [],
       });
-      setForm({ title: "", message: "", targetType: "ALL", zoneId: "" });
+      setForm({ title: "", message: "", targetType: "ALL", zoneId: "", restaurantId: "", productId: "", redirectUrl: "" });
+      setMenuItems([]);
       setSelectedRecipients([]);
       setSearch("");
       window.dispatchEvent(new Event("adminBroadcastUpdated"));
@@ -264,6 +390,81 @@ export default function NotificationBroadcast() {
                 ))}
               </select>
             </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Link to Restaurant (Optional)</span>
+              <select
+                value={form.restaurantId}
+                onChange={(e) => handleRestaurantSelect(e.target.value)}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">-- No Direct Link --</option>
+                {restaurants.map((r) => (
+                  <option key={r._id || r.id} value={r._id || r.id}>
+                    {r.restaurantName || r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {form.restaurantId && (
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">
+                  Direct Link to Specific Product / Dish (Optional)
+                </span>
+                <select
+                  value={form.productId}
+                  onChange={(e) => handleProductSelect(e.target.value)}
+                  disabled={loadingMenu}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+                >
+                  <option value="">
+                    {loadingMenu ? "Loading menu items..." : "-- Land on Restaurant Page (Whole Menu) --"}
+                  </option>
+                  {menuItems.map((item) => (
+                    <option key={item._id || item.id} value={item._id || item.id}>
+                      {item.name || item.title} {item.price ? `(₹${item.price})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {form.productId && (
+                  <div className="mt-3 p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-600 text-xs">
+                      {menuItems.find(i => String(i._id || i.id) === String(form.productId))?.image ? (
+                        <img 
+                          src={menuItems.find(i => String(i._id || i.id) === String(form.productId))?.image?.url || menuItems.find(i => String(i._id || i.id) === String(form.productId))?.image} 
+                          alt="Product" 
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : "DISH"}
+                    </div>
+                    <div className="flex-1 min-w-0 text-xs">
+                      <p className="font-bold text-slate-900 truncate">
+                        {menuItems.find(i => String(i._id || i.id) === String(form.productId))?.name || "Selected Product"}
+                      </p>
+                      <p className="text-slate-500 truncate">
+                        {restaurants.find(r => String(r._id || r.id) === String(form.restaurantId))?.restaurantName || restaurants.find(r => String(r._id || r.id) === String(form.restaurantId))?.name} • ₹{menuItems.find(i => String(i._id || i.id) === String(form.productId))?.price || 0}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </label>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="block">
+                <span className="text-xs font-medium text-slate-500">Generated Target Route</span>
+                <input
+                  type="text"
+                  value={form.redirectUrl}
+                  onChange={(e) => setForm((prev) => ({ ...prev, redirectUrl: e.target.value }))}
+                  placeholder="e.g. /food/user/restaurants/burger-king?item=123"
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 outline-none"
+                />
+              </label>
+            </div>
           </div>
 
           <label className="block">

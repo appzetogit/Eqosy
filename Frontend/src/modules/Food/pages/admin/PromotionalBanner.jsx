@@ -13,10 +13,14 @@ export default function PromotionalBanner() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingBanner, setEditingBanner] = useState(null)
   
+  const [menuItems, setMenuItems] = useState([])
+  const [loadingMenu, setLoadingMenu] = useState(false)
+  
   const [formData, setFormData] = useState({
     title: "",
     ctaLink: "",
     restaurantId: "",
+    productId: "",
     zoneId: "",
     startDate: "",
     endDate: "",
@@ -43,6 +47,107 @@ export default function PromotionalBanner() {
       }
     } catch (error) {
       debugError("Failed to fetch restaurants:", error)
+    }
+  }, [])
+
+  const fetchMenuForRestaurant = useCallback(async (restaurantId) => {
+    if (!restaurantId) {
+      setMenuItems([])
+      return
+    }
+    try {
+      setLoadingMenu(true)
+      const itemsMap = new Map()
+
+      // 1. Fetch from Food collection (/food/admin/foods)
+      try {
+        const foodsRes = await api.get('/food/admin/foods', { params: { restaurantId, limit: 1000 } })
+        const rawFoods = foodsRes.data?.data?.foods || foodsRes.data?.foods || foodsRes.data?.items || foodsRes.data?.data || []
+        if (Array.isArray(rawFoods)) {
+          rawFoods.forEach((item) => {
+            const key = String(item._id || item.id || "")
+            if (key) itemsMap.set(key, item)
+          })
+        }
+      } catch (err) {
+        // ignore errors
+      }
+
+      // 2. Fetch from Restaurant Menu (/food/admin/restaurants/:id/menu)
+      try {
+        const res = await api.get(`/food/admin/restaurants/${restaurantId}/menu`)
+        const rawData = res.data?.data || res.data?.menu || res.data || {}
+        const sections = Array.isArray(rawData.sections)
+          ? rawData.sections
+          : Array.isArray(rawData.menuSections)
+          ? rawData.menuSections
+          : Array.isArray(rawData)
+          ? rawData
+          : []
+
+        const extractItems = (itemList) => {
+          if (Array.isArray(itemList)) {
+            itemList.forEach((item) => {
+              const key = String(item._id || item.id || "")
+              if (key && !itemsMap.has(key)) itemsMap.set(key, item)
+            })
+          }
+        }
+
+        if (sections.length > 0) {
+          sections.forEach((sec) => {
+            extractItems(sec.items)
+            if (Array.isArray(sec.subsections)) {
+              sec.subsections.forEach((sub) => extractItems(sub.items))
+            }
+          })
+        } else if (Array.isArray(rawData.items)) {
+          extractItems(rawData.items)
+        }
+      } catch (err) {
+        // ignore errors
+      }
+
+      // 3. Fallback to public restaurant menu (/food/restaurants/:id/menu)
+      if (itemsMap.size === 0) {
+        try {
+          const res = await api.get(`/food/restaurants/${restaurantId}/menu`)
+          const rawData = res.data?.data || res.data || {}
+          const sections = Array.isArray(rawData.sections)
+            ? rawData.sections
+            : Array.isArray(rawData.menuSections)
+            ? rawData.menuSections
+            : Array.isArray(rawData)
+            ? rawData
+            : []
+
+          const extractItems = (itemList) => {
+            if (Array.isArray(itemList)) {
+              itemList.forEach((item) => {
+                const key = String(item._id || item.id || "")
+                if (key && !itemsMap.has(key)) itemsMap.set(key, item)
+              })
+            }
+          }
+
+          if (sections.length > 0) {
+            sections.forEach((sec) => {
+              extractItems(sec.items)
+              if (Array.isArray(sec.subsections)) {
+                sec.subsections.forEach((sub) => extractItems(sub.items))
+              }
+            })
+          } else if (Array.isArray(rawData.items)) {
+            extractItems(rawData.items)
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+
+      setMenuItems([...itemsMap.values()])
+    } finally {
+      setLoadingMenu(false)
     }
   }, [])
 
@@ -95,6 +200,9 @@ export default function PromotionalBanner() {
       if (formData.file) data.append("file", formData.file)
       data.append("title", formData.title)
       data.append("ctaLink", formData.ctaLink)
+      if (formData.restaurantId) data.append("restaurantId", formData.restaurantId)
+      if (formData.productId) data.append("productId", formData.productId)
+      if (formData.ctaLink) data.append("deepLink", formData.ctaLink)
       if (formData.zoneId) data.append("zoneId", formData.zoneId)
       if (formData.startDate) data.append("startDate", formData.startDate)
       if (formData.endDate) data.append("endDate", formData.endDate)
@@ -104,6 +212,9 @@ export default function PromotionalBanner() {
         res = await api.patch(`/food/hero-banners/home-promotion/${editingBanner._id}`, {
           title: formData.title,
           ctaLink: formData.ctaLink,
+          deepLink: formData.ctaLink || null,
+          restaurantId: formData.restaurantId || null,
+          productId: formData.productId || null,
           zoneId: formData.zoneId || null,
           startDate: formData.startDate || null,
           endDate: formData.endDate || null
@@ -150,10 +261,12 @@ export default function PromotionalBanner() {
   }
 
   const resetForm = () => {
+    setMenuItems([])
     setFormData({
       title: "",
       ctaLink: "",
       restaurantId: "",
+      productId: "",
       zoneId: "",
       startDate: "",
       endDate: "",
@@ -167,16 +280,27 @@ export default function PromotionalBanner() {
     
     // Try to find if ctaLink matches a restaurant route
     let matchedRestaurantId = "";
-    if (banner.ctaLink?.startsWith("/restaurant/")) {
-      const slug = banner.ctaLink.replace("/restaurant/", "");
-      const found = restaurants.find(r => r.slug === slug);
-      if (found) matchedRestaurantId = found._id;
+    let matchedProductId = "";
+    if (banner.ctaLink?.includes("/restaurants/")) {
+      const parts = banner.ctaLink.split("/restaurants/");
+      const slugAndQuery = parts[1] || "";
+      const [slug, queryString] = slugAndQuery.split("?");
+      const found = restaurants.find(r => r.slug === slug || r._id === slug);
+      if (found) {
+        matchedRestaurantId = found._id;
+        fetchMenuForRestaurant(found._id);
+      }
+      if (queryString) {
+        const search = new URLSearchParams(queryString);
+        matchedProductId = search.get("item") || search.get("dish") || search.get("itemId") || "";
+      }
     }
 
     setFormData({
       title: banner.title || "",
       ctaLink: banner.ctaLink || "",
       restaurantId: matchedRestaurantId,
+      productId: matchedProductId,
       zoneId: banner.zoneId?._id || banner.zoneId || "",
       startDate: banner.startDate ? new Date(banner.startDate).toISOString().split('T')[0] : "",
       endDate: banner.endDate ? new Date(banner.endDate).toISOString().split('T')[0] : "",
@@ -190,7 +314,6 @@ export default function PromotionalBanner() {
     const restaurant = restaurants.find(r => r._id === id);
     
     if (restaurant) {
-      // PRO LOGIC: Use existing slug, or generate one from name if missing
       const slug = restaurant.slug || 
                    restaurant.restaurantName
                      .toLowerCase()
@@ -202,10 +325,36 @@ export default function PromotionalBanner() {
       setFormData(prev => ({
         ...prev, 
         restaurantId: id,
+        productId: "",
         ctaLink: `/food/user/restaurants/${slug}`
       }))
+      fetchMenuForRestaurant(id)
     } else {
-      setFormData(prev => ({...prev, restaurantId: ""}))
+      setMenuItems([])
+      setFormData(prev => ({...prev, restaurantId: "", productId: ""}))
+    }
+  }
+
+  const handleProductChange = (itemId) => {
+    const item = menuItems.find(i => String(i._id || i.id) === String(itemId));
+    const restaurant = restaurants.find(r => r._id === formData.restaurantId);
+    if (!restaurant) return;
+
+    const slug = restaurant.slug || restaurant.restaurantName.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+    const idToUse = item?._id || item?.id || itemId;
+
+    if (itemId) {
+      setFormData(prev => ({
+        ...prev,
+        productId: itemId,
+        ctaLink: `/food/user/restaurants/${slug}?item=${idToUse}`
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        productId: "",
+        ctaLink: `/food/user/restaurants/${slug}`
+      }))
     }
   }
 
@@ -310,15 +459,15 @@ export default function PromotionalBanner() {
 
         {showAddModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
                 <h3 className="text-xl font-bold text-slate-900">{editingBanner ? 'Edit Banner' : 'New Promotional Banner'}</h3>
                 <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-6">
+              <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <label className="block text-sm font-semibold text-slate-700">Banner Image</label>
@@ -380,13 +529,57 @@ export default function PromotionalBanner() {
                           ))}
                       </select>
                     </div>
+                    {formData.restaurantId && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                          Direct Link to Specific Product / Dish (Optional)
+                        </label>
+                        <select
+                          value={formData.productId}
+                          onChange={(e) => handleProductChange(e.target.value)}
+                          disabled={loadingMenu}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm appearance-none disabled:opacity-50"
+                        >
+                          <option value="">
+                            {loadingMenu ? "Loading restaurant dishes..." : "-- Land on Restaurant Page (Whole Menu) --"}
+                          </option>
+                          {menuItems.map((item) => (
+                            <option key={item._id || item.id} value={item._id || item.id}>
+                              {item.name || item.title} {item.price ? `(₹${item.price})` : ''}
+                            </option>
+                          ))}
+                        </select>
+
+                        {formData.productId && (
+                          <div className="mt-3 p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-600 text-xs">
+                              {menuItems.find(i => String(i._id || i.id) === String(formData.productId))?.image ? (
+                                <img 
+                                  src={menuItems.find(i => String(i._id || i.id) === String(formData.productId))?.image?.url || menuItems.find(i => String(i._id || i.id) === String(formData.productId))?.image} 
+                                  alt="Product" 
+                                  className="w-full h-full object-cover rounded-lg"
+                                />
+                              ) : "DISH"}
+                            </div>
+                            <div className="flex-1 min-w-0 text-xs">
+                              <p className="font-bold text-slate-900 truncate">
+                                {menuItems.find(i => String(i._id || i.id) === String(formData.productId))?.name || "Selected Product"}
+                              </p>
+                              <p className="text-slate-500 truncate">
+                                {restaurants.find(r => r._id === formData.restaurantId)?.restaurantName} • ₹{menuItems.find(i => String(i._id || i.id) === String(formData.productId))?.price || 0}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">CTA Link / Slug</label>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">CTA Link / Target URL</label>
                       <input 
                         type="text" 
                         value={formData.ctaLink}
-                        onChange={e => setFormData(p => ({...p, ctaLink: e.target.value, restaurantId: ""}))}
-                        placeholder="e.g. burgers-king or /food/offers"
+                        onChange={e => setFormData(p => ({...p, ctaLink: e.target.value, restaurantId: "", productId: ""}))}
+                        placeholder="e.g. /food/user/restaurants/burgers-king?item=123"
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
                       />
                     </div>

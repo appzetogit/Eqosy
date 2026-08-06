@@ -56,6 +56,22 @@ const notificationBroadcastSchema = new mongoose.Schema(
             default: '',
             trim: true
         },
+        redirectUrl: {
+            type: String,
+            default: '',
+            trim: true
+        },
+        restaurantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'FoodRestaurant',
+            default: null,
+            index: true
+        },
+        productId: {
+            type: String,
+            default: '',
+            trim: true
+        },
         zoneId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'FoodZone',

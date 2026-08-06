@@ -319,7 +319,7 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
         throw new Error(`Unsupported owner type: ${ownerType}`);
     }
 
-    const doc = await model.findById(normalizedOwnerId);
+    const doc = await model.findById(normalizedOwnerId).select('fcmTokens fcmTokenMobile fcmTokenWeb').lean();
     if (!doc) {
         throw new AuthError('Session is stale or invalid for this account. Please login again.');
     }
@@ -334,9 +334,9 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
     );
 
     const tokens = normalizeTokenList([...existingTokens, normalizedToken]);
-    writeTokenFieldFromList(doc, field, tokens);
+    const updateValue = Array.isArray(doc[field]) ? tokens : (tokens[tokens.length - 1] || '');
 
-    await doc.save();
+    await model.updateOne({ _id: normalizedOwnerId }, { $set: { [field]: updateValue } });
     logger.info(
         `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${tokens.length} tokenPresent=${tokens.includes(normalizedToken)}`
     );
@@ -352,27 +352,35 @@ export const removeFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
     if (!model) {
         throw new Error(`Unsupported owner type: ${ownerType}`);
     }
-    const doc = await model.findById(ownerId);
+    const doc = await model.findById(ownerId).select('fcmTokens fcmTokenMobile fcmTokenWeb').lean();
     if (!doc) {
         return { success: false };
     }
 
+    const updates = {};
     if (platform) {
         const field = getTokenFieldForOwnerPlatform(ownerType, platform);
-        const existing = readTokenFieldAsList(doc, field);
-        writeTokenFieldFromList(doc, field, existing.filter((t) => t !== normalizedToken));
+        if (field) {
+            const existing = readTokenFieldAsList(doc, field);
+            const remaining = existing.filter((t) => t !== normalizedToken);
+            updates[field] = Array.isArray(doc[field]) ? remaining : (remaining[remaining.length - 1] || '');
+        }
     } else {
         const webField = getTokenFieldForOwnerPlatform(ownerType, 'web');
         const mobileField = getTokenFieldForOwnerPlatform(ownerType, 'mobile');
-        writeTokenFieldFromList(doc, webField, readTokenFieldAsList(doc, webField).filter((t) => t !== normalizedToken));
-        writeTokenFieldFromList(
-            doc,
-            mobileField,
-            readTokenFieldAsList(doc, mobileField).filter((t) => t !== normalizedToken)
-        );
+        if (webField) {
+            const existingWeb = readTokenFieldAsList(doc, webField).filter((t) => t !== normalizedToken);
+            updates[webField] = Array.isArray(doc[webField]) ? existingWeb : (existingWeb[existingWeb.length - 1] || '');
+        }
+        if (mobileField) {
+            const existingMobile = readTokenFieldAsList(doc, mobileField).filter((t) => t !== normalizedToken);
+            updates[mobileField] = Array.isArray(doc[mobileField]) ? existingMobile : (existingMobile[existingMobile.length - 1] || '');
+        }
     }
 
-    await doc.save();
+    if (Object.keys(updates).length > 0) {
+        await model.updateOne({ _id: ownerId }, { $set: updates });
+    }
     return { success: true };
 };
 
@@ -462,20 +470,20 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
             .filter(Boolean);
         if (invalidTokens.length > 0) {
             const model = getOwnerModel(ownerType);
-            const doc = model ? await model.findById(ownerId) : null;
+            const doc = model ? await model.findById(ownerId).select('fcmTokens fcmTokenMobile fcmTokenWeb').lean() : null;
             if (doc) {
                 const fieldNames = platform
                     ? [getTokenFieldForOwnerPlatform(ownerType, platform)]
                     : [getTokenFieldForOwnerPlatform(ownerType, 'web'), getTokenFieldForOwnerPlatform(ownerType, 'mobile')];
+                const updates = {};
                 for (const field of fieldNames) {
                     if (!field) continue;
-                    writeTokenFieldFromList(
-                        doc,
-                        field,
-                        readTokenFieldAsList(doc, field).filter((t) => !invalidTokens.includes(t))
-                    );
+                    const remaining = readTokenFieldAsList(doc, field).filter((t) => !invalidTokens.includes(t));
+                    updates[field] = Array.isArray(doc[field]) ? remaining : (remaining[remaining.length - 1] || '');
                 }
-                await doc.save();
+                if (Object.keys(updates).length > 0) {
+                    await model.updateOne({ _id: ownerId }, { $set: updates });
+                }
             }
         }
         logger.info(

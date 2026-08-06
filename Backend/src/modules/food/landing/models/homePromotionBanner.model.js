@@ -16,6 +16,21 @@ const homePromotionBannerSchema = new mongoose.Schema(
         ctaLink: {
             type: String
         },
+        deepLink: {
+            type: String,
+            default: null
+        },
+        restaurantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'FoodRestaurant',
+            default: null,
+            index: true
+        },
+        productId: {
+            type: String,
+            default: null,
+            index: true
+        },
         startDate: {
             type: Date,
             default: null

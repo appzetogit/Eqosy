@@ -555,12 +555,21 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
                   if (!mapRef.current || draggingRef.current) return;
                   commitMapCenter();
                 }}
+                onClick={(e) => {
+                  if (e?.latLng) {
+                    const next = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                    isAddressEditingRef.current = false;
+                    setCenter(next);
+                    if (mapRef.current) mapRef.current.panTo(next);
+                  }
+                }}
                 options={{
                   disableDefaultUI: true,
                   zoomControl: false,
                   clickableIcons: false,
                   streetViewControl: false,
                   fullscreenControl: false,
+                  gestureHandling: 'greedy',
                 }}
               />
             ) : (
@@ -568,6 +577,42 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
                 {loadError ? 'Map could not be loaded right now.' : 'Loading map...'}
               </div>
             )}
+
+            {/* Map Controls: Zoom In, Zoom Out, Use Current Location */}
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2.5 z-30">
+              <button
+                type="button"
+                onClick={() => {
+                  if (mapRef.current) {
+                    mapRef.current.setZoom((mapRef.current.getZoom() || 16) + 1);
+                  }
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white text-lg font-black text-slate-800 shadow-xl active:scale-90 transition-transform"
+                aria-label="Zoom in map"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mapRef.current) {
+                    mapRef.current.setZoom((mapRef.current.getZoom() || 16) - 1);
+                  }
+                }}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white text-lg font-black text-slate-800 shadow-xl active:scale-90 transition-transform"
+                aria-label="Zoom out map"
+              >
+                -
+              </button>
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-white text-slate-800 shadow-xl active:scale-90 transition-transform"
+                aria-label="My location"
+              >
+                {isLocating ? <LoaderCircle size={20} className="animate-spin text-blue-500" /> : <Navigation size={20} className="text-slate-900" />}
+              </button>
+            </div>
 
             <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-4">
               <div className="pointer-events-auto rounded-[22px] border border-white bg-white/92 px-4 py-4 shadow-xl backdrop-blur-md">
@@ -1790,26 +1835,34 @@ const SenderReceiverDetails = () => {
                 <div className="space-y-2">
                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Pickup Search Results</p>
                   <div className="space-y-2">
-                    {googlePickupSuggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          applySuggestion('pickup', item);
-                          setActiveSearchField(null);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-emerald-200 transition-all"
-                      >
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <Navigation size={15} className="mt-0.5 shrink-0 text-emerald-500" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-black text-slate-800">{item.label}</p>
-                            {item.secondaryText ? (
-                              <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{item.secondaryText}</p>
-                            ) : null}
+                    {googlePickupSuggestions.map((item) => {
+                      const distKm = item.distanceKm || getItemDistanceKm(item, pickupCoords);
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            applySuggestion('pickup', item);
+                            setActiveSearchField(null);
+                          }}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-emerald-200 transition-all"
+                        >
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <Navigation size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-black text-slate-800">{item.label}</p>
+                              {item.secondaryText ? (
+                                <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{item.secondaryText}</p>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
+                          {distKm ? (
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-black shrink-0">
+                              {distKm} km
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1817,21 +1870,30 @@ const SenderReceiverDetails = () => {
                 <div className="space-y-2">
                   <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Popular Pickup Locations</p>
                   <div className="space-y-2">
-                    {pickupSuggestions.map((item) => (
-                      <button
-                        key={item}
-                        onClick={() => {
-                          applySuggestion('pickup', item);
-                          setActiveSearchField(null);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-emerald-200 transition-all"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <MapPin size={15} className="shrink-0 text-emerald-500" />
-                          <span className="truncate text-[13px] font-bold text-slate-700">{item}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {pickupSuggestions.map((item) => {
+                      const coords = LOCATION_COORDS[item];
+                      const distKm = coords && pickupCoords ? calculateDistanceKm(pickupCoords, coords).toFixed(1) : null;
+                      return (
+                        <button
+                          key={item}
+                          onClick={() => {
+                            applySuggestion('pickup', item);
+                            setActiveSearchField(null);
+                          }}
+                          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left shadow-xs hover:border-emerald-200 transition-all"
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <MapPin size={15} className="shrink-0 text-emerald-500" />
+                            <span className="truncate text-[13px] font-bold text-slate-700">{item}</span>
+                          </div>
+                          {distKm ? (
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-black shrink-0">
+                              {distKm} km
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -338,6 +338,14 @@ const IntercityHome = () => {
                   onLoad={(map) => (mapInstanceRef.current = map)}
                   onIdle={handleMapIdle}
                   onDragStart={() => setIsDragging(true)}
+                  onClick={(e) => {
+                    if (e?.latLng) {
+                      const next = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+                      setMapCenter(next);
+                      reverseGeocode(next);
+                      if (mapInstanceRef.current) mapInstanceRef.current.panTo(next);
+                    }
+                  }}
                   options={{
                     disableDefaultUI: true,
                     clickableIcons: false,
@@ -368,12 +376,40 @@ const IntercityHome = () => {
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-2 bg-black/20 rounded-full blur-md" />
               </div>
 
-              <button
-                onClick={handleUseCurrentLocation}
-                className="absolute bottom-10 right-6 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 active:scale-90 transition-all z-20"
-              >
-                {isLocating ? <LoaderCircle size={24} className="animate-spin text-blue-500" /> : <Navigation size={24} className="text-slate-900" />}
-              </button>
+              {/* Map Controls: Zoom In, Zoom Out, Use Current Location */}
+              <div className="absolute bottom-10 right-6 flex flex-col gap-2.5 z-20">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mapInstanceRef.current) {
+                      mapInstanceRef.current.setZoom((mapInstanceRef.current.getZoom() || 15) + 1);
+                    }
+                  }}
+                  className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 text-lg font-black text-slate-900 active:scale-90 transition-all"
+                  aria-label="Zoom in map"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mapInstanceRef.current) {
+                      mapInstanceRef.current.setZoom((mapInstanceRef.current.getZoom() || 15) - 1);
+                    }
+                  }}
+                  className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 text-lg font-black text-slate-900 active:scale-90 transition-all"
+                  aria-label="Zoom out map"
+                >
+                  -
+                </button>
+                <button
+                  onClick={handleUseCurrentLocation}
+                  className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 active:scale-90 transition-all"
+                  aria-label="My location"
+                >
+                  {isLocating ? <LoaderCircle size={20} className="animate-spin text-blue-500" /> : <Navigation size={20} className="text-slate-900" />}
+                </button>
+              </div>
             </div>
 
             <div className="px-6 pt-6 pb-12 bg-white border-t border-slate-50">

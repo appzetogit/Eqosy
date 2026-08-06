@@ -58,6 +58,9 @@ export const createHomePromotionBanner = async (file, meta = {}) => {
             publicId: uploadResult.public_id,
             title: meta.title,
             ctaLink: meta.ctaLink,
+            deepLink: meta.deepLink || meta.ctaLink || null,
+            restaurantId: meta.restaurantId || null,
+            productId: meta.productId || null,
             zoneId: meta.zoneId || null,
             startDate: (meta.startDate && meta.startDate !== "") ? new Date(meta.startDate) : null,
             endDate: (meta.endDate && meta.endDate !== "") ? new Date(meta.endDate) : null,
@@ -73,6 +76,9 @@ export const updateHomePromotionBanner = async (id, data) => {
     const updateData = { ...data };
     if (data.startDate !== undefined) updateData.startDate = (data.startDate && data.startDate !== "") ? new Date(data.startDate) : null;
     if (data.endDate !== undefined) updateData.endDate = (data.endDate && data.endDate !== "") ? new Date(data.endDate) : null;
+    if (data.restaurantId !== undefined) updateData.restaurantId = data.restaurantId || null;
+    if (data.productId !== undefined) updateData.productId = data.productId || null;
+    if (data.deepLink !== undefined) updateData.deepLink = data.deepLink || data.ctaLink || null;
 
     return HomePromotionBanner.findByIdAndUpdate(id, updateData, { new: true }).lean();
 };

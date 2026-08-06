@@ -78,7 +78,7 @@ function RestaurantDetailsContent() {
   const goBack = useAppBackNavigation()
   const [searchParams] = useSearchParams()
   const showOnlyUnder250 = searchParams.get('under250') === 'true'
-  const targetDishId = useMemo(() => String(searchParams.get('dish') || '').trim(), [searchParams])
+  const targetDishId = useMemo(() => String(searchParams.get('dish') || searchParams.get('item') || searchParams.get('itemId') || '').trim(), [searchParams])
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart, triggerEqosyCartLoader } = useCart()
   const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
@@ -1930,7 +1930,10 @@ function RestaurantDetailsContent() {
       })
     })
 
-    if (!matchedItem || matchedSectionIndex === null) return
+    if (!matchedItem || matchedSectionIndex === null) {
+      toast.error("The selected product is currently unavailable or has been removed.")
+      return
+    }
 
     const highlightId = getMenuItemKey(matchedItem)
     if (!highlightId) return
@@ -1941,6 +1944,10 @@ function RestaurantDetailsContent() {
       return next
     })
     setHighlightedDishId(highlightId)
+    setSelectedItem(matchedItem)
+    const defaultVariant = getDefaultFoodVariant(matchedItem)
+    setSelectedVariantId(defaultVariant?.id || "")
+    setShowItemDetail(true)
 
     const scrollTimer = window.setTimeout(() => {
       const targetNode = dishCardRefs.current[`sec-${matchedSectionIndex}-${highlightId}`]

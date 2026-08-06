@@ -65,13 +65,31 @@ const deliveryPartnerSchema = new mongoose.Schema(
             type: [String],
             default: []
         },
+        zoneId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'TaxiZone',
+            default: null
+        },
+        zoneName: {
+            type: String,
+            default: ''
+        },
         aadharPhoto: {
+            type: String
+        },
+        aadharPhotoBack: {
             type: String
         },
         panPhoto: {
             type: String
         },
+        panPhotoBack: {
+            type: String
+        },
         drivingLicensePhoto: {
+            type: String
+        },
+        drivingLicensePhotoBack: {
             type: String
         },
         status: {

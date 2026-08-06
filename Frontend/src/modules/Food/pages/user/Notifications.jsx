@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Bell, CheckCircle2, Clock, Tag, Gift, AlertCircle, Trash2, X } from "lucide-react"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Button } from "@food/components/ui/button"
@@ -42,6 +42,7 @@ const ICON_MAP = {
 }
 
 export default function Notifications() {
+  const navigate = useNavigate()
   const [notificationsList, setNotificationsList] = useState(() => {
     const saved = localStorage.getItem('food_user_notifications')
     return saved ? JSON.parse(saved) : DEFAULT_NOTIFICATIONS
@@ -138,14 +139,24 @@ export default function Notifications() {
 
   const unreadCount = notificationsList.filter(n => !n.read).length + broadcastUnreadCount
 
-  const handleMarkAsRead = (id, source = "local") => {
+  const handleMarkAsRead = (notification) => {
+    const { id, source, redirectUrl, ctaLink, targetUrl, url } = notification || {}
     if (source === "broadcast") {
       markBroadcastAsRead(id)
-      return
+    } else {
+      setNotificationsList(prev => 
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      )
     }
-    setNotificationsList(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    )
+
+    const navTarget = redirectUrl || ctaLink || targetUrl || url
+    if (navTarget) {
+      if (navTarget.startsWith("http://") || navTarget.startsWith("https://")) {
+        window.location.href = navTarget
+      } else {
+        navigate(navTarget)
+      }
+    }
   }
 
   const handleClearAll = () => {
@@ -200,7 +211,7 @@ export default function Notifications() {
             return (
               <Card
                 key={notification.id}
-                onClick={() => handleMarkAsRead(notification.id, notification.source)}
+                onClick={() => handleMarkAsRead(notification)}
                 className={`relative cursor-pointer transition-all duration-200 py-1 hover:shadow-md ${!notification.read ? "bg-red-50/50 dark:bg-red-900/20 border-red-200 dark:border-red-800" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                   }`}
               >

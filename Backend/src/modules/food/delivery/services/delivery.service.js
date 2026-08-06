@@ -10,7 +10,7 @@ import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service
 
 export const registerDeliveryPartner = async (payload, files) => {
     const { 
-        name, phone, email, countryCode, address, city, state, 
+        name, phone, email, countryCode, address, city, state, zoneId, zoneName,
         vehicleType, vehicleName, vehicleNumber, drivingLicenseNumber, panNumber, aadharNumber,
         fcmToken, platform 
     } = payload;
@@ -33,12 +33,24 @@ export const registerDeliveryPartner = async (payload, files) => {
     if (files?.aadharPhoto?.[0]) {
         images.aadharPhoto = await uploadImageBuffer(files.aadharPhoto[0].buffer, 'food/delivery/aadhar');
     }
+    if (files?.aadharPhotoBack?.[0]) {
+        images.aadharPhotoBack = await uploadImageBuffer(files.aadharPhotoBack[0].buffer, 'food/delivery/aadhar');
+    }
     if (files?.panPhoto?.[0]) {
         images.panPhoto = await uploadImageBuffer(files.panPhoto[0].buffer, 'food/delivery/pan');
+    }
+    if (files?.panPhotoBack?.[0]) {
+        images.panPhotoBack = await uploadImageBuffer(files.panPhotoBack[0].buffer, 'food/delivery/pan');
     }
     if (files?.drivingLicensePhoto?.[0]) {
         images.drivingLicensePhoto = await uploadImageBuffer(
             files.drivingLicensePhoto[0].buffer,
+            'food/delivery/license'
+        );
+    }
+    if (files?.drivingLicensePhotoBack?.[0]) {
+        images.drivingLicensePhotoBack = await uploadImageBuffer(
+            files.drivingLicensePhotoBack[0].buffer,
             'food/delivery/license'
         );
     }
@@ -51,6 +63,8 @@ export const registerDeliveryPartner = async (payload, files) => {
         address,
         city,
         state,
+        zoneId: zoneId && mongoose.Types.ObjectId.isValid(zoneId) ? zoneId : null,
+        zoneName: zoneName ? String(zoneName).trim() : '',
         vehicleType,
         vehicleName,
         vehicleNumber,

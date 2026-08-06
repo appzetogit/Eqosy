@@ -30,18 +30,36 @@ const StepPersonal = () => {
             : 'driver');
     const isOwner = role === 'owner';
 
+    const [zones, setZones] = useState([]);
     const [formData, setFormData] = useState({
         fullName: session.fullName || '',
         email: session.email || '',
         gender: session.gender || '',
+        serviceLocationId: session.serviceLocationId || session.service_location_id || '',
+        zoneName: session.zoneName || '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
+        const fetchZones = async () => {
+            try {
+                const res = await fetch('/api/v1/taxi/user/service-locations');
+                const data = await res.json();
+                const list = data?.data?.results || data?.results || [];
+                setZones(list);
+            } catch (err) {
+                // Ignore fetch error
+            }
+        };
+        fetchZones();
+    }, []);
+
+    useEffect(() => {
         saveDriverRegistrationSession({
             ...session,
             ...formData,
+            service_location_id: formData.serviceLocationId,
         });
     }, [formData]);
 
@@ -186,6 +204,30 @@ const StepPersonal = () => {
                                     />
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70 px-2">Select Operating Zone / City</label>
+                            <select
+                                value={formData.serviceLocationId}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    const selected = zones.find((z) => String(z._id || z.id) === String(val));
+                                    setFormData((p) => ({
+                                        ...p,
+                                        serviceLocationId: val,
+                                        zoneName: selected?.name || selected?.service_location_name || '',
+                                    }));
+                                }}
+                                className="w-full rounded-2xl border-2 border-slate-50 bg-slate-50 p-4 text-[13px] font-black text-slate-900 outline-none focus:border-slate-900/10 focus:bg-white"
+                            >
+                                <option value="">-- Select Existing Zone (Optional) --</option>
+                                {zones.map((z) => (
+                                    <option key={z._id || z.id} value={z._id || z.id}>
+                                        {z.name || z.service_location_name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="space-y-3 pt-2">

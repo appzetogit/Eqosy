@@ -12,8 +12,11 @@ const debugError = (...args) => {}
 const createEmptyUploadedDocs = () => ({
   profilePhoto: null,
   aadharPhoto: null,
+  aadharPhotoBack: null,
   panPhoto: null,
-  drivingLicensePhoto: null
+  panPhotoBack: null,
+  drivingLicensePhoto: null,
+  drivingLicensePhotoBack: null
 })
 
 const sanitizeUploadedDocValue = (value) => {
@@ -37,8 +40,11 @@ const sanitizeUploadedDocValue = (value) => {
 const sanitizeUploadedDocs = (docs) => ({
   profilePhoto: sanitizeUploadedDocValue(docs?.profilePhoto),
   aadharPhoto: sanitizeUploadedDocValue(docs?.aadharPhoto),
+  aadharPhotoBack: sanitizeUploadedDocValue(docs?.aadharPhotoBack),
   panPhoto: sanitizeUploadedDocValue(docs?.panPhoto),
-  drivingLicensePhoto: sanitizeUploadedDocValue(docs?.drivingLicensePhoto)
+  panPhotoBack: sanitizeUploadedDocValue(docs?.panPhotoBack),
+  drivingLicensePhoto: sanitizeUploadedDocValue(docs?.drivingLicensePhoto),
+  drivingLicensePhotoBack: sanitizeUploadedDocValue(docs?.drivingLicensePhotoBack)
 })
 
 const getFriendlyRegistrationError = (error) => {
@@ -81,14 +87,20 @@ export default function SignupStep2() {
   const fileInputRefs = useRef({
     profilePhoto: null,
     aadharPhoto: null,
+    aadharPhotoBack: null,
     panPhoto: null,
-    drivingLicensePhoto: null
+    panPhotoBack: null,
+    drivingLicensePhoto: null,
+    drivingLicensePhotoBack: null
   })
   const [documents, setDocuments] = useState({
     profilePhoto: null,
     aadharPhoto: null,
+    aadharPhotoBack: null,
     panPhoto: null,
-    drivingLicensePhoto: null
+    panPhotoBack: null,
+    drivingLicensePhoto: null,
+    drivingLicensePhotoBack: null
   })
   const [uploadedDocs, setUploadedDocs] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDocs")
@@ -218,7 +230,7 @@ export default function SignupStep2() {
 
     const hasDrivingLicense = isBicycle || documents.drivingLicensePhoto;
     if (!documents.profilePhoto || !documents.aadharPhoto || !documents.panPhoto || !hasDrivingLicense) {
-      toast.error("Please upload all required documents")
+      toast.error("Please upload all required front documents")
       return
     }
 
@@ -247,6 +259,8 @@ export default function SignupStep2() {
     if (details.address) formData.append("address", details.address)
     if (details.city) formData.append("city", details.city)
     if (details.state) formData.append("state", details.state)
+    if (details.zoneId) formData.append("zoneId", details.zoneId)
+    if (details.zoneName) formData.append("zoneName", details.zoneName)
     if (details.vehicleType) formData.append("vehicleType", details.vehicleType)
     if (details.vehicleName) formData.append("vehicleName", details.vehicleName)
     if (details.vehicleNumber) formData.append("vehicleNumber", details.vehicleNumber)
@@ -258,9 +272,14 @@ export default function SignupStep2() {
     if (details.aadharNumber) formData.append("aadharNumber", details.aadharNumber)
     formData.append("profilePhoto", documents.profilePhoto)
     formData.append("aadharPhoto", documents.aadharPhoto)
+    if (documents.aadharPhotoBack) formData.append("aadharPhotoBack", documents.aadharPhotoBack)
     formData.append("panPhoto", documents.panPhoto)
+    if (documents.panPhotoBack) formData.append("panPhotoBack", documents.panPhotoBack)
     if (!isBicycle && documents.drivingLicensePhoto) {
       formData.append("drivingLicensePhoto", documents.drivingLicensePhoto)
+    }
+    if (!isBicycle && documents.drivingLicensePhotoBack) {
+      formData.append("drivingLicensePhotoBack", documents.drivingLicensePhotoBack)
     }
 
     // Try to get FCM token before registering
@@ -439,9 +458,26 @@ export default function SignupStep2() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
-          <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
-          <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
-          {!isBicycle && <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />}
+          
+          <div className="space-y-2 pt-2">
+            <h3 className="text-sm font-bold text-gray-800">Aadhar Card Photos</h3>
+            <DocumentUpload docType="aadharPhoto" label="Aadhar Card (Front Side)" required={true} />
+            <DocumentUpload docType="aadharPhotoBack" label="Aadhar Card (Back Side)" required={false} />
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <h3 className="text-sm font-bold text-gray-800">PAN Card Photos</h3>
+            <DocumentUpload docType="panPhoto" label="PAN Card (Front Side)" required={true} />
+            <DocumentUpload docType="panPhotoBack" label="PAN Card (Back Side)" required={false} />
+          </div>
+
+          {!isBicycle && (
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-bold text-gray-800">Driving License Photos</h3>
+              <DocumentUpload docType="drivingLicensePhoto" label="Driving License (Front Side)" required={true} />
+              <DocumentUpload docType="drivingLicensePhotoBack" label="Driving License (Back Side)" required={false} />
+            </div>
+          )}
 
           {/* Submit Button */}
           <button

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api, { publicGetOnce } from "@food/api";
 
 const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
+  const navigate = useNavigate();
   const [banners, setBanners] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -81,11 +83,16 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
             transition={{ duration: 0.5, ease: "easeInOut" }}
             className="w-full h-full"
           >
-            <a 
-              href={banners[currentIndex]?.ctaLink || "#"} 
-              className="block w-full h-full"
+            <div 
+              className="block w-full h-full cursor-pointer"
               onClick={(e) => {
-                if (!banners[currentIndex]?.ctaLink) e.preventDefault();
+                const cta = banners[currentIndex]?.ctaLink;
+                if (!cta) return;
+                if (cta.startsWith("http://") || cta.startsWith("https://")) {
+                  window.location.href = cta;
+                } else {
+                  navigate(cta);
+                }
               }}
             >
               <img 
@@ -93,7 +100,7 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
                 alt={banners[currentIndex]?.title || "Promotion"} 
                 className="w-full h-full object-cover"
               />
-            </a>
+            </div>
           </motion.div>
         </AnimatePresence>
 

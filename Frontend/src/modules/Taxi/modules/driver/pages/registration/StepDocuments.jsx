@@ -8,9 +8,11 @@ import {
     ShieldCheck, 
     AlertCircle,
     ChevronRight,
-    UploadCloud
+    UploadCloud,
+    X,
+    RefreshCw
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   clearDriverRegistrationSession,
@@ -137,6 +139,48 @@ const inferImageMeta = (file, dataUrl) => {
   };
 };
 
+const DEFAULT_DRIVER_DOCUMENT_TEMPLATES = [
+  {
+    id: 'driving_license',
+    name: 'Driving License',
+    account_type: 'both',
+    is_required: true,
+    has_identify_number: true,
+    identify_number_key: 'driving_license_number',
+    has_expiry_date: true,
+    fields: [
+      { key: 'dl_front', label: 'Driving License (Front Side)', required: true },
+      { key: 'dl_back', label: 'Driving License (Back Side)', required: true },
+    ],
+  },
+  {
+    id: 'aadhaar_card',
+    name: 'Aadhaar Card',
+    account_type: 'both',
+    is_required: true,
+    has_identify_number: true,
+    identify_number_key: 'aadhaar_number',
+    has_expiry_date: false,
+    fields: [
+      { key: 'aadhaar_front', label: 'Aadhaar Card (Front Side)', required: true },
+      { key: 'aadhaar_back', label: 'Aadhaar Card (Back Side)', required: true },
+    ],
+  },
+  {
+    id: 'pan_card',
+    name: 'PAN Card',
+    account_type: 'both',
+    is_required: true,
+    has_identify_number: true,
+    identify_number_key: 'pan_number',
+    has_expiry_date: false,
+    fields: [
+      { key: 'pan_front', label: 'PAN Card (Front Side)', required: true },
+      { key: 'pan_back', label: 'PAN Card (Back Side)', required: true },
+    ],
+  },
+];
+
 const StepDocuments = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -165,9 +209,29 @@ const StepDocuments = () => {
       try {
         const response = await getDriverDocumentTemplates(normalizedRole);
         const results = response?.data?.data?.results || response?.data?.results || [];
-        setTemplates(normalizeDriverDocumentTemplates(results));
+        const normalizedRemote = normalizeDriverDocumentTemplates(results);
+
+        const mergedTemplates = [...normalizedRemote];
+        for (const defaultTemplate of DEFAULT_DRIVER_DOCUMENT_TEMPLATES) {
+          const hasMatch = mergedTemplates.some((item) => {
+            const itemId = String(item.id || item.slug || '').toLowerCase();
+            const itemName = String(item.name || '').toLowerCase();
+            return (
+              itemId.includes(defaultTemplate.id) ||
+              itemName.includes(defaultTemplate.name.toLowerCase()) ||
+              (defaultTemplate.id === 'aadhaar_card' && (itemId.includes('adhaar') || itemName.includes('adhaar') || itemId.includes('aadhaar') || itemName.includes('aadhaar'))) ||
+              (defaultTemplate.id === 'pan_card' && (itemId.includes('pan') || itemName.includes('pan'))) ||
+              (defaultTemplate.id === 'driving_license' && (itemId.includes('license') || itemName.includes('license') || itemId.includes('dl')))
+            );
+          });
+          if (!hasMatch) {
+            mergedTemplates.push(defaultTemplate);
+          }
+        }
+
+        setTemplates(mergedTemplates);
       } catch {
-        setTemplates(normalizeDriverDocumentTemplates([]));
+        setTemplates(DEFAULT_DRIVER_DOCUMENT_TEMPLATES);
       } finally {
         setTemplatesLoading(false);
       }
@@ -262,24 +326,37 @@ const StepDocuments = () => {
     });
   };
 
-  const handleFileChange = async (templateId, key, event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const [activeCameraTarget, setActiveCameraTarget] = useState(null);
+  const [facingMode, setFacingMode] = useState('environment');
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+  const fileInputRefs = React.useRef({});
 
-    if (!file) {
-      return;
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
+  };
 
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
+
+  const processDataUrlUpload = async (templateId, key, dataUrl, fileNameOverride = '') => {
     setUploading(key);
     setError('');
 
     try {
-      const dataUrl = await fileToDataUrl(file);
       if (!String(dataUrl || '').startsWith('data:image/')) {
         throw new Error('Please upload an image file');
       }
 
-      const { fileName, mimeType } = inferImageMeta(file, dataUrl);
+      const mimeType = 'image/jpeg';
+      const fileName = fileNameOverride || `capture-${key}-${Date.now()}.jpg`;
 
       setDocs((prev) => ({
         ...prev,
@@ -340,6 +417,113 @@ const StepDocuments = () => {
       }));
     } finally {
       setUploading(null);
+    }
+  };
+
+  const handleFileChange = async (templateId, key, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const { fileName } = inferImageMeta(file, dataUrl);
+      await processDataUrlUpload(templateId, key, dataUrl, fileName);
+    } catch (readErr) {
+      setError(readErr?.message || 'Unable to read selected file');
+    }
+  };
+
+  const openCameraModal = async (templateId, key, label) => {
+    if (uploading) return;
+
+    const fallbackTriggerInput = () => {
+      const targetInput = fileInputRefs.current[`camera-${key}`];
+      if (targetInput) {
+        targetInput.click();
+      }
+    };
+
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        setError('');
+        setCameraLoading(true);
+        stopCameraStream();
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+
+        streamRef.current = stream;
+        setActiveCameraTarget({ templateId, key, label });
+        setCameraLoading(false);
+        return;
+      } catch (camErr) {
+        console.warn('Live WebRTC camera failed, falling back to file capture:', camErr);
+        stopCameraStream();
+        setCameraLoading(false);
+      }
+    }
+
+    fallbackTriggerInput();
+  };
+
+  const capturePhotoFromLiveCamera = async () => {
+    const video = videoRef.current;
+    if (!video || !activeCameraTarget) return;
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      setError('Failed to capture frame from camera');
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+    const { templateId, key } = activeCameraTarget;
+    stopCameraStream();
+    setActiveCameraTarget(null);
+
+    await processDataUrlUpload(templateId, key, dataUrl, `license-${key}-${Date.now()}.jpg`);
+  };
+
+  const toggleCameraFacingMode = async () => {
+    if (!activeCameraTarget) return;
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextFacing);
+
+    try {
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: nextFacing },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Unable to toggle camera facing mode:', e);
     }
   };
 
@@ -570,25 +754,32 @@ const StepDocuments = () => {
                                     onChange={(event) => handleFileChange(template.id, field.key, event)}
                                     />
                                 </label>
-                                <label className={`flex-1 relative flex h-12 items-center justify-center gap-2 text-center rounded-2xl border text-[11px] font-black uppercase tracking-widest transition-all ${
-                                    isUploading
-                                    ? 'cursor-not-allowed border-slate-50 bg-slate-50 text-slate-300'
-                                    : 'cursor-pointer border-slate-900 bg-slate-900 text-white hover:bg-black shadow-lg shadow-slate-900/10 active:scale-[0.98]'
-                                }`}>
+                                <button
+                                    type="button"
+                                    disabled={isUploading || cameraLoading}
+                                    onClick={() => openCameraModal(template.id, field.key, field.label)}
+                                    className={`flex-1 relative flex h-12 items-center justify-center gap-2 text-center rounded-2xl border text-[11px] font-black uppercase tracking-widest transition-all ${
+                                        isUploading || cameraLoading
+                                        ? 'cursor-not-allowed border-slate-50 bg-slate-50 text-slate-300'
+                                        : 'cursor-pointer border-slate-900 bg-slate-900 text-white hover:bg-black shadow-lg shadow-slate-900/10 active:scale-[0.98]'
+                                    }`}
+                                >
                                     <Camera size={16} />
-                                    Camera
+                                    {cameraLoading ? 'Opening...' : 'Camera'}
                                     <input
-                                    type="file"
-                                    accept="image/*"
-                                    disabled={isUploading}
-                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                    aria-label={`Capture ${field.label} from camera`}
-                                    onClick={(event) => {
-                                      event.target.value = '';
-                                    }}
-                                    onChange={(event) => handleFileChange(template.id, field.key, event)}
+                                        ref={(el) => (fileInputRefs.current[`camera-${field.key}`] = el)}
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        disabled={isUploading}
+                                        className="sr-only pointer-events-none"
+                                        aria-label={`Capture ${field.label} from camera`}
+                                        onClick={(event) => {
+                                          event.target.value = '';
+                                        }}
+                                        onChange={(event) => handleFileChange(template.id, field.key, event)}
                                     />
-                                </label>
+                                </button>
                             </div>
                         </div>
                       </div>
@@ -680,6 +871,86 @@ const StepDocuments = () => {
                 </motion.button>
             </div>
         </div>
+
+        <AnimatePresence>
+          {activeCameraTarget && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex flex-col bg-slate-950/95 backdrop-blur-md font-['Plus_Jakarta_Sans']"
+            >
+              <div className="flex items-center justify-between px-6 pt-8 pb-4 border-b border-white/10">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
+                    Document Scanner
+                  </span>
+                  <h3 className="text-lg font-black text-white">{activeCameraTarget.label}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCameraStream();
+                    setActiveCameraTarget(null);
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all active:scale-95"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-6">
+                <div className="relative w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl bg-black">
+                  <video
+                    ref={(el) => {
+                      videoRef.current = el;
+                      if (el && streamRef.current) {
+                        el.srcObject = streamRef.current;
+                        el.play().catch(() => {});
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-4 rounded-2xl border-2 border-dashed border-emerald-400/80 pointer-events-none flex items-center justify-center">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-white bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/20">
+                      Align document inside box
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-4 text-[12px] font-bold text-slate-400 text-center max-w-xs">
+                  Ensure good lighting and that all text on the document is clear and readable.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-around px-8 pb-10 pt-4 bg-black/40 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={toggleCameraFacingMode}
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all"
+                  title="Switch Camera"
+                >
+                  <RefreshCw size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={capturePhotoFromLiveCamera}
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-slate-900 shadow-[0_0_30px_rgba(255,255,255,0.4)] border-4 border-white/40 active:scale-90 transition-all"
+                  title="Take Photo"
+                >
+                  <div className="h-14 w-14 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <Camera size={24} strokeWidth={2.5} />
+                  </div>
+                </button>
+
+                <div className="w-12 h-12" />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

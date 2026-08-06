@@ -186,18 +186,21 @@ const resolveTargets = async ({ targetType, targetIds = [], targets = [], zoneId
     throw new ValidationError('Unsupported targetType');
 };
 
-const buildNotificationPayload = ({ title, message, link, broadcastId, target }) => ({
+const buildNotificationPayload = ({ title, message, link, redirectUrl, restaurantId, productId, broadcastId, target }) => ({
     ownerType: target.ownerType,
     ownerId: target.ownerId,
     title,
     message,
-    link,
+    link: redirectUrl || link || '',
     category: 'broadcast',
     broadcastId,
     metadata: {
         broadcastId: String(broadcastId),
         ownerLabel: target.label || '',
-        ownerSubLabel: target.subLabel || ''
+        ownerSubLabel: target.subLabel || '',
+        redirectUrl: redirectUrl || link || '',
+        restaurantId: restaurantId ? String(restaurantId) : '',
+        productId: productId || ''
     }
 });
 
@@ -213,7 +216,10 @@ const emitRealtimeNotifications = (targets = [], broadcast) => {
             id: String(broadcast._id),
             title: broadcast.title,
             message: broadcast.message,
-            link: broadcast.link || '',
+            link: broadcast.redirectUrl || broadcast.link || '',
+            redirectUrl: broadcast.redirectUrl || broadcast.link || '',
+            restaurantId: broadcast.restaurantId ? String(broadcast.restaurantId) : '',
+            productId: broadcast.productId || '',
             targetType: broadcast.targetType,
             createdAt: broadcast.createdAt
         };
@@ -243,7 +249,10 @@ const paginationMeta = ({ page = 1, limit = 10 } = {}) => {
 export const createBroadcastNotification = async ({ body = {}, adminId } = {}) => {
     const title = normalizeText(body?.title, 'title');
     const message = normalizeText(body?.message, 'message');
-    const link = normalizeText(body?.link, 'link', false);
+    const redirectUrl = normalizeText(body?.redirectUrl || body?.link, 'redirectUrl', false);
+    const link = redirectUrl || normalizeText(body?.link, 'link', false);
+    const restaurantId = body?.restaurantId && mongoose.Types.ObjectId.isValid(String(body.restaurantId)) ? String(body.restaurantId) : null;
+    const productId = normalizeText(body?.productId, 'productId', false);
     const targetType = normalizeTargetType(body?.targetType);
     const zoneId = body?.zoneId && mongoose.Types.ObjectId.isValid(String(body.zoneId)) ? String(body.zoneId) : null;
     let zoneName = '';
@@ -280,6 +289,9 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
             subLabel: target.subLabel || ''
         })),
         link,
+        redirectUrl,
+        restaurantId: restaurantId ? toObjectId(restaurantId, 'restaurantId') : null,
+        productId,
         zoneId: zoneId ? toObjectId(zoneId, 'zoneId') : null,
         zoneName,
         createdBy: toObjectId(adminId, 'createdBy'),
@@ -292,6 +304,9 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
                 title,
                 message,
                 link,
+                redirectUrl,
+                restaurantId,
+                productId,
                 broadcastId: broadcast._id,
                 target
             })
@@ -309,7 +324,10 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
             data: {
                 type: 'admin_broadcast',
                 broadcastId: String(broadcast._id),
-                link
+                link: redirectUrl || link,
+                redirectUrl: redirectUrl || link,
+                restaurantId: restaurantId || '',
+                productId: productId || ''
             }
         }
     );

@@ -11,6 +11,8 @@ const debugError = (...args) => {}
 export default function SignupStep1() {
   const navigate = useNavigate()
   const goBack = useDeliveryBackNavigation()
+  const [zones, setZones] = useState([])
+  const [zonesLoading, setZonesLoading] = useState(false)
   const [formData, setFormData] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDetails")
     const base = {
@@ -22,6 +24,8 @@ export default function SignupStep1() {
       address: "",
       city: "",
       state: "",
+      zoneId: "",
+      zoneName: "",
       vehicleType: "bike",
       vehicleName: "",
       vehicleNumber: "",
@@ -40,6 +44,23 @@ export default function SignupStep1() {
   })
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      setZonesLoading(true)
+      try {
+        const res = await fetch("/api/v1/taxi/user/service-locations")
+        const data = await res.json()
+        const list = data?.data?.results || data?.results || []
+        setZones(list)
+      } catch (e) {
+        debugError("Error loading service locations:", e)
+      } finally {
+        setZonesLoading(false)
+      }
+    }
+    fetchZones()
+  }, [])
 
   const sanitizeLocationValue = (value) =>
     value.replace(/[^A-Za-z\s.-]/g, "").replace(/\s{2,}/g, " ")
@@ -110,6 +131,17 @@ export default function SignupStep1() {
 
     if (name === "email") {
       updatedValue = sanitizeEmailValue(value)
+    }
+
+    if (name === "zoneId") {
+      const selected = zones.find(z => String(z._id || z.id) === String(value))
+      setFormData(prev => ({
+        ...prev,
+        zoneId: value,
+        zoneName: selected?.name || selected?.service_location_name || ""
+      }))
+      if (errors.zoneId) setErrors(prev => ({ ...prev, zoneId: "" }))
+      return
     }
 
     setFormData(prev => ({
@@ -211,6 +243,8 @@ export default function SignupStep1() {
         address: formData.address.trim(),
         city: formData.city.trim(),
         state: formData.state.trim(),
+        zoneId: formData.zoneId || "",
+        zoneName: formData.zoneName || "",
         vehicleType: formData.vehicleType || "bike",
         vehicleName: formData.vehicleName?.trim() || "",
         vehicleNumber: formData.vehicleType === "bicycle" ? "" : formData.vehicleNumber.trim(),
@@ -338,6 +372,26 @@ export default function SignupStep1() {
               />
               {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state}</p>}
             </div>
+          </div>
+
+          {/* Operating Zone Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Select Operating Zone / Service Area
+            </label>
+            <select
+              name="zoneId"
+              value={formData.zoneId || ""}
+              onChange={handleChange}
+              className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A]"
+            >
+              <option value="">-- Select Existing Zone (Optional) --</option>
+              {zones.map((zone) => (
+                <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                  {zone.name || zone.service_location_name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Vehicle Type */}
