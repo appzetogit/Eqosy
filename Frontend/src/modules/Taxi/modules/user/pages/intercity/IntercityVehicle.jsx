@@ -2,7 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, ChevronRight, Clock3, Info, MapPin, Users } from 'lucide-react';
-import { useSettings } from '../../../../shared/context/SettingsContext';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 
 const pad = (value) => String(value).padStart(2, '0');
 
@@ -72,10 +81,16 @@ const getMaxAdvanceDateTime = () => {
 };
 
 const getVehicleIcon = (type = {}) => {
-  const customIcon = String(type.icon || '').trim();
-  if (customIcon) return customIcon;
+  const customIcon = String(
+    type?.map_icon ||
+    type?.icon ||
+    type?.image ||
+    type?.vehicleIconUrl ||
+    ''
+  ).trim();
+  if (customIcon) return resolveAssetUrl(customIcon);
 
-  const iconValue = String(type.iconType || type.vehicleName || '').toLowerCase();
+  const iconValue = String(type?.iconType || type?.vehicleName || type?.icon_types || '').toLowerCase();
   if (iconValue.includes('bike')) return '/1_Bike.png';
   if (iconValue.includes('auto')) return '/2_AutoRickshaw.png';
   return '/4_Taxi.png';

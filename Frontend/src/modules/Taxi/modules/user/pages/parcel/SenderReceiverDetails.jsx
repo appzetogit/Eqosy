@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Contact,
   LocateFixed,
+  LoaderCircle,
   MapPin,
   Mic,
   Navigation,
@@ -662,15 +663,6 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
                 <MapPin size={18} className="text-white" />
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={useCurrentLocation}
-              disabled={isLocating}
-              className="absolute bottom-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-100 bg-white text-slate-900 shadow-xl"
-            >
-              <LocateFixed size={20} className={isLocating ? 'animate-pulse text-blue-600' : ''} />
-            </button>
           </div>
 
           <div className="bg-white px-5 pb-8 pt-5">
@@ -1254,26 +1246,38 @@ const SenderReceiverDetails = () => {
     }
 
     setIsLocatingPickup(true);
+
+    const onSuccess = async (position) => {
+      const next = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const coords = latLngToCoordPair(next);
+      setPickupCoords(coords);
+      const address = await resolveAddressFromCoords(next);
+      setPickup(address || formatLatLngLabel(next));
+      clearError('pickup');
+      setIsLocatingPickup(false);
+    };
+
+    const onError = (err) => {
+      console.warn('High accuracy geolocation failed, trying low accuracy...', err);
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        () => {
+          setIsLocatingPickup(false);
+          setErrors((prev) => ({ ...prev, pickup: 'Could not detect current location' }));
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const next = { lat: position.coords.latitude, lng: position.coords.longitude };
-        const coords = latLngToCoordPair(next);
-        const address = await resolveAddressFromCoords(next);
-        setPickupCoords(coords);
-        setPickup(address || formatLatLngLabel(next));
-        clearError('pickup');
-        setIsLocatingPickup(false);
-      },
-      () => {
-        setIsLocatingPickup(false);
-        setErrors((prev) => ({ ...prev, pickup: 'Location permission denied' }));
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+      onSuccess,
+      onError,
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
     );
   });
 
   useEffect(() => {
-    if (autoPickupRequestedRef.current || livePickupHydratedRef.current) return;
+    if (autoPickupRequestedRef.current) return;
     autoPickupRequestedRef.current = true;
     livePickupHydratedRef.current = true;
     const timer = setTimeout(() => {
@@ -1767,11 +1771,17 @@ const SenderReceiverDetails = () => {
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setActiveMapPicker('pickup')}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-100 bg-white text-emerald-600 shadow-xs"
-                  aria-label="Change pickup location"
+                  onClick={requestCurrentPickupLocation}
+                  disabled={isLocatingPickup}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-100 bg-white text-emerald-600 shadow-xs active:scale-95 transition-all"
+                  aria-label="Use current location for pickup"
+                  title="Detect current location"
                 >
-                  <LocateFixed size={16} />
+                  {isLocatingPickup ? (
+                    <LoaderCircle size={16} className="animate-spin text-emerald-600" />
+                  ) : (
+                    <LocateFixed size={16} />
+                  )}
                 </button>
                 <button
                   type="button"

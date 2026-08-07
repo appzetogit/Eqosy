@@ -87,8 +87,12 @@ const transformOrderForList = (order) => ({
   ),
   eta: null,
   itemsSummary:
-    order.items?.map((item) => `${item.quantity}x ${item.name}`).join(", ") ||
-    "No items",
+    order.items
+      ?.map((item) => {
+        const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+        return `${item.quantity}x ${item.name}${v ? ` (${v})` : ""}`;
+      })
+      .join(", ") || "No items",
   photoUrl: order.items?.[0]?.image || null,
   photoAlt: order.items?.[0]?.name || "Order",
   paymentMethod: order.paymentMethod || order.payment?.method || null,
@@ -136,7 +140,10 @@ function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
               order.deliveredAt || order.updatedAt || order.createdAt,
             itemsSummary:
               order.items
-                ?.map((item) => `${item.quantity}x ${item.name}`)
+                ?.map((item) => {
+                  const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+                  return `${item.quantity}x ${item.name}${v ? ` (${v})` : ""}`;
+                })
                 .join(", ") || "No items",
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
@@ -841,7 +848,7 @@ function AllOrders({ onSelectOrder, onCancel }) {
                 eta={etaDisplay}
                 onSelect={onSelectOrder}
                 onCancel={
-                  normalizedStatus === "preparing" ? onCancel : undefined
+                  ["confirmed", "preparing", "ready", "ready_for_pickup"].includes(normalizedStatus) ? onCancel : undefined
                 }
                 onMarkReady={
                   normalizedStatus === "preparing" ? handleMarkReady : undefined
@@ -1645,12 +1652,16 @@ export default function OrdersMain() {
         yPos += 8;
 
         // Prepare table data
-        const tableData = orderToPrint.items.map((item) => [
-          item.name || "Item",
-          item.quantity || 1,
-          `₹${(item.price || 0).toFixed(2)}`,
-          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`,
-        ]);
+        const tableData = orderToPrint.items.map((item) => {
+          const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+          const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
+          return [
+            nameWithVariant,
+            item.quantity || 1,
+            `₹${(item.price || 0).toFixed(2)}`,
+            `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`,
+          ];
+        });
 
         autoTable(doc, {
           startY: yPos,
@@ -1872,6 +1883,7 @@ export default function OrdersMain() {
         return (
           <ReadyOrders
             onSelectOrder={handleSelectOrder}
+            onCancel={handleCancelClick}
             refreshToken={ordersRefreshToken}
           />
         );
@@ -2285,24 +2297,52 @@ export default function OrdersMain() {
                           className="overflow-hidden">
                           <div className="py-3 space-y-3">
                             {(popupOrder || newOrder)?.items?.map(
-                              (item, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-start gap-3">
+                              (item, index) => {
+                                const variantName =
+                                  item.variantName ||
+                                  item.variant ||
+                                  item.variation ||
+                                  item.selectedVariant?.name ||
+                                  item.optionName ||
+                                  item.variantTitle;
+                                return (
                                   <div
-                                    className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.isVeg ? "bg-green-500" : "bg-red-500"}`}></div>
-                                  <div className="flex-1">
-                                    <div className="flex items-start justify-between">
-                                      <p className="text-sm font-medium text-gray-900">
-                                        {item.quantity} x {item.name}
-                                      </p>
-                                      <p className="text-xs text-gray-600 ml-2">
-                                        ₹{item.price * item.quantity}
-                                      </p>
+                                    key={index}
+                                    className="flex items-start gap-3">
+                                    <div
+                                      className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.isVeg ? "bg-green-500" : "bg-red-500"}`}></div>
+                                    <div className="flex-1">
+                                      <div className="flex items-start justify-between">
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-900">
+                                            {item.quantity} x {item.name}
+                                          </p>
+                                          {variantName && (
+                                            <p className="text-xs font-semibold text-emerald-600 mt-0.5">
+                                              Variation: {variantName}
+                                            </p>
+                                          )}
+                                          {Array.isArray(item.addons) && item.addons.length > 0 && (
+                                            <div className="text-[11px] text-gray-500 mt-0.5">
+                                              {item.addons.map((a, ai) => (
+                                                <span key={ai} className="mr-2">+ {a.name || a.title || a}</span>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {item.notes && (
+                                            <p className="text-[11px] italic text-gray-500 mt-0.5">
+                                              Note: {item.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <p className="text-xs font-semibold text-gray-700 ml-2">
+                                          ₹{item.price * item.quantity}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              ),
+                                );
+                              },
                             ) || (
                                 <p className="text-sm text-gray-500">No items</p>
                               )}
@@ -3287,7 +3327,7 @@ function PreparingOrders({
 }
 
 // Ready Orders List
-function ReadyOrders({ onSelectOrder, refreshToken = 0 }) {
+function ReadyOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -3396,6 +3436,7 @@ function ReadyOrders({ onSelectOrder, refreshToken = 0 }) {
               key={order.orderId || order.mongoId}
               {...order}
               onSelect={onSelectOrder}
+              onCancel={onCancel}
             />
           ))}
         </div>

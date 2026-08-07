@@ -294,7 +294,7 @@ export async function getRestaurants(query) {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('restaurantName slug location area city status ownerName ownerPhone zoneId zoneFeaturedRank profileImage coverImages menuImages isRestaurant')
+            .select('restaurantName slug location area city status ownerName ownerPhone zoneId zoneFeaturedRank profileImage coverImages menuImages isRestaurant isSponsored')
             .populate('zoneId', 'name zoneName')
             .lean(),
         FoodRestaurant.countDocuments(filter)

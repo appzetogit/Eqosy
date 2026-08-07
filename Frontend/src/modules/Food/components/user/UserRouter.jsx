@@ -76,6 +76,9 @@ const Accessibility = lazy(() => import("@food/pages/user/profile/Accessibility"
 const Logout = lazy(() => import("@food/pages/user/profile/Logout"))
 const ReferEarn = lazy(() => import("@food/pages/user/profile/ReferEarn"))
 
+// Onboarding
+const Preferences = lazy(() => import("@food/pages/user/Preferences"))
+
 // Auth
 const SignIn = lazy(() => import("@food/pages/user/auth/SignIn"))
 const OTP = lazy(() => import("@food/pages/user/auth/OTP"))

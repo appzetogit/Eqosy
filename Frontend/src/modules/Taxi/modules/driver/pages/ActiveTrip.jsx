@@ -26,9 +26,19 @@ import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/u
 import { socketService } from '../../../shared/api/socket';
 import { pushDriverLocationRealtime } from '../../../shared/services/rideRealtime';
 import api from '../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
 import carIcon from '../../../assets/icons/car.png';
 import { getLocalDriverToken } from '../services/registrationService';
 import CancellationReceiptModal from '../../shared/components/CancellationReceiptModal';
+
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
 
 const MAP_CONTAINER_STYLE = {
     width: '100%',
@@ -794,7 +804,19 @@ const ActiveTrip = () => {
     const rideId = getJobRideId(liveRequest) || getJobRideId(effectiveState);
     const [resolvedPickupCoords, setResolvedPickupCoords] = useState(null);
     const [resolvedDropCoords, setResolvedDropCoords] = useState(null);
-    const vehicleIconUrl = liveRaw.vehicleIconUrl || liveRequest.vehicleIconUrl || effectiveState.vehicleIconUrl || carIcon;
+    const rawVehicleIcon = String(
+        liveRaw.vehicleIconUrl ||
+        liveRequest.vehicleIconUrl ||
+        effectiveState.vehicleIconUrl ||
+        liveRaw.map_icon ||
+        liveRaw.icon ||
+        liveRaw.image ||
+        effectiveState.map_icon ||
+        effectiveState.icon ||
+        effectiveState.image ||
+        ''
+    ).trim();
+    const vehicleIconUrl = rawVehicleIcon ? resolveAssetUrl(rawVehicleIcon) : carIcon;
 
     useEffect(() => {
         if (!rideId) return;

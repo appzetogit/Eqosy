@@ -1363,12 +1363,16 @@ export default function OrderTracking({ isSharedView = false }) {
         setShowCancelDialog(false);
         setCancellationReason("");
         setCustomCancellationComment("");
+        setOrderStatus('cancelled');
+        setOrder((prev) => (prev ? { ...prev, status: 'cancelled_by_user', orderStatus: 'cancelled_by_user' } : prev));
         // Refresh order data
-        const orderResponse = await fetchOrderDetailsWithFallback({ force: true });
-        if (orderResponse.data?.success && orderResponse.data.data?.order) {
-          const apiOrder = orderResponse.data.data.order;
-          setOrder(transformOrderForTracking(apiOrder, order));
-        }
+        try {
+          const orderResponse = await fetchOrderDetailsWithFallback({ force: true });
+          if (orderResponse.data?.success && orderResponse.data.data?.order) {
+            const apiOrder = orderResponse.data.data.order;
+            setOrder(transformOrderForTracking(apiOrder, order));
+          }
+        } catch (_) {}
       } else {
         toast.error(response.data?.message || 'Failed to cancel order');
       }
@@ -1911,7 +1915,7 @@ export default function OrderTracking({ isSharedView = false }) {
           <div className="space-y-3">
             {order?.items?.map((item, i) => (
               <div key={i} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{item.quantity} x {item.name}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{item.quantity} x {item.name}{(item.variantName || item.variant || item.variation) ? ` (${item.variantName || item.variant || item.variation})` : ""}</span>
                 <span className="text-sm font-bold text-gray-900 dark:text-white">{"\u20B9"}{((item?.price || 0) * (item?.quantity || 0)).toFixed(0)}</span>
               </div>
             ))}

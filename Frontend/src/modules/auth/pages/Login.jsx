@@ -23,21 +23,62 @@ export default function UnifiedOTPFastLogin() {
   const location = useLocation()
   const submitting = useRef(false)
 
-  const handleBack = () => {
+  // Dismiss soft keyboard on unmount & auto-redirect if already logged in
+  useEffect(() => {
+    if (isUnifiedAuthenticated()) {
+      const fromPath = location.state?.from || resolvePostLoginRoute()
+      navigate(fromPath, { replace: true })
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+          document.activeElement.blur()
+        }
+        document.querySelectorAll('input, textarea').forEach((el) => {
+          if (el && typeof el.blur === 'function') el.blur()
+        })
+      }
+    }
+  }, [location.state?.from, navigate])
+
+  const handleBack = (e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    // Instantly dismiss soft keyboard across all browsers & native WebView
+    if (typeof document !== 'undefined') {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur()
+      }
+      document.querySelectorAll('input, textarea').forEach((el) => {
+        if (el && typeof el.blur === 'function') el.blur()
+      })
+    }
+    if (typeof window !== 'undefined' && window.flutter_inappwebview) {
+      try {
+        window.flutter_inappwebview.callHandler('hideKeyboard')
+      } catch (_) {}
+    }
+
     if (step > 1) {
       setStep(1)
       return
     }
     const fromPath = location.state?.from
-    if (fromPath && fromPath !== '/login') {
-      navigate(fromPath, { replace: true })
-      return
-    }
-    if (typeof window !== 'undefined' && window.history.length > 2) {
-      navigate(-1)
-    } else {
-      navigate('/taxi/user')
-    }
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+    const fallbackPath = currentPath.includes('taxi') ? '/taxi/user' : '/food/user'
+
+    const targetPath = (fromPath && fromPath !== '/login' && !fromPath.includes('/auth/login')) ? fromPath : fallbackPath
+
+    // Wait 30ms for browser soft keyboard dismiss animation to complete before unmounting input
+    setTimeout(() => {
+      if (typeof window !== 'undefined' && window.history.state && window.history.state.idx > 0) {
+        navigate(-1)
+      } else {
+        navigate(targetPath, { replace: true })
+      }
+    }, 30)
   }
 
   const getWebFcmTokenForLogin = async () => {
@@ -460,14 +501,18 @@ export default function UnifiedOTPFastLogin() {
         {/* Mobile Header / Form Area */}
         <div className="flex-1 w-full relative z-20 flex flex-col items-center justify-start pt-4 lg:justify-center">
           {/* Top Action Bar (Single Back Button) */}
-          <div className="w-full max-w-[420px] px-6 py-2 flex items-center justify-start z-30">
+          <div className="w-full max-w-[420px] px-6 py-2 flex items-center justify-start z-[100] relative">
             <button
               type="button"
               onClick={handleBack}
-              className="w-10 h-10 rounded-full bg-black/5 hover:bg-black/10 active:scale-95 flex items-center justify-center text-[#1A1A1A] transition-all border border-gray-200"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handleBack(e);
+              }}
+              className="w-10 h-10 rounded-full bg-white hover:bg-gray-50 active:scale-95 flex items-center justify-center text-[#1A1A1A] transition-all border border-gray-300 shadow-md cursor-pointer pointer-events-auto relative z-[100]"
               aria-label="Back"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 pointer-events-none" />
             </button>
           </div>
 
@@ -659,11 +704,11 @@ export default function UnifiedOTPFastLogin() {
                       (step === 3 && String(name).trim().length < 2)
                     }
                     className={`w-full h-[60px] rounded-full font-semibold text-[17px] transition-all flex items-center justify-center gap-3 ${loading ||
-                        (step === 1 && String(phoneNumber).length < 10) ||
-                        (step === 2 && otp.length !== 4) ||
-                        (step === 3 && String(name).trim().length < 2)
-                        ? "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed shadow-inner"
-                        : "bg-[#1A1A1A] text-white shadow-lg active:scale-[0.98]"
+                      (step === 1 && String(phoneNumber).length < 10) ||
+                      (step === 2 && otp.length !== 4) ||
+                      (step === 3 && String(name).trim().length < 2)
+                      ? "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed shadow-inner"
+                      : "bg-[#1A1A1A] text-white shadow-lg active:scale-[0.98]"
                       }`}
                   >
                     {loading ? (
@@ -672,11 +717,11 @@ export default function UnifiedOTPFastLogin() {
                       <>
                         {step === 1 ? "Continue securely" : step === 2 ? "Verify & Login" : "Complete Profile"}
                         <ArrowRight className={`w-5 h-5 ${loading ||
-                            (step === 1 && String(phoneNumber).length < 10) ||
-                            (step === 2 && otp.length !== 4) ||
-                            (step === 3 && String(name).trim().length < 2)
-                            ? 'text-[#9CA3AF]'
-                            : 'text-[#F38F24]'
+                          (step === 1 && String(phoneNumber).length < 10) ||
+                          (step === 2 && otp.length !== 4) ||
+                          (step === 3 && String(name).trim().length < 2)
+                          ? 'text-[#9CA3AF]'
+                          : 'text-[#F38F24]'
                           }`} />
                       </>
                     )}

@@ -211,13 +211,17 @@ const compressSelfieDataUrl = async (dataUrl) => {
 
 const getMapIconForVehicle = (iconType = '') => {
     const raw = String(iconType || '').trim();
-    if (/^(https?:|data:image\/|blob:)/.test(raw)) {
+    if (!raw) return CarIcon;
+    if (/^(https?:|data:image\/|blob:)/i.test(raw)) {
+        return raw;
+    }
+    if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) {
         return raw;
     }
     if (raw.startsWith('/')) {
         return `${BACKEND_ORIGIN}${raw}`;
     }
-    if (/^(uploads\/|images\/)/.test(raw)) {
+    if (/^(uploads\/|images\/)/i.test(raw)) {
         return `${BACKEND_ORIGIN}/${raw}`;
     }
 
@@ -647,8 +651,8 @@ const DriverHome = () => {
     const lastDutyToggleAtRef = useRef(0);
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
     const mapVehicleIcon = useMemo(
-        () => getMapIconForVehicle(vehicleIconUrl || vehicleIconType),
-        [vehicleIconType, vehicleIconUrl],
+        () => getMapIconForVehicle(vehicleIconUrl || storedDriverInfo?.vehicleIconUrl || storedDriverInfo?.map_icon || storedDriverInfo?.image || vehicleIconType),
+        [vehicleIconType, vehicleIconUrl, storedDriverInfo],
     );
 
     const walletAlertState = useMemo(

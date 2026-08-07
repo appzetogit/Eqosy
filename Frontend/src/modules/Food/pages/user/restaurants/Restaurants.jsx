@@ -86,7 +86,12 @@ export default function Restaurants() {
             distance: restaurant?.distance ? (typeof restaurant.distance === 'number' ? `${restaurant.distance.toFixed(1)} km` : restaurant.distance) : "1.2 km",
             priceRange: restaurant?.priceRange || "$$",
             image: pickRestaurantImage(restaurant),
+            isSponsored: restaurant?.isSponsored === true || restaurant?.isSponsored === "true",
           }
+        }).sort((a, b) => {
+          if (a.isSponsored && !b.isSponsored) return -1
+          if (!a.isSponsored && b.isSponsored) return 1
+          return 0
         })
 
         setRestaurants(transformed)
@@ -172,6 +177,12 @@ export default function Restaurants() {
                                     {restaurant.cuisine}
                                   </p>
                                   <div className="flex items-center gap-2 flex-wrap">
+                                    {restaurant.isSponsored && (
+                                      <div className="flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider shadow-sm">
+                                        <Star className="h-3 w-3 fill-current" />
+                                        Sponsored
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/30 px-1.5 py-0.5 rounded-full">
                                       <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-yellow-400 text-yellow-400" />
                                       <span className="font-bold text-xs sm:text-sm text-yellow-700 dark:text-yellow-400">

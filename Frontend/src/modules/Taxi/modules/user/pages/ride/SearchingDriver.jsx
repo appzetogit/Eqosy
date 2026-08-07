@@ -15,6 +15,7 @@ const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
   if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
@@ -322,7 +323,11 @@ const SearchingDriver = () => {
     const raw = String(
       routeState.vehicleIconUrl ||
       routeState.vehicle?.vehicleIconUrl ||
+      routeState.vehicle?.map_icon ||
       routeState.vehicle?.icon ||
+      routeState.vehicle?.image ||
+      routeState.vehicle?.raw?.map_icon ||
+      routeState.vehicle?.raw?.image ||
       ''
     ).trim();
 

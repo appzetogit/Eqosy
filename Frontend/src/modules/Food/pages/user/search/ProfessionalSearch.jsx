@@ -16,9 +16,56 @@ import { searchAPI } from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
-const getMediaUrl = (url) => {
+
+const DEFAULT_RESTAURANT_IMAGE = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80";
+const DEFAULT_DISH_IMAGE = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80";
+
+const extractImageUrl = (item) => {
+  if (!item) return null;
+
+  const candidates = [
+    item.coverImages?.[0]?.url,
+    item.coverImages?.[0],
+    item.profileImage?.url,
+    item.profileImage,
+    item.bannerImage?.url,
+    item.bannerImage,
+    item.banner,
+    item.image?.url,
+    item.image,
+    item.images?.[0]?.url,
+    item.images?.[0],
+    item.recommendedImages?.[0]?.url,
+    item.recommendedImages?.[0],
+    item.logo?.url,
+    item.logo,
+    item.matchedDishImage,
+  ];
+
+  for (const raw of candidates) {
+    if (!raw) continue;
+    let url = typeof raw === 'object' ? raw.url || raw.src || raw.path : raw;
+    if (typeof url === 'string' && url.trim()) {
+      return url.trim();
+    }
+  }
+
+  return null;
+};
+
+const getMediaUrl = (input) => {
+  if (!input) return null;
+  let url = input;
+  if (typeof url === 'object') {
+    url = url.url || url.src || url.path || null;
+  }
   if (!url || typeof url !== 'string') return null;
-  if (url.startsWith('http')) return url;
+  url = url.trim();
+  if (!url) return null;
+
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
   
   const apiBase = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL
     ? String(import.meta.env.VITE_API_BASE_URL).trim()
@@ -156,21 +203,23 @@ export default function ProfessionalSearch() {
   }, [])
 
   const fetchCategories = async () => {
-    if (hasEffectiveCoordinates && (zoneLoading || zoneStatus === "loading")) {
-      return
-    }
-
-    if (hasEffectiveCoordinates && !zoneId) {
-      setCategories([])
-      return
-    }
-
     try {
-      const res = await searchAPI.getAdminCategories({
-        zoneId,
-        isRestaurant: isRestaurantParam,
-      })
-      if (res.data?.success) setCategories(res.data.data.categories)
+      const params = {}
+      if (zoneId) params.zoneId = zoneId
+      if (isRestaurantParam) params.isRestaurant = isRestaurantParam
+
+      const res = await searchAPI.getAdminCategories(params)
+      const fetched = res.data?.data?.categories || res.data?.categories || []
+
+      if (Array.isArray(fetched) && fetched.length > 0) {
+        setCategories(fetched)
+        return
+      }
+
+      // Fallback: fetch all active categories without zone constraint
+      const fallbackRes = await searchAPI.getAdminCategories({ isRestaurant: isRestaurantParam })
+      const fallbackCategories = fallbackRes.data?.data?.categories || fallbackRes.data?.categories || []
+      setCategories(Array.isArray(fallbackCategories) ? fallbackCategories : [])
     } catch (err) {
       console.error("Failed to fetch categories", err)
     }
@@ -194,10 +243,6 @@ export default function ProfessionalSearch() {
   }
 
   const performSearch = useCallback(async (searchTerm, catId) => {
-    if (hasEffectiveCoordinates && (zoneLoading || zoneStatus === "loading")) {
-      return
-    }
-
     if (!searchTerm && !catId) {
       setResults({ restaurants: [], dishes: [] })
       return
@@ -214,20 +259,18 @@ export default function ProfessionalSearch() {
         isRestaurant: isRestaurantParam,
       })
       
-      if (res.data?.success) {
-        // Grouping results into Restaurants and potential Dishes
-        const all = res.data.data.restaurants || []
-        setResults({
-          restaurants: all.filter(r => r.matchType === 'restaurant' || !r.matchType),
-          dishes: all.filter(r => r.matchType === 'food')
-        })
-      }
+      const all = res.data?.data?.restaurants || res.data?.restaurants || []
+
+      setResults({
+        restaurants: all.filter(r => r.matchType === 'restaurant' || !r.matchType),
+        dishes: all.filter(r => r.matchType === 'food')
+      })
     } catch (err) {
       console.error("Search failed", err)
     } finally {
       setLoading(false)
     }
-  }, [effectiveLocation, zoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates, isRestaurantParam])
+  }, [effectiveLocation, zoneId, isRestaurantParam])
 
   useEffect(() => {
     performSearch(debouncedQuery, selectedCategoryId)
@@ -235,7 +278,7 @@ export default function ProfessionalSearch() {
         setSearchParams(buildSearchParams({
           q: debouncedQuery,
           ...(selectedCategoryId ? { cat: selectedCategoryId } : {}),
-        }))
+        }), { replace: true })
     }
   }, [debouncedQuery, selectedCategoryId, performSearch, setSearchParams, buildSearchParams])
 
@@ -262,7 +305,7 @@ export default function ProfessionalSearch() {
   const handleClear = () => {
     setQuery("")
     setSelectedCategoryId(null)
-    setSearchParams(buildSearchParams())
+    setSearchParams(buildSearchParams(), { replace: true })
     setResults({ restaurants: [], dishes: [] })
   }
 
@@ -271,20 +314,42 @@ export default function ProfessionalSearch() {
     setSelectedCategoryId(newCat)
     const base = Object.fromEntries(searchParams)
     if (newCat) {
-        setSearchParams(buildSearchParams({ ...base, cat: newCat }))
+        setSearchParams(buildSearchParams({ ...base, cat: newCat }), { replace: true })
     } else {
         const p = { ...base }
         delete p.cat
-        setSearchParams(buildSearchParams(p))
+        setSearchParams(buildSearchParams(p), { replace: true })
     }
   }
 
-  const handleBack = () => {
-    if (isGrocerySearch) {
-      navigate("/food/user?vertical=grocery")
-      return
+  const handleBack = (e) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
     }
-    navigate(-1)
+    if (typeof document !== 'undefined') {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur()
+      }
+      document.querySelectorAll('input, textarea').forEach((el) => {
+        if (el && typeof el.blur === 'function') el.blur()
+      })
+    }
+    if (typeof window !== 'undefined' && window.flutter_inappwebview) {
+      try {
+        window.flutter_inappwebview.callHandler('hideKeyboard')
+      } catch (_) {}
+    }
+
+    const fallbackPath = isGrocerySearch ? '/food/user?vertical=grocery' : '/food/user'
+
+    setTimeout(() => {
+      if (typeof window !== 'undefined' && window.history.state && window.history.state.idx > 0) {
+        navigate(-1)
+      } else {
+        navigate(fallbackPath, { replace: true })
+      }
+    }, 20)
   }
 
   const buildStoreLink = (restaurant, dishId) => {
@@ -336,28 +401,40 @@ export default function ProfessionalSearch() {
           <div className="mb-8">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-1">Top Categories</h3>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4">
-              {categories.map((cat) => (
+              {categories.map((cat) => {
+                const catImgUrl = getMediaUrl(cat.image);
+                return (
                 <button 
                   key={cat._id} 
                   onClick={() => handleCategoryClick(cat._id)}
                   className={`flex flex-col items-center group transition-all ${selectedCategoryId === cat._id ? 'scale-110' : ''}`}
                 >
-                  <div className={`w-14 h-14 rounded-2xl mb-2 flex items-center justify-center overflow-hidden border-2 transition-all ${selectedCategoryId === cat._id ? 'border-rose-500 shadow-lg shadow-rose-100' : 'border-transparent bg-white dark:bg-zinc-900'}`}>
-                    {cat.image ? (
+                  <div className={`w-14 h-14 rounded-2xl mb-2 flex items-center justify-center overflow-hidden border-2 transition-all ${selectedCategoryId === cat._id ? 'border-rose-500 shadow-lg shadow-rose-100' : 'border-transparent bg-slate-100 dark:bg-zinc-900'}`}>
+                    {catImgUrl ? (
                       <img 
-                        src={getMediaUrl(cat.image)} 
+                        src={catImgUrl} 
                         alt={cat.name} 
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        }}
                       />
-                    ) : (
-                      <Utensils className="w-6 h-6 text-slate-300" />
-                    )}
+                    ) : null}
+                    <div 
+                      className="w-full h-full flex items-center justify-center bg-rose-50 dark:bg-rose-950/40 text-rose-500 font-black text-xs"
+                      style={{ display: catImgUrl ? 'none' : 'flex' }}
+                    >
+                      {cat.name?.slice(0, 2)?.toUpperCase() || 'FC'}
+                    </div>
                   </div>
                   <span className={`text-[11px] font-medium text-center line-clamp-1 ${selectedCategoryId === cat._id ? 'text-rose-600' : 'text-slate-600 dark:text-slate-400'}`}>
                     {cat.name}
                   </span>
                 </button>
-              ))}
+              );
+              })}
             </div>
           </div>
         )}
@@ -417,7 +494,9 @@ export default function ProfessionalSearch() {
                    </h2>
                 </div>
                 <div className="grid gap-4">
-                  {results.dishes.map((r) => (
+                   {results.dishes.map((r) => {
+                     const dishImgUrl = getMediaUrl(r.matchedDishImage || extractImageUrl(r)) || DEFAULT_DISH_IMAGE;
+                     return (
                     <Link
                       to={buildStoreLink(r, r.matchedDishId)}
                       key={`${r._id}-${r.matchedDishId || "dish"}`}
@@ -426,10 +505,13 @@ export default function ProfessionalSearch() {
                     >
                        <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
                            <img 
-                            src={getMediaUrl(r.matchedDishImage || r.profileImage || r.image || (Array.isArray(r.images) && r.images[0]))} 
+                            src={dishImgUrl} 
                             alt={r.matchedDish || r.restaurantName}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                            onError={(e) => (e.target.src = "/placeholder-dish.jpg")}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = DEFAULT_DISH_IMAGE;
+                            }}
                           />
                           {r.pureVegRestaurant && (
                             <div className="absolute top-1 left-1 w-4 h-4 border border-green-600 p-[1px] bg-white rounded-sm">
@@ -463,7 +545,8 @@ export default function ProfessionalSearch() {
                           )}
                        </div>
                     </Link>
-                  ))}
+                   );
+                  })}
                 </div>
               </section>
             )}
@@ -478,13 +561,19 @@ export default function ProfessionalSearch() {
                    </h2>
                 </div>
                 <div className="grid gap-6">
-                  {results.restaurants.map((r) => (
+                  {results.restaurants.map((r) => {
+                    const restImgUrl = getMediaUrl(extractImageUrl(r)) || DEFAULT_RESTAURANT_IMAGE;
+                    return (
                     <Link to={buildStoreLink(r)} key={r._id} className="block group">
                       <div className="relative rounded-3xl overflow-hidden aspect-[16/9] mb-3 bg-slate-200">
                          <img 
-                          src={getMediaUrl(r.profileImage || r.image || (Array.isArray(r.images) && r.images[0]))} 
+                          src={restImgUrl} 
+                          alt={r.restaurantName || "Restaurant"}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={(e) => (e.target.src = "/placeholder-restaurant.jpg")}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = DEFAULT_RESTAURANT_IMAGE;
+                          }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                         <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
@@ -517,8 +606,9 @@ export default function ProfessionalSearch() {
                             Top Pick
                          </div>
                       </div>
-                    </Link>
-                  ))}
+                     </Link>
+                    );
+                  })}
                 </div>
               </section>
             )}

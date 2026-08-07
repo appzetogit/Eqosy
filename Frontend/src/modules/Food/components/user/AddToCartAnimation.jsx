@@ -1,13 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from "@food/context/CartContext";
+import { isModuleAuthenticated } from "@food/utils/auth";
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
-
-
 
 /**
  * AddToCartAnimation Component
@@ -38,14 +37,15 @@ export default function AddToCartAnimation({
   const flyingThumbnailRef = useRef(null);
   const prevItemsRef = useRef(items);
 
-  // Hide pill on cart pages, order pages, and account page (if enabled)
+  // Hide pill on cart pages, order pages, account page, or if user is not logged in
+  const isAuthenticated = isModuleAuthenticated('user');
   const iscartPage = location.pathname === '/cart' ||
     location.pathname === '/user/cart' ||
     location.pathname.startsWith('/cart/') ||
     location.pathname.startsWith('/user/cart/');
   const isOrderPage = location.pathname.startsWith('/orders/');
   const isAccountPage = location.pathname === '/account';
-  const shouldHidePill = hideOnPages && (iscartPage || isOrderPage || isAccountPage);
+  const shouldHidePill = !isAuthenticated || (hideOnPages && (iscartPage || isOrderPage || isAccountPage));
 
   // Handle removal animation when product is removed
   useEffect(() => {

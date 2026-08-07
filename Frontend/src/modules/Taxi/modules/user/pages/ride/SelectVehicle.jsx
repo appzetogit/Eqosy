@@ -15,6 +15,7 @@ const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
   if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
@@ -457,7 +458,16 @@ const getTypeLabel = (type) => type?.name || type?.vehicle_type || type?.label |
 const getIconValue = (type) => String(type?.icon_types || type?.vehicleIconType || type?.name || '').toLowerCase();
 
 const getVehicleMapIcon = (type) => {
-  const customIcon = String(type?.map_icon || type?.icon || type?.vehicleIconUrl || '').trim();
+  const customIcon = String(
+    type?.map_icon ||
+    type?.mapIcon ||
+    type?.icon ||
+    type?.image ||
+    type?.vehicleIconUrl ||
+    type?.preview_image ||
+    type?.previewImage ||
+    ''
+  ).trim();
   if (customIcon) {
     return resolveAssetUrl(customIcon);
   }
@@ -508,7 +518,15 @@ const getVehicleMapIcon = (type) => {
 };
 
 const getVehiclePreviewImage = (type) => {
-  const previewImage = String(type?.image || type?.preview_image || type?.previewImage || '').trim();
+  const previewImage = String(
+    type?.image ||
+    type?.preview_image ||
+    type?.previewImage ||
+    type?.map_icon ||
+    type?.icon ||
+    type?.vehicleIconUrl ||
+    ''
+  ).trim();
   if (previewImage) {
     return resolveAssetUrl(previewImage);
   }

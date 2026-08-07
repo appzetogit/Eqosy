@@ -1541,7 +1541,8 @@ export const listApprovedRestaurants = async (query = {}) => {
         openingTime: 1,
         closingTime: 1,
         openDays: 1,
-        zoneFeaturedRank: 1
+        zoneFeaturedRank: 1,
+        isSponsored: 1
     };
 
     // Use $geoNear only when geo is explicitly needed (radius filter or nearest sorting).
@@ -1561,14 +1562,14 @@ export const listApprovedRestaurants = async (query = {}) => {
         }
 
         const sortStage = (() => {
-            if (sortBy === 'rating' || sortBy === 'rating-high') return { $sort: { rating: -1, distanceMeters: 1 } };
-            if (sortBy === 'rating-low') return { $sort: { rating: 1, distanceMeters: 1 } };
-            if (sortBy === 'price-low') return { $sort: { featuredPrice: 1, distanceMeters: 1 } };
-            if (sortBy === 'price-high') return { $sort: { featuredPrice: -1, distanceMeters: 1 } };
-            if (sortBy === 'newest') return { $sort: { createdAt: -1 } };
-            if (sortBy === 'deliveryTime') return { $sort: { estimatedDeliveryTimeMinutes: 1, distanceMeters: 1 } };
+            if (sortBy === 'rating' || sortBy === 'rating-high') return { $sort: { isSponsored: -1, rating: -1, distanceMeters: 1 } };
+            if (sortBy === 'rating-low') return { $sort: { isSponsored: -1, rating: 1, distanceMeters: 1 } };
+            if (sortBy === 'price-low') return { $sort: { isSponsored: -1, featuredPrice: 1, distanceMeters: 1 } };
+            if (sortBy === 'price-high') return { $sort: { isSponsored: -1, featuredPrice: -1, distanceMeters: 1 } };
+            if (sortBy === 'newest') return { $sort: { isSponsored: -1, createdAt: -1 } };
+            if (sortBy === 'deliveryTime') return { $sort: { isSponsored: -1, estimatedDeliveryTimeMinutes: 1, distanceMeters: 1 } };
             // nearest (default)
-            return { $sort: { distanceMeters: 1 } };
+            return { $sort: { isSponsored: -1, distanceMeters: 1 } };
         })();
 
         const basePipeline = [
@@ -1593,17 +1594,36 @@ export const listApprovedRestaurants = async (query = {}) => {
 
         const total = totalDocs?.[0]?.count || 0;
         const restaurantsWithRecommendedImages = await attachRecommendedImagesToRestaurants(pageDocs);
-        return { restaurants: restaurantsWithRecommendedImages, total, page, limit };
+        const restaurants = (restaurantsWithRecommendedImages || []).map((r) => ({
+            ...r,
+            restaurantId: r._id,
+            id: r._id,
+            name: r.restaurantName || '',
+            rating: normalizeRatingValue(r.rating),
+            totalRatings: normalizeTotalRatingsValue(r.totalRatings),
+            profileImage: r.profileImage ? { url: r.profileImage } : null,
+            coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
+            openingTime: r.openingTime || null,
+            closingTime: r.closingTime || null,
+            pureVegRestaurant: Boolean(r.pureVegRestaurant),
+            isRestaurant: r.isRestaurant !== false,
+            isSponsored: Boolean(r.isSponsored),
+            pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
+            openDays: Array.isArray(r.openDays) ? r.openDays : [],
+            menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
+            recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
+        }));
+        return { restaurants, total, page, limit };
     }
 
     // Non-geo path: normal query + sort.
     const sort = (() => {
-        if (sortBy === 'rating' || sortBy === 'rating-high') return { rating: -1, createdAt: -1 };
-        if (sortBy === 'rating-low') return { rating: 1, createdAt: -1 };
-        if (sortBy === 'price-low') return { featuredPrice: 1, createdAt: -1 };
-        if (sortBy === 'price-high') return { featuredPrice: -1, createdAt: -1 };
-        if (sortBy === 'deliveryTime') return { estimatedDeliveryTimeMinutes: 1, createdAt: -1 };
-        return { createdAt: -1 };
+        if (sortBy === 'rating' || sortBy === 'rating-high') return { isSponsored: -1, rating: -1, createdAt: -1 };
+        if (sortBy === 'rating-low') return { isSponsored: -1, rating: 1, createdAt: -1 };
+        if (sortBy === 'price-low') return { isSponsored: -1, featuredPrice: 1, createdAt: -1 };
+        if (sortBy === 'price-high') return { isSponsored: -1, featuredPrice: -1, createdAt: -1 };
+        if (sortBy === 'deliveryTime') return { isSponsored: -1, estimatedDeliveryTimeMinutes: 1, createdAt: -1 };
+        return { isSponsored: -1, createdAt: -1 };
     })();
 
     const [restaurantsRaw, total] = await Promise.all([
@@ -1631,6 +1651,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         closingTime: r.closingTime || null,
         pureVegRestaurant: Boolean(r.pureVegRestaurant),
         isRestaurant: r.isRestaurant !== false,
+        isSponsored: Boolean(r.isSponsored),
         pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
         openDays: Array.isArray(r.openDays) ? r.openDays : [],
         // Keep menuImages as an array for fallbacks; allow both string and {url} on client.

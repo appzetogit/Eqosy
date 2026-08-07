@@ -1127,65 +1127,41 @@ export default function Home() {
     };
   }, [showVegModePopup]);
 
-  // Fetch hero banners from public API (no auth required)
+  // Consolidated parallel fetch for hero banners, explore icons, landing settings, and public categories
   useEffect(() => {
     let cancelled = false;
     setLoadingBanners(true);
-    publicGetOnce("/food/hero-banners/public")
-      .then((response) => {
-        if (cancelled) return;
-        const data = response?.data?.data;
-        const list = Array.isArray(data?.banners)
-          ? data.banners
-          : Array.isArray(data)
-            ? data
-            : [];
+    setLoadingLandingConfig(true);
+    setLoadingRealCategories(true);
+
+    Promise.allSettled([
+      publicGetOnce("/food/hero-banners/public").catch(() => null),
+      publicGetOnce("/food/explore-icons/public").catch(() => null),
+      publicGetOnce("/food/landing/settings/public").catch(() => null),
+      adminAPI.getPublicCategories({}).catch(() => null),
+    ]).then(([bannerRes, exploreRes, settingsRes, catRes]) => {
+      if (cancelled) return;
+
+      // 1. Hero Banners
+      if (bannerRes.status === "fulfilled" && bannerRes.value) {
+        const data = bannerRes.value?.data?.data;
+        const list = Array.isArray(data?.banners) ? data.banners : Array.isArray(data) ? data : [];
         const images = list
           .map((b) => (b && typeof b.imageUrl === "string" ? b.imageUrl : ""))
           .filter(Boolean);
         setHeroBannerImages(images);
         setHeroBannersData(list);
         setCurrentBannerIndex(0);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        debugError("Failed to fetch hero banners", err);
+      } else {
         setHeroBannerImages([]);
         setHeroBannersData([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingBanners(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      }
+      setLoadingBanners(false);
 
-  // Old backend endpoint removed: keep UI stable with empty categories.
-  useEffect(() => {
-    setLoadingRealCategories(true);
-    setRealCategories([]);
-    setLoadingRealCategories(false);
-  }, []);
-
-  // Fetch explore icons and landing settings from public APIs
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingLandingConfig(true);
-    Promise.all([
-      publicGetOnce("/food/explore-icons/public")
-        .catch(() => ({ data: { data: {} } })),
-      publicGetOnce("/food/landing/settings/public")
-        .catch(() => ({ data: { data: {} } })),
-    ])
-      .then(([exploreRes, settingsRes]) => {
-        if (cancelled) return;
-        const exploreData = exploreRes?.data?.data;
-        const items = Array.isArray(exploreData?.items)
-          ? exploreData.items
-          : Array.isArray(exploreData)
-            ? exploreData
-            : [];
+      // 2. Explore Icons
+      if (exploreRes.status === "fulfilled" && exploreRes.value) {
+        const exploreData = exploreRes.value?.data?.data;
+        const items = Array.isArray(exploreData?.items) ? exploreData.items : Array.isArray(exploreData) ? exploreData : [];
         setLandingExploreMore(
           items.map((it) => ({
             ...it,
@@ -1193,29 +1169,50 @@ export default function Home() {
             label: it.label || it.name,
           })),
         );
-        const settings = settingsRes?.data?.data || {};
+      } else {
+        setLandingExploreMore([]);
+      }
+
+      // 3. Landing Settings
+      if (settingsRes.status === "fulfilled" && settingsRes.value) {
+        const settings = settingsRes.value?.data?.data || {};
         setExploreMoreHeading(settings.exploreMoreHeading || "Explore More");
         setRecommendedRestaurantIds(settings.recommendedRestaurantIds || []);
         setRecommendedRestaurantsFromSettings(
-          (settings.recommendedRestaurants || []).filter(
-            (restaurant) => restaurant?.isRestaurant !== false,
-          ),
+          (settings.recommendedRestaurants || []).filter((restaurant) => restaurant?.isRestaurant !== false),
         );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLandingExploreMore([]);
-          setExploreMoreHeading("Explore More");
-          setRecommendedRestaurantsFromSettings([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingLandingConfig(false);
-      });
+      } else {
+        setExploreMoreHeading("Explore More");
+        setRecommendedRestaurantsFromSettings([]);
+      }
+      setLoadingLandingConfig(false);
+
+      // 4. Public Categories
+      if (catRes.status === "fulfilled" && catRes.value) {
+        const list = catRes.value?.data?.data?.categories || catRes.value?.data?.categories || [];
+        const categories = Array.isArray(list)
+          ? list.map((cat, idx) => ({
+              id: String(cat?.id || cat?._id || cat?.slug || idx),
+              name: cat?.name || "",
+              slug: cat?.slug || String(cat?.name || "").toLowerCase().replace(/\s+/g, "-"),
+              image:
+                normalizeImageUrl(cat?.image || cat?.imageUrl) ||
+                foodImages[idx % foodImages.length] ||
+                foodImages[0],
+              type: cat?.type || "",
+            }))
+          : [];
+        setRealCategories(categories);
+      } else {
+        setRealCategories([]);
+      }
+      setLoadingRealCategories(false);
+    });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [normalizeImageUrl]);
 
   // Keep index within current banner bounds after admin updates/reloads.
   useEffect(() => {
@@ -1368,11 +1365,7 @@ export default function Home() {
   const [loadingPreviouslyOrdered, setLoadingPreviouslyOrdered] = useState(false);
   const categoryScrollRef = useRef(null);
   const gsapAnimationsRef = useRef([]);
-  // Show skeletons immediately while loading â€” delayed toggles caused visible layout swap (CLS).
-  const showBannerSkeleton = loadingBanners;
-  const showCategorySkeleton = loadingRealCategories || loadingMenuCategories;
-  const showExploreSkeleton = loadingLandingConfig;
-  const showRestaurantSkeleton = isLoadingFilterResults || loadingRestaurants;
+
   // Safely get profile context - handle case when ProfileProvider is not available
   let profileContext = null;
   try {
@@ -1478,67 +1471,13 @@ export default function Home() {
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
 
-  // Fetch admin categories as global for homepage category rail.
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      const zoneKey = "global-admin-categories"
-      try {
-        // Dedupe repeated calls (StrictMode + zone settling). Cache per zoneKey and share in-flight request.
-        const cached = publicCategoriesCacheRef.current.get(zoneKey)
-        if (cached) {
-          if (!cancelled) setRealCategories(cached)
-          return
-        }
+  // Show skeletons immediately while loading — delayed toggles caused visible layout swap (CLS).
+  const showBannerSkeleton = loadingBanners;
+  const showCategorySkeleton = loadingRealCategories || loadingMenuCategories;
+  const showExploreSkeleton = loadingLandingConfig;
+  const showRestaurantSkeleton = isLoadingFilterResults || loadingRestaurants || Boolean(zoneLoading);
 
-        const inFlight = publicCategoriesInFlightRef.current.get(zoneKey)
-        if (inFlight) {
-          const categories = await inFlight
-          if (!cancelled) setRealCategories(categories)
-          return
-        }
 
-        setLoadingRealCategories(true)
-        const promise = (async () => {
-          const res = await adminAPI.getPublicCategories({})
-          const list =
-            res?.data?.data?.categories ||
-            res?.data?.categories ||
-            []
-          const categories = Array.isArray(list)
-            ? list.map((cat, idx) => ({
-                id: String(cat?.id || cat?._id || cat?.slug || idx),
-                name: cat?.name || "",
-                slug: cat?.slug || String(cat?.name || "").toLowerCase().replace(/\s+/g, "-"),
-                image:
-                  normalizeImageUrl(cat?.image || cat?.imageUrl) ||
-                  foodImages[idx % foodImages.length] ||
-                  foodImages[0],
-                type: cat?.type || "",
-              }))
-            : []
-
-          publicCategoriesCacheRef.current.set(zoneKey, categories)
-          return categories
-        })()
-
-        publicCategoriesInFlightRef.current.set(zoneKey, promise)
-        const categories = await promise
-        publicCategoriesInFlightRef.current.delete(zoneKey)
-
-        if (!cancelled) setRealCategories(categories)
-      } catch (err) {
-        debugWarn("Failed to fetch categories:", err)
-        if (!cancelled) setRealCategories([])
-      } finally {
-        if (!cancelled) setLoadingRealCategories(false)
-      }
-    }
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [normalizeImageUrl])
 
   // Memoize cartCount to prevent recalculation on every render - use cart directly
   const cartCount = useMemo(
@@ -1845,9 +1784,11 @@ export default function Home() {
         }
 
         // Strict zone-only listing for user home.
-        // If zone is not detected yet, don't fetch global restaurants.
+        // If zone is not detected yet, wait for zone detection to complete.
         if (!zoneId) {
-          setRestaurantsData([]);
+          if (!zoneLoading) {
+            setRestaurantsData([]);
+          }
           return;
         }
         params.zoneId = zoneId;
@@ -2097,14 +2038,18 @@ export default function Home() {
                   Number(restaurant.zoneFeaturedRank) <= 10
                     ? Number(restaurant.zoneFeaturedRank)
                     : null,
+                isSponsored: restaurant.isSponsored === true || restaurant.isSponsored === "true",
               };
             },
           );
 
           const sortRestaurantsForDisplay = (restaurants) => {
-            if (!userLat || !userLng) return restaurants;
             return [...restaurants].sort((a, b) => {
-              // Available restaurants first, then unavailable
+              // 1. Sponsored restaurants ALWAYS come first
+              if (a.isSponsored && !b.isSponsored) return -1;
+              if (!a.isSponsored && b.isSponsored) return 1;
+
+              // 2. Available restaurants first, then unavailable
               const aAvailable = getRestaurantAvailabilityStatus(
                 a,
                 new Date(),
@@ -2150,62 +2095,6 @@ export default function Home() {
           startTransition(() => {
             setRestaurantsData(sortRestaurantsForDisplay(transformedRestaurants));
           });
-
-          const restaurantsNeedingOutletTimings = transformedRestaurants.filter(
-            (restaurant) => restaurant.mongoId && !restaurant.outletTimings,
-          );
-
-          if (restaurantsNeedingOutletTimings.length > 0) {
-            void (async () => {
-              const resolvedOutletTimings = new Map();
-
-              for (const restaurant of restaurantsNeedingOutletTimings) {
-                try {
-                  const outletResponse =
-                    await restaurantAPI.getOutletTimingsByRestaurantId(
-                      restaurant.mongoId,
-                      { noCache: true },
-                    );
-                  const outletTimings =
-                    outletResponse?.data?.data?.outletTimings ||
-                    outletResponse?.data?.outletTimings ||
-                    null;
-
-                  if (outletTimings) {
-                    resolvedOutletTimings.set(restaurant.mongoId, outletTimings);
-                  }
-                } catch (_) {
-                  // Keep the existing restaurant data if enrichment fails.
-                }
-              }
-
-              if (
-                requestSeq !== restaurantsRequestSeqRef.current ||
-                resolvedOutletTimings.size === 0
-              ) {
-                return;
-              }
-
-              startTransition(() => {
-                setRestaurantsData((currentRestaurants) => {
-                  let hasChanges = false;
-                  const nextRestaurants = currentRestaurants.map((restaurant) => {
-                    if (!restaurant.mongoId) return restaurant;
-                    const outletTimings = resolvedOutletTimings.get(
-                      restaurant.mongoId,
-                    );
-                    if (!outletTimings) return restaurant;
-                    hasChanges = true;
-                    return { ...restaurant, outletTimings };
-                  });
-
-                  return hasChanges
-                    ? sortRestaurantsForDisplay(nextRestaurants)
-                    : currentRestaurants;
-                });
-              });
-            })();
-          }
         } else {
           debugWarn("Invalid API response structure:", response.data);
           setRestaurantsData([]);
@@ -2671,6 +2560,11 @@ export default function Home() {
     const base = (restaurantsData || []).filter(matchesVegMode);
 
     return [...base].sort((a, b) => {
+      // 1. Sponsored restaurants ALWAYS come first
+      if (a.isSponsored && !b.isSponsored) return -1;
+      if (!a.isSponsored && b.isSponsored) return 1;
+
+      // 2. Zone featured rank (1 to 10)
       const aRank = Number(a.zoneFeaturedRank);
       const bRank = Number(b.zoneFeaturedRank);
       const aHasRank = aRank >= 1 && aRank <= 10;
@@ -3569,6 +3463,12 @@ export default function Home() {
                             }`}>
                             {/* Image Section with Carousel */}
                             <div className="relative">
+                              {restaurant.isSponsored && (
+                                <div className="absolute top-3 left-3 px-2.5 py-1 bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] sm:text-xs font-black rounded-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-20">
+                                  <Star className="w-3.5 h-3.5 fill-current" />
+                                  Sponsored
+                                </div>
+                              )}
                               <RecommendedFoodImageStrip
                                 restaurant={restaurant}
                                 priority={index < 3}

@@ -442,11 +442,20 @@ export default function Profile() {
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 pb-20 sm:pb-24">
         {/* Header: Back Arrow */}
         <div className="flex items-center mb-4">
-          <Link to="/user">
-            <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
-              <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
-            </Button>
-          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 2) {
+                navigate(-1)
+              } else {
+                navigate("/food/user")
+              }
+            }}
+            className="h-8 w-8 p-0 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-center cursor-pointer border-0 bg-transparent"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
+          </button>
         </div>
 
         {/* Profile Info Card */}

@@ -680,7 +680,6 @@ export default function HomeHeader({
                 <div
                   className="flex-1 min-w-0 rounded-[14px] flex items-center px-3 py-2 bg-white dark:bg-[#1a1a1a] shadow-[0_4px_16px_rgba(0,0,0,0.15)] cursor-pointer active:scale-[0.99] transition-all duration-200 overflow-hidden"
                   onClick={onSearchFocus}
-                  onTouchStart={onSearchFocus}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {

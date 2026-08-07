@@ -1,8 +1,15 @@
 import { Link, useNavigate } from "react-router-dom"
 import { X, ChevronRight } from "lucide-react"
 import { useCart } from "@food/context/CartContext"
+import { isModuleAuthenticated } from "@food/utils/auth"
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+
+const cardVariants = {
+  initial: { opacity: 0, y: 50, scale: 0.95 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } },
+  exit: { opacity: 0, y: 50, scale: 0.95, transition: { duration: 0.2 } },
+}
 
 export default function StickyCartCard() {
   const { cart, getCartCount, triggerEqosyCartLoader } = useCart()
@@ -10,79 +17,14 @@ export default function StickyCartCard() {
   const [isVisible, setIsVisible] = useState(true)
   const [bottomPosition, setBottomPosition] = useState("bottom-[88px]") // Fixed above bottom navigation
   const cartCount = getCartCount()
+  const isAuthenticated = isModuleAuthenticated("user")
 
-  // Set fixed position above bottom navigation (no scroll-based movement)
-  useEffect(() => {
-    // Set initial position based on screen size
-    const setInitialPosition = () => {
-      if (window.innerWidth >= 768) {
-        setBottomPosition("bottom-6") // Desktop: fixed position
-      } else {
-        setBottomPosition("bottom-[88px]") // Mobile: above bottom nav (fixed, doesn't move with scroll)
-      }
-    }
+  const restaurantName = cart?.restaurantName || cart?.restaurant?.restaurantName || cart?.restaurant?.name || cart?.items?.[0]?.restaurantName || "Restaurant"
+  const restaurantImage = cart?.restaurantImage || cart?.restaurant?.image || cart?.restaurant?.profileImage?.url || (typeof cart?.restaurant?.profileImage === 'string' ? cart.restaurant.profileImage : null) || cart?.items?.[0]?.image || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80"
+  const restaurantSlug = cart?.restaurantSlug || cart?.restaurant?.slug || cart?.restaurantId || cart?.restaurant?._id || ""
 
-    setInitialPosition()
-
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setBottomPosition("bottom-6") // Desktop: always fixed
-      } else {
-        setBottomPosition("bottom-[88px]") // Mobile: above bottom nav (fixed)
-      }
-    }
-
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      window.removeEventListener("resize", handleResize)
-    }
-  }, [])
-
-  // Get restaurant info from first cart item or use default
-  const restaurantName = cart[0]?.restaurant || "Restaurant"
-  const restaurantImage = cart[0]?.image || "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=200&fit=crop"
-
-  // Create restaurant slug from restaurant name
-  const restaurantSlug = restaurantName.toLowerCase().replace(/\s+/g, "-")
-
-  // Calculate total price
-  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity * 83), 0)
-
-  // Animation variants for the popout effect
-  const cardVariants = {
-    initial: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      rotate: 0,
-    },
-    animate: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      rotate: 0,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        mass: 0.8,
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.8,
-      y: 100,
-      rotate: -5,
-      transition: {
-        duration: 0.4,
-        ease: [0.4, 0, 0.2, 1],
-      },
-    },
-  }
-
-  // Don't render if cart is empty
-  if (cartCount === 0) return null
+  // Don't render if cart is empty or user is not authenticated
+  if (cartCount === 0 || !isAuthenticated) return null
 
   return (
     <AnimatePresence>

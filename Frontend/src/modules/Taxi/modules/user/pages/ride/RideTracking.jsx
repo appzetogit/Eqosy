@@ -100,10 +100,13 @@ const getTrackingVehicleIcon = (ride, driver) => {
   const customIcon = String(
     ride?.vehicleIconUrl ||
     ride?.vehicle?.vehicleIconUrl ||
+    ride?.vehicle?.map_icon ||
     ride?.vehicle?.icon ||
+    ride?.vehicle?.image ||
     driver?.vehicleIconUrl ||
     driver?.map_icon ||
     driver?.icon ||
+    driver?.image ||
     '',
   ).trim();
 
@@ -138,6 +141,10 @@ const resolveAssetUrl = (value = '') => {
   }
 
   if (/^(https?:|data:image\/|blob:)/i.test(raw)) {
+    return raw;
+  }
+
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) {
     return raw;
   }
 

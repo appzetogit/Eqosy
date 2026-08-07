@@ -1172,17 +1172,22 @@ const SelectLocation = () => {
                   </div>
                 </div>
                 <div
-                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'pickup' ? 'ring-2 ring-emerald-200' : ''}`}
+                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2 transition-all ${activeInput === 'pickup' ? 'ring-2 ring-emerald-200' : ''}`}
                   onClick={() => setActiveInput('pickup')}
                 >
-                  <input
-                    type="text"
-                    value={pickup}
-                    onChange={(e) => setPickup(sanitizeLocationInput(e.target.value))}
-                    onFocus={() => setActiveInput('pickup')}
-                    placeholder="Your pickup location"
-                    className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
-                  />
+                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 leading-none mb-1">
+                      Pick up
+                    </span>
+                    <input
+                      type="text"
+                      value={pickup}
+                      onChange={(e) => setPickup(sanitizeLocationInput(e.target.value))}
+                      onFocus={() => setActiveInput('pickup')}
+                      placeholder="Enter pickup location..."
+                      className="w-full bg-transparent border-none text-[14px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300 p-0"
+                    />
+                  </div>
                   {pickup.length > 0 && (
                     <button onClick={() => setPickup('')} className="ml-2 shrink-0">
                       <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />
@@ -1211,22 +1216,27 @@ const SelectLocation = () => {
                         </div>
                       </div>
                       <div
-                        className={`flex-1 flex items-center rounded-xl px-3 py-2.5 transition-all ${stop.trim().length > 0
+                        className={`flex-1 flex items-center rounded-xl px-3 py-2 transition-all ${stop.trim().length > 0
                             ? 'bg-white/90 border border-indigo-200 shadow-[0_10px_24px_rgba(99,102,241,0.10)]'
                             : 'bg-indigo-50/70 border border-indigo-100/70'
                           } ${activeInput === idx ? 'ring-2 ring-indigo-200' : ''}`}
                         onClick={() => setActiveInput(idx)}
                       >
-                        <input
-                          type="text"
-                          value={stop}
-                          autoFocus={activeInput === idx}
-                          placeholder={`Stop ${idx + 1} location...`}
-                          onFocus={() => setActiveInput(idx)}
-                          onChange={(e) => updateStop(idx, sanitizeLocationInput(e.target.value))}
-                          className={`w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none ${stop.trim().length > 0 ? 'placeholder:text-slate-300' : 'placeholder:text-indigo-300'
-                            }`}
-                        />
+                        <div className="min-w-0 flex-1 flex flex-col justify-center">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 leading-none mb-1">
+                            Stop {idx + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={stop}
+                            autoFocus={activeInput === idx}
+                            placeholder={`Enter stop ${idx + 1} location...`}
+                            onFocus={() => setActiveInput(idx)}
+                            onChange={(e) => updateStop(idx, sanitizeLocationInput(e.target.value))}
+                            className={`w-full bg-transparent border-none text-[14px] font-medium text-slate-900 focus:outline-none p-0 ${stop.trim().length > 0 ? 'placeholder:text-slate-300' : 'placeholder:text-indigo-300'
+                              }`}
+                          />
+                        </div>
                         {stop.length > 0 && (
                           <button onClick={() => updateStop(idx, '')} className="ml-2 shrink-0">
                             <X size={16} className="text-indigo-300 hover:text-indigo-600 transition-colors" />
@@ -1254,18 +1264,23 @@ const SelectLocation = () => {
                   </div>
                 </div>
                 <div
-                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2.5 transition-all ${activeInput === 'drop' ? 'ring-2 ring-orange-200' : ''}`}
+                  className={`flex-1 flex items-center bg-white/70 border border-white/80 rounded-xl px-3 py-2 transition-all ${activeInput === 'drop' ? 'ring-2 ring-orange-200' : ''}`}
                   onClick={() => setActiveInput('drop')}
                 >
-                  <input
-                    type="text"
-                    value={drop}
-                    autoFocus={activeInput === 'drop'}
-                    placeholder="Enter drop location..."
-                    onFocus={() => setActiveInput('drop')}
-                    onChange={(e) => setDrop(sanitizeLocationInput(e.target.value))}
-                    className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
-                  />
+                  <div className="min-w-0 flex-1 flex flex-col justify-center">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-orange-600 leading-none mb-1">
+                      Drop
+                    </span>
+                    <input
+                      type="text"
+                      value={drop}
+                      autoFocus={activeInput === 'drop'}
+                      placeholder="Enter drop location..."
+                      onFocus={() => setActiveInput('drop')}
+                      onChange={(e) => setDrop(sanitizeLocationInput(e.target.value))}
+                      className="w-full bg-transparent border-none text-[14px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300 p-0"
+                    />
+                  </div>
                   {drop.length > 0 && (
                     <button onClick={() => setDrop('')} className="ml-2 shrink-0">
                       <X size={16} className="text-slate-300 hover:text-slate-600 transition-colors" />

@@ -673,7 +673,7 @@ export default function AllOrdersPage() {
               {order.items.slice(0, 1).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <span className="text-sm text-gray-900">
-                    {item.quantity} x {item.name}
+                    {item.quantity} x {item.name}{(item.variantName || item.variant || item.variation) ? ` (${item.variantName || item.variant || item.variation})` : ""}
                   </span>
                   <span className="text-sm font-medium text-gray-900">{formatMoney(item.price)}</span>
                 </div>

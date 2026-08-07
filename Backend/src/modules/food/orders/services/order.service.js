@@ -791,7 +791,7 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     orderMongoId: order._id?.toString?.(),
     orderId: order._id.toString(),
     userId,
-    reason: reason || "",
+    reason: displayReason || cancellationReason || "",
   });
 
   // Sync transaction status
@@ -803,7 +803,7 @@ export async function cancelOrder(orderId, userId, payload = {}) {
       (finalPaymentStatus === "paid" || finalPaymentStatus === "refunded");
     await foodTransactionService.updateTransactionStatus(order._id, 'cancelled_by_user', {
       status: isOnlinePaid ? 'refunded' : 'failed',
-      note: `Order cancelled by user: ${reason || "No reason"}`,
+      note: `Order cancelled by user: ${displayReason || cancellationReason || "No reason"}`,
       recordedByRole: 'USER',
       recordedById: userId
     });
@@ -1393,16 +1393,10 @@ export async function switchToCash(orderId, deliveryPartnerId) {
   return paymentService.switchToCash(orderId, deliveryPartnerId);
 }
 
-
 // ----- Admin -----
-export async function listOrdersAdmin(query) {
+export async function listOrdersAdmin(query = {}) {
   const { page, limit, skip } = buildPaginationOptions(query);
-  const filter = {
-    $or: [
-      { "payment.method": { $in: ["cash", "wallet"] } },
-      { "payment.status": { $in: ["paid", "authorized", "captured", "settled", "refunded"] } },
-    ],
-  };
+  const filter = {};
 
   const rawStatus =
     typeof query.status === "string" ? query.status.trim().toLowerCase() : "";
@@ -1416,11 +1410,32 @@ export async function listOrdersAdmin(query) {
     typeof query.startDate === "string" ? query.startDate.trim() : "";
   const endDateRaw =
     typeof query.endDate === "string" ? query.endDate.trim() : "";
+  const searchTerm =
+    typeof (query.search || query.q || query.orderId || query.order_id) === "string"
+      ? String(query.search || query.q || query.orderId || query.order_id).trim()
+      : "";
+
+  if (searchTerm) {
+    const rx = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const searchConditions = [
+      { order_id: rx },
+      { orderId: rx },
+      { customerName: rx },
+      { customerPhone: rx }
+    ];
+    if (mongoose.isValidObjectId(searchTerm)) {
+      searchConditions.push({ _id: new mongoose.Types.ObjectId(searchTerm) });
+    }
+    filter.$or = searchConditions;
+  }
 
   if (rawStatus && rawStatus !== "all") {
     switch (rawStatus) {
       case "pending":
-        filter.orderStatus = { $in: ["created", "confirmed"] };
+        filter.orderStatus = { $in: ["pending_payment", "created", "confirmed", "pending"] };
+        break;
+      case "pending_payment":
+        filter.orderStatus = "pending_payment";
         break;
       case "accepted":
         filter.orderStatus = "confirmed";
@@ -1429,7 +1444,7 @@ export async function listOrdersAdmin(query) {
         filter.orderStatus = { $in: ["preparing", "ready_for_pickup"] };
         break;
       case "food-on-the-way":
-        filter.orderStatus = "picked_up";
+        filter.orderStatus = { $in: ["picked_up", "en_route_to_delivery", "at_drop"] };
         break;
       case "delivered":
         filter.orderStatus = "delivered";
@@ -1448,7 +1463,7 @@ export async function listOrdersAdmin(query) {
         filter.orderStatus = "cancelled_by_restaurant";
         break;
       case "payment-failed":
-        filter["payment.status"] = "failed";
+        filter.$or = [{ "payment.status": "failed" }, { orderStatus: "pending_payment" }];
         break;
       case "refunded":
         filter["payment.status"] = "refunded";
