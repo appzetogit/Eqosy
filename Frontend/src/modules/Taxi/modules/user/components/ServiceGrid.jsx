@@ -60,7 +60,7 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
         animate={{ x: coords.x, y: coords.y }}
         whileHover={{ y: -6, scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
-        className="relative z-10 w-full h-[94px] flex flex-col items-center justify-between p-2.5 rounded-[12px] bg-white/85 border border-slate-200/50 backdrop-blur-xl shadow-md shadow-slate-200/20 hover:shadow-lg hover:shadow-slate-300/30 transition-shadow duration-300 text-center overflow-hidden select-none group"
+        className="relative z-10 w-full min-h-[112px] flex flex-col items-center justify-between p-3 rounded-[16px] bg-white/90 border border-slate-200/60 backdrop-blur-xl shadow-md shadow-slate-200/20 hover:shadow-xl hover:shadow-slate-300/40 transition-all duration-300 text-center overflow-hidden select-none group"
       >
         {/* Shine Sweep Effect */}
         <motion.div
@@ -70,9 +70,9 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
         />
 
         {/* Center: Icon container with continuous floating animation */}
-        <div className="flex flex-col items-center justify-center flex-1 w-full pt-1">
+        <div className="flex flex-col items-center justify-center flex-1 w-full pt-1 pb-0.5">
           <motion.div
-            animate={{ y: [0, -4, 0] }}
+            animate={{ y: [0, -3, 0] }}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             className="flex items-center justify-center"
           >
@@ -82,19 +82,21 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
               src={imgSrc || icon}
               onError={() => fallbackIcon && setImgSrc(fallbackIcon)}
               alt={label || ''}
-              className="h-14 w-14 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
+              className="h-12 w-12 object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)]"
             />
           </motion.div>
         </div>
 
         {/* Bottom: Text area */}
-        <div className="w-full mt-1">
-          <h3 className="text-[10px] font-black text-slate-800 tracking-tight leading-tight truncate">
+        <div className="w-full flex flex-col items-center justify-center mt-1">
+          <h3 className="text-[11px] font-extrabold text-slate-800 tracking-tight leading-snug line-clamp-1 w-full px-0.5">
             {label}
           </h3>
-          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider leading-none mt-0.5 truncate">
-            {description}
-          </p>
+          {description && (
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wide leading-tight mt-0.5 line-clamp-1 w-full px-0.5">
+              {description}
+            </p>
+          )}
         </div>
       </motion.button>
     </motion.div>
@@ -320,7 +322,7 @@ const ServiceGrid = ({ plain = false }) => {
       <div className="relative z-10 grid grid-cols-3 gap-3.5">
         {loading ? (
           [...Array(5)].map((_, i) => (
-            <div key={i} className="w-full h-[94px] animate-pulse rounded-[12px] border border-white/80 bg-white/40" />
+            <div key={i} className="w-full h-[112px] animate-pulse rounded-[16px] border border-white/80 bg-white/40" />
           ))
         ) : (
           services.map((service, index) => (

@@ -1102,12 +1102,16 @@ export default function OrdersMain() {
     }
   };
 
-  // Lenis smooth scrolling
+  // Lenis smooth scrolling (skipped on mobile touch devices to ensure native 1-finger smooth scroll)
   useEffect(() => {
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    if (isTouchDevice) return;
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
+      syncTouch: false,
     });
 
     function raf(time) {
@@ -1348,8 +1352,8 @@ export default function OrdersMain() {
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handlePointerEnd);
-    // passive: false is required to allow preventDefault() during swipe
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    // Use passive listener to allow fluid 1-finger scrolling on touch devices
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("touchend", handlePointerEnd);
     window.addEventListener("touchcancel", handlePointerEnd);
 

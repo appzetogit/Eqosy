@@ -1223,11 +1223,12 @@ export async function updateOrderStatusRestaurant(
         }
       }
 
-      // When ready for pickup -> ping assigned delivery partner.
+      // When ready for pickup -> ping assigned delivery partner OR trigger auto-assign dispatch immediately.
       if (String(orderStatus) === 'ready_for_pickup' && String(from) !== 'ready_for_pickup') {
         console.log(`[DEBUG] Order ${order._id.toString()} changed to 'ready_for_pickup'.`);
         const assignedId = order.dispatch?.deliveryPartnerId?.toString?.() || order.dispatch?.deliveryPartnerId;
-        if (assignedId) {
+        const isAccepted = order.dispatch?.status === 'accepted';
+        if (assignedId && isAccepted) {
           console.log(`[DEBUG] Notifying assigned partner ${assignedId} that order is ready.`);
           const restaurant = await FoodRestaurant.findById(order.restaurantId).select('restaurantName location addressLine1 area city state').lean();
           const payload = buildDeliverySocketPayload(order, restaurant);
@@ -1236,7 +1237,13 @@ export async function updateOrderStatusRestaurant(
           );
           io.to(rooms.delivery(assignedId)).emit('order_ready', payload);
         } else {
-          console.log(`[DEBUG] Order ${order._id.toString()} is ready but no partner assigned.`);
+          console.log(`[DEBUG] Order ${order._id.toString()} is ready but no partner accepted yet. Triggering auto-assign dispatch immediately.`);
+          try {
+            await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
+            await tryAutoAssign(order._id);
+          } catch (err) {
+            console.error(`[DEBUG] Auto-assign on ready_for_pickup failed:`, err);
+          }
         }
       }
     }
