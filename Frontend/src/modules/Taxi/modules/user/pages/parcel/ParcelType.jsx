@@ -14,6 +14,8 @@ import trucksImg from '../../../../assets/images/delivery/trucks.png';
 import bikeImg from '../../../../assets/images/delivery/bike.png';
 import moversImg from '../../../../assets/images/delivery/movers.png';
 
+import { useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
+
 const Motion = motion;
 const PARCEL_BOOKING_DRAFT_KEY = 'parcelBookingDraft';
 
@@ -49,17 +51,106 @@ const DELIVERY_CATEGORY_OPTIONS = [
   }
 ];
 
+const readParcelDraft = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(PARCEL_BOOKING_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 const ParcelType = () => {
+  const { isLoaded: isGoogleMapsLoaded } = useAppGoogleMapsLoader();
+  const draft = useMemo(() => readParcelDraft(), []);
+
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [pickupAddress, setPickupAddress] = useState('1A, Vandana Nagar Main Rd, Rajshri Palace Colon...');
+  const [pickupAddress, setPickupAddress] = useState(() => draft?.pickup || 'Locating current location...');
+  const [pickupCoords, setPickupCoords] = useState(() => draft?.pickupCoords || null);
+  const [isLocating, setIsLocating] = useState(() => !draft?.pickup);
+
   const navigate = useNavigate();
   const location = useLocation();
   const routePrefix = useMemo(
     () => (location.pathname.startsWith('/taxi/user') ? '/taxi/user' : ''),
     [location.pathname],
   );
+
+  // Fetch live location if no stored pickup in draft
+  useEffect(() => {
+    if (draft?.pickup && draft?.pickupCoords) return;
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setPickupAddress('Tap to select pickup location');
+      setIsLocating(false);
+      return;
+    }
+
+    setIsLocating(true);
+
+    const resolveReverseGeocode = (lat, lng) => {
+      if (typeof window !== 'undefined' && window.google?.maps?.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          setIsLocating(false);
+          if (status === 'OK' && results?.[0]?.formatted_address) {
+            setPickupAddress(results[0].formatted_address);
+          } else {
+            setPickupAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          }
+        });
+      } else {
+        setPickupAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        setIsLocating(false);
+      }
+    };
+
+    const onSuccess = (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const coords = [lng, lat];
+      setPickupCoords(coords);
+      resolveReverseGeocode(lat, lng);
+    };
+
+    const onError = (err) => {
+      console.warn('High accuracy geolocation failed on ParcelType, retrying low accuracy...', err);
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        () => {
+          setIsLocating(false);
+          setPickupAddress('Tap to select pickup location');
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      onSuccess,
+      onError,
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  }, [draft]);
+
+  // Re-geocode if Google Maps loaded after location was fetched as raw coordinates
+  useEffect(() => {
+    if (!isGoogleMapsLoaded || !pickupCoords || !Array.isArray(pickupCoords) || pickupCoords.length < 2) return;
+    if (pickupAddress && !pickupAddress.includes(',') && !pickupAddress.toLowerCase().includes('locating')) return;
+
+    const lng = pickupCoords[0];
+    const lat = pickupCoords[1];
+    if (typeof window !== 'undefined' && window.google?.maps?.Geocoder) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results?.[0]?.formatted_address) {
+          setPickupAddress(results[0].formatted_address);
+        }
+      });
+    }
+  }, [isGoogleMapsLoaded, pickupCoords]);
 
   useEffect(() => {
     const fetchVehicles = async () => {
@@ -116,6 +207,7 @@ const ParcelType = () => {
       category: category.id,
       deliveryCategory: category.id,
       pickup: pickupAddress,
+      pickupCoords: pickupCoords,
     };
 
     if (typeof window !== 'undefined') {
@@ -162,17 +254,20 @@ const ParcelType = () => {
            <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-lg border border-white/50"
-            onClick={() => navigate(`${routePrefix || '/taxi/user'}/parcel/details`, { state: { editPickup: true } })}
+            className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-lg border border-white/50 cursor-pointer hover:bg-slate-50/90 transition-colors"
+            onClick={() => navigate(`${routePrefix || '/taxi/user'}/parcel/details`, { state: { editPickup: true, pickup: pickupAddress, pickupCoords: pickupCoords } })}
            >
              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-               <MapPin size={20} className="text-emerald-500 fill-emerald-500/20" />
+               <MapPin size={20} className={`text-emerald-500 fill-emerald-500/20 ${isLocating ? 'animate-bounce' : ''}`} />
              </div>
              <div className="flex-1 min-w-0">
-               <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Pick up from</p>
+               <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                 Pick up from
+                 {isLocating && <span className="text-[10px] text-emerald-600 font-bold lowercase animate-pulse">(locating...)</span>}
+               </p>
                <p className="text-[13px] font-bold text-slate-900 truncate mt-0.5">{pickupAddress}</p>
              </div>
-             <ChevronRight size={18} className="text-slate-400" />
+             <ChevronRight size={18} className="text-slate-400 shrink-0" />
            </motion.div>
         </div>
       </div>
