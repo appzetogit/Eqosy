@@ -1091,17 +1091,23 @@ export const restaurantAPI = {
         .map((o) => {
           const isPct = o.discountType === "percentage";
           const discountVal = Number(o.discountValue || 0);
+          const maxDisc = o.maxDiscount != null ? Number(o.maxDiscount) : null;
+          const displayStr = isPct
+            ? `${discountVal}% OFF${maxDisc ? ` UPTO ₹${maxDisc}` : ""}`
+            : `FLAT ₹${discountVal} OFF`;
+
           return {
             couponCode: o.couponCode,
             discountType: o.discountType,
             discountPercentage: isPct ? discountVal : 0,
             discountValue: discountVal,
-            // For backward compat with Cart.jsx mapping (original - discounted = savings)
-            originalPrice: isPct ? 0 : discountVal,
-            discountedPrice: 0,
+            discount: discountVal,
+            discountDisplay: displayStr,
+            originalPrice: isPct ? 100 : discountVal,
+            discountedPrice: isPct ? Math.max(0, 100 - discountVal) : 0,
             minOrderValue: Number(o.minOrderValue || 0),
             minOrder: Number(o.minOrderValue || 0),
-            maxDiscount: o.maxDiscount != null ? Number(o.maxDiscount) : null,
+            maxDiscount: maxDisc,
             customerGroup: o.customerScope || "all",
             isGlobalCoupon: true,
             endDate: o.endDate || null,
@@ -2045,6 +2051,14 @@ export const deliveryAPI = {
   getEmergencyHelp: () =>
     apiClient.get("/food/delivery/emergency-help", {
       contextModule: "delivery",
+    }),
+  requestEmergencyOffline: (reason) =>
+    apiClient.post("/food/delivery/emergency-offline-request", { reason }, {
+      contextModule: "delivery"
+    }),
+  getEmergencyOfflineStatus: () =>
+    apiClient.get("/food/delivery/emergency-offline-status", {
+      contextModule: "delivery"
     }),
   /** GET /food/delivery/cash-limit - admin-set cash limit for delivery partner */
   getCashLimit: () =>

@@ -3554,13 +3554,44 @@ export async function getAllOffers(_query = {}) {
 }
 
 export async function createAdminOffer(body) {
-    const existing = await FoodOffer.findOne({ couponCode: body.couponCode }).lean();
+    const formattedCode = String(body.couponCode || '').trim().toUpperCase();
+    if (!formattedCode) {
+        throw new ValidationError('Coupon code is required');
+    }
+
+    const existing = await FoodOffer.findOne({ couponCode: formattedCode });
     if (existing) {
-        throw new ValidationError('Coupon code already exists');
+        const now = Date.now();
+        const isExpired = existing.status === 'inactive' || (existing.endDate && new Date(existing.endDate).getTime() <= now);
+
+        if (isExpired) {
+            existing.couponCode = formattedCode;
+            existing.discountType = body.discountType;
+            existing.discountValue = body.discountValue;
+            existing.customerScope = body.customerScope;
+            existing.restaurantScope = body.restaurantScope;
+            existing.restaurantId = body.restaurantScope === 'selected' ? body.restaurantId : undefined;
+            existing.minOrderValue = body.minOrderValue ?? 0;
+            existing.maxDiscount = body.maxDiscount ?? null;
+            existing.usageLimit = body.usageLimit ?? null;
+            existing.perUserLimit = body.perUserLimit ?? null;
+            existing.startDate = body.startDate;
+            existing.isFirstOrderOnly = body.isFirstOrderOnly ?? false;
+            existing.endDate = body.endDate;
+            existing.status = body.endDate && new Date(body.endDate).getTime() <= now ? 'inactive' : 'active';
+            existing.showInCart = true;
+            existing.createdByRole = 'ADMIN';
+            existing.usedCount = 0;
+
+            await existing.save();
+            return existing.toObject();
+        } else {
+            throw new ValidationError('An active coupon with this code already exists. Please choose a different code or wait until it expires.');
+        }
     }
 
     const doc = await FoodOffer.create({
-        couponCode: body.couponCode,
+        couponCode: formattedCode,
         discountType: body.discountType,
         discountValue: body.discountValue,
         customerScope: body.customerScope,
@@ -4796,8 +4827,9 @@ export async function getWithdrawals(query = {}) {
 export async function updateWithdrawalStatus(id, { status, adminNote, rejectionReason, transactionId }) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) throw new ValidationError('Invalid withdrawal ID');
 
+    const nextStatus = String(status).toLowerCase();
     const update = {
-        status: String(status).toLowerCase(),
+        status: nextStatus,
         adminNote,
         rejectionReason,
         transactionId,
@@ -4811,6 +4843,45 @@ export async function updateWithdrawalStatus(id, { status, adminNote, rejectionR
     ).populate('restaurantId', 'restaurantName').lean();
 
     if (!updated) throw new ValidationError('Withdrawal request not found');
+
+    if (['approved', 'completed', 'settled'].includes(nextStatus)) {
+        try {
+            const targetRestaurantId = updated.restaurantId?._id || updated.restaurantId;
+            await FoodTransaction.updateMany(
+                {
+                    restaurantId: targetRestaurantId,
+                    status: { $in: ['captured', 'authorized'] },
+                    'settlement.isRestaurantSettled': { $ne: true }
+                },
+                {
+                    $set: {
+                        'settlement.isRestaurantSettled': true,
+                        'settlement.restaurantSettledAt': new Date(),
+                        'settlement.restaurantWithdrawalId': updated._id
+                    }
+                }
+            );
+
+            if (targetRestaurantId) {
+                const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
+                await notifyOwnersSafely(
+                    [{ ownerType: 'RESTAURANT', ownerId: targetRestaurantId }],
+                    {
+                        title: 'Withdrawal Request Approved! 🎉',
+                        body: 'Your withdrawal request have approved successfully and money has been credited to your selected bank account',
+                        data: {
+                            type: 'WITHDRAWAL_APPROVED',
+                            withdrawalId: String(updated._id),
+                            amount: String(updated.amount)
+                        }
+                    }
+                );
+            }
+        } catch (err) {
+            logger.warn(`Failed to update transaction settlement or notify on withdrawal approval: ${err?.message || err}`);
+        }
+    }
+
     return updated;
 }
 
@@ -4873,7 +4944,7 @@ export async function updateDeliveryWithdrawalStatus(id, { status, adminNote, re
     if (!updated) throw new ValidationError('Withdrawal request not found');
 
     // If approved, deduct from wallet balance
-    if (status.toLowerCase() === 'approved' || status.toLowerCase() === 'processed') {
+    if (['approved', 'processed', 'completed', 'settled'].includes(String(status).toLowerCase())) {
         const amount = Number(updated.amount || 0);
         if (amount > 0) {
             await FoodDeliveryWallet.findOneAndUpdate(
@@ -4885,6 +4956,27 @@ export async function updateDeliveryWithdrawalStatus(id, { status, adminNote, re
                     }
                 }
             );
+        }
+
+        try {
+            const partnerId = updated.deliveryPartnerId?._id || updated.deliveryPartnerId;
+            if (partnerId) {
+                const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
+                await notifyOwnersSafely(
+                    [{ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId }],
+                    {
+                        title: 'Withdrawal Request Approved! 🎉',
+                        body: 'Your withdrawal request have approved successfully and money has been credited to your selected bank account',
+                        data: {
+                            type: 'WITHDRAWAL_APPROVED',
+                            withdrawalId: String(updated._id),
+                            amount: String(updated.amount)
+                        }
+                    }
+                );
+            }
+        } catch (err) {
+            logger.warn(`Failed to notify delivery partner on withdrawal approval: ${err?.message || err}`);
         }
     }
 

@@ -179,6 +179,18 @@ const DEFAULT_DRIVER_DOCUMENT_TEMPLATES = [
       { key: 'pan_back', label: 'PAN Card (Back Side)', required: true },
     ],
   },
+  {
+    id: 'bank_passbook',
+    name: 'Bank Account Passbook',
+    account_type: 'both',
+    is_required: true,
+    has_identify_number: true,
+    identify_number_key: 'account_number',
+    has_expiry_date: false,
+    fields: [
+      { key: 'passbook_front', label: 'Bank Account Passbook / Cancelled Cheque Photo', required: true },
+    ],
+  },
 ];
 
 const StepDocuments = () => {

@@ -296,44 +296,59 @@ export const sendPushNotificationToAudience = async ({
   let failedCount = 0;
   const invalidTargets = [];
 
-  for (const batch of chunk(dedupedTargets, 500)) {
-    const response = await messaging.sendEachForMulticast({
-      tokens: batch.map((target) => target.token),
-      notification: {
-        title,
-        body,
-        ...(image ? { imageUrl: image } : {}),
-      },
-      data: {
-        notificationId: String(notificationId || ''),
-        serviceLocationId: String(serviceLocationId || ''),
-        sendTo: String(sendTo || 'all'),
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      },
-      android: {
-        priority: 'high',
-        notification: image ? { imageUrl: image } : undefined,
-      },
-      webpush: {
+  const userTargets = dedupedTargets.filter((t) => t.role === 'user');
+  const driverTargets = dedupedTargets.filter((t) => t.role === 'driver');
+  const targetGroups = [
+    { targets: userTargets, redirectUrl: '/taxi/user' },
+    { targets: driverTargets, redirectUrl: '/taxi/driver/home' },
+  ].filter((g) => g.targets.length > 0);
+
+  for (const group of targetGroups) {
+    for (const batch of chunk(group.targets, 500)) {
+      const response = await messaging.sendEachForMulticast({
+        tokens: batch.map((target) => target.token),
         notification: {
           title,
           body,
-          ...(image ? { image } : {}),
+          ...(image ? { imageUrl: image } : {}),
         },
-      },
-    });
+        data: {
+          notificationId: String(notificationId || ''),
+          serviceLocationId: String(serviceLocationId || 'all'),
+          sendTo: String(sendTo || 'all'),
+          redirect_url: group.redirectUrl,
+          link: group.redirectUrl,
+          targetUrl: group.redirectUrl,
+          click_action: group.redirectUrl,
+        },
+        android: {
+          priority: 'high',
+          notification: image ? { imageUrl: image } : undefined,
+        },
+        webpush: {
+          notification: {
+            title,
+            body,
+            ...(image ? { image } : {}),
+          },
+          fcmOptions: {
+            link: group.redirectUrl,
+          },
+        },
+      });
 
-    response.responses.forEach((item, index) => {
-      if (item.success) {
-        deliveredCount += 1;
-        return;
-      }
+      response.responses.forEach((item, index) => {
+        if (item.success) {
+          deliveredCount += 1;
+          return;
+        }
 
-      failedCount += 1;
-      if (INVALID_TOKEN_CODES.has(item.error?.code)) {
-        invalidTargets.push(batch[index]);
-      }
-    });
+        failedCount += 1;
+        if (INVALID_TOKEN_CODES.has(item.error?.code)) {
+          invalidTargets.push(batch[index]);
+        }
+      });
+    }
   }
 
   const invalidTokenCount = await removeInvalidTokens(invalidTargets);

@@ -19,7 +19,13 @@ export const listDiningBannersController = async (req, res, next) => {
 
 export const uploadDiningBannersController = async (req, res, next) => {
     try {
-        if (!req.files || !req.files.length) {
+        const fileList = Array.isArray(req.files)
+            ? req.files
+            : req.files
+            ? Object.values(req.files).flat()
+            : [];
+
+        if (!fileList || !fileList.length) {
             throw new ValidationError('No files uploaded');
         }
 
@@ -30,8 +36,9 @@ export const uploadDiningBannersController = async (req, res, next) => {
             diningType: req.body.diningType,
         };
 
-        const results = await createDiningBannersFromFiles(req.files, meta);
-        return sendResponse(res, 201, 'Dining banners uploaded', { banners: results });
+        const results = await createDiningBannersFromFiles(fileList, meta);
+        const uploadedBanners = results.filter(r => r.success).map(r => r.banner);
+        return sendResponse(res, 201, 'Dining banners uploaded', { banners: uploadedBanners, results });
     } catch (error) {
         next(error);
     }

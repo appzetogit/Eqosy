@@ -54,6 +54,12 @@ export const registerDeliveryPartner = async (payload, files) => {
             'food/delivery/license'
         );
     }
+    if (files?.bankPassbookPhoto?.[0]) {
+        images.bankPassbookPhoto = await uploadImageBuffer(
+            files.bankPassbookPhoto[0].buffer,
+            'food/delivery/bank'
+        );
+    }
 
     const partner = await FoodDeliveryPartner.create({
         name,
@@ -318,11 +324,19 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     const todayKey = new Date().toISOString().slice(0, 10);
 
     if (validStatus === 'online' && !forceBypassForDev) {
-        // Step 1: Enforce Active Gig Check
-        const { getActiveGigForPartner } = await import('./gig.service.js');
+        // Step 1: Enforce Active Gig Check (Online status allowed 15-30 mins before gig start)
+        const { getActiveGigForPartner, getUpcomingGigLoginDetails } = await import('./gig.service.js');
         const activeGig = await getActiveGigForPartner(partner._id);
 
         if (!activeGig) {
+            const upcomingInfo = await getUpcomingGigLoginDetails(partner._id);
+            if (upcomingInfo) {
+                const err = new ValidationError(
+                    `You can only log in online within 30 minutes of your scheduled gig start time (Your shift starts at ${upcomingInfo.startTime}).`
+                );
+                err.code = 'GIG_LOGIN_TOO_EARLY';
+                throw err;
+            }
             const err = new ValidationError("You don't have an active gig. Please book a gig before going online.");
             err.code = 'NO_ACTIVE_GIG';
             throw err;
@@ -358,6 +372,44 @@ export const updateDeliveryAvailability = async (userId, payload) => {
             { gigId: activeGig._id, deliveryPartnerId: partner._id, status: 'booked' },
             { $set: { status: 'completed', completedAt: new Date() } }
         );
+    }
+
+    if (validStatus === 'offline') {
+        // Guard 1: Active Order Running Check
+        const { FoodOrder } = await import('../orders/models/order.model.js');
+        const activeRunningOrder = await FoodOrder.findOne({
+            'dispatch.deliveryPartnerId': partner._id,
+            orderStatus: {
+                $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop']
+            }
+        }).select('orderId _id order_id').lean();
+
+        if (activeRunningOrder) {
+            const displayId = activeRunningOrder.order_id || activeRunningOrder.orderId || activeRunningOrder._id;
+            const err = new ValidationError(
+                `You cannot go offline while you have an active order (#${displayId}) in progress.`
+            );
+            err.code = 'ACTIVE_ORDER_IN_PROGRESS';
+            throw err;
+        }
+
+        // Guard 2: Active Scheduled Gig Shift Emergency Admin Approval Check
+        const { getActiveGigForPartner } = await import('./gig.service.js');
+        const activeGig = await getActiveGigForPartner(partner._id);
+
+        if (activeGig && !partner.emergencyOfflineApproved && !forceBypassForDev) {
+            const err = new ValidationError(
+                'You are currently working an active gig shift. You can only go offline during an active shift in an emergency situation with Admin approval.'
+            );
+            err.code = 'EMERGENCY_OFFLINE_REQUIRED';
+            err.canRequestEmergency = true;
+            throw err;
+        }
+
+        // Reset emergency offline approval flag after successfully turning offline
+        if (partner.emergencyOfflineApproved) {
+            partner.emergencyOfflineApproved = false;
+        }
     }
 
     partner.availabilityStatus = validStatus;
@@ -966,4 +1018,69 @@ export const getDeliveryPartnerReviews = async (deliveryPartnerId) => {
         reviews
     };
 };
+
+/**
+ * Request emergency offline permission during an active gig shift
+ */
+export const requestEmergencyOffline = async (partnerId, reason) => {
+    const partner = await FoodDeliveryPartner.findById(partnerId);
+    if (!partner) throw new ValidationError('Delivery partner not found');
+
+    if (!reason || !String(reason).trim()) {
+        throw new ValidationError('Emergency reason is required');
+    }
+
+    partner.emergencyOfflineRequest = {
+        status: 'pending',
+        reason: String(reason).trim(),
+        requestedAt: new Date()
+    };
+    await partner.save();
+
+    return {
+        success: true,
+        message: 'Emergency offline request submitted to Admin successfully',
+        emergencyOfflineRequest: partner.emergencyOfflineRequest
+    };
+};
+
+/**
+ * Get emergency offline request status for delivery partner
+ */
+export const getEmergencyOfflineStatus = async (partnerId) => {
+    const partner = await FoodDeliveryPartner.findById(partnerId).select('emergencyOfflineRequest emergencyOfflineApproved availabilityStatus').lean();
+    if (!partner) throw new ValidationError('Delivery partner not found');
+
+    return {
+        emergencyOfflineApproved: Boolean(partner.emergencyOfflineApproved),
+        emergencyOfflineRequest: partner.emergencyOfflineRequest || { status: 'none' },
+        availabilityStatus: partner.availabilityStatus
+    };
+};
+
+/**
+ * Admin approves emergency offline request
+ */
+export const approveEmergencyOfflineByAdmin = async (partnerId, adminId) => {
+    const partner = await FoodDeliveryPartner.findById(partnerId);
+    if (!partner) throw new ValidationError('Delivery partner not found');
+
+    partner.emergencyOfflineApproved = true;
+    partner.availabilityStatus = 'offline';
+    partner.emergencyOfflineRequest = {
+        ...(partner.emergencyOfflineRequest || {}),
+        status: 'approved',
+        approvedAt: new Date(),
+        approvedBy: adminId || null
+    };
+
+    await partner.save();
+
+    return {
+        success: true,
+        message: 'Emergency offline request approved by Admin',
+        partnerId: partner._id
+    };
+};
+
 

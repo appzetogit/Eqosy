@@ -142,8 +142,8 @@ const serializePromoCode = (item) => ({
 
 const serializeNotification = (item) => ({
   _id: item._id,
-  service_location_id: item.service_location_id || '',
-  service_location_name: item.service_location_name || '',
+  service_location_id: item.service_location_id || 'all',
+  service_location_name: item.service_location_name || (item.service_location_id === 'all' || !item.service_location_id ? 'All Zones' : ''),
   send_to: item.send_to || 'all',
   push_title: item.push_title || '',
   message: item.message || '',
@@ -345,12 +345,17 @@ const normalizePromoPayload = async (payload, existing = null) => {
 };
 
 const normalizeNotificationPayload = async (payload, existing = null) => {
-  const serviceLocationId = payload.service_location_id || existing?.service_location_id;
-  if (!serviceLocationId) {
-    throw new ApiError(400, 'Service location is required');
+  const serviceLocationId = payload.service_location_id || existing?.service_location_id || 'all';
+
+  let targetLocationId = 'all';
+  let targetLocationName = 'All Zones';
+
+  if (serviceLocationId && serviceLocationId !== 'all') {
+    const serviceLocation = await ensureServiceLocationExists(serviceLocationId);
+    targetLocationId = serviceLocation._id;
+    targetLocationName = serviceLocation.service_location_name || serviceLocation.name || 'Zone';
   }
 
-  const serviceLocation = await ensureServiceLocationExists(serviceLocationId);
   const sendTo = normalizeText(payload.send_to ?? existing?.send_to ?? 'all');
   if (!['all', 'drivers', 'users'].includes(sendTo)) {
     throw new ApiError(400, 'Send to must be all, drivers, or users');
@@ -377,15 +382,13 @@ const normalizeNotificationPayload = async (payload, existing = null) => {
       image = uploaded.secureUrl;
     } catch (error) {
       console.error('Cloudinary upload error:', error);
-      // We don't throw here to allow sending notification even if image upload fails?
-      // Actually, it's better to throw so the user knows why it failed.
       throw new ApiError(500, `Failed to upload notification image: ${error.message}`);
     }
   }
 
   return {
-    service_location_id: serviceLocation._id,
-    service_location_name: serviceLocation.service_location_name || serviceLocation.name || '',
+    service_location_id: targetLocationId,
+    service_location_name: targetLocationName,
     send_to: sendTo,
     push_title: pushTitle,
     message,

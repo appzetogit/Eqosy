@@ -91,6 +91,7 @@ export default function Restaurants() {
         }).sort((a, b) => {
           if (a.isSponsored && !b.isSponsored) return -1
           if (!a.isSponsored && b.isSponsored) return 1
+          if (b.rating !== a.rating) return b.rating - a.rating
           return 0
         })
 

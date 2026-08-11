@@ -78,3 +78,26 @@ export const toggleHeroBannerStatusController = async (req, res, next) => {
     }
 };
 
+export const updateHeroBannerTextController = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { updateHeroBanner } = await import('../services/heroBanner.service.js');
+        const updated = await updateHeroBanner(id, req.body || {});
+        return sendResponse(res, 200, 'Hero banner text updated successfully', { banner: updated });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const linkHeroBannerRestaurantsController = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { restaurantIds } = req.body;
+        const { linkRestaurantsToHeroBanner } = await import('../services/heroBanner.service.js');
+        const updated = await linkRestaurantsToHeroBanner(id, restaurantIds || []);
+        return sendResponse(res, 200, 'Restaurants linked to hero banner successfully', { banner: updated });
+    } catch (error) {
+        next(error);
+    }
+};
+

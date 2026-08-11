@@ -5,7 +5,9 @@ import {
     uploadHeroBannersController,
     deleteHeroBannerController,
     updateHeroBannerOrderController,
-    toggleHeroBannerStatusController
+    toggleHeroBannerStatusController,
+    updateHeroBannerTextController,
+    linkHeroBannerRestaurantsController
 } from '../controllers/heroBanner.controller.js';
 import {
     listUnder250BannersController,
@@ -77,8 +79,11 @@ router.post(
     uploadHeroBannersController
 );
 router.delete('/hero-banners/:id', deleteHeroBannerController);
+router.patch('/hero-banners/:id', updateHeroBannerTextController);
 router.patch('/hero-banners/:id/order', updateHeroBannerOrderController);
 router.patch('/hero-banners/:id/status', toggleHeroBannerStatusController);
+router.patch('/hero-banners/:id/link-restaurants', linkHeroBannerRestaurantsController);
+router.put('/hero-banners/:id/link-restaurants', linkHeroBannerRestaurantsController);
 
 // Admin under 250 banners
 router.get('/hero-banners/under-250', listUnder250BannersController);
@@ -95,7 +100,7 @@ router.patch('/hero-banners/under-250/:id/status', toggleUnder250BannerStatusCon
 router.get('/hero-banners/dining', listDiningBannersController);
 router.post(
     '/hero-banners/dining/multiple',
-    upload.array('files'),
+    upload.fields([{ name: 'files' }, { name: 'images' }]),
     uploadDiningBannersController
 );
 router.delete('/hero-banners/dining/:id', deleteDiningBannerController);

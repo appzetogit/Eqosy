@@ -177,11 +177,13 @@ self.addEventListener("notificationclick", (event) => {
     data: event?.notification?.data || {},
   });
   event.notification.close();
+  const notificationData = event?.notification?.data || {};
+  const rideId = notificationData.rideId || notificationData.ride_id || notificationData.id || "";
   const rawLink =
-    event?.notification?.data?.link ||
-    event?.notification?.data?.click_action ||
-    event?.notification?.data?.targetUrl ||
-    "/";
+    notificationData.link ||
+    notificationData.click_action ||
+    notificationData.targetUrl ||
+    (rideId ? `/taxi/driver/home?rideId=${encodeURIComponent(rideId)}` : "/taxi/driver/home");
   const targetUrl = String(rawLink || "/").startsWith("/") ? String(rawLink || "/") : "/";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {

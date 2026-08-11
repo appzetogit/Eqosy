@@ -35,19 +35,22 @@ const DELIVERY_CATEGORY_OPTIONS = [
     id: 'trucks',
     title: 'Trucks',
     img: trucksImg,
-    searchTokens: ['truck', 'lcv', 'hcv', 'mcv', 'loader'],
+    searchTokens: ['truck', 'lcv', 'hcv', 'mcv', 'loader', 'tempo'],
+    goodsTypeFor: 'truck',
   },
   {
     id: '2wheeler',
     title: '2 Wheeler',
     img: bikeImg,
     searchTokens: ['bike', 'scooter', 'cycle', '2-wheeler'],
+    goodsTypeFor: 'bike',
   },
   {
     id: 'movers',
     title: 'Packers & Movers',
     img: moversImg,
-    searchTokens: ['mover', 'packers'],
+    searchTokens: ['mover', 'packers', 'truck', 'loader'],
+    goodsTypeFor: 'mover',
   }
 ];
 
@@ -177,18 +180,37 @@ const ParcelType = () => {
       return;
     }
 
+    const isHeavyCategory = category.id === 'movers' || category.id === 'trucks';
     const filteredVehicles = vehicleTypes.filter((vehicle) => {
+      const name = String(vehicle.name || '').toLowerCase();
+      const iconType = String(vehicle.icon_types || '').toLowerCase();
+      const isTwoWheeler = name.includes('bike') || name.includes('scooter') || iconType.includes('bike') || iconType.includes('2wheel') || iconType.includes('scooter');
+      
+      if (isHeavyCategory && isTwoWheeler) {
+        return false;
+      }
+
       const configuredCategory = String(vehicle.delivery_category || '').trim().toLowerCase();
       if (configuredCategory) {
         return configuredCategory === category.id;
       }
 
-      const name = String(vehicle.name || '').toLowerCase();
-      const iconType = String(vehicle.icon_types || '').toLowerCase();
       return category.searchTokens.some((token) => name.includes(token) || iconType.includes(token));
     });
 
-    const selectedVehicle = filteredVehicles[0] || vehicleTypes[0] || null;
+    const fallbackVehicle = isHeavyCategory
+      ? {
+          _id: `heavy_${category.id}`,
+          id: `heavy_${category.id}`,
+          name: category.id === 'movers' ? 'Packers & Movers Truck' : 'Delivery Truck',
+          icon_types: 'truck',
+          delivery_category: category.id,
+          goodsTypeFor: category.goodsTypeFor || (category.id === 'movers' ? 'mover' : 'truck'),
+          active: true,
+        }
+      : vehicleTypes[0] || null;
+
+    const selectedVehicle = filteredVehicles[0] || fallbackVehicle;
     const selectedVehicleIds = filteredVehicles.length
       ? filteredVehicles.map((vehicle) => vehicle?._id || vehicle?.id).filter(Boolean)
       : [selectedVehicle?._id || selectedVehicle?.id].filter(Boolean);
@@ -204,8 +226,11 @@ const ParcelType = () => {
       selectedVehicles,
       selectedVehicleId: selectedVehicle?._id || selectedVehicle?.id || '',
       selectedVehicleIds,
+      vehicleIconUrl: selectedVehicle?.map_icon || selectedVehicle?.icon || selectedVehicle?.image || selectedVehicle?.vehicleIconUrl || '',
+      vehicleIconType: selectedVehicle?.icon_types || selectedVehicle?.iconType || (isHeavyCategory ? 'truck' : 'bike'),
       category: category.id,
       deliveryCategory: category.id,
+      goodsTypeFor: category.goodsTypeFor || (isHeavyCategory ? (category.id === 'movers' ? 'mover' : 'truck') : 'bike'),
       pickup: pickupAddress,
       pickupCoords: pickupCoords,
     };

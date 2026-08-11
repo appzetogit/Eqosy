@@ -6,6 +6,11 @@ const withdrawalRequestSchema = new mongoose.Schema({
   owner_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiOwner' },
   amount: Number,
   payment_method: String,
+  upiQrCode: String,
+  upiId: String,
+  accountHolderName: String,
+  accountNumber: String,
+  ifscCode: String,
   status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' }
 }, { timestamps: true });
 

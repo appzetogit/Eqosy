@@ -92,6 +92,9 @@ const deliveryPartnerSchema = new mongoose.Schema(
         drivingLicensePhotoBack: {
             type: String
         },
+        bankPassbookPhoto: {
+            type: String
+        },
         status: {
             type: String,
             enum: ['pending', 'approved', 'rejected'],
@@ -142,7 +145,16 @@ const deliveryPartnerSchema = new mongoose.Schema(
             max: 5,
             set: normalizeRatingValue
         },
-        totalRatings: { type: Number, default: 0, min: 0 }
+        totalRatings: { type: Number, default: 0, min: 0 },
+        emergencyOfflineApproved: { type: Boolean, default: false },
+        emergencyOfflineRequest: {
+            status: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+            reason: { type: String, default: '' },
+            requestedAt: { type: Date, default: null },
+            approvedAt: { type: Date, default: null },
+            approvedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+            rejectionReason: { type: String, default: '' }
+        }
     },
     {
         collection: 'food_delivery_partners',

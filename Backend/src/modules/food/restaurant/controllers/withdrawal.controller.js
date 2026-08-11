@@ -3,6 +3,8 @@ import { FoodRestaurantWithdrawal } from '../models/foodRestaurantWithdrawal.mod
 import { getRestaurantWithdrawalSettings } from '../../admin/services/admin.service.js';
 import { getRestaurantFinance } from '../services/restaurantFinance.service.js';
 
+import { FoodRestaurant } from '../models/restaurant.model.js';
+
 export const createWithdrawalRequestController = async (req, res, next) => {
     try {
         const restaurantId = req.user?.userId;
@@ -11,6 +13,10 @@ export const createWithdrawalRequestController = async (req, res, next) => {
 
         if (!restaurantId) return sendError(res, 401, 'Restaurant authentication required');
         if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return sendError(res, 400, 'Invalid withdrawal amount');
+
+        const restaurant = await FoodRestaurant.findById(restaurantId)
+            .select('upiId upiQrImage accountHolderName accountNumber ifscCode bankName')
+            .lean();
 
         const finance = await getRestaurantFinance(restaurantId);
         const totalEarnings = Number(finance?.currentCycle?.netAvailable ?? finance?.currentCycle?.estimatedPayout ?? 0);
@@ -25,10 +31,20 @@ export const createWithdrawalRequestController = async (req, res, next) => {
             return sendError(res, 400, `Insufficient balance. Available to withdraw: Rs ${totalEarnings.toLocaleString('en-IN')}`);
         }
 
+        const mergedBankDetails = {
+            accountNumber: bankDetails?.accountNumber || restaurant?.accountNumber || '',
+            ifscCode: bankDetails?.ifscCode || restaurant?.ifscCode || '',
+            bankName: bankDetails?.bankName || restaurant?.bankName || '',
+            accountHolderName: bankDetails?.accountHolderName || restaurant?.accountHolderName || '',
+            upiId: bankDetails?.upiId || restaurant?.upiId || '',
+            upiQrImage: bankDetails?.upiQrImage || restaurant?.upiQrImage || '',
+            upiQrCode: bankDetails?.upiQrCode || restaurant?.upiQrImage || ''
+        };
+
         const withdrawal = new FoodRestaurantWithdrawal({
             restaurantId,
             amount: parsedAmount,
-            bankDetails,
+            bankDetails: mergedBankDetails,
             status: 'pending'
         });
 

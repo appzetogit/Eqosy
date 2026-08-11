@@ -16,7 +16,8 @@ const createEmptyUploadedDocs = () => ({
   panPhoto: null,
   panPhotoBack: null,
   drivingLicensePhoto: null,
-  drivingLicensePhotoBack: null
+  drivingLicensePhotoBack: null,
+  bankPassbookPhoto: null
 })
 
 const sanitizeUploadedDocValue = (value) => {
@@ -44,7 +45,8 @@ const sanitizeUploadedDocs = (docs) => ({
   panPhoto: sanitizeUploadedDocValue(docs?.panPhoto),
   panPhotoBack: sanitizeUploadedDocValue(docs?.panPhotoBack),
   drivingLicensePhoto: sanitizeUploadedDocValue(docs?.drivingLicensePhoto),
-  drivingLicensePhotoBack: sanitizeUploadedDocValue(docs?.drivingLicensePhotoBack)
+  drivingLicensePhotoBack: sanitizeUploadedDocValue(docs?.drivingLicensePhotoBack),
+  bankPassbookPhoto: sanitizeUploadedDocValue(docs?.bankPassbookPhoto)
 })
 
 const getFriendlyRegistrationError = (error) => {
@@ -91,7 +93,8 @@ export default function SignupStep2() {
     panPhoto: null,
     panPhotoBack: null,
     drivingLicensePhoto: null,
-    drivingLicensePhotoBack: null
+    drivingLicensePhotoBack: null,
+    bankPassbookPhoto: null
   })
   const [documents, setDocuments] = useState({
     profilePhoto: null,
@@ -100,7 +103,8 @@ export default function SignupStep2() {
     panPhoto: null,
     panPhotoBack: null,
     drivingLicensePhoto: null,
-    drivingLicensePhotoBack: null
+    drivingLicensePhotoBack: null,
+    bankPassbookPhoto: null
   })
   const [uploadedDocs, setUploadedDocs] = useState(() => {
     const saved = sessionStorage.getItem("deliverySignupDocs")
@@ -229,8 +233,8 @@ export default function SignupStep2() {
     e.preventDefault()
 
     const hasDrivingLicense = isBicycle || documents.drivingLicensePhoto;
-    if (!documents.profilePhoto || !documents.aadharPhoto || !documents.panPhoto || !hasDrivingLicense) {
-      toast.error("Please upload all required front documents")
+    if (!documents.profilePhoto || !documents.aadharPhoto || !documents.aadharPhotoBack || !documents.panPhoto || !documents.panPhotoBack || !documents.bankPassbookPhoto || !hasDrivingLicense) {
+      toast.error("Please upload all required document photos (Aadhaar front & back, PAN front & back, Bank Passbook, Profile Photo)")
       return
     }
 
@@ -275,6 +279,7 @@ export default function SignupStep2() {
     if (documents.aadharPhotoBack) formData.append("aadharPhotoBack", documents.aadharPhotoBack)
     formData.append("panPhoto", documents.panPhoto)
     if (documents.panPhotoBack) formData.append("panPhotoBack", documents.panPhotoBack)
+    if (documents.bankPassbookPhoto) formData.append("bankPassbookPhoto", documents.bankPassbookPhoto)
     if (!isBicycle && documents.drivingLicensePhoto) {
       formData.append("drivingLicensePhoto", documents.drivingLicensePhoto)
     }
@@ -462,13 +467,18 @@ export default function SignupStep2() {
           <div className="space-y-2 pt-2">
             <h3 className="text-sm font-bold text-gray-800">Aadhar Card Photos</h3>
             <DocumentUpload docType="aadharPhoto" label="Aadhar Card (Front Side)" required={true} />
-            <DocumentUpload docType="aadharPhotoBack" label="Aadhar Card (Back Side)" required={false} />
+            <DocumentUpload docType="aadharPhotoBack" label="Aadhar Card (Back Side)" required={true} />
           </div>
 
           <div className="space-y-2 pt-2">
             <h3 className="text-sm font-bold text-gray-800">PAN Card Photos</h3>
             <DocumentUpload docType="panPhoto" label="PAN Card (Front Side)" required={true} />
-            <DocumentUpload docType="panPhotoBack" label="PAN Card (Back Side)" required={false} />
+            <DocumentUpload docType="panPhotoBack" label="PAN Card (Back Side)" required={true} />
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <h3 className="text-sm font-bold text-gray-800">Bank Account Details</h3>
+            <DocumentUpload docType="bankPassbookPhoto" label="Bank Account Passbook / Cancelled Cheque Photo" required={true} />
           </div>
 
           {!isBicycle && (
@@ -482,8 +492,8 @@ export default function SignupStep2() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)}
-            className={`w-full py-4 rounded-xl font-bold text-white text-base transition-all mt-6 shadow-md ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)
+            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.aadharPhotoBack || !uploadedDocs.panPhoto || !uploadedDocs.panPhotoBack || !uploadedDocs.bankPassbookPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)}
+            className={`w-full py-4 rounded-xl font-bold text-white text-base transition-all mt-6 shadow-md ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.aadharPhotoBack || !uploadedDocs.panPhoto || !uploadedDocs.panPhotoBack || !uploadedDocs.bankPassbookPhoto || (!isBicycle && !uploadedDocs.drivingLicensePhoto)
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-[#1A1A1A] hover:bg-black hover:shadow-lg"
               }`}

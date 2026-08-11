@@ -4318,38 +4318,35 @@ export const approveDriverWithdrawalRequest = async (requestId, adminId = null) 
     }
 
     const requestAmount = Math.round(Number(request.amount || 0) * 100) / 100;
-    const currentBalance = Math.round(Number(driver.wallet?.balance || 0) * 100) / 100;
-
-    if (!Number.isFinite(requestAmount) || requestAmount <= 0) {
-      throw new ApiError(400, 'Withdrawal request amount is invalid');
-    }
-
-    if (currentBalance < requestAmount) {
-      throw new ApiError(400, 'Driver wallet balance is not enough for this withdrawal');
-    }
-
-    const walletResult = await applyDriverWalletAdjustment({
-      driverId: driver._id,
-      amount: -requestAmount,
-      type: 'adjustment',
-      description: 'Driver withdrawal approved by admin',
-      metadata: {
-        withdrawalRequestId: String(request._id),
-        approvedBy: adminId ? String(adminId) : null,
-        paymentMethod: request.payment_method || 'bank_transfer',
-      },
-      session,
-    });
 
     request.status = 'completed';
     await request.save({ session });
 
     await session.commitTransaction();
 
+    const wallet = await serializeDriverWallet(driver);
     emitToDriver(driver._id, 'driver:wallet:updated', {
-      wallet: walletResult.wallet,
-      transaction: walletResult.transaction,
+      wallet,
+      transaction: null,
     });
+
+    try {
+      const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
+      await notifyOwnersSafely(
+        [{ ownerType: 'TAXI_DRIVER', ownerId: driver._id }],
+        {
+          title: 'Withdrawal Request Approved! 🎉',
+          body: 'Your withdrawal request has been approved successfully and money has been credited to your selected bank account',
+          data: {
+            type: 'WITHDRAWAL_APPROVED',
+            withdrawalRequestId: String(request._id),
+            amount: String(requestAmount)
+          }
+        }
+      );
+    } catch (notifErr) {
+      console.error('Failed to send driver withdrawal approval notification:', notifErr);
+    }
 
     return {
       request: {
@@ -4361,7 +4358,7 @@ export const approveDriverWithdrawalRequest = async (requestId, adminId = null) 
         createdAt: request.createdAt,
         updatedAt: request.updatedAt,
       },
-      wallet: walletResult.wallet,
+      wallet,
     };
   } catch (error) {
     await session.abortTransaction();
@@ -4384,16 +4381,41 @@ export const rejectDriverWithdrawalRequest = async (requestId) => {
   request.status = 'cancelled';
   await request.save();
 
+  const refundAmount = Math.round(Number(request.amount || 0) * 100) / 100;
+  let walletResult = null;
+  if (refundAmount > 0) {
+    try {
+      walletResult = await applyDriverWalletAdjustment({
+        driverId: request.driver_id,
+        amount: refundAmount,
+        type: 'adjustment',
+        description: 'Withdrawal request rejected by admin - balance refunded',
+        metadata: {
+          withdrawalRequestId: String(request._id),
+          source: 'withdrawal_rejected',
+        },
+      });
+
+      emitToDriver(request.driver_id, 'driver:wallet:updated', {
+        wallet: walletResult.wallet,
+        transaction: walletResult.transaction,
+      });
+    } catch (refundErr) {
+      console.error('Failed to refund driver wallet on withdrawal rejection:', refundErr);
+    }
+  }
+
   return {
     request: {
       _id: request._id,
       driver_id: request.driver_id,
-      amount: Number(request.amount || 0),
+      amount: refundAmount,
       payment_method: request.payment_method || '',
       status: request.status,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
     },
+    wallet: walletResult?.wallet || null,
   };
 };
 

@@ -14,24 +14,38 @@ export const createDiningBannersFromFiles = async (files, meta = {}) => {
 
     for (const file of files) {
         try {
-            const uploadResult = await new Promise((resolve, reject) => {
-                const stream = cloudinary.uploader.upload_stream(
-                    { folder: 'food/dining-banners', resource_type: 'image' },
-                    (error, result) => {
-                        if (error) return reject(error);
-                        return resolve(result);
-                    }
-                );
-                stream.end(file.buffer);
-            });
+            let imageUrl = '';
+            let publicId = `dining_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+            try {
+                const uploadResult = await new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        { folder: 'food/dining-banners', resource_type: 'image' },
+                        (error, result) => {
+                            if (error) return reject(error);
+                            return resolve(result);
+                        }
+                    );
+                    stream.end(file.buffer);
+                });
+                imageUrl = uploadResult.secure_url;
+                publicId = uploadResult.public_id;
+            } catch (cloudErr) {
+                if (file.buffer) {
+                    const mime = file.mimetype || 'image/jpeg';
+                    imageUrl = `data:${mime};base64,${file.buffer.toString('base64')}`;
+                } else {
+                    throw cloudErr;
+                }
+            }
 
             const banner = await FoodDiningBanner.create({
-                imageUrl: uploadResult.secure_url,
-                publicId: uploadResult.public_id,
-                title: meta.title,
-                ctaText: meta.ctaText,
-                ctaLink: meta.ctaLink,
-                diningType: meta.diningType,
+                imageUrl,
+                publicId,
+                title: meta.title || '',
+                ctaText: meta.ctaText || '',
+                ctaLink: meta.ctaLink || '',
+                diningType: meta.diningType || 'all',
                 sortOrder: meta.sortOrder ?? 0,
                 isActive: true,
             });

@@ -32,7 +32,8 @@ export const PayoutV2 = () => {
         
         if (response?.data?.success) {
           const transactions = response.data.data.transactions || [];
-          setWithdrawals(transactions.map(t => ({
+          const withdrawalTxs = transactions.filter(t => !t.type || String(t.type).toLowerCase() === 'withdrawal');
+          setWithdrawals(withdrawalTxs.map(t => ({
             id: t._id || t.id,
             amount: t.amount || 0,
             status: t.status || 'Pending',

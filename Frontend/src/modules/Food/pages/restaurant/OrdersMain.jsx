@@ -352,7 +352,10 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
               order.cancellationReason || "No reason provided",
             itemsSummary:
               order.items
-                ?.map((item) => `${item.quantity}x ${item.name}`)
+                ?.map((item) => {
+                  const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size;
+                  return `${item.quantity}x ${item.name}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
+                })
                 .join(", ") || "No items",
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
@@ -3061,7 +3064,10 @@ function PreparingOrders({
               preparingTimestamp, // Store when order started preparing
               itemsSummary:
                 order.items
-                  ?.map((item) => `${item.quantity}x ${item.name}`)
+                  ?.map((item) => {
+                    const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size;
+                    return `${item.quantity}x ${item.name}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
+                  })
                   .join(", ") || "No items",
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || "Order",
@@ -3368,7 +3374,10 @@ function ReadyOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
             eta: null, // Don't show ETA for ready orders
             itemsSummary:
               order.items
-                ?.map((item) => `${item.quantity}x ${item.name}`)
+                ?.map((item) => {
+                  const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size;
+                  return `${item.quantity}x ${item.name}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
+                })
                 .join(", ") || "No items",
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
@@ -3487,7 +3496,10 @@ const OutForDeliveryOrders = ({ onSelectOrder, refreshToken = 0 }) => {
             eta: null,
             itemsSummary:
               order.items
-                ?.map((item) => `${item.quantity}x ${item.name}`)
+                ?.map((item) => {
+                  const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size;
+                  return `${item.quantity}x ${item.name}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
+                })
                 .join(", ") || "No items",
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",

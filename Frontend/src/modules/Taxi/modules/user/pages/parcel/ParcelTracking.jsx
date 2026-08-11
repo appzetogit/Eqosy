@@ -96,15 +96,20 @@ const getTrackingVehicleIcon = (ride, driver) => {
   const customIcon = String(
     ride?.vehicleIconUrl ||
     ride?.vehicle?.vehicleIconUrl ||
+    ride?.vehicle?.map_icon ||
     ride?.vehicle?.icon ||
+    ride?.vehicle?.image ||
     driver?.vehicleIconUrl ||
     driver?.map_icon ||
     driver?.icon ||
+    driver?.image ||
     '',
   ).trim();
   if (customIcon) return resolveAssetUrl(customIcon);
-  const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
-  if (iconType.includes('bike')) return bikeIcon;
+  const iconType = String(ride?.vehicleIconType || ride?.vehicle?.iconType || ride?.vehicle?.name || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
+  const category = String(ride?.deliveryCategory || ride?.parcel?.deliveryCategory || ride?.parcel?.category || '').toLowerCase();
+  if (category.includes('truck') || category.includes('mover') || category.includes('movers') || category.includes('packers') || iconType.includes('truck') || iconType.includes('mover') || iconType.includes('packers') || iconType.includes('suv')) return carIcon;
+  if (iconType.includes('bike') || category.includes('2wheel')) return bikeIcon;
   if (iconType.includes('auto')) return autoIcon;
   if (iconType.includes('car')) return carIcon;
   return deliveryIcon;
@@ -116,7 +121,14 @@ const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
-  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
+  if (raw.startsWith('/uploads/') || raw.startsWith('/storage/') || raw.startsWith('/public/uploads/')) {
+    return `${BACKEND_ORIGIN}${raw}`;
+  }
+  if (raw.startsWith('uploads/') || raw.startsWith('storage/')) {
+    return `${BACKEND_ORIGIN}/${raw}`;
+  }
+  if (raw.startsWith('/')) return raw;
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
 
@@ -197,7 +209,25 @@ const ParcelTracking = () => {
       calculateBearing(driverPosition, activeDestination),
     );
   }, [activeDestination, driverPosition, rideRealtime?.driverLocation?.heading, routePath]);
-  const fare = rideRealtime?.fare || state.fare || 45;
+
+  const fare = useMemo(() => {
+    const candidates = [
+      rideRealtime?.fare,
+      rideRealtime?.baseFare,
+      rideRealtime?.estimatedFare,
+      state.fare,
+      state.baseFare,
+      state.estimatedFare?.approx,
+      state.estimatedFare?.min,
+      state.estimatedFare,
+    ];
+
+    for (const candidate of candidates) {
+      const num = Number(String(candidate || '').replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(num) && num > 0) return num;
+    }
+    return 0;
+  }, [rideRealtime?.baseFare, rideRealtime?.estimatedFare, rideRealtime?.fare, state.baseFare, state.estimatedFare, state.fare]);
   const otp = String(rideRealtime?.otp || state.otp || '');
   const completedAt = rideRealtime?.completedAt || state.completedAt || Date.now();
   const isDeliveryCompleted = COMPLETED_TRACKING_STATUSES.has(tripStatus);

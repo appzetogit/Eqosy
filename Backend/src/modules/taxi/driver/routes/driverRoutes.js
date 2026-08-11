@@ -25,6 +25,9 @@ import {
   claimDriverIncentiveReward,
   goOffline,
   goOnline,
+  updateDriverLocation,
+  getDriverEarningsFilter,
+  getPendingDriverDispatch,
   createBusDriverReservation,
   updateBusDriverSchedules,
   getCurrentDriver,
@@ -428,4 +431,19 @@ driverRouter.patch(
   "/offline",
   authenticate(["driver"]),
   asyncHandler(goOffline),
+);
+driverRouter.patch(
+  "/location",
+  authenticate(["driver"]),
+  asyncHandler(updateDriverLocation),
+);
+driverRouter.get(
+  "/earnings",
+  authenticate(["driver"]),
+  asyncHandler(getDriverEarningsFilter),
+);
+driverRouter.get(
+  "/pending-dispatch",
+  authenticate(["driver"]),
+  asyncHandler(getPendingDriverDispatch),
 );

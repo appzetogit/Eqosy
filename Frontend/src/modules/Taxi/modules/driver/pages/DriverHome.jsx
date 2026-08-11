@@ -792,38 +792,55 @@ const DriverHome = () => {
         };
     }, [isOnline]);
 
-    // Live continuous GPS watcher for Taxi Driver (runs in background & syncs Socket + Firebase Realtime DB)
+    // Live continuous GPS watcher for Taxi Driver (runs in background & syncs Socket + REST API + Firebase)
     useEffect(() => {
         if (!isOnline || typeof navigator === 'undefined' || !navigator.geolocation) {
             return undefined;
         }
 
+        let lastRestSyncAt = 0;
+
+        const syncLocationPayload = (coords, { lat, lng, heading = 0, speed = 0 } = {}) => {
+            setDriverCoords(coords);
+            driverCoordsRef.current = coords;
+
+            // 1. Emit via Socket.IO (both standard and legacy channel names)
+            socketService.emit('locationUpdate', { coordinates: coords, lat, lng, heading, speed });
+            socketService.emit('driver_location_update', { coordinates: coords, latitude: lat, longitude: lng, heading, speed });
+
+            // 2. Emit via Firebase Realtime if ride active
+            if (currentRequestRef.current?.rideId) {
+                pushDriverLocationRealtime(currentRequestRef.current.rideId, { lat, lng }, { heading, speed });
+            }
+
+            // 3. Periodic HTTP REST fallback sync every 12 seconds for full database reliability
+            const now = Date.now();
+            if (now - lastRestSyncAt > 12000) {
+                lastRestSyncAt = now;
+                api.patch('/drivers/location', { coordinates: coords, lat, lng }).catch(() => {});
+            }
+        };
+
         const watchId = navigator.geolocation.watchPosition(
             (pos) => {
                 const { latitude: lat, longitude: lng, heading, speed } = pos.coords;
-                const coords = [lng, lat];
-                setDriverCoords(coords);
-                driverCoordsRef.current = coords;
-
-                // 1. Emit via Socket.IO
-                socketService.emit('driver_location_update', {
-                    coordinates: coords,
-                    latitude: lat,
-                    longitude: lng,
-                    heading: heading || 0,
-                    speed: speed || 0
-                });
-
-                // 2. Emit via Firebase Realtime if ride active
-                if (currentRequestRef.current?.rideId) {
-                    pushDriverLocationRealtime(currentRequestRef.current.rideId, { lat, lng }, { heading, speed });
-                }
+                syncLocationPayload([lng, lat], { lat, lng, heading: heading || 0, speed: speed || 0 });
             },
             (err) => console.warn('Taxi driver live location watch warning:', err),
             { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
         );
 
-        return () => navigator.geolocation.clearWatch(watchId);
+        const syncInterval = setInterval(() => {
+            if (driverCoordsRef.current) {
+                const [lng, lat] = driverCoordsRef.current;
+                syncLocationPayload([lng, lat], { lat, lng });
+            }
+        }, 10000);
+
+        return () => {
+            navigator.geolocation.clearWatch(watchId);
+            clearInterval(syncInterval);
+        };
     }, [isOnline]);
 
     useEffect(() => {
@@ -1267,10 +1284,13 @@ const DriverHome = () => {
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
-                console.warn('[driver-home] socket connect skipped because token was missing');
-                setIsOnline(false);
-                setStatusMessage('Driver session missing. Please login again.');
-                return;
+                const hasValidToken = Boolean(getLocalDriverToken());
+                if (!hasValidToken) {
+                    console.warn('[driver-home] socket connect skipped because token was missing');
+                    setIsOnline(false);
+                    setStatusMessage('Driver session missing. Please login again.');
+                    return;
+                }
             }
 
             setIsOnline(true);
@@ -1623,11 +1643,14 @@ const DriverHome = () => {
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
-                console.warn('[driver-home] socket effect could not get a socket');
-                setStatusMessage('Driver session missing. Please login again.');
-                setIsOnline(false);
-                setSocketStatus('offline');
-                return undefined;
+                const hasValidToken = Boolean(getLocalDriverToken());
+                if (!hasValidToken) {
+                    console.warn('[driver-home] socket effect could not get a socket because token is completely missing');
+                    setStatusMessage('Driver session missing. Please login again.');
+                    setIsOnline(false);
+                    setSocketStatus('offline');
+                    return undefined;
+                }
             }
 
             setSocketStatus(socket.connected ? 'connected' : 'reconnecting');
@@ -2464,6 +2487,15 @@ const DriverHome = () => {
                                             <span className="text-[9px] font-bold uppercase tracking-tight text-slate-400">Rides</span>
                                         </div>
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/taxi/driver/earnings')}
+                                        className="mt-3.5 flex w-full items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-700 hover:bg-emerald-100 transition-all border border-emerald-200/80"
+                                    >
+                                        <span>Filter Earnings (Today, Week, Custom Date)</span>
+                                        <ChevronRight size={14} />
+                                    </button>
                                 </motion.div>
                             ) : null}
                         </AnimatePresence>

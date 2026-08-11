@@ -73,6 +73,7 @@ export default function AddressSelectorPage() {
   const [keywordAddressSuggestions, setKeywordAddressSuggestions] = useState([])
   const [googlePlacesSuggestions, setGooglePlacesSuggestions] = useState([])
   const [isKeywordSearching, setIsKeywordSearching] = useState(false)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [lockMapToAutocomplete, setLockMapToAutocomplete] = useState(true)
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState(null)
   const [formScrollTop, setFormScrollTop] = useState(0)
@@ -80,12 +81,22 @@ export default function AddressSelectorPage() {
   const [baseMapHeight, setBaseMapHeight] = useState(320)
   const formBodyRef = useRef(null)
   const manualFieldRefs = useRef({})
-  const suppressAutocompleteFetchRef = useRef(false)
+  const suppressAutocompleteFetchRef = useRef(true)
+
+  const dismissSuggestions = useCallback(() => {
+    setIsSearchFocused(false)
+    setGooglePlacesSuggestions([])
+    setKeywordAddressSuggestions([])
+    if (typeof document !== "undefined" && document.activeElement && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+  }, [])
 
   const persistActiveLocation = useCallback(async (locationData, mode = "current") => {
     if (!locationData) return
     try {
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      const dataToSave = { ...locationData, isManual: mode === "saved" || locationData.isManual === true }
+      localStorage.setItem("userLocation", JSON.stringify(dataToSave))
       localStorage.setItem("deliveryAddressMode", mode)
       window.dispatchEvent(new Event("deliveryAddressModeChanged"))
       window.dispatchEvent(new Event("storage"))
@@ -99,7 +110,120 @@ export default function AddressSelectorPage() {
       // ignore API errors for guest/fallback mode
     }
   }, [])
-  
+
+  const reverseGeocodeTimeoutRef = useRef(null)
+  const lastGeocodedCoordsRef = useRef(null)
+
+  const handleMapMoveEnd = useCallback(async (lat, lng) => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+    if (reverseGeocodeTimeoutRef.current) {
+      clearTimeout(reverseGeocodeTimeoutRef.current)
+    }
+
+    reverseGeocodeTimeoutRef.current = setTimeout(async () => {
+      if (lastGeocodedCoordsRef.current) {
+        const dLat = Math.abs(lat - lastGeocodedCoordsRef.current.lat)
+        const dLng = Math.abs(lng - lastGeocodedCoordsRef.current.lng)
+        if (dLat < 0.00005 && dLng < 0.00005) return
+      }
+
+      lastGeocodedCoordsRef.current = { lat, lng }
+
+      try {
+        let formattedAddress = ""
+        let street = ""
+        let city = ""
+        let state = ""
+        let postcode = ""
+
+        if (window.google && window.google.maps && window.google.maps.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder()
+          const res = await new Promise((resolve) => {
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+              if (status === "OK" && results?.[0]) resolve(results[0])
+              else resolve(null)
+            })
+          })
+
+          if (res) {
+            formattedAddress = res.formatted_address || ""
+            ;(res.address_components || []).forEach((comp) => {
+              const types = comp.types || []
+              if (types.includes("route") || types.includes("sublocality") || types.includes("neighborhood")) {
+                street = street ? `${street}, ${comp.long_name}` : comp.long_name
+              } else if (types.includes("locality")) {
+                city = comp.long_name
+              } else if (types.includes("administrative_area_level_1")) {
+                state = comp.long_name
+              } else if (types.includes("postal_code")) {
+                postcode = comp.long_name
+              }
+            })
+          }
+        }
+
+        if (!formattedAddress) {
+          try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+            const r = await fetch(url, { headers: { Accept: "application/json" } })
+            const json = await r.json()
+            if (json?.display_name) {
+              formattedAddress = json.display_name
+              const a = json.address || {}
+              street = a.road || a.suburb || a.neighbourhood || street
+              city = a.city || a.town || a.village || city
+              state = a.state || state
+              postcode = a.postcode || postcode
+            }
+          } catch {}
+        }
+
+        if (!formattedAddress) {
+          formattedAddress = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+        }
+
+        let cleanAddress = formattedAddress
+        if (cleanAddress.endsWith(", India")) {
+          cleanAddress = cleanAddress.replace(", India", "").trim()
+        }
+
+        // 1. Update top search bar value
+        suppressAutocompleteFetchRef.current = true
+        setAddressAutocompleteValue(cleanAddress)
+
+        // 2. Update Pinned Location box
+        setCurrentAddress(cleanAddress)
+
+        // 3. Update Primary Address Form field
+        setAddressFormData((prev) => ({
+          ...prev,
+          street: street || cleanAddress.split(",")[0] || prev.street,
+          city: city || prev.city,
+          state: state || prev.state,
+          zipCode: postcode || prev.zipCode,
+        }))
+
+        // 4. Save active location so map selection is persisted
+        const locationData = {
+          latitude: lat,
+          longitude: lng,
+          street: street || cleanAddress.split(",")[0] || "",
+          city: city || "",
+          state: state || "",
+          postalCode: postcode || "",
+          area: street || cleanAddress.split(",")[0] || "",
+          address: cleanAddress,
+          formattedAddress: cleanAddress,
+          isManual: true,
+        }
+        persistActiveLocation(locationData, "saved")
+      } catch (err) {
+        debugError("Reverse geocode error:", err)
+      }
+    }, 250)
+  }, [persistActiveLocation])
+
   const ENABLE_LOCATION_REVERSE_GEOCODE = import.meta.env.VITE_ENABLE_LOCATION_REVERSE_GEOCODE !== "false"
   const ENABLE_NOMINATIM_SEARCH = import.meta.env.VITE_ENABLE_NOMINATIM_SEARCH !== "false"
   const getAddressId = (address) => address?.id || address?._id || address?.addressId || null
@@ -172,6 +296,7 @@ export default function AddressSelectorPage() {
     if (formatted) {
       setCurrentAddress(formatted)
       setAddressAutocompleteValue(formatted)
+      suppressAutocompleteFetchRef.current = true
     }
 
     setAddressFormData((prev) => ({
@@ -323,6 +448,10 @@ export default function AddressSelectorPage() {
           ]
         })
         googleMapRef.current = map
+
+        map.addListener("dragstart", () => {
+          dismissSuggestions()
+        })
 
         // Update coordinates on map idle (center of the map is the chosen location)
         map.addListener("idle", () => {
@@ -594,49 +723,6 @@ export default function AddressSelectorPage() {
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-  const handleMapMoveEnd = async (lat, lng) => {
-    if (!ENABLE_LOCATION_REVERSE_GEOCODE) return
-    try {
-      // Use Nominatim for free reverse geocoding on the client side
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
-      const response = await fetch(url, { 
-        headers: { 
-          "Accept-Language": "en",
-          "User-Agent": "Eqosy-Food-App" 
-        } 
-      })
-      const json = await response.json()
-      
-      if (json && json.address) {
-        const addr = json.address
-        const formatted = json.display_name
-        
-        // Extract meaningful street/area info
-        const street = [
-          addr.road,
-          addr.suburb,
-          addr.neighbourhood,
-          addr.house_number
-        ].filter(Boolean).slice(0, 2).join(", ") || addr.amenity || addr.industrial || ""
-
-        const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || ""
-        const state = addr.state || ""
-        const postcode = addr.postcode || ""
-
-        setCurrentAddress(formatted)
-        setAddressFormData(prev => ({
-          ...prev,
-          street: street || formatted.split(",")[0] || prev.street,
-          city: city || prev.city,
-          state: state || prev.state,
-          zipCode: postcode || prev.zipCode,
-        }))
-      }
-    } catch (e) {
-      debugError("Reverse geocode error:", e)
-    }
-  }
-
   const handleAddressFormSubmit = async (e) => {
     e.preventDefault()
     const street = String(addressFormData.street || "").trim()
@@ -771,7 +857,9 @@ export default function AddressSelectorPage() {
                 </div>
                 <Input
                   value={addressAutocompleteValue}
+                  onFocus={() => setIsSearchFocused(true)}
                   onChange={(e) => {
+                    setIsSearchFocused(true)
                     suppressAutocompleteFetchRef.current = false
                     setAddressAutocompleteValue(e.target.value)
                   }}
@@ -784,7 +872,7 @@ export default function AddressSelectorPage() {
                   </div>
                 )}
 
-                {googlePlacesSuggestions.length > 0 && (
+                {isSearchFocused && googlePlacesSuggestions.length > 0 && (
                   <div
                     className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-y-auto overflow-x-hidden z-30 animate-in fade-in slide-in-from-top-2 duration-200 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                     style={{ maxHeight: "min(42vh, 280px)" }}
@@ -830,6 +918,7 @@ export default function AddressSelectorPage() {
                               }));
                               setCurrentAddress(res.formatted_address);
                               suppressAutocompleteFetchRef.current = true;
+                              setIsSearchFocused(false);
                               setGooglePlacesSuggestions([]);
                               setKeywordAddressSuggestions([]);
                             }
@@ -847,7 +936,7 @@ export default function AddressSelectorPage() {
                   </div>
                 )}
 
-                {keywordAddressSuggestions.length > 0 && (
+                {isSearchFocused && keywordAddressSuggestions.length > 0 && (
                   <div
                     className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-y-auto overflow-x-hidden z-30 animate-in fade-in slide-in-from-top-2 duration-200 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                     style={{ maxHeight: "min(42vh, 280px)" }}
@@ -875,6 +964,7 @@ export default function AddressSelectorPage() {
                             zipCode: zipCode || prev.zipCode,
                           }))
                           suppressAutocompleteFetchRef.current = true
+                          setIsSearchFocused(false)
                           setGooglePlacesSuggestions([])
                           setKeywordAddressSuggestions([])
                         }}
@@ -892,7 +982,12 @@ export default function AddressSelectorPage() {
               </div>
             </div>
 
-            <div ref={mapContainerRef} className="w-full h-full bg-gray-100 dark:bg-gray-800" />
+            <div
+              ref={mapContainerRef}
+              onPointerDown={dismissSuggestions}
+              onTouchStart={dismissSuggestions}
+              className="w-full h-full bg-gray-100 dark:bg-gray-800"
+            />
             
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                <div className="relative mb-8 flex flex-col items-center">

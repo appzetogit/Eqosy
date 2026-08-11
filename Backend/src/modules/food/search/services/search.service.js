@@ -262,20 +262,41 @@ export const searchUnified = async (query = {}, options = {}) => {
         results.sort((a, b) => {
             if (a.isSponsored && !b.isSponsored) return -1;
             if (!a.isSponsored && b.isSponsored) return 1;
+
+            const aRating = Number(a.rating || 0);
+            const bRating = Number(b.rating || 0);
+            if (bRating !== aRating) return bRating - aRating;
+
+            const aTotalRatings = Number(a.totalRatings || 0);
+            const bTotalRatings = Number(b.totalRatings || 0);
+            if (bTotalRatings !== aTotalRatings) return bTotalRatings - aTotalRatings;
+
             return (a.distanceScore || 999) - (b.distanceScore || 999);
         });
     } else if (results.length > 0) {
         results.sort((a, b) => {
             if (a.isSponsored && !b.isSponsored) return -1;
             if (!a.isSponsored && b.isSponsored) return 1;
+
+            const aRating = Number(a.rating || 0);
+            const bRating = Number(b.rating || 0);
+            if (bRating !== aRating) return bRating - aRating;
+
+            const aTotalRatings = Number(a.totalRatings || 0);
+            const bTotalRatings = Number(b.totalRatings || 0);
+            if (bTotalRatings !== aTotalRatings) return bTotalRatings - aTotalRatings;
+
             return 0;
         });
     }
 
-    // 5. Attach recommended images for the auto slider
-    const { attachRecommendedImagesToRestaurants } = await import('../../restaurant/services/restaurant.service.js');
+    // 5. Attach recommended images and active running coupon offers for the auto slider & cards
+    const { attachRecommendedImagesToRestaurants, attachActiveOffersToRestaurants } = await import('../../restaurant/services/restaurant.service.js');
     let paginatedRestaurants = results.slice(skip, skip + limit);
     paginatedRestaurants = await attachRecommendedImagesToRestaurants(paginatedRestaurants);
+    if (attachActiveOffersToRestaurants) {
+        paginatedRestaurants = await attachActiveOffersToRestaurants(paginatedRestaurants);
+    }
 
     return {
         success: true,

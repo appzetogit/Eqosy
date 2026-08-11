@@ -3,6 +3,8 @@ import { FoodGig } from '../models/foodGig.model.js';
 import { FoodGigBooking } from '../models/foodGigBooking.model.js';
 import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
+import { getIO, rooms } from '../../../../config/socket.js';
+import { logger } from '../../../../utils/logger.js';
 
 const parseDateTime = (dateStr, timeStr) => {
   // dateStr: YYYY-MM-DD, timeStr: HH:mm
@@ -300,27 +302,56 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
 export const getActiveGigForPartner = async (deliveryPartnerId) => {
   const now = new Date();
   const nowMs = now.getTime();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // Find booking for a gig where current time falls within gig window (or starts within 60 mins / booked for today)
+  // Find booking for a gig where current time falls within gig window (starts within 30 mins or currently running)
   const bookings = await FoodGigBooking.find({
     deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
     status: { $in: ['booked', 'completed'] }
   }).populate('gigId').lean();
 
-  const GRACE_BEFORE_MS = 60 * 60 * 1000; // Allow going online 60 mins before gig start time
+  const THIRTY_MIN_BEFORE_MS = 30 * 60 * 1000; // Allow logging in online 30 minutes before gig start time
 
   const activeBooking = bookings.find(b => {
     if (!b.gigId || b.gigId.status !== 'active') return false;
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
 
-    const isInTimeWindow = (nowMs >= startMs - GRACE_BEFORE_MS) && (nowMs <= endMs);
-    const isTodayGig = b.gigId.date === todayStr && nowMs <= endMs;
-    return isInTimeWindow || isTodayGig;
+    // Rider can log in starting 30 minutes before gig start time up until gig end time
+    const isInTimeWindow = (nowMs >= startMs - THIRTY_MIN_BEFORE_MS) && (nowMs <= endMs);
+    return isInTimeWindow;
   });
 
   return activeBooking ? activeBooking.gigId : null;
+};
+
+export const getUpcomingGigLoginDetails = async (deliveryPartnerId) => {
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  const bookings = await FoodGigBooking.find({
+    deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+    status: 'booked'
+  }).populate('gigId').lean();
+
+  for (const b of bookings) {
+    if (!b.gigId || b.gigId.status !== 'active') continue;
+    const startMs = new Date(b.gigId.startDateTime).getTime();
+    const endMs = new Date(b.gigId.endDateTime).getTime();
+
+    // If gig is starting in the future (more than 30 minutes from now)
+    if (nowMs < startMs - (30 * 60 * 1000) && nowMs < endMs) {
+      const minutesUntilStart = Math.ceil((startMs - nowMs) / (60 * 1000));
+      const minutesUntilAllowed = Math.ceil((startMs - (30 * 60 * 1000) - nowMs) / (60 * 1000));
+      return {
+        gig: b.gigId,
+        startTime: b.gigId.startTime || 'scheduled time',
+        minutesUntilStart,
+        minutesUntilAllowed,
+        allowedTimeMs: startMs - (30 * 60 * 1000)
+      };
+    }
+  }
+  return null;
 };
 
 export const getGigAttendanceStats = async () => {
@@ -370,4 +401,43 @@ export const processNoShows = async () => {
   }
 
   return { processed: updatedCount };
+};
+
+export const checkAndAutoOfflineExpiredGigs = async () => {
+  try {
+    const onlinePartners = await FoodDeliveryPartner.find({
+      availabilityStatus: 'online'
+    }).select('_id name availabilityStatus');
+
+    if (!onlinePartners || !onlinePartners.length) return { processed: 0 };
+
+    let offlinedCount = 0;
+    for (const partner of onlinePartners) {
+      const activeGig = await getActiveGigForPartner(partner._id);
+      if (!activeGig) {
+        partner.availabilityStatus = 'offline';
+        await partner.save();
+        offlinedCount++;
+
+        logger.info(
+          `[Gig Auto-Offline] Partner ${partner.name} (${partner._id}) set offline automatically because active gig ended with no next gig.`
+        );
+
+        const io = getIO();
+        if (io) {
+          io.to(rooms.delivery(partner._id)).emit('gig:auto_offline', {
+            reason: 'GIG_ENDED',
+            message: 'Your shift has ended and you have no upcoming active gig. You are now offline.'
+          });
+          io.to(rooms.delivery(partner._id)).emit('delivery:status_changed', {
+            availabilityStatus: 'offline'
+          });
+        }
+      }
+    }
+    return { processed: offlinedCount };
+  } catch (error) {
+    logger.error(`[Gig Auto-Offline Error] ${error.message}`);
+    return { processed: 0, error: error.message };
+  }
 };

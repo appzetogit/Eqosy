@@ -5,6 +5,8 @@ import { useParams } from 'react-router-dom';
 import AdminPageHeader from '../../components/ui/AdminPageHeader';
 import { adminCardClass, adminInputClass } from '../../components/ui/adminUi';
 
+import { adminService } from '../../services/adminService';
+
 const statusPillClass = (status) => {
   const normalized = String(status || '').toLowerCase();
   if (normalized === 'processed' || normalized === 'approved') {
@@ -29,18 +31,11 @@ const WithdrawalRequestOwnerDetail = () => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));
-        const res = await fetch(
-          `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/taxi/admin/wallet/owners/${id}/withdrawals?limit=${itemsPerPage}`,
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          },
-        );
-
-        const data = await res.json();
-        if (data.success) {
-          setOwner(data.data?.owner ?? null);
-          const mapped = (data.data?.results || []).map((withdrawal) => ({
+        const response = await adminService.getOwnerWithdrawals(id, { limit: itemsPerPage });
+        const data = response?.data || response || {};
+        if (data) {
+          setOwner(data.owner ?? null);
+          const mapped = (data.results || []).map((withdrawal) => ({
             id: withdrawal._id,
             date: new Date(withdrawal.createdAt).toLocaleDateString('en-GB', {
               day: '2-digit',

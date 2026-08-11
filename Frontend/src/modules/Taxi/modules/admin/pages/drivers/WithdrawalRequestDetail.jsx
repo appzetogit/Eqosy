@@ -279,6 +279,30 @@ const WithdrawalRequestDetail = () => {
                   </p>
                 </div>
               </div>
+
+              {/* UPI & Bank QR Code Section */}
+              {(driver?.documents?.bankDetails?.upiQrCode || driver?.documents?.bankDetails?.qrCode || driver?.upiQrCode || driver?.upiQrImage || driver?.documents?.bankDetails?.upiId || driver?.upiId) && (
+                <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-3xl space-y-3 mt-4">
+                  <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-indigo-600" /> UPI & Bank QR Information
+                  </p>
+                  {(driver?.documents?.bankDetails?.upiId || driver?.upiId) && (
+                    <p className="text-sm font-bold text-gray-900">
+                      <span className="text-gray-500 font-medium">UPI ID:</span> {driver?.documents?.bankDetails?.upiId || driver?.upiId}
+                    </p>
+                  )}
+                  {(driver?.documents?.bankDetails?.upiQrCode || driver?.documents?.bankDetails?.qrCode || driver?.upiQrCode || driver?.upiQrImage) && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-600 mb-1.5">Scan UPI QR Code to Pay:</p>
+                      <img
+                        src={driver?.documents?.bankDetails?.upiQrCode || driver?.documents?.bankDetails?.qrCode || driver?.upiQrCode || driver?.upiQrImage}
+                        alt="Driver UPI QR Code"
+                        className="w-40 h-40 object-contain border border-gray-200 rounded-xl bg-white p-2 shadow-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -195,6 +195,8 @@ const withDriverAuth = (config = {}) => {
 };
 
 export const getCurrentDriver = () => api.get("/drivers/me", withDriverAuth());
+export const getDriverPendingDispatch = (params = {}) =>
+  api.get("/drivers/pending-dispatch", withDriverAuth({ params }));
 
 export const getDriverRideHistory = (params = {}) =>
   api.get("/rides", withDriverAuth({ params }));

@@ -1516,3 +1516,20 @@ export async function bulkApproveFoodItems(req, res, next) {
     }
 }
 
+export async function approveEmergencyOfflineController(req, res, next) {
+    try {
+        const partnerId = req.params.id;
+        const adminId = req.user?.userId;
+        const { approveEmergencyOfflineByAdmin } = await import('../../delivery/services/delivery.service.js');
+        const data = await approveEmergencyOfflineByAdmin(partnerId, adminId);
+        res.status(200).json({
+            success: true,
+            message: 'Emergency offline request approved successfully',
+            data
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+

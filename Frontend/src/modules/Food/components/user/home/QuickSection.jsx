@@ -1,13 +1,119 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Star, ShoppingBasket, Timer } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { restaurantAPI } from '@food/api';
+import { publicGetOnce, restaurantAPI } from '@food/api';
 import { API_BASE_URL } from '@food/api/config';
 import { useLocation } from '@food/hooks/useLocation';
 import { useZone } from '@food/hooks/useZone';
 
 const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+
+const GroceryBannerSlider = ({ zoneId }) => {
+  const [banners, setBanners] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const touchStartX = useRef(0);
+  const isSwiping = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    publicGetOnce('/food/hero-banners/public')
+      .then((res) => {
+        if (!active) return;
+        const list = res?.data?.data?.banners || res?.data?.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setBanners(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const bannerImages = useMemo(() => {
+    return banners
+      .map((b) => (b && typeof b.imageUrl === 'string' ? b.imageUrl : ''))
+      .filter(Boolean);
+  }, [banners]);
+
+  useEffect(() => {
+    if (bannerImages.length <= 1) return;
+    const interval = setInterval(() => {
+      if (!isSwiping.current) {
+        setCurrentIndex((prev) => (prev + 1) % bannerImages.length);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [bannerImages.length]);
+
+  if (bannerImages.length === 0) return null;
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    isSwiping.current = true;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!isSwiping.current || bannerImages.length <= 1) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) {
+        setCurrentIndex((prev) => (prev + 1) % bannerImages.length);
+      } else {
+        setCurrentIndex((prev) => (prev - 1 + bannerImages.length) % bannerImages.length);
+      }
+    }
+    setTimeout(() => {
+      isSwiping.current = false;
+    }, 200);
+  };
+
+  return (
+    <div className="mb-5">
+      <div
+        className="relative w-full overflow-hidden aspect-[2/1] sm:aspect-[2.4/1] rounded-2xl shadow-sm bg-gray-100 dark:bg-gray-800 cursor-pointer"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="absolute inset-0 z-0">
+          {bannerImages.map((image, idx) => (
+            <div
+              key={`${idx}-${image}`}
+              className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+              style={{
+                opacity: currentIndex === idx ? 1 : 0,
+                zIndex: currentIndex === idx ? 2 : 1,
+              }}
+            >
+              <img
+                src={image}
+                alt={`Grocery Banner ${idx + 1}`}
+                className="w-full h-full object-cover rounded-2xl"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Indicators */}
+        {bannerImages.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 px-3 py-1 bg-black/30 backdrop-blur-md rounded-full z-10">
+            {bannerImages.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  currentIndex === idx ? 'bg-white w-5' : 'bg-white/40 w-1.5'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const normalizeImageUrl = (imageUrl) => {
   if (typeof imageUrl !== 'string' || !imageUrl.trim()) return '';
@@ -240,6 +346,9 @@ export default function QuickSection() {
 
   return (
     <div className="min-h-screen bg-white px-4 pt-5 pb-28">
+
+      {/* Hero Banner Carousel */}
+      <GroceryBannerSlider zoneId={zoneId} />
 
       {/* Header */}
       <div className="flex items-start justify-between mb-5">

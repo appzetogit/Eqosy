@@ -698,25 +698,17 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             {!isCollapsed && (
               <div className="flex items-center gap-2 animate-[slideIn_0.3s_ease-out]">
                 <div className="w-24 h-12 rounded-lg flex items-center justify-center shadow-black/20">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl || quickSpicyLogo}
-                      alt={companyName || "Company"}
-                      className="w-24 h-10 object-contain"
-                      loading="lazy"
-                      onError={(e) => {
-                        if (e.target.src !== quickSpicyLogo) {
-                          e.target.src = quickSpicyLogo
-                        }
-                      }}
-                    />
-                  ) : companyName ? (
-                    <span className="text-xs font-semibold text-white px-2 truncate">
-                      {companyName}
-                    </span>
-                  ) : (
-                    <img src={quickSpicyLogo} alt="Company" className="w-24 h-10 object-contain" loading="lazy" />
-                  )}
+                  <img
+                    src={logoUrl || quickSpicyLogo}
+                    alt={companyName || "Company"}
+                    className="w-24 h-10 object-contain"
+                    loading="lazy"
+                    onError={(e) => {
+                      if (e.target.src !== quickSpicyLogo) {
+                        e.target.src = quickSpicyLogo
+                      }
+                    }}
+                  />
                 </div>
               </div>
             )}

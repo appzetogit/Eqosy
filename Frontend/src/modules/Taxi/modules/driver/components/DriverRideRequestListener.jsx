@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import IncomingRideRequest from '../pages/IncomingRideRequest';
 import api from '../../../shared/api/axiosInstance';
 import { socketService } from '../../../shared/api/socket';
-import { getLocalDriverToken } from '../services/registrationService';
+import { getLocalDriverToken, getDriverPendingDispatch } from '../services/registrationService';
 import {
     playRideRequestAlertSound,
     stopRideRequestAlertSound,
@@ -135,6 +135,79 @@ const DriverRideRequestListener = () => {
         });
         return unwrapApiPayload(response);
     }, []);
+
+    const checkPendingDispatch = useCallback(async (targetRideId = '') => {
+        if (!activeOnRoute || requestRef.current) return;
+        const driverToken = getLocalDriverToken();
+        if (!driverToken) return;
+
+        try {
+            const searchParams = new URLSearchParams(window.location.search);
+            const rideId = targetRideId || searchParams.get('rideId') || searchParams.get('openRideId') || sessionStorage.getItem('pendingRideId') || localStorage.getItem('pendingRideId') || '';
+            const response = await getDriverPendingDispatch(rideId ? { rideId } : {});
+            const data = unwrapApiPayload(response);
+
+            if (data && data.rideId && !requestRef.current) {
+                const requestType = normalizeJobType(data);
+                const request = {
+                    type: requestType,
+                    title: getJobTitle(requestType),
+                    fare: `Rs ${data.fare || 0}`,
+                    payment: data.paymentMethod || 'Cash',
+                    pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
+                    drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
+                    distance: formatTripDistance(data),
+                    requestId: data.rideId,
+                    rideId: data.rideId,
+                    attempt: data.attempt,
+                    maxAttempts: data.maxAttempts,
+                    acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+                    requestExpiresAt: data.requestExpiresAt || null,
+                    customer: data.user || null,
+                    bookingMode: data.bookingMode || 'normal',
+                    bidding: data.bidding || { enabled: false },
+                    raw: data,
+                };
+
+                setCurrentRequest(request);
+                playRideRequestAlertSound();
+
+                sessionStorage.removeItem('pendingRideId');
+                localStorage.removeItem('pendingRideId');
+                if (rideId) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('rideId');
+                    url.searchParams.delete('openRideId');
+                    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+                }
+            }
+        } catch (error) {
+            console.warn('[driver-ride-request-listener] checkPendingDispatch error', error?.message || error);
+        }
+    }, [activeOnRoute]);
+
+    useEffect(() => {
+        if (!activeOnRoute) return undefined;
+
+        checkPendingDispatch();
+
+        const handleFocus = () => checkPendingDispatch();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                checkPendingDispatch();
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('pageshow', handleFocus);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('pageshow', handleFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [activeOnRoute, checkPendingDispatch]);
 
     useEffect(() => {
         if (!activeOnRoute) {

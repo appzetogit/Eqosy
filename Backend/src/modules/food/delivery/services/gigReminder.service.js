@@ -3,14 +3,19 @@ import { sendNotificationToOwner } from '../../../../core/notifications/firebase
 import { createInboxNotifications } from '../../../../core/notifications/notification.service.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { logger } from '../../../../utils/logger.js';
+import { checkAndAutoOfflineExpiredGigs } from './gig.service.js';
 
 /**
  * Periodically checks booked gigs and:
  * 1. Sends a notification 10 minutes before the gig start time if delivery partner is offline.
  * 2. Rings mobile (high priority push + alarm sound + socket event) once shift time starts if delivery partner hasn't logged in online yet.
+ * 3. Auto-offlines drivers whose gig has ended and have no next gig.
  */
 export const checkAndSendGigReminders = async () => {
   try {
+    // Step 0: Auto-offline drivers whose gig has ended with no next gig
+    await checkAndAutoOfflineExpiredGigs();
+
     const now = new Date();
     const nowMs = now.getTime();
 
@@ -37,10 +42,131 @@ export const checkAndSendGigReminders = async () => {
 
       const isPartnerOnline = partner.availabilityStatus === 'online';
 
-      // -------------------------------------------------------------
-      // FEATURE 1: 10 Minutes Before Gig Start Notification
-      // -------------------------------------------------------------
       const timeUntilStartMs = startMs - nowMs;
+
+      // -------------------------------------------------------------
+      // FEATURE 1A: 30 Minutes Before Gig Start Notification
+      // -------------------------------------------------------------
+      const THIRTY_MIN_MS = 30 * 60 * 1000;
+      if (
+        !booking.reminder30MinSent &&
+        timeUntilStartMs > 0 &&
+        timeUntilStartMs <= (32 * 60 * 1000) &&
+        timeUntilStartMs >= (27 * 60 * 1000) &&
+        !isPartnerOnline
+      ) {
+        logger.info(
+          `[Gig Reminder] Sending 30-minute pre-shift notification to partner ${partner.name} (${partner._id}) for gig "${gig.title}" (${gig.startTime})`
+        );
+
+        const title = '⏰ Upcoming Shift Reminder (30m)';
+        const message = `Your booked shift "${gig.title}" starts in 30 minutes (${gig.startTime}). You can log in online in 15 minutes or get ready now!`;
+
+        await sendNotificationToOwner({
+          ownerType: 'DELIVERY_PARTNER',
+          ownerId: partner._id,
+          payload: {
+            title,
+            body: message,
+            data: {
+              type: 'GIG_REMINDER_30MIN',
+              gigId: String(gig._id),
+              startTime: gig.startTime
+            }
+          }
+        });
+
+        await createInboxNotifications({
+          notifications: [
+            {
+              ownerType: 'DELIVERY_PARTNER',
+              ownerId: partner._id,
+              title,
+              message,
+              category: 'gig_reminder',
+              metadata: { gigId: String(gig._id), startTime: gig.startTime }
+            }
+          ]
+        });
+
+        const io = getIO();
+        if (io) {
+          io.to(rooms.delivery(partner._id)).emit('gig:reminder_30min', {
+            gigId: gig._id,
+            title: gig.title,
+            startTime: gig.startTime,
+            message
+          });
+        }
+
+        booking.reminder30MinSent = true;
+        booking.reminder30MinSentAt = now;
+        await booking.save();
+      }
+
+      // -------------------------------------------------------------
+      // FEATURE 1B: 15 Minutes Before Gig Start Notification
+      // -------------------------------------------------------------
+      const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+      if (
+        !booking.reminder15MinSent &&
+        timeUntilStartMs > 0 &&
+        timeUntilStartMs <= (17 * 60 * 1000) &&
+        timeUntilStartMs >= (12 * 60 * 1000) &&
+        !isPartnerOnline
+      ) {
+        logger.info(
+          `[Gig Reminder] Sending 15-minute pre-shift notification to partner ${partner.name} (${partner._id}) for gig "${gig.title}" (${gig.startTime})`
+        );
+
+        const title = '⏰ Shift Starting Soon (15m)';
+        const message = `Your booked shift "${gig.title}" starts in 15 minutes (${gig.startTime}). You can now log in online to get ready!`;
+
+        await sendNotificationToOwner({
+          ownerType: 'DELIVERY_PARTNER',
+          ownerId: partner._id,
+          payload: {
+            title,
+            body: message,
+            data: {
+              type: 'GIG_REMINDER_15MIN',
+              gigId: String(gig._id),
+              startTime: gig.startTime
+            }
+          }
+        });
+
+        await createInboxNotifications({
+          notifications: [
+            {
+              ownerType: 'DELIVERY_PARTNER',
+              ownerId: partner._id,
+              title,
+              message,
+              category: 'gig_reminder',
+              metadata: { gigId: String(gig._id), startTime: gig.startTime }
+            }
+          ]
+        });
+
+        const io = getIO();
+        if (io) {
+          io.to(rooms.delivery(partner._id)).emit('gig:reminder_15min', {
+            gigId: gig._id,
+            title: gig.title,
+            startTime: gig.startTime,
+            message
+          });
+        }
+
+        booking.reminder15MinSent = true;
+        booking.reminder15MinSentAt = now;
+        await booking.save();
+      }
+
+      // -------------------------------------------------------------
+      // FEATURE 1C: 10 Minutes Before Gig Start Notification
+      // -------------------------------------------------------------
       const TEN_MIN_MS = 10 * 60 * 1000;
       const ELEVEN_MIN_MS = 11 * 60 * 1000;
 
@@ -48,7 +174,7 @@ export const checkAndSendGigReminders = async () => {
         !booking.reminder10MinSent &&
         timeUntilStartMs > 0 &&
         timeUntilStartMs <= ELEVEN_MIN_MS &&
-        timeUntilStartMs >= (TEN_MIN_MS - 2 * 60 * 1000) && // flexible 8-11 min window
+        timeUntilStartMs >= (TEN_MIN_MS - 2 * 60 * 1000) &&
         !isPartnerOnline
       ) {
         logger.info(

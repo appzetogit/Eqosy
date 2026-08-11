@@ -329,6 +329,21 @@ export default function LandingPageManagement() {
     }
   }
 
+  const handleSaveBannerText = async (id, title, subTitle) => {
+    try {
+      setError(null)
+      setSuccess(null)
+      const response = await api.patch(`/food/hero-banners/${id}`, { title, subTitle }, getAuthConfig())
+      if (response.data.success) {
+        setSuccess('Hero banner text updated successfully!')
+        await fetchBanners()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to update banner text.')
+    }
+  }
+
   // Handle restaurant selection for banner advertising
   const handleLinkRestaurants = async () => {
     if (!selectedBannerId) return
@@ -950,6 +965,7 @@ export default function LandingPageManagement() {
 
       const formData = new FormData()
       files.forEach((file) => {
+        formData.append('files', file)
         formData.append('images', file)
       })
 
@@ -1388,6 +1404,44 @@ export default function LandingPageManagement() {
                             </button>
                           </div>
                         </div>
+                        {/* Editable Banner Text Fields */}
+                        <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                              Banner Title (e.g. FLAT 50% OFF)
+                            </label>
+                            <Input
+                              type="text"
+                              placeholder="Enter banner title..."
+                              defaultValue={banner.title || ''}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim()
+                                if (val !== (banner.title || '')) {
+                                  handleSaveBannerText(banner._id, val, banner.subTitle || banner.ctaText || '')
+                                }
+                              }}
+                              className="text-xs h-8 bg-slate-50 border-slate-200 focus:bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                              Banner Subtitle / Tagline (e.g. with FREE delivery)
+                            </label>
+                            <Input
+                              type="text"
+                              placeholder="Enter subtitle/tagline..."
+                              defaultValue={banner.subTitle || banner.ctaText || ''}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim()
+                                if (val !== (banner.subTitle || banner.ctaText || '')) {
+                                  handleSaveBannerText(banner._id, banner.title || '', val)
+                                }
+                              }}
+                              className="text-xs h-8 bg-slate-50 border-slate-200 focus:bg-white"
+                            />
+                          </div>
+                        </div>
+
                         {banner.linkedRestaurants && banner.linkedRestaurants.length > 0 && (
                           <div className="mt-2 pt-2 border-t border-slate-200">
                             <p className="text-xs text-slate-600 mb-1">Linked Restaurants ({banner.linkedRestaurants.length}):</p>

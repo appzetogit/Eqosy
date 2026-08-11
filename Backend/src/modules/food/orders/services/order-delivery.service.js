@@ -16,7 +16,9 @@ import { fetchPolyline } from '../utils/googleMaps.js';
 
 import * as foodTransactionService from './foodTransaction.service.js';
 import * as dispatchService from './order-dispatch.service.js';
+import { isPartnerInActiveZoneSync } from './order-dispatch.service.js';
 import * as paymentService from './order-payment.service.js';
+import { FoodZone } from '../../admin/models/zone.model.js';
 
 import {
   buildOrderIdentityFilter,
@@ -60,47 +62,69 @@ function emitOrderUpdate(order, deliveryPartnerId) {
 
     let userTitle = '';
     let userBody = '';
+    let restTitle = '';
+    let restBody = '';
     let riderTitle = '';
     let riderBody = '';
 
-    const orderId = order._id.toString();
+    const displayOrderId = order.order_id || order.orderId || order._id?.toString?.() || '';
 
     if (status === 'picked_up') {
-      userTitle = 'Order on the way!';
-      userBody = `Partner has picked up your order #${orderId} and is heading your way.`;
-      riderTitle = 'Order picked up!';
-      riderBody = `You have picked up order #${orderId}. Proceed to the customer location.`;
+      userTitle = 'Order Picked Up! 🛵';
+      userBody = 'Your order has been picked up by the delivery partner and is on the way to deliver your order.';
+      restTitle = 'Order Picked Up! 🛵';
+      restBody = `Order #${displayOrderId} has been picked up by the delivery partner.`;
+      riderTitle = 'Order Picked Up! 📦';
+      riderBody = `You have picked up order #${displayOrderId}. Proceed to the customer location.`;
     } else if (status === 'reached_drop') {
-      userTitle = 'Partner nearby!';
-      userBody = `Your delivery partner has reached your location for order #${orderId}.`;
-      riderTitle = 'Arrived at drop!';
-      riderBody = `You have reached the customer location for order #${orderId}.`;
+      userTitle = 'Rider Arrived! 📍';
+      userBody = 'Rider has arrived at your location, please collect the order.';
+      restTitle = 'Rider at Customer Location 📍';
+      restBody = `Delivery partner has arrived at customer location for Order #${displayOrderId}.`;
+      riderTitle = 'Arrived at Drop! 📍';
+      riderBody = `You have reached the customer location for Order #${displayOrderId}.`;
     } else if (status === 'delivered') {
-      userTitle = `Order #${orderId} delivered!`;
-      userBody = 'Hope you enjoyed your meal! Don\'t forget to rate your experience.';
-      riderTitle = 'Delivery successful!';
-      riderBody = `Order #${orderId} has been successfully delivered.`;
+      userTitle = 'Order Completed! 🎉';
+      userBody = 'Your order is completed, now enjoy your meal';
+      restTitle = `Order #${displayOrderId} Delivered! ✅`;
+      restBody = `Order #${displayOrderId} has been successfully delivered to customer.`;
+      riderTitle = 'Delivery successful! ✅';
+      riderBody = `Order #${displayOrderId} has been successfully delivered.`;
 
       if (order.payment?.method === 'cash' || order.paymentMethod === 'cash') {
-        riderTitle = 'Payment collected!';
+        riderTitle = 'Payment collected! 💰';
         const amt = order.pricing?.total || order.amounts?.totalCustomerPaid || 0;
-        riderBody = `You have collected Rs ${amt} cash for Order #${orderId}.`;
+        riderBody = `You have collected ₹${amt} cash for Order #${displayOrderId}.`;
       }
     }
 
     if (userTitle) {
-      void notifyOwnersSafely(
-        [
-          { ownerType: 'RESTAURANT', ownerId: order.restaurantId },
-          { ownerType: 'USER', ownerId: order.userId },
-        ],
+      void notifyOwnerSafely(
+        { ownerType: 'USER', ownerId: order.userId },
         {
           title: userTitle,
           body: userBody,
-          dataOnly: true,
+          dataOnly: false,
           data: {
             type: 'order_status_update',
-            orderId,
+            orderId: displayOrderId,
+            orderMongoId: order._id?.toString?.() || '',
+            orderStatus: status,
+          },
+        },
+      );
+    }
+
+    if (restTitle) {
+      void notifyOwnerSafely(
+        { ownerType: 'RESTAURANT', ownerId: order.restaurantId },
+        {
+          title: restTitle,
+          body: restBody,
+          dataOnly: false,
+          data: {
+            type: 'order_status_update',
+            orderId: displayOrderId,
             orderMongoId: order._id?.toString?.() || '',
             orderStatus: status,
           },
@@ -114,10 +138,10 @@ function emitOrderUpdate(order, deliveryPartnerId) {
         {
           title: riderTitle,
           body: riderBody,
-          dataOnly: true,
+          dataOnly: false,
           data: {
             type: status === 'delivered' ? 'order_completed' : 'order_status_update',
-            orderId,
+            orderId: displayOrderId,
             orderMongoId: order._id?.toString?.() || '',
             paymentMethod: order.payment?.method || order.paymentMethod,
             amountCollected: String(order.pricing?.total || order.amounts?.totalCustomerPaid || 0),
@@ -237,6 +261,23 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   if (!identity) throw new ValidationError('Order id required');
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
+
+  const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
+  if (activeZones && activeZones.length > 0) {
+    const partner = await FoodDeliveryPartner.findById(partnerId).select('lastLat lastLng name').lean();
+    if (!partner || partner.lastLat == null || partner.lastLng == null) {
+      throw new ForbiddenError('Location unavailable. You must be inside an active delivery zone to accept orders.');
+    }
+    const targetOrder = await FoodOrder.findOne(identity).select('restaurantId').lean();
+    const restaurant = targetOrder?.restaurantId
+      ? await FoodRestaurant.findById(targetOrder.restaurantId).select('zoneId zone').lean()
+      : null;
+    const targetZoneId = restaurant?.zoneId || restaurant?.zone;
+    const isInZone = isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, targetZoneId, activeZones);
+    if (!isInZone) {
+      throw new ForbiddenError('You cannot accept orders when you are outside the zone created by admin.');
+    }
+  }
   const now = new Date();
   const acceptedStatuses = ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up'];
   const cancellableStatuses = [
@@ -539,10 +580,10 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
         title: isFoodPreparing ? 'Food preparation is taking longer 🟠' : 'Rider arrived!',
         body: isFoodPreparing
           ? 'Your delivery partner has arrived at the restaurant and is waiting for your order to be ready.'
-          : `${partner?.name || 'The delivery partner'} has arrived at ${restaurant?.restaurantName || 'your restaurant'} to pick up Order #${order.order_id || order._id.toString()}.`,
+          : `${partner?.name || 'The delivery partner'} has arrived at ${restaurant?.restaurantName || 'your restaurant'} to pick up Order #${order.order_id || order.orderId || order._id.toString()}.`,
         data: {
           type: 'rider_arrived',
-          orderId: String(order._id.toString()),
+          orderId: String(order.order_id || order.orderId || order._id.toString()),
           orderMongoId: String(order._id),
           partnerName: partner?.name || '',
           riderWaiting: isFoodPreparing,

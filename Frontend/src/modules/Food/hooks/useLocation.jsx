@@ -1303,6 +1303,10 @@ export function useLocation() {
             try {
               const storedRaw = localStorage.getItem("userLocation")
               const storedLocation = storedRaw ? JSON.parse(storedRaw) : null
+              if (storedLocation?.isManual === true || location?.isManual === true) {
+                debugLog("?? User has manually selected location; skipping live watch location overwrite")
+                return
+              }
               const savedLabel = loc?.label || storedLocation?.label
               if (savedLabel && String(savedLabel).trim()) {
                 persistedLocation = { ...loc, label: String(savedLabel).trim() }
@@ -1550,6 +1554,21 @@ export function useLocation() {
 
         // Auto-fetch real GPS location if navigator.geolocation is available
         if (navigator.geolocation) {
+          const storedRaw = localStorage.getItem("userLocation")
+          if (storedRaw) {
+            try {
+              const parsedStored = JSON.parse(storedRaw)
+              if (parsedStored?.latitude && parsedStored?.longitude) {
+                debugLog("?? Using existing stored location on startup/focus, skipping auto GPS fetch:", parsedStored)
+                setLocation(parsedStored)
+                setPermissionGranted(true)
+                setLoading(false)
+                if (AUTO_START_LIVE_WATCH) startWatchingLocation()
+                return
+              }
+            } catch {}
+          }
+
           setLoading(true);
           getLocation(true, true, true)
             .then((loc) => {

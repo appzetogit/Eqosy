@@ -17,23 +17,68 @@ import {
   notifyOwnersSafely,
 } from './order.helpers.js';
 
+import { FoodZone } from '../../admin/models/zone.model.js';
+
+function isPointInPolygon(lat, lng, polygon = []) {
+  if (!Array.isArray(polygon) || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = Number(polygon[i]?.longitude);
+    const yi = Number(polygon[i]?.latitude);
+    const xj = Number(polygon[j]?.longitude);
+    const yj = Number(polygon[j]?.latitude);
+    const intersects =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+export function isPartnerInActiveZoneSync(lat, lng, targetZoneId, activeZones = []) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+    return false;
+  }
+
+  if (!activeZones || activeZones.length === 0) {
+    return true;
+  }
+
+  if (targetZoneId && mongoose.Types.ObjectId.isValid(targetZoneId)) {
+    const targetZone = activeZones.find(z => z._id.toString() === targetZoneId.toString());
+    if (targetZone && Array.isArray(targetZone.coordinates) && targetZone.coordinates.length >= 3) {
+      return isPointInPolygon(Number(lat), Number(lng), targetZone.coordinates);
+    }
+  }
+
+  return activeZones.some(z => isPointInPolygon(Number(lat), Number(lng), z.coordinates || []));
+}
+
 async function listNearbyOnlineDeliveryPartners(
   restaurantId,
   { maxKm = 15, limit = 25 } = {},
 ) {
   const rId = (restaurantId?._id || restaurantId).toString();
   const restaurant = await FoodRestaurant.findById(rId)
-    .select("location")
+    .select("location zoneId zone")
     .lean();
 
+  const targetZoneId = restaurant?.zoneId || restaurant?.zone;
+  const activeZones = await FoodZone.find({ isActive: true }).select("_id coordinates").lean();
+  const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
+
   if (!restaurant?.location?.coordinates?.length) {
-    const partners = await FoodDeliveryPartner.find({
+    let partners = await FoodDeliveryPartner.find({
       status: "approved",
       availabilityStatus: "online",
     })
-      .select("_id status name")
+      .select("_id status name lastLat lastLng")
       .limit(Math.max(1, limit))
       .lean();
+
+    if (hasActiveZones) {
+      partners = partners.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+    }
 
     return {
       restaurant: null,
@@ -57,8 +102,17 @@ async function listNearbyOnlineDeliveryPartners(
 
     const isStale = !p.lastLocationAt || (Date.now() - new Date(p.lastLocationAt).getTime()) > STALE_GPS_MS;
     if (p.lastLat == null || p.lastLng == null || isStale) {
+      if (hasActiveZones) continue; // Must be inside active zone; missing/stale GPS cannot be verified
       scored.push({ partnerId: p._id, distanceKm: 999, status: p.status });
       continue;
+    }
+
+    if (hasActiveZones) {
+      const isInZone = isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
+      if (!isInZone) {
+        logger.info(`[ZoneDispatchFilter] Skipping rider ${p.name || p._id} - outside admin created zone.`);
+        continue;
+      }
     }
 
     const d = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
@@ -71,13 +125,17 @@ async function listNearbyOnlineDeliveryPartners(
   const picked = scored.slice(0, Math.max(1, limit));
 
   if (picked.length === 0) {
-    const anyOnline = await FoodDeliveryPartner.find({
+    let anyOnline = await FoodDeliveryPartner.find({
       status: { $in: allowedStatuses },
       availabilityStatus: "online",
     })
-      .select("_id status name")
+      .select("_id status name lastLat lastLng")
       .limit(Math.max(1, limit))
       .lean();
+
+    if (hasActiveZones) {
+      anyOnline = anyOnline.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+    }
 
     return {
       partners: anyOnline.map((p) => ({
@@ -281,16 +339,28 @@ export async function tryAutoAssign(orderId, options = {}) {
     }
 
     const codEligiblePartners = await filterPartnersByCodCashLimit(partners, order);
-    const eligible = codEligiblePartners.filter(p => !offeredIds.includes(p.partnerId.toString()));
+
+    // Filter to strictly ONLINE delivery partners right now
+    const partnerIdsToVerify = codEligiblePartners.map(p => p.partnerId).filter(Boolean);
+    const onlineDocs = partnerIdsToVerify.length > 0
+      ? await FoodDeliveryPartner.find({
+          _id: { $in: partnerIdsToVerify },
+          availabilityStatus: 'online'
+        }).select('_id').lean()
+      : [];
+    const onlineIdsSet = new Set(onlineDocs.map(d => d._id.toString()));
+
+    const codEligibleOnlinePartners = codEligiblePartners.filter(p => onlineIdsSet.has(p.partnerId?.toString?.()));
+    const eligible = codEligibleOnlinePartners.filter(p => !offeredIds.includes(p.partnerId.toString()));
 
     if (eligible.length === 0) {
-      logger.info(`tryAutoAssign: No NEW eligible partners in ${maxKm}km for order ${order._id}. Restarting hunt...`);
+      logger.info(`tryAutoAssign: No NEW eligible online partners in ${maxKm}km for order ${order._id}. Restarting hunt...`);
 
-      // If we ran out of new eligible partners, we might want to re-offer to everyone (Phase 2 style)
+      // If we ran out of new eligible partners, re-offer to current online partners only
       const io = getIO();
-      if (io && codEligiblePartners.length > 0) {
+      if (io && codEligibleOnlinePartners.length > 0) {
         const payload = buildDeliverySocketPayload(order, order.restaurantId);
-        for (const p of codEligiblePartners) {
+        for (const p of codEligibleOnlinePartners) {
           const roomName = rooms.delivery(p.partnerId);
           io.to(roomName).emit('new_order_available', { ...payload, pickupDistanceKm: p.distanceKm });
         }

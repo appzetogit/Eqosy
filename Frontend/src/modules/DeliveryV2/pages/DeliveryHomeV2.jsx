@@ -234,6 +234,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     clearNewOrder,
     orderStatusUpdate,
     clearOrderStatusUpdate,
+    orderReady,
+    clearOrderReady,
     isConnected: isSocketConnected,
     emitLocation,
     joinTrackingForOrder,
@@ -260,6 +262,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [selfieUploading, setSelfieUploading] = useState(false);
   const [selfieError, setSelfieError] = useState('');
   const [onlineSelfie, setOnlineSelfie] = useState(null);
+  const [showEmergencyOfflineModal, setShowEmergencyOfflineModal] = useState(false);
+  const [emergencyOfflineReason, setEmergencyOfflineReason] = useState('');
+  const [isSubmittingEmergencyOffline, setIsSubmittingEmergencyOffline] = useState(false);
   const [isTogglingDuty, setIsTogglingDuty] = useState(false);
   const [emergencyNumbers, setEmergencyNumbers] = useState({
     medicalEmergency: "",
@@ -659,11 +664,39 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       setOnline(false);
       toast('You are now offline');
     } catch (error) {
-      toast.error(error?.response?.data?.message || error?.message || 'Failed to go offline');
+      const errCode = error?.response?.data?.code || error?.code;
+      const errMsg = error?.response?.data?.message || error?.message || 'Failed to go offline';
+      if (errCode === 'EMERGENCY_OFFLINE_REQUIRED' || error?.response?.data?.canRequestEmergency) {
+        setShowEmergencyOfflineModal(true);
+      } else {
+        toast.error(errMsg);
+      }
     } finally {
       setIsTogglingDuty(false);
     }
   }, [setOnline]);
+
+  const handleSubmitEmergencyOffline = async () => {
+    if (!emergencyOfflineReason.trim()) {
+      toast.error('Please provide a reason for emergency offline request');
+      return;
+    }
+    setIsSubmittingEmergencyOffline(true);
+    try {
+      const res = await deliveryAPI.requestEmergencyOffline(emergencyOfflineReason.trim());
+      if (res?.data?.success) {
+        toast.success('Emergency offline request submitted to Admin! Waiting for approval.');
+        setShowEmergencyOfflineModal(false);
+        setEmergencyOfflineReason('');
+      } else {
+        toast.error(res?.data?.message || 'Failed to submit request');
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Error submitting emergency offline request');
+    } finally {
+      setIsSubmittingEmergencyOffline(false);
+    }
+  };
 
   const handleDutyToggle = useCallback(async () => {
     if (isTogglingDuty) return;
@@ -892,6 +925,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => clearInterval(interval);
   }, [isOnline, onlineSelfie]);
 
+  // Periodic active gig check: auto-offline driver if shift has ended with no next gig
+  useEffect(() => {
+    if (!isOnline) return;
+
+    const checkGigStatus = async () => {
+      try {
+        const gigRes = await deliveryAPI.getActiveGig();
+        const activeGig = gigRes?.data?.data?.activeGig;
+        const serverStatus = gigRes?.data?.data?.availabilityStatus;
+
+        if (!activeGig || serverStatus === 'offline') {
+          setOnline(false);
+          localStorage.setItem('delivery_online_status', 'false');
+          toast.warning('Your shift has ended and you have no upcoming active gig. You are now offline.');
+        }
+      } catch (err) {
+        // ignore network error during polling
+      }
+    };
+
+    const interval = setInterval(checkGigStatus, 30000);
+    return () => clearInterval(interval);
+  }, [isOnline, setOnline]);
+
   // 3.5. Background Ping / Heartbeat
   // If watchPosition stops firing (e.g. app in background or device stationary),
   // this ensures we ping the backend periodically. This keeps the token fresh (via 401 interceptor)
@@ -1052,13 +1109,87 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   useEffect(() => {
     if (orderStatusUpdate) {
-      if (orderStatusUpdate.status === 'cancelled') {
-        toast.error('Order cancelled');
+      const status = String(orderStatusUpdate.orderStatus || orderStatusUpdate.status || '').toLowerCase();
+      if (status.includes('cancel')) {
+        toast.error('Order cancelled by restaurant');
         resetTrip();
+      } else if (activeOrder) {
+        const isReady = status === 'ready_for_pickup' || status === 'ready' || Boolean(orderStatusUpdate.isFoodReady);
+        const nextStatus = orderStatusUpdate.orderStatus || orderStatusUpdate.status || activeOrder.orderStatus;
+        setActiveOrder({
+          ...activeOrder,
+          ...orderStatusUpdate,
+          orderStatus: nextStatus,
+          isFoodReady: isReady || activeOrder.isFoodReady,
+          deliveryState: {
+            ...(activeOrder.deliveryState || {}),
+            ...(orderStatusUpdate.deliveryState || {}),
+            status: nextStatus,
+            isFoodReady: isReady || activeOrder.deliveryState?.isFoodReady,
+            foodReadyAt: orderStatusUpdate.deliveryState?.foodReadyAt || activeOrder.deliveryState?.foodReadyAt || (isReady ? new Date() : null)
+          }
+        });
+        if (isReady && !activeOrder.isFoodReady && activeOrder.orderStatus !== 'ready_for_pickup') {
+          toast.success('Food is ready for pickup! 🟢');
+        }
       }
       clearOrderStatusUpdate();
     }
-  }, [orderStatusUpdate, resetTrip, clearOrderStatusUpdate]);
+  }, [orderStatusUpdate, activeOrder, setActiveOrder, resetTrip, clearOrderStatusUpdate]);
+
+  useEffect(() => {
+    if (orderReady && activeOrder) {
+      setActiveOrder({
+        ...activeOrder,
+        ...orderReady,
+        orderStatus: 'ready_for_pickup',
+        isFoodReady: true,
+        deliveryState: {
+          ...(activeOrder.deliveryState || {}),
+          ...(orderReady.deliveryState || {}),
+          status: 'ready_for_pickup',
+          isFoodReady: true,
+          foodReadyAt: new Date()
+        }
+      });
+      toast.success('Food is ready for pickup! 🟢');
+      clearOrderReady();
+    }
+  }, [orderReady, activeOrder, setActiveOrder, clearOrderReady]);
+
+  // Poller to sync active order status from server every 4s while an active trip is ongoing
+  useEffect(() => {
+    if (!activeOrder) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await deliveryAPI.getCurrentDelivery();
+        const serverOrder = res?.data?.data?.order || res?.data?.data || res?.data;
+        if (serverOrder && (serverOrder.orderStatus || serverOrder._id)) {
+          const s = String(serverOrder.orderStatus || '').toLowerCase();
+          const isReady = s === 'ready_for_pickup' || s === 'ready' || Boolean(serverOrder.isFoodReady) || Boolean(serverOrder.deliveryState?.isFoodReady);
+          if (
+            serverOrder.orderStatus !== activeOrder.orderStatus ||
+            isReady !== Boolean(activeOrder.isFoodReady)
+          ) {
+            setActiveOrder({
+              ...activeOrder,
+              ...serverOrder,
+              orderStatus: serverOrder.orderStatus || activeOrder.orderStatus,
+              isFoodReady: isReady || activeOrder.isFoodReady,
+              deliveryState: {
+                ...(activeOrder.deliveryState || {}),
+                ...(serverOrder.deliveryState || {}),
+                isFoodReady: isReady
+              }
+            });
+          }
+        }
+      } catch (e) {
+        // quiet error
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeOrder, setActiveOrder]);
 
 
   const handleCenterMap = () => {
@@ -1303,6 +1434,19 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     onReachedPickup={reachPickup} 
                     onPickedUp={(billImageUrl) => pickUpOrder(billImageUrl)} 
                     onMinimize={() => setIsModalMinimized(true)}
+                    onCancel={async () => {
+                      const orderId = activeOrder?.orderId || activeOrder?._id;
+                      if (!orderId) { resetTrip(); return; }
+                      try {
+                        await deliveryAPI.rejectOrder(orderId, { reason: 'driver_cancelled' });
+                        toast('Order cancelled');
+                      } catch (err) {
+                        const msg = err?.response?.data?.message || err?.message || 'Failed to cancel';
+                        toast.error(msg);
+                      } finally {
+                        resetTrip();
+                      }
+                    }}
                   />
                 )}
                 {(tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && (
@@ -1491,6 +1635,60 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
            ))}
          </div>
       </BottomPopup>
+
+      {/* Emergency Offline Request Modal */}
+      <AnimatePresence>
+        {showEmergencyOfflineModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[700] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 font-bold">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Emergency Offline Request</h3>
+                  <p className="text-xs text-gray-500 font-medium">Active Gig Shift In Progress</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                You are currently working an active gig shift. Riders can only go offline during an active shift for an emergency situation with Admin approval.
+              </p>
+              <textarea
+                value={emergencyOfflineReason}
+                onChange={(e) => setEmergencyOfflineReason(e.target.value)}
+                placeholder="State your emergency reason (e.g. vehicle breakdown, family/medical emergency)..."
+                className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4 resize-none"
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEmergencyOfflineModal(false)}
+                  disabled={isSubmittingEmergencyOffline}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-xs font-bold text-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitEmergencyOffline}
+                  disabled={isSubmittingEmergencyOffline || !emergencyOfflineReason.trim()}
+                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-xs font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSubmittingEmergencyOffline ? 'Submitting...' : 'Submit to Admin'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showOnlineSelfiePrompt && (

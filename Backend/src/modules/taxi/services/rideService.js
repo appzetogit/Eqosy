@@ -19,7 +19,7 @@ import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '
 import { applyPromoToRideInTransaction } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
-import { emitToRoom, getDriverRoom } from './dispatchService.js';
+import { emitToDriver, emitToRoom, getDriverRoom } from './dispatchService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -772,6 +772,19 @@ const normalizeRideTransportType = (value = 'taxi') => {
   return normalized;
 };
 
+const TWO_WHEELER_KEYS = ['bike', 'scooter', '2wheeler', '2-wheeler', '2_wheeler', 'two_wheeler', 'twowheeler'];
+const TRUCK_MOVER_KEYS = ['truck', 'lcv', 'hcv', 'mcv', 'loader', 'mover', 'movers', 'packers'];
+
+const isTwoWheelerVehicle = (name = '', type = '', icon = '') => {
+  const str = `${name} ${type} ${icon}`.toLowerCase();
+  return TWO_WHEELER_KEYS.some((key) => str.includes(key));
+};
+
+const isTruckOrMoverVehicle = (name = '', type = '', icon = '') => {
+  const str = `${name} ${type} ${icon}`.toLowerCase();
+  return TRUCK_MOVER_KEYS.some((key) => str.includes(key));
+};
+
 const buildDriverVehicleAcceptFilter = async (ride) => {
   const vehicleTypeIds = normalizeVehicleTypeIds(ride.dispatchVehicleTypeIds || [], ride.vehicleTypeId);
 
@@ -781,17 +794,57 @@ const buildDriverVehicleAcceptFilter = async (ride) => {
 
   const vehicles = await Vehicle.find({ _id: { $in: vehicleTypeIds } }).select('name vehicle_type icon_types').lean();
   const vehicleTypeKeys = normalizeVehicleKeys(vehicles);
+
+  const isRideTwoWheeler = vehicles.some((v) => isTwoWheelerVehicle(v.name, v.vehicle_type, v.icon_types)) ||
+    isTwoWheelerVehicle(ride.vehicleIconType || '', ride.serviceType || '');
+
+  const isRideTruckOrMover = vehicles.some((v) => isTruckOrMoverVehicle(v.name, v.vehicle_type, v.icon_types)) ||
+    isTruckOrMoverVehicle(ride.vehicleIconType || '', ride.serviceType || '');
+
+  const normServiceType = String(ride?.serviceType || '').toLowerCase();
+  const isParcelRide = normServiceType === 'parcel' || normServiceType === 'delivery';
+
+  const parcelDriverClauses = isParcelRide
+    ? [
+        { serviceCategories: { $in: ['delivery', 'Delivery', 'DELIVERY', 'parcel', 'Parcel', 'PARCEL', 'both', 'Both', 'BOTH', 'taxi,delivery', 'delivery,taxi', 'Taxi,Delivery', 'Taxi, Delivery'] } },
+        { service_categories: { $in: ['delivery', 'Delivery', 'DELIVERY', 'parcel', 'Parcel', 'PARCEL', 'both', 'Both', 'BOTH', 'taxi,delivery', 'delivery,taxi', 'Taxi,Delivery', 'Taxi, Delivery'] } },
+        { registerFor: { $in: ['delivery', 'Delivery', 'DELIVERY', 'both', 'Both', 'BOTH'] } },
+        { 'onboarding.activeServices': { $in: ['delivery', 'Delivery', 'DELIVERY', 'parcel', 'Parcel', 'PARCEL', 'both', 'Both'] } },
+      ]
+    : [];
+
   const clauses = [
     { vehicleTypeId: { $in: vehicleTypeIds } },
     ...(vehicleTypeKeys.length
       ? [
-        { vehicleType: { $in: vehicleTypeKeys } },
-        { vehicleIconType: { $in: vehicleTypeKeys } },
-      ]
+          { vehicleType: { $in: vehicleTypeKeys } },
+          { vehicleIconType: { $in: vehicleTypeKeys } },
+        ]
       : []),
+    ...parcelDriverClauses,
   ];
 
-  return clauses.length > 1 ? { $or: clauses } : clauses[0];
+  const baseFilter = clauses.length > 1 ? { $or: clauses } : clauses[0] || {};
+
+  if (isRideTwoWheeler) {
+    return {
+      $and: [
+        baseFilter,
+        { vehicleType: { $nin: TRUCK_MOVER_KEYS }, vehicleIconType: { $nin: TRUCK_MOVER_KEYS } },
+      ],
+    };
+  }
+
+  if (isRideTruckOrMover) {
+    return {
+      $and: [
+        baseFilter,
+        { vehicleType: { $nin: TWO_WHEELER_KEYS }, vehicleIconType: { $nin: TWO_WHEELER_KEYS } },
+      ],
+    };
+  }
+
+  return baseFilter;
 };
 
 const syncDeliveryWithRide = async (ride) => {
@@ -1248,7 +1301,7 @@ export const serializeRideRealtime = (ride) => ({
   serviceType: ride.serviceType || 'ride',
   status: ride.status,
   liveStatus: ride.liveStatus,
-  fare: ride.fare,
+  fare: Number(ride.fare || ride.baseFare || ride.baseRideFare || 0),
   baseFare: Number(ride.baseFare || ride.fare || 0),
   baseRideFare: Number(ride.baseRideFare || (ride.fare - (ride.previousCancellationFee || 0)) || ride.baseFare || 0),
   previousCancellationFee: Number(ride.previousCancellationFee || 0),
@@ -2181,17 +2234,32 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
   await Promise.all([ride.save(), driver.save()]);
 
   if (numericTip > 0) {
-    try {
-      await applyDriverWalletAdjustment({
-        driverId: ride.driverId,
-        rideId: ride._id,
-        amount: numericTip,
-        type: 'ride_tip',
-        description: `Tip of Rs ${numericTip} received from rider (cash)`,
-        metadata: { source: 'ride_tip', tipAmount: numericTip, paymentMode: 'cash' },
-      });
-    } catch (walletErr) {
-      console.warn('Failed to credit tip to driver wallet:', walletErr?.message);
+    const isOnlinePayment = String(ride.paymentMethod || '').toLowerCase() !== 'cash';
+    if (isOnlinePayment) {
+      try {
+        const walletResult = await applyDriverWalletAdjustment({
+          driverId: ride.driverId,
+          rideId: ride._id,
+          amount: numericTip,
+          type: 'ride_tip',
+          description: `Tip of Rs ${numericTip} received from rider (online)`,
+          metadata: { source: 'ride_tip', tipAmount: numericTip, paymentMode: 'online' },
+        });
+
+        const tipFormatted = Number.isInteger(numericTip) ? String(numericTip) : numericTip.toFixed(2);
+        emitToDriver(ride.driverId, 'driver:wallet:updated', {
+          wallet: walletResult?.wallet,
+          transaction: walletResult?.transaction,
+          notification: {
+            id: `ride-tip-${ride._id}-${Date.now()}`,
+            title: 'Payment received',
+            body: `Rs ${tipFormatted} tip received from rider.`,
+            sentAt: new Date().toISOString(),
+          },
+        });
+      } catch (walletErr) {
+        console.warn('Failed to credit tip to driver wallet:', walletErr?.message);
+      }
     }
 
     try {

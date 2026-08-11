@@ -31,7 +31,7 @@ import {
 } from "../services/authService.js";
 import { cancelScheduledRideByDriver, emitToDriver } from "../../services/dispatchService.js";
 import { calculateCancellationBill } from "../../services/cancellationService.js";
-import { notifyLateAvailableDriver } from "../../services/dispatchService.js";
+import { notifyLateAvailableDriver, getActivePendingDispatchForDriver } from "../../services/dispatchService.js";
 import { findZoneByPickup } from "../services/locationService.js";
 import { listDriverServiceLocations } from "../services/serviceLocationService.js";
 import {
@@ -2240,6 +2240,182 @@ export const loginDriver = async (req, res) => {
   });
 };
 
+export const getDriverEarningsFilter = async (req, res) => {
+  const driverId = req.auth.sub;
+  const { period = 'today', date, startDate, endDate } = req.query;
+
+  const now = new Date();
+  let fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  let toDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  const normPeriod = String(period || 'today').toLowerCase();
+
+  if (normPeriod === 'tomorrow') {
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    fromDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0, 0);
+    toDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59, 999);
+  } else if (normPeriod === 'this_week') {
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMon);
+    fromDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0, 0);
+    toDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (normPeriod === 'last_week') {
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const lastMon = new Date(now);
+    lastMon.setDate(now.getDate() + diffToMon - 7);
+    const lastSun = new Date(lastMon);
+    lastSun.setDate(lastMon.getDate() + 6);
+    fromDate = new Date(lastMon.getFullYear(), lastMon.getMonth(), lastMon.getDate(), 0, 0, 0, 0);
+    toDate = new Date(lastSun.getFullYear(), lastSun.getMonth(), lastSun.getDate(), 23, 59, 59, 999);
+  } else if (normPeriod === 'custom_date' && date) {
+    const parsed = new Date(date);
+    if (!isNaN(parsed.getTime())) {
+      fromDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
+      toDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999);
+    }
+  } else if (normPeriod === 'custom_range' && startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      fromDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+      toDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+    }
+  }
+
+  const dateQueryField = normPeriod === 'tomorrow' ? { $or: [{ scheduledAt: { $gte: fromDate, $lte: toDate } }, { createdAt: { $gte: fromDate, $lte: toDate } }] } : { createdAt: { $gte: fromDate, $lte: toDate } };
+
+  const rides = await Ride.find({
+    driverId,
+    status: normPeriod === 'tomorrow' ? { $in: ['accepted', 'searching', 'scheduled', 'completed'] } : 'completed',
+    ...dateQueryField,
+  })
+    .sort({ createdAt: -1 })
+    .populate('userId', 'name phone')
+    .lean();
+
+  let totalGrossFare = 0;
+  let totalCommission = 0;
+  let totalNetEarnings = 0;
+  let totalTips = 0;
+  let onlineTips = 0;
+  let cashTips = 0;
+  let onlineEarnings = 0;
+  let cashEarnings = 0;
+
+  const tripItems = rides.map((r) => {
+    const fare = Number(r.fare || r.baseFare || 0);
+    const commission = Number(r.cancellationBill?.commissionAmount || r.commissionAmount || 0);
+    const tip = Number(r.feedback?.tipAmount || 0);
+    const isOnlinePayment = String(r.paymentMethod || '').toLowerCase() !== 'cash';
+    const isOnlineTip = isOnlinePayment || Boolean(r.feedback?.tipPaymentId);
+    const onlineTip = (isOnlineTip && tip > 0) ? tip : 0;
+    const cashTip = (!isOnlineTip && tip > 0) ? tip : 0;
+    const net = fare - commission + onlineTip;
+
+    totalGrossFare += fare;
+    totalCommission += commission;
+    totalTips += tip;
+    onlineTips += onlineTip;
+    cashTips += cashTip;
+    totalNetEarnings += net;
+
+    if (!isOnlinePayment) {
+      cashEarnings += fare;
+    } else {
+      onlineEarnings += net;
+    }
+
+    return {
+      id: String(r._id),
+      serviceType: r.serviceType || 'ride',
+      pickupAddress: r.pickupAddress || 'Pickup Location',
+      dropAddress: r.dropAddress || 'Drop Location',
+      fare,
+      commission,
+      tip,
+      cashTip,
+      onlineTip,
+      isOnlineTip,
+      netEarnings: net,
+      paymentMethod: r.paymentMethod || 'cash',
+      status: r.status,
+      createdAt: r.createdAt || r.scheduledAt,
+      customerName: r.userId?.name || 'Customer',
+    };
+  });
+
+  res.json({
+    success: true,
+    data: {
+      period: normPeriod,
+      fromDate,
+      toDate,
+      summary: {
+        totalTrips: rides.length,
+        totalNetEarnings: Math.round(totalNetEarnings * 100) / 100,
+        totalGrossFare: Math.round(totalGrossFare * 100) / 100,
+        totalCommission: Math.round(totalCommission * 100) / 100,
+        totalTips: Math.round(totalTips * 100) / 100,
+        onlineTips: Math.round(onlineTips * 100) / 100,
+        cashTips: Math.round(cashTips * 100) / 100,
+        onlineEarnings: Math.round(onlineEarnings * 100) / 100,
+        cashEarnings: Math.round(cashEarnings * 100) / 100,
+      },
+      trips: tripItems,
+    },
+  });
+};
+
+export const getPendingDriverDispatch = async (req, res) => {
+  const driverId = req.auth.sub;
+  const { rideId, openRideId } = req.query;
+  const targetRideId = rideId || openRideId || null;
+
+  const pendingRequest = await getActivePendingDispatchForDriver(driverId, targetRideId);
+
+  res.json({
+    success: true,
+    data: pendingRequest || null,
+  });
+};
+
+export const updateDriverLocation = async (req, res) => {
+  const { location, coordinates: bodyCoords, lat, lng } = req.body;
+  const rawCoords = location || bodyCoords || (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? [Number(lng), Number(lat)] : null);
+  if (!rawCoords) {
+    throw new ApiError(400, "Location coordinates are required");
+  }
+
+  const coordinates = normalizePoint(rawCoords, "location");
+  const zone = await findZoneByPickup(coordinates);
+
+  const driver = await Driver.findByIdAndUpdate(
+    req.auth.sub,
+    {
+      location: toPoint(coordinates, "location"),
+      zoneId: zone?._id || null,
+    },
+    { returnDocument: 'after' }
+  );
+
+  if (!driver) {
+    throw new ApiError(404, "Driver not found");
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      location: driver.location,
+      isOnline: driver.isOnline,
+      isOnRide: driver.isOnRide,
+    },
+  });
+};
+
 export const goOnline = async (req, res) => {
   const { location, selfieImageUrl } = req.body;
 
@@ -4426,11 +4602,29 @@ export const createDriverWithdrawalRequest = async (req, res) => {
     throw new ApiError(409, "A similar withdrawal request was just submitted");
   }
 
+  const roundedAmount = Math.round(amount * 100) / 100;
+
+  const walletResult = await applyDriverWalletAdjustment({
+    driverId: req.auth.sub,
+    amount: -roundedAmount,
+    type: 'adjustment',
+    description: `Withdrawal request submitted (${paymentMethod})`,
+    metadata: {
+      source: 'withdrawal_request',
+      paymentMethod,
+    },
+  });
+
   const created = await WithdrawalRequest.create({
     transactionId: `wdr_${Date.now().toString(36)}`,
     driver_id: req.auth.sub,
-    amount: Math.round(amount * 100) / 100,
+    amount: roundedAmount,
     payment_method: paymentMethod,
+    upiQrCode: driver.documents?.bankDetails?.upiQrCode || driver.documents?.bankDetails?.qrCode || driver.upiQrCode || driver.upiQrImage || '',
+    upiId: driver.documents?.bankDetails?.upiId || driver.upiId || '',
+    accountHolderName: driver.documents?.bankDetails?.accountHolderName || driver.accountHolderName || '',
+    accountNumber: driver.documents?.bankDetails?.accountNumber || driver.accountNumber || '',
+    ifscCode: driver.documents?.bankDetails?.ifscCode || driver.ifscCode || '',
     status: 'pending',
   });
 
@@ -4438,7 +4632,7 @@ export const createDriverWithdrawalRequest = async (req, res) => {
     success: true,
     data: {
       request: created,
-      wallet,
+      wallet: walletResult?.wallet || wallet,
     },
     message: "Withdrawal request sent to admin",
   });

@@ -289,6 +289,28 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
                 </div>
               </div>
             </div>
+
+            {/* Order Items Preview with Variations */}
+            {Array.isArray(order?.items) && order.items.length > 0 && (
+              <div className="bg-gray-50/70 rounded-2xl p-3.5 border border-gray-100 mt-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
+                  Items ({order.items.length})
+                </p>
+                <div className="space-y-1.5">
+                  {order.items.map((it, idx) => {
+                    const v = it.variantName || it.variant || it.variation || it.selectedVariant?.name || it.optionName || it.size || '';
+                    return (
+                      <div key={idx} className="flex justify-between items-center text-xs font-bold text-gray-900">
+                        <span className="truncate pr-2">
+                          {it.quantity || 1}x {it.name || 'Item'}
+                          {v && <span className="text-orange-600 font-semibold ml-1.5">({v})</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

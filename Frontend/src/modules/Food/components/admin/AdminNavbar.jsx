@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu,
@@ -281,26 +281,17 @@ export default function AdminNavbar({ onMenuClick }) {
             {/* Logo */}
             <div className="flex items-center gap-2">
               <div className="w-24 h-12 rounded-lg bg-white flex items-center justify-center ring-neutral-200">
-                {businessSettings?.logo?.url ? (
-                  <img
-                    src={businessSettings.logo.url}
-                    alt={businessSettings.companyName || "Company"}
-                    className="w-24 h-10 object-contain"
-                    loading="lazy"
-                    onError={(e) => {
-                      // Fallback to default logo if company logo fails to load
+                <img
+                  src={businessSettings?.logo?.url || quickSpicyLogo}
+                  alt={businessSettings?.companyName || "Company"}
+                  className="w-24 h-10 object-contain"
+                  loading="lazy"
+                  onError={(e) => {
+                    if (e.target.src !== quickSpicyLogo) {
                       e.target.src = quickSpicyLogo;
-                    }}
-                  />
-                ) : (
-                  businessSettings?.companyName ? (
-                    <span className="text-sm font-semibold text-neutral-700 px-2 truncate">
-                      {businessSettings.companyName}
-                    </span>
-                  ) : (
-                    <img src={quickSpicyLogo} alt={businessSettings?.companyName || "Company"} className="w-24 h-10 object-contain" loading="lazy" />
-                  )
-                )}
+                    }
+                  }}
+                />
               </div>
             </div>
           </div>

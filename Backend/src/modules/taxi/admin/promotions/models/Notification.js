@@ -3,9 +3,9 @@ import mongoose from 'mongoose';
 const notificationSchema = new mongoose.Schema(
   {
     service_location_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'TaxiServiceLocation',
-      required: true,
+      type: mongoose.Schema.Types.Mixed,
+      required: false,
+      default: 'all',
       index: true,
     },
     service_location_name: {

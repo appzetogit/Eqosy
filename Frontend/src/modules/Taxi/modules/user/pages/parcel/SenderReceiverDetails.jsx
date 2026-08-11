@@ -18,10 +18,14 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { GoogleMap } from '@react-google-maps/api';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userAuthService } from '../../services/authService';
 import api from '../../../../shared/api/axiosInstance';
+import carIcon from '../../../../assets/icons/car.png';
+import bikeIcon from '../../../../assets/icons/bike.png';
+import autoIcon from '../../../../assets/icons/auto.png';
+import deliveryIcon from '../../../../assets/icons/Delivery.png';
 
 const Motion = motion;
 const PHONE_REGEX = /^[6-9]\d{9}$/;
@@ -250,14 +254,20 @@ const matchesDeliveryCategory = (vehicle, categoryId) => {
   const normalizedCategoryId = String(categoryId || '').trim().toLowerCase();
   if (!normalizedCategoryId) return false;
 
+  const vehicleName = String(vehicle?.name || '').toLowerCase();
+  const iconType = String(vehicle?.icon_types || '').toLowerCase();
+  const isTwoWheeler = vehicleName.includes('bike') || vehicleName.includes('scooter') || iconType.includes('bike') || iconType.includes('2wheel') || iconType.includes('scooter');
+
+  if ((normalizedCategoryId === 'movers' || normalizedCategoryId === 'trucks') && isTwoWheeler) {
+    return false;
+  }
+
   const configuredCategory = String(vehicle?.delivery_category || '').trim().toLowerCase();
   if (configuredCategory) {
     return configuredCategory === normalizedCategoryId;
   }
 
   const searchTokens = DELIVERY_CATEGORY_SEARCH_TOKENS[normalizedCategoryId] || [];
-  const vehicleName = String(vehicle?.name || '').toLowerCase();
-  const iconType = String(vehicle?.icon_types || '').toLowerCase();
   return searchTokens.some((token) => vehicleName.includes(token) || iconType.includes(token));
 };
 
@@ -303,7 +313,7 @@ const PhoneInput = ({ label, value, onChange, error, name, onClearError, disable
   </div>
 );
 
-const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClose, onConfirm }) => {
+const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, mapNearbyDrivers = [], onClose, onConfirm }) => {
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const [center, setCenter] = useState(coordPairToLatLng(initialCoords));
   const [selectedAddress, setSelectedAddress] = useState(value || formatCoordLabel(initialCoords));
@@ -572,7 +582,26 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, onClo
                   fullscreenControl: false,
                   gestureHandling: 'greedy',
                 }}
-              />
+              >
+                {mapNearbyDrivers.map((driver, index) => {
+                  const coordsPair = driver?.location?.coordinates;
+                  if (!Array.isArray(coordsPair) || coordsPair.length < 2) return null;
+                  const pos = { lat: Number(coordsPair[1]), lng: Number(coordsPair[0]) };
+                  const iconType = String(driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
+                  const iconAsset = iconType.includes('bike') ? bikeIcon : iconType.includes('auto') ? autoIcon : iconType.includes('truck') ? deliveryIcon : carIcon;
+                  return (
+                    <MarkerF
+                      key={driver.id || driver._id || index}
+                      position={pos}
+                      title={driver.name || 'Available Driver'}
+                      icon={{
+                        url: iconAsset,
+                        scaledSize: new window.google.maps.Size(32, 32),
+                      }}
+                    />
+                  );
+                })}
+              </GoogleMap>
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center text-sm font-bold text-slate-500">
                 {loadError ? 'Map could not be loaded right now.' : 'Loading map...'}
@@ -904,6 +933,42 @@ const SenderReceiverDetails = () => {
   const [dynamicNearbySuggestions, setDynamicNearbySuggestions] = useState([]);
   const [dynamicPopularSuggestions, setDynamicPopularSuggestions] = useState([]);
   const [isFetchingNearbySuggestions, setIsFetchingNearbySuggestions] = useState(false);
+  const [mapNearbyDrivers, setMapNearbyDrivers] = useState([]);
+
+  useEffect(() => {
+    if (!activeMapPicker) return;
+    const targetCoords = activeMapPicker === 'pickup' ? pickupCoords : dropCoords;
+    const pos = coordPairToLatLng(targetCoords);
+    if (!pos?.lat || !pos?.lng) return;
+    let active = true;
+
+    const fetchDrivers = async () => {
+      try {
+        const response = await api.get('/rides/available-drivers', {
+          params: {
+            lat: pos.lat,
+            lng: pos.lng,
+            transport_type: 'delivery',
+            maxDistance: 10000,
+            limit: 20,
+          },
+        });
+        const list = response?.data?.data?.drivers || response?.data?.drivers || [];
+        if (active && Array.isArray(list)) {
+          setMapNearbyDrivers(list);
+        }
+      } catch (_e) {
+        if (active) setMapNearbyDrivers([]);
+      }
+    };
+
+    fetchDrivers();
+    const interval = setInterval(fetchDrivers, 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [activeMapPicker, pickupCoords, dropCoords]);
 
   const handleGoBack = () => {
     if (activeMapPicker) {
@@ -1588,9 +1653,14 @@ const SenderReceiverDetails = () => {
     }
 
     setIsContactSheetOpen(false);
+    const categoryId = String(parcelState.deliveryCategory || parcelState.category || parcelState.parcel?.deliveryCategory || parcelState.parcel?.category || '').toLowerCase();
+    const resolvedGoodsTypeFor = parcelState.goodsTypeFor || parcelState.parcel?.goodsTypeFor || (categoryId.includes('mover') || categoryId.includes('packers') ? 'mover' : categoryId.includes('truck') ? 'truck' : '');
+
     navigate(`${routePrefix}/parcel/searching`, {
       state: {
         ...parcelState,
+        vehicleIconUrl: parcelState.vehicleIconUrl || parcelState.selectedVehicle?.map_icon || parcelState.selectedVehicle?.icon || parcelState.selectedVehicle?.image || parcelState.selectedVehicle?.vehicleIconUrl || '',
+        vehicleIconType: parcelState.vehicleIconType || parcelState.selectedVehicle?.icon_types || parcelState.selectedVehicle?.iconType || (categoryId.includes('mover') || categoryId.includes('truck') ? 'truck' : ''),
         pickup,
         drop,
         pickupCoords: resolvedPickupCoords,
@@ -1603,14 +1673,16 @@ const SenderReceiverDetails = () => {
         fare: estimatedFare?.approx ?? estimatedFare?.min ?? null,
         estimatedFare,
         estimatedDistanceKm,
+        deliveryCategory: parcelState.deliveryCategory || parcelState.category || categoryId || '',
+        goodsTypeFor: resolvedGoodsTypeFor,
         deliveryScope: parcelState.deliveryScope || 'city',
         isOutstation: Boolean(parcelState.isOutstation || parcelState.deliveryScope === 'outstation'),
         parcel: {
-          category: parcelState.parcelType || 'Parcel',
+          category: parcelState.parcelType || parcelState.category || 'Parcel',
           weight: parcelState.weight || 'Under 5kg',
           description: parcelState.description || '',
-          deliveryCategory: parcelState.deliveryCategory || parcelState.parcel?.deliveryCategory || '',
-          goodsTypeFor: parcelState.goodsTypeFor || parcelState.parcel?.goodsTypeFor || '',
+          deliveryCategory: parcelState.deliveryCategory || parcelState.category || categoryId || '',
+          goodsTypeFor: resolvedGoodsTypeFor,
           deliveryScope: parcelState.deliveryScope || 'city',
           isOutstation: Boolean(parcelState.isOutstation || parcelState.deliveryScope === 'outstation'),
           senderName,
@@ -1642,6 +1714,7 @@ const SenderReceiverDetails = () => {
         title="Set Pickup Location"
         value={pickup}
         initialCoords={pickupCoords}
+        mapNearbyDrivers={mapNearbyDrivers}
         confirmLabel="Confirm Pickup"
         onClose={() => setActiveMapPicker(null)}
         onConfirm={(coords, address) => {
@@ -1656,6 +1729,7 @@ const SenderReceiverDetails = () => {
         title="Set Delivery Location"
         value={drop}
         initialCoords={dropCoords}
+        mapNearbyDrivers={mapNearbyDrivers}
         confirmLabel="Confirm Drop"
         onClose={() => setActiveMapPicker(null)}
         onConfirm={(coords, address) => {

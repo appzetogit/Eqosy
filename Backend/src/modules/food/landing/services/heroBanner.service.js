@@ -2,7 +2,14 @@ import { FoodHeroBanner } from '../models/heroBanner.model.js';
 import { v2 as cloudinary } from 'cloudinary';
 
 export const listHeroBanners = async () => {
-    return FoodHeroBanner.find().sort({ sortOrder: 1, createdAt: -1 }).lean();
+    const banners = await FoodHeroBanner.find()
+        .populate('linkedRestaurantIds', 'name slug profileImage coverImages')
+        .sort({ sortOrder: 1, createdAt: -1 })
+        .lean();
+    return banners.map((b) => ({
+        ...b,
+        linkedRestaurants: b.linkedRestaurantIds || [],
+    }));
 };
 
 export const createHeroBannersFromFiles = async (files, meta = {}) => {
@@ -79,5 +86,38 @@ export const toggleHeroBannerStatus = async (id, isActive) => {
         { new: true }
     ).lean();
     return updated;
+};
+
+export const updateHeroBanner = async (id, data = {}) => {
+    const allowed = {};
+    if (data.title !== undefined) allowed.title = data.title;
+    if (data.subTitle !== undefined) allowed.subTitle = data.subTitle;
+    if (data.ctaText !== undefined) allowed.ctaText = data.ctaText;
+    if (data.ctaLink !== undefined) allowed.ctaLink = data.ctaLink;
+
+    const updated = await FoodHeroBanner.findByIdAndUpdate(
+        id,
+        { $set: allowed },
+        { new: true }
+    ).lean();
+    return updated;
+};
+
+export const linkRestaurantsToHeroBanner = async (id, restaurantIds = []) => {
+    const banner = await FoodHeroBanner.findById(id);
+    if (!banner) {
+        throw new Error('Banner not found');
+    }
+    banner.linkedRestaurantIds = restaurantIds;
+    await banner.save();
+
+    const updated = await FoodHeroBanner.findById(id)
+        .populate('linkedRestaurantIds', 'name slug profileImage coverImages')
+        .lean();
+
+    return {
+        ...updated,
+        linkedRestaurants: updated.linkedRestaurantIds || [],
+    };
 };
 

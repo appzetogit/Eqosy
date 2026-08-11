@@ -130,21 +130,21 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         0
     );
 
-    // Block only pending withdrawals from available balance.
-    // Approved/rejected requests are processed records and should not keep locking payout.
-    const pendingWithdrawalsAgg = await FoodRestaurantWithdrawal.aggregate([
+    // Subtract pending AND approved/completed/processing/settled withdrawals from available balance.
+    // Rejected withdrawals are returned to available balance.
+    const withdrawalsAgg = await FoodRestaurantWithdrawal.aggregate([
         {
             $match: {
                 restaurantId: rid,
                 $expr: {
-                    $eq: [{ $toLower: { $trim: { input: '$status' } } }, 'pending']
+                    $in: [{ $toLower: { $trim: { input: '$status' } } }, ['pending', 'approved', 'processing', 'completed', 'settled']]
                 }
             }
         },
         { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    const totalPendingWithdrawals = Number(pendingWithdrawalsAgg?.[0]?.total || 0);
-    const availableBalance = Math.max(0, globalEstimatedPayout - totalPendingWithdrawals);
+    const totalDeductedWithdrawals = Number(withdrawalsAgg?.[0]?.total || 0);
+    const availableBalance = Math.max(0, globalEstimatedPayout - totalDeductedWithdrawals);
     const withdrawalSettings = await getRestaurantWithdrawalSettings();
     const minimumWithdrawalAmount = Number(withdrawalSettings?.minimumWithdrawalAmount) || 0;
 

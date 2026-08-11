@@ -365,8 +365,12 @@ const SendNotification = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600 max-w-[340px] truncate">{item.message}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{item.service_location_name || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600 capitalize">{item.send_to || 'all'}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                            {item.service_location_name || (item.service_location_id === 'all' || !item.service_location_id ? '🌐 All Zones' : '-')}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600 capitalize">
+                            {item.send_to === 'drivers' ? '🚕 Riders (Captains)' : item.send_to === 'users' ? '👤 Users (Passengers)' : '👥 All (Users & Riders)'}
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-end gap-2">
                               <button
@@ -403,7 +407,7 @@ const SendNotification = () => {
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <FieldLabel required>Service Location</FieldLabel>
+                    <FieldLabel required>Service Location / Zone</FieldLabel>
                     <div className="relative">
                       <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <select
@@ -412,10 +416,11 @@ const SendNotification = () => {
                         className={`${inputClass} pl-10`}
                         required
                       >
-                        <option value="">Select Service Location</option>
+                        <option value="">Select Zone / Service Location</option>
+                        <option value="all">🌐 All Zones (Broadcast to All)</option>
                         {serviceLocations.map((loc) => (
                           <option key={loc._id || loc.id} value={loc._id || loc.id}>
-                            {loc.service_location_name || loc.name}
+                            📍 {loc.service_location_name || loc.name}
                           </option>
                         ))}
                       </select>
@@ -423,7 +428,7 @@ const SendNotification = () => {
                   </div>
 
                   <div>
-                    <FieldLabel required>Send To</FieldLabel>
+                    <FieldLabel required>Send To Audience</FieldLabel>
                     <div className="relative">
                       <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <select
@@ -432,10 +437,10 @@ const SendNotification = () => {
                         className={`${inputClass} pl-10`}
                         required
                       >
-                        <option value="">Select</option>
-                        <option value="all">All</option>
-                        <option value="drivers">Drivers</option>
-                        <option value="users">Users</option>
+                        <option value="">Select Audience</option>
+                        <option value="all">👥 All (Users & Riders)</option>
+                        <option value="users">👤 Users Only (Taxi Portal Redirection)</option>
+                        <option value="drivers">🚕 Riders Only (Captain App Redirection)</option>
                       </select>
                     </div>
                   </div>

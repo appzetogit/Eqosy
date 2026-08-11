@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle, Calendar } from 'lucide-react';
+import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2, AlertTriangle, Calendar, User, Clock, Users, Package, Navigation } from 'lucide-react';
 import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
@@ -548,6 +548,10 @@ const getVehiclePreviewImage = (type) => {
 };
 
 const getCapacity = (type) => {
+  if (type?.capacity && Number(type.capacity) > 0) {
+    return Number(type.capacity);
+  }
+
   const value = getIconValue(type);
 
   if (value.includes('bike')) {
@@ -563,6 +567,55 @@ const getCapacity = (type) => {
   }
 
   return 4;
+};
+
+const getParcelWeightCapacity = (type) => {
+  const customWeight =
+    type?.max_weight ||
+    type?.maxWeight ||
+    type?.capacity_kg ||
+    type?.weightCapacity ||
+    type?.parcel_capacity ||
+    type?.parcelCapacity ||
+    type?.maxParcelWeight;
+
+  if (customWeight) {
+    const numeric = Number(customWeight);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return `${numeric} kg`;
+    }
+    if (typeof customWeight === 'string' && customWeight.trim()) {
+      return customWeight.trim();
+    }
+  }
+
+  const value = getIconValue(type);
+
+  if (value.includes('bike') || value.includes('scooter') || value.includes('2wheeler')) {
+    return '20 kg';
+  }
+
+  if (value.includes('auto') || value.includes('rickshaw') || value.includes('3wheeler')) {
+    return '100 kg';
+  }
+
+  if (value.includes('lcv') || value.includes('mini') || value.includes('tempo')) {
+    return '500 kg';
+  }
+
+  if (value.includes('mcv') || value.includes('loader')) {
+    return '1000 kg';
+  }
+
+  if (value.includes('hcv') || value.includes('ehcv') || value.includes('truck')) {
+    return '2500 kg';
+  }
+
+  if (value.includes('mover') || value.includes('packers')) {
+    return '1500 kg';
+  }
+
+  return '50 kg';
 };
 
 const AVERAGE_CITY_SPEED_KMPH = 24;
@@ -1921,7 +1974,7 @@ const SelectVehicle = () => {
     const token = getLocalUserToken();
     if (!token) {
       localStorage.setItem('eqosy_active_module', 'taxi');
-      navigate('/login', { state: { from: location.pathname } });
+      navigate('/taxi/user/login', { state: { from: location.pathname } });
       return;
     }
 
@@ -2117,11 +2170,25 @@ const SelectVehicle = () => {
                 1,
                 availability.closestDriverEtaMinutes || tripMetrics.durationMinutes || 1,
               );
+              const personCapacity = v.capacity || getCapacity(v);
+              const totalDurationMinutes = compactEta + (tripMetrics.durationMinutes || 15);
+              const estimatedDropTimeLabel = getDropTime(totalDurationMinutes);
+              const closestDriverDistanceLabel = availability.closestDriverDistanceMeters ? formatDistanceLabel(availability.closestDriverDistanceMeters) : null;
+              const totalNearbyDrivers = availability.totalDrivers || availability.drivers?.length || 0;
+
               const fareLabel = isFarePending
                 ? '...'
                 : formatVehicleFare(v, bidRideSettings, bookingTab);
 
               const vehicleBidBounds = getVehicleBidBounds(v, bidRideSettings);
+
+              const isParcelService =
+                bookingTab === 'parcel' ||
+                String(v.transport_type || '').toLowerCase() === 'delivery' ||
+                String(v.serviceType || '').toLowerCase() === 'parcel' ||
+                String(v.dispatch_type || '').toLowerCase() === 'delivery';
+
+              const parcelMaxWeight = getParcelWeightCapacity(v);
 
               return (
                 <motion.div
@@ -2153,30 +2220,74 @@ const SelectVehicle = () => {
                         setSelected(v.id);
                       }
                     }}
-                    className={`flex items-center gap-3 px-3 py-3 text-left ${
+                    className={`flex items-center gap-3.5 px-3.5 py-3.5 text-left ${
                       canSelectVehicle ? 'cursor-pointer' : 'cursor-default'
                     }`}
                   >
-                    <div className="flex w-[52px] shrink-0 flex-col items-center">
-                      <div className="flex h-9 w-full items-center justify-center">
-                        <img src={v.icon} alt={v.name} className="h-8 w-12 object-contain" draggable={false} />
+                    <div className="flex w-[56px] shrink-0 flex-col items-center justify-center">
+                      <div className="flex h-10 w-full items-center justify-center">
+                        <img src={v.icon} alt={v.name} className="h-9 w-12 object-contain" draggable={false} />
                       </div>
-                      <span className="mt-1 text-[10px] font-medium text-slate-500">{compactEta} min</span>
+                      <span className="mt-1 flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9.5px] font-black text-slate-700">
+                        {isParcelService ? (
+                          <>
+                            <Package size={10} strokeWidth={2.5} className="text-amber-600" />
+                            {parcelMaxWeight}
+                          </>
+                        ) : (
+                          <>
+                            <User size={10} strokeWidth={2.5} className="text-slate-500" />
+                            {personCapacity}
+                          </>
+                        )}
+                      </span>
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="block truncate text-[14px] font-bold leading-tight text-slate-900">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="block truncate text-[15px] font-black leading-tight text-slate-900">
                               {v.name}
                             </span>
+                            {isParcelService ? (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 text-[9.5px] font-black text-amber-800">
+                                <Package size={10} strokeWidth={2.5} />
+                                Max Weight: {parcelMaxWeight}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-100/80 px-1.5 py-0.5 text-[9.5px] font-black text-blue-700">
+                                <User size={10} strokeWidth={2.5} />
+                                Max Capacity: {personCapacity} {personCapacity === 1 ? 'Person' : 'Persons'}
+                              </span>
+                            )}
                             {isSelected && (
                               <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white shadow-xs">
                                 ✓
                               </span>
                             )}
                           </div>
+
+                          <div className="mt-1 flex items-center gap-2 text-[11px] font-bold flex-wrap">
+                            <span className="text-emerald-600 font-extrabold flex items-center gap-1">
+                              <Clock size={11} strokeWidth={2.5} />
+                              Est. Drop: ~{estimatedDropTimeLabel}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-700 font-semibold flex items-center gap-1">
+                              <Navigation size={11} strokeWidth={2.5} className="text-indigo-500" />
+                              Closest driver: {closestDriverDistanceLabel ? `${closestDriverDistanceLabel}` : `${compactEta} min`} ({compactEta} min pickup)
+                            </span>
+                            {totalNearbyDrivers > 0 && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-indigo-600 font-extrabold">
+                                  {totalNearbyDrivers} nearby
+                                </span>
+                              </>
+                            )}
+                          </div>
+
                           <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
                             {v.sublabel}
                           </p>
@@ -2186,8 +2297,9 @@ const SelectVehicle = () => {
                             </p>
                           )}
                         </div>
+
                         <div className="shrink-0 text-right">
-                          <span className={`block text-[20px] font-semibold leading-none ${isUnavailable && rideMode !== 'schedule' ? 'text-slate-300' : 'text-slate-900'}`}>
+                          <span className={`block text-[20px] font-black leading-none ${isUnavailable && rideMode !== 'schedule' ? 'text-slate-300' : 'text-slate-900'}`}>
                             {fareLabel}
                           </span>
                           {isSelected && (
@@ -2396,8 +2508,14 @@ const SelectVehicle = () => {
                   </p>
                 </div>
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Seats</p>
-                  <p className="mt-1 text-[17px] font-extrabold text-slate-900">{previewVehicle.capacity}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                    {bookingTab === 'parcel' || String(previewVehicle.transport_type || '').toLowerCase() === 'delivery' ? 'Max Weight' : 'Max Capacity'}
+                  </p>
+                  <p className="mt-1 text-[17px] font-extrabold text-slate-900">
+                    {bookingTab === 'parcel' || String(previewVehicle.transport_type || '').toLowerCase() === 'delivery'
+                      ? getParcelWeightCapacity(previewVehicle)
+                      : `${previewVehicle.capacity || getCapacity(previewVehicle)} Persons`}
+                  </p>
                 </div>
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Booking type</p>

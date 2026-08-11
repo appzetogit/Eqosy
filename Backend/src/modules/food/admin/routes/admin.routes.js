@@ -243,6 +243,7 @@ router.get('/delivery/partners', adminController.getDeliveryPartners);
 router.get('/delivery/:id', adminController.getDeliveryPartnerById);
 router.patch('/delivery/:id/approve', adminController.approveDeliveryPartner);
 router.patch('/delivery/:id/reject', adminController.rejectDeliveryPartner);
+router.post('/delivery/:id/approve-emergency-offline', adminController.approveEmergencyOfflineController);
 
 // ----- Zones -----
 router.get('/zones', requireFoodResourceAccess('zones', 'zones'), adminController.getZones);

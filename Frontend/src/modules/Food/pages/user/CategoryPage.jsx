@@ -1735,22 +1735,22 @@ export default function CategoryPage() {
                         {/* Category Dish Badge - Top Left */}
                         {(restaurant.categoryDishName || restaurant.featuredDish || restaurant.categoryDishPrice || restaurant.featuredPrice) && (
                           <div className="absolute top-3 left-3 flex items-center z-10">
-                            <div className="bg-black/75 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-medium tracking-tight flex items-center gap-1.5 shadow-xl border border-white/20">
-                              <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border p-0.5 ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'border-emerald-500 bg-emerald-950/40' : 'border-rose-500 bg-rose-950/40'}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            <div className="bg-black/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold tracking-tight flex items-center gap-2 shadow-xl border border-white/20">
+                              <span className={`inline-flex items-center justify-center text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant 
+                                  ? 'border-emerald-500 bg-emerald-950/80 text-emerald-400' 
+                                  : 'border-rose-500 bg-rose-950/80 text-rose-400'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                                {restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'VEG' : 'NON-VEG'}
                               </span>
-                              <span className="font-semibold truncate max-w-[130px] sm:max-w-[170px]">
+                              <span className="font-bold truncate max-w-[120px] sm:max-w-[160px]">
                                 {restaurant.categoryDishName || restaurant.featuredDish || "Special"}
                               </span>
                               <span className="opacity-50">·</span>
-                              <span className="font-bold text-white">
+                              <span className="font-extrabold text-amber-400">
                                 ₹{Math.round(restaurant.categoryDishPrice || restaurant.featuredPrice || 0)}
                               </span>
-                              {(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice) && Number(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice) > Number(restaurant.categoryDishPrice || restaurant.featuredPrice) && (
-                                <span className="text-[10px] text-gray-300 line-through font-normal ml-0.5">
-                                  ₹{Math.round(restaurant.categoryDishOriginalPrice || restaurant.featuredOriginalPrice)}
-                                </span>
-                              )}
                             </div>
                           </div>
                         )}
@@ -1782,14 +1782,27 @@ export default function CategoryPage() {
                         {/* Restaurant Name & Rating */}
                         <div className="flex items-start justify-between gap-2 mb-2 lg:mb-3">
                           <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${
+                                restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-rose-600 dark:bg-rose-400'}`} />
+                                {restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'VEG' : 'NON-VEG'}
+                              </span>
+                              {(restaurant.categoryDishPrice || restaurant.featuredPrice) && (
+                                <span className="text-sm font-extrabold text-[#EB590E]">
+                                  ₹{Math.round(restaurant.categoryDishPrice || restaurant.featuredPrice || 0)}
+                                </span>
+                              )}
+                            </div>
                             <h3 className="text-md md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white line-clamp-1 lg:line-clamp-2">
-                              {isCategoryView ? (restaurant.categoryDishName || restaurant.featuredDish || restaurant.name) : restaurant.name}
+                              {restaurant.categoryDishName || restaurant.featuredDish || restaurant.name}
                             </h3>
-                            {isCategoryView && (
-                              <p className="mt-1 text-sm md:text-base text-gray-500 dark:text-gray-400 line-clamp-1">
-                                {restaurant.name}
-                              </p>
-                            )}
+                            <p className="mt-0.5 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 line-clamp-1">
+                              by {restaurant.name}
+                            </p>
                           </div>
                           <div className="flex-shrink-0 bg-green-600 text-white px-2 md:px-3 lg:px-4 py-1 lg:py-1.5 rounded-lg flex items-center gap-1">
                             <span className="text-sm md:text-base lg:text-lg font-bold">{restaurant.rating}</span>

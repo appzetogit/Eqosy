@@ -151,27 +151,32 @@ const registerTaxiSocketConnectionHandlers = (io) => {
 
     registerRideSocketHandlers({ io, socket, onAsync });
 
-    socket.on(
-      'locationUpdate',
-      onAsync(socket, async ({ coordinates }) => {
-        if (identity.role !== 'driver') {
-          return;
-        }
+    const handleDriverLocationSocketUpdate = async (payload = {}) => {
+      if (identity.role !== 'driver') {
+        return;
+      }
+      const coordsInput = payload.coordinates || payload.location || (
+        Number.isFinite(Number(payload.latitude ?? payload.lat)) && Number.isFinite(Number(payload.longitude ?? payload.lng))
+          ? [Number(payload.longitude ?? payload.lng), Number(payload.latitude ?? payload.lat)]
+          : null
+      );
+      if (!coordsInput) return;
 
-        // Drivers push fresh GPS coordinates every few seconds so matching stays accurate.
-        const normalizedCoords = normalizePoint(coordinates, 'coordinates');
-        const zone = await findZoneByPickup(normalizedCoords);
+      const normalizedCoords = normalizePoint(coordsInput, 'coordinates');
+      const zone = await findZoneByPickup(normalizedCoords);
 
-        await Driver.findByIdAndUpdate(identity.sub, {
-          socketId: socket.id,
-          location: toPoint(normalizedCoords, 'coordinates'),
-          zoneId: zone?._id || null,
-        });
-        notifyLateAvailableDriver(identity.sub).catch((error) => {
-          console.error('Failed to notify late-available driver on location update', error);
-        });
-      }),
-    );
+      await Driver.findByIdAndUpdate(identity.sub, {
+        socketId: socket.id,
+        location: toPoint(normalizedCoords, 'coordinates'),
+        zoneId: zone?._id || null,
+      });
+      notifyLateAvailableDriver(identity.sub).catch((error) => {
+        console.error('Failed to notify late-available driver on location update', error);
+      });
+    };
+
+    socket.on('locationUpdate', onAsync(socket, handleDriverLocationSocketUpdate));
+    socket.on('driver_location_update', onAsync(socket, handleDriverLocationSocketUpdate));
 
     socket.on(
       'requestRide',

@@ -551,6 +551,42 @@ const SelectLocation = () => {
     return withDistance;
   }, [localSearchResults, remoteResults, pickupCoords]);
 
+  const geocodeCoords = (lat, lng) => {
+    setIsGeocoding(true);
+    setPickedAddress('Loading address...');
+
+    const fallbackOSM = () => {
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setIsGeocoding(false);
+          if (data?.display_name) {
+            setPickedAddress(data.display_name);
+          } else {
+            setPickedAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          }
+        })
+        .catch(() => {
+          setIsGeocoding(false);
+          setPickedAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        });
+    };
+
+    if (window.google?.maps?.Geocoder) {
+      const geocoder = getGeocoder() || new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results?.[0]?.formatted_address) {
+          setIsGeocoding(false);
+          setPickedAddress(results[0].formatted_address);
+        } else {
+          fallbackOSM();
+        }
+      });
+    } else {
+      fallbackOSM();
+    }
+  };
+
   const showMapToast = () => {
     // Reset map center to pickup or current location before opening
     const startCoord = Array.isArray(pickupCoords) && pickupCoords.length === 2
@@ -558,37 +594,29 @@ const SelectLocation = () => {
       : INDIA_CENTER;
 
     setMapCenter(startCoord);
-    lastCenterRef.current = startCoord;
+    lastCenterRef.current = null;
+    geocodeCoords(startCoord.lat, startCoord.lng);
     setShowMapPicker(true);
   };
 
   const handleMapIdle = () => {
-    if (!mapInstanceRef.current || !window.google) return;
+    if (!mapInstanceRef.current) return;
     const center = mapInstanceRef.current.getCenter();
+    if (!center) return;
     const lat = center.lat();
     const lng = center.lng();
 
-    // Only update and geocode if the center has actually changed significantly
-    const dist = Math.abs(lat - lastCenterRef.current.lat) + Math.abs(lng - lastCenterRef.current.lng);
-    if (dist < 0.00001) {
-      setIsDragging(false);
-      return;
+    if (lastCenterRef.current) {
+      const dist = Math.abs(lat - lastCenterRef.current.lat) + Math.abs(lng - lastCenterRef.current.lng);
+      if (dist < 0.00001) {
+        setIsDragging(false);
+        return;
+      }
     }
 
     lastCenterRef.current = { lat, lng };
     setIsDragging(false);
-
-    // Reverse Geocode
-    setIsGeocoding(true);
-    const geocoder = new window.google.maps.Geocoder();
-    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-      setIsGeocoding(false);
-      if (status === 'OK' && results[0]) {
-        setPickedAddress(results[0].formatted_address);
-      } else {
-        setPickedAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-      }
-    });
+    geocodeCoords(lat, lng);
   };
 
   const handleUseCurrentLocation = () => {
@@ -761,8 +789,15 @@ const SelectLocation = () => {
   };
 
   const handleConfirmMapLocation = () => {
-    const finalAddress = pickedAddress;
-    const selectedCoords = [lastCenterRef.current.lng, lastCenterRef.current.lat];
+    const lat = lastCenterRef.current?.lat || mapCenter.lat;
+    const lng = lastCenterRef.current?.lng || mapCenter.lng;
+    let finalAddress = pickedAddress;
+
+    if (!finalAddress || finalAddress === 'Loading address...' || finalAddress.includes('Loading')) {
+      finalAddress = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+
+    const selectedCoords = [lng, lat];
 
     if (!validateZoneSelection(selectedCoords)) {
       toast.error('Please pin a location inside the active service zone.');

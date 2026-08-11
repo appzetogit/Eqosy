@@ -309,6 +309,37 @@ export async function createOrder(userId, dto) {
 
     await order.save();
 
+    // Automatic Inventory Control: Deduct ordered stock and notify if out of stock or low stock
+    try {
+      const { FoodItem } = await import('../../admin/models/food.model.js');
+      const { notifyInventoryControl } = await import('../../restaurant/services/restaurantFood.service.js');
+      for (const item of (dto.items || [])) {
+        if (item?.itemId && mongoose.Types.ObjectId.isValid(String(item.itemId))) {
+          const foodDoc = await FoodItem.findById(item.itemId);
+          if (foodDoc && typeof foodDoc.stockQuantity === 'number' && foodDoc.stockQuantity !== null) {
+            const prevStock = foodDoc.stockQuantity;
+            const prevAvailable = foodDoc.isAvailable;
+            const newStock = Math.max(0, foodDoc.stockQuantity - (Number(item.quantity) || 1));
+            foodDoc.stockQuantity = newStock;
+            if (newStock === 0) {
+              foodDoc.isAvailable = false;
+            }
+            await foodDoc.save();
+
+            void notifyInventoryControl({
+              foodItem: foodDoc,
+              previousIsAvailable: prevAvailable,
+              currentIsAvailable: foodDoc.isAvailable,
+              stockQuantity: newStock,
+              restaurantId
+            });
+          }
+        }
+      }
+    } catch (invErr) {
+      logger.error(`Inventory control update error for order ${order._id}: ${invErr.message}`);
+    }
+
     if (isWallet) {
       try {
         await userWalletService.deductWalletBalance(userId, order.pricing.total, `Payment for order #${order.order_id || order._id}`, { orderId: order._id });
@@ -1084,7 +1115,9 @@ export async function updateOrderStatusRestaurant(
   order.deliveryState = order.deliveryState || {};
   if (['confirmed', 'preparing'].includes(orderStatus) && !order.deliveryState.foodPrepStartedAt) {
     order.deliveryState.foodPrepStartedAt = new Date();
-  } else if (orderStatus === 'ready_for_pickup') {
+  } else if (orderStatus === 'ready_for_pickup' || orderStatus === 'ready') {
+    order.isFoodReady = true;
+    order.deliveryState.isFoodReady = true;
     order.deliveryState.foodReadyAt = new Date();
   }
 
@@ -1129,6 +1162,8 @@ export async function updateOrderStatusRestaurant(
         orderMongoId: order._id?.toString?.(),
         orderId: order._id.toString(),
         orderStatus: order.orderStatus,
+        isFoodReady: orderStatus === 'ready_for_pickup' || orderStatus === 'ready' || Boolean(order.deliveryState?.isFoodReady),
+        deliveryState: order.deliveryState,
         note: order.note || note || "",
         title,
         message: body,

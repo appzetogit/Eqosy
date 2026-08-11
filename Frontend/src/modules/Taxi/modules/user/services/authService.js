@@ -49,6 +49,8 @@ export const clearLocalUserSession = () => {
   const fallbackToken = localStorage.getItem('token');
 
   localStorage.removeItem('userToken');
+  localStorage.removeItem('user_accessToken');
+  localStorage.removeItem('user_refreshToken');
   localStorage.removeItem('userInfo');
 
   if (token && fallbackToken === token) {

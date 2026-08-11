@@ -444,6 +444,26 @@ export const sendPushNotification = async (tokens, payload = {}) => {
 };
 
 export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, platform } = {}) => {
+    const normalizedOwnerType = normalizeOwnerType(ownerType);
+
+    // Safety Guard: For DELIVERY_PARTNER order assignment notifications, do NOT notify if rider is offline
+    if (normalizedOwnerType === 'DELIVERY_PARTNER') {
+        const dataType = String(payload?.data?.type || '').toLowerCase();
+        const isOrderNotification = dataType.includes('order') || dataType.includes('delivery');
+        const isReminderOrSystem = dataType.includes('reminder') || dataType.includes('alarm') || dataType.includes('gig_');
+
+        if (isOrderNotification && !isReminderOrSystem) {
+            const partnerId = resolveRoomOwnerId(ownerId);
+            if (partnerId) {
+                const partner = await FoodDeliveryPartner.findById(partnerId).select('availabilityStatus').lean();
+                if (!partner || partner.availabilityStatus !== 'online') {
+                    logger.info(`[FCM Push Guard] Skipped order notification (${dataType}) for offline delivery partner ${ownerId}`);
+                    return { successCount: 0, failureCount: 0, results: [] };
+                }
+            }
+        }
+    }
+
     // 💡 Clone the payload to avoid side-effects (e.g. adding multiple prefixes to the same object during broadcasting)
     const enrichedPayload = { ...payload };
 

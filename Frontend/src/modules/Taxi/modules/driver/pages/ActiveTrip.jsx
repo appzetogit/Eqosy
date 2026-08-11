@@ -643,6 +643,19 @@ const buildPersistedTripState = (job = {}, overrides = {}) => {
         return null;
     }
 
+    const resolvedJobFare = [
+        mergedJob.fare,
+        mergedJob.baseFare,
+        mergedJob.baseRideFare,
+        mergedJob.estimatedFare,
+        mergedJob.estimatedFare?.approx,
+        mergedJob.estimatedFare?.min,
+        mergedJob.pricingSnapshot?.fare,
+        mergedJob.parcel?.fare,
+        mergedJob.request?.raw?.fare,
+        mergedJob.request?.fare,
+    ].reduce((acc, curr) => (acc > 0 ? acc : parseFareAmount(curr)), 0);
+
     return {
         type: currentType,
         rideId: currentRideId,
@@ -650,13 +663,14 @@ const buildPersistedTripState = (job = {}, overrides = {}) => {
         otp: mergedJob.otp || '',
         arrivedAt: mergedJob.arrivedAt || '',
         startedAt: mergedJob.startedAt || '',
+        fare: resolvedJobFare > 0 ? resolvedJobFare : Number(mergedJob.fare || 0),
         paymentMethod: mergedJob.paymentMethod || 'Cash',
         pricingSnapshot: mergedJob.pricingSnapshot || null,
         currentDriverCoords: mergedJob.lastDriverLocation?.coordinates || mergedJob.driverLocation?.coordinates || null,
         request: {
             type: currentType,
             title: getTripTitle(currentType),
-            fare: `Rs ${mergedJob.fare || 0}`,
+            fare: resolvedJobFare > 0 ? `Rs ${resolvedJobFare}` : (mergedJob.fare ? `Rs ${mergedJob.fare}` : ''),
             payment: mergedJob.paymentMethod || 'Cash',
             pickup: getAreaName(mergedJob.pickupAddress, formatAddressFromPoint(mergedJob.pickupLocation, 'Pickup area')),
             drop: getAreaName(mergedJob.dropAddress, formatAddressFromPoint(mergedJob.dropLocation, 'Drop area')),
@@ -1519,6 +1533,31 @@ const ActiveTrip = () => {
         pickupAddressLabel,
     ]);
 
+    const fareAmount = useMemo(() => {
+        const candidates = [
+            liveRaw?.fare,
+            liveRaw?.baseFare,
+            liveRaw?.baseRideFare,
+            liveRaw?.estimatedFare,
+            liveRaw?.estimatedFare?.approx,
+            liveRaw?.estimatedFare?.min,
+            liveRaw?.pricingSnapshot?.fare,
+            liveRaw?.parcel?.fare,
+            liveRequest?.fare,
+            effectiveState?.fare,
+            effectiveState?.baseFare,
+            effectiveState?.request?.fare,
+            effectiveState?.request?.raw?.fare,
+            effectiveState?.estimatedFare,
+        ];
+
+        for (const candidate of candidates) {
+            const num = parseFareAmount(candidate);
+            if (num > 0) return num;
+        }
+        return parseFareAmount(liveRequest?.fare || effectiveState?.fare || 0);
+    }, [effectiveState?.baseFare, effectiveState?.estimatedFare, effectiveState?.fare, effectiveState?.request?.fare, effectiveState?.request?.raw?.fare, liveRaw?.baseFare, liveRaw?.baseRideFare, liveRaw?.estimatedFare, liveRaw?.fare, liveRaw?.parcel?.fare, liveRaw?.pricingSnapshot?.fare, liveRequest?.fare]);
+
     const tripData = isParcel ? {
         sender: {
             name: liveRaw.parcel?.senderName || 'Sender',
@@ -1531,7 +1570,7 @@ const ActiveTrip = () => {
         },
         pickup: getAreaName(liveRaw.pickupAddress || liveRequest?.pickup, formatAddressFromPoint(liveRaw.pickupLocation, 'Pickup area')),
         drop: getAreaName(liveRaw.dropAddress || liveRequest?.drop, formatAddressFromPoint(liveRaw.dropLocation, 'Drop area')),
-        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        fare: `Rs ${fareAmount}`,
         payment: effectiveState?.paymentMethod || 'Online'
     } : {
         user: {
@@ -1541,12 +1580,11 @@ const ActiveTrip = () => {
         },
         pickup: getAreaName(liveRaw.pickupAddress || liveRequest?.pickup, formatAddressFromPoint(liveRaw.pickupLocation, 'Pickup area')),
         drop: getAreaName(liveRaw.dropAddress || liveRequest?.drop, formatAddressFromPoint(liveRaw.dropLocation, 'Drop area')),
-        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        fare: `Rs ${fareAmount}`,
         payment: liveRequest?.payment || effectiveState?.paymentMethod || 'Online'
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
-    const fareAmount = parseFareAmount(displayFare);
     const expectedOtp = String(liveRaw?.otp || liveRequest?.otp || effectiveState?.otp || '');
     const waitingPricing = liveRaw?.pricingSnapshot || liveRequest?.raw?.pricingSnapshot || effectiveState?.pricingSnapshot || {};
     const allowedPaymentModes = (() => {
@@ -2103,6 +2141,23 @@ const ActiveTrip = () => {
                             heading: nextHeading,
                             speed: pos.coords.speed,
                         });
+                        socketService.emit('locationUpdate', {
+                            coordinates: [nextPosition.lng, nextPosition.lat],
+                            lat: nextPosition.lat,
+                            lng: nextPosition.lng,
+                            heading: nextHeading,
+                        });
+                        socketService.emit('driver_location_update', {
+                            coordinates: [nextPosition.lng, nextPosition.lat],
+                            latitude: nextPosition.lat,
+                            longitude: nextPosition.lng,
+                            heading: nextHeading,
+                        });
+                        api.patch('/drivers/location', {
+                            coordinates: [nextPosition.lng, nextPosition.lat],
+                            lat: nextPosition.lat,
+                            lng: nextPosition.lng,
+                        }).catch(() => {});
                     }
                     driverPositionRef.current = nextPosition;
                     evaluateRouteRefresh();

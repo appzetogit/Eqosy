@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, FileSearch, Search } from 'lucide-react';
-import { getUnifiedAdminToken } from '../../services/adminSession';
-
-const BASE = () => `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/taxi/admin/wallet/drivers/withdrawals`;
+import { adminService } from '../../services/adminService';
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -28,22 +26,21 @@ const WithdrawalRequestDrivers = () => {
   } = {}) => {
     setLoading(true);
     try {
-      const token = getUnifiedAdminToken();
-      const params = new URLSearchParams({
-        page: String(nextPage),
-        limit: String(nextLimit),
-      });
+      const params = {
+        page: nextPage,
+        limit: nextLimit,
+      };
       if (String(nextSearch || '').trim()) {
-        params.set('search', String(nextSearch).trim());
+        params.search = String(nextSearch).trim();
       }
-      const res = await fetch(`${BASE()}?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setRows(data.data?.results || []);
-        setPaginator(data.data?.paginator || null);
-      }
+      const response = await adminService.getDriverWithdrawalSummaries(params);
+      const data = response?.data || response || {};
+      setRows(data.results || []);
+      setPaginator(data.paginator || null);
+    } catch (err) {
+      console.error('Failed to fetch withdrawal requests:', err);
+      setRows([]);
+      setPaginator(null);
     } finally {
       setLoading(false);
     }

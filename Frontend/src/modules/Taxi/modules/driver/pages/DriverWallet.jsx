@@ -9,6 +9,7 @@ import {
     Clock3,
     IndianRupee,
     RefreshCw,
+    TrendingUp,
     Wallet,
     X,
 } from 'lucide-react';
@@ -293,16 +294,21 @@ const DriverWallet = () => {
             .filter((tx) => tx.type === 'commission_deduction')
             .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
         const tipEarnings = transactions
-            .filter((tx) => tx.type === 'ride_tip')
+            .filter((tx) => tx.type === 'ride_tip' && String(tx.metadata?.paymentMode || '').toLowerCase() !== 'cash')
             .reduce((sum, tx) => sum + Math.max(Number(tx.amount || 0), 0), 0);
         const totalAppEarnings = transactions
             .filter((tx) => ['ride_earning', 'adjustment', 'ride_tip'].includes(tx.type))
             .reduce((sum, tx) => {
                 const amount = Number(tx.amount || 0);
                 const source = String(tx.metadata?.source || tx.metadata?.category || '').toLowerCase();
+                const mode = String(tx.metadata?.paymentMode || '').toLowerCase();
 
-                if (tx.type === 'ride_earning' || tx.type === 'ride_tip') {
+                if (tx.type === 'ride_earning') {
                     return sum + Math.max(amount, 0);
+                }
+
+                if (tx.type === 'ride_tip') {
+                    return mode !== 'cash' ? sum + Math.max(amount, 0) : sum;
                 }
 
                 return source === 'driver_incentive' ? sum + Math.max(amount, 0) : sum;
@@ -711,6 +717,13 @@ const DriverWallet = () => {
                                     Withdraw <ArrowDownLeft size={17} />
                                 </button>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/taxi/driver/earnings')}
+                                className="mt-3.5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase tracking-[0.08em] text-emerald-800 shadow-sm hover:bg-emerald-100 transition-all"
+                            >
+                                Filter Earnings (Today, Week, Custom Date) <TrendingUp size={16} />
+                            </button>
                         </section>
 
                         {recentWithdrawalRequests.length > 0 && (

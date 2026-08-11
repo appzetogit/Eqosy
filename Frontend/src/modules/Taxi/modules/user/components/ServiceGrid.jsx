@@ -191,9 +191,14 @@ const ServiceGrid = ({ plain = false }) => {
             if (!m.short_description) description = 'Share Cab';
           }
 
+          const hasBikeIcon = adminIcon && (String(adminIcon).includes('1_Bike') || String(adminIcon).includes('bike.png'));
+          const resolvedIcon = isParcel
+            ? (adminIcon && !hasBikeIcon ? adminIcon : deliveryImg)
+            : (adminIcon && String(adminIcon).trim() !== '' ? adminIcon : fallbackIcon);
+
           return {
             id: m._id || idx,
-            icon: adminIcon && String(adminIcon).trim() !== '' ? adminIcon : fallbackIcon,
+            icon: resolvedIcon,
             fallbackIcon,
             label,
             description,

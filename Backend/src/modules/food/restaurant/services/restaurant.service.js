@@ -421,8 +421,8 @@ export const registerRestaurant = async (payload, files) => {
     // If we have pre-uploaded menu images, use them
     if (preUploadedMenuImages) {
         try {
-            menuImages = Array.isArray(preUploadedMenuImages) 
-                ? preUploadedMenuImages 
+            menuImages = Array.isArray(preUploadedMenuImages)
+                ? preUploadedMenuImages
                 : (typeof preUploadedMenuImages === 'string' ? JSON.parse(preUploadedMenuImages) : []);
         } catch (e) {
             console.error('Error parsing preUploadedMenuImages:', e);
@@ -1182,10 +1182,10 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
                     'ownerEmail',
                     'ownerPhone',
                     'primaryContactNumber',
-                'pureVegRestaurant',
-                'profileImage',
-                'coverImages',
-                'menuImages',
+                    'pureVegRestaurant',
+                    'profileImage',
+                    'coverImages',
+                    'menuImages',
                     'openingTime',
                     'closingTime',
                     'openDays',
@@ -1385,6 +1385,55 @@ export const uploadRestaurantMenuImages = async (restaurantId, files = []) => {
     };
 };
 
+export async function attachActiveOffersToRestaurants(restaurants = []) {
+    if (!Array.isArray(restaurants) || restaurants.length === 0) return restaurants;
+
+    try {
+        const now = new Date();
+        const activeOffers = await FoodOffer.find({
+            status: 'active',
+            $and: [
+                { $or: [{ startDate: { $exists: false } }, { startDate: null }, { startDate: { $lte: now } }] },
+                { $or: [{ endDate: { $exists: false } }, { endDate: null }, { endDate: { $gt: now } }] }
+            ]
+        }).lean();
+
+        if (!activeOffers || activeOffers.length === 0) return restaurants;
+
+        const offerByRestaurantId = new Map();
+        let globalOfferText = '';
+
+        activeOffers.forEach((offer) => {
+            const discountText =
+                offer.discountType === 'percentage'
+                    ? `${offer.discountValue}% OFF${offer.maxDiscount ? ` UPTO ₹${offer.maxDiscount}` : ''}`
+                    : `FLAT ₹${offer.discountValue} OFF`;
+            const formattedOffer = `${discountText} | USE ${offer.couponCode}`;
+
+            if (offer.restaurantScope === 'selected' && offer.restaurantId) {
+                const rid = String(offer.restaurantId);
+                if (!offerByRestaurantId.has(rid)) {
+                    offerByRestaurantId.set(rid, formattedOffer);
+                }
+            } else if (offer.restaurantScope === 'all' && !globalOfferText) {
+                globalOfferText = formattedOffer;
+            }
+        });
+
+        return restaurants.map((r) => {
+            const rid = String(r._id || r.id || r.restaurantId || '');
+            const activeOffer = offerByRestaurantId.get(rid) || globalOfferText || r.offer || '';
+            return {
+                ...r,
+                offer: activeOffer || r.offer || ''
+            };
+        });
+    } catch (err) {
+        console.error('Error attaching active offers to restaurants:', err?.message || err);
+        return restaurants;
+    }
+}
+
 export const listApprovedRestaurants = async (query = {}) => {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -1562,14 +1611,14 @@ export const listApprovedRestaurants = async (query = {}) => {
         }
 
         const sortStage = (() => {
-            if (sortBy === 'rating' || sortBy === 'rating-high') return { $sort: { isSponsored: -1, rating: -1, distanceMeters: 1 } };
-            if (sortBy === 'rating-low') return { $sort: { isSponsored: -1, rating: 1, distanceMeters: 1 } };
+            if (sortBy === 'rating' || sortBy === 'rating-high') return { $sort: { isSponsored: -1, rating: -1, totalRatings: -1, distanceMeters: 1 } };
+            if (sortBy === 'rating-low') return { $sort: { isSponsored: -1, rating: 1, totalRatings: 1, distanceMeters: 1 } };
             if (sortBy === 'price-low') return { $sort: { isSponsored: -1, featuredPrice: 1, distanceMeters: 1 } };
             if (sortBy === 'price-high') return { $sort: { isSponsored: -1, featuredPrice: -1, distanceMeters: 1 } };
             if (sortBy === 'newest') return { $sort: { isSponsored: -1, createdAt: -1 } };
             if (sortBy === 'deliveryTime') return { $sort: { isSponsored: -1, estimatedDeliveryTimeMinutes: 1, distanceMeters: 1 } };
-            // nearest (default)
-            return { $sort: { isSponsored: -1, distanceMeters: 1 } };
+            // Default: Sponsored first, then ranked strictly on the basis of review/rating in the zone
+            return { $sort: { isSponsored: -1, rating: -1, totalRatings: -1, distanceMeters: 1 } };
         })();
 
         const basePipeline = [
@@ -1594,7 +1643,7 @@ export const listApprovedRestaurants = async (query = {}) => {
 
         const total = totalDocs?.[0]?.count || 0;
         const restaurantsWithRecommendedImages = await attachRecommendedImagesToRestaurants(pageDocs);
-        const restaurants = (restaurantsWithRecommendedImages || []).map((r) => ({
+        const mappedPageDocs = (restaurantsWithRecommendedImages || []).map((r) => ({
             ...r,
             restaurantId: r._id,
             id: r._id,
@@ -1613,17 +1662,19 @@ export const listApprovedRestaurants = async (query = {}) => {
             menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
             recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
         }));
+        const restaurants = await attachActiveOffersToRestaurants(mappedPageDocs);
         return { restaurants, total, page, limit };
     }
 
     // Non-geo path: normal query + sort.
     const sort = (() => {
-        if (sortBy === 'rating' || sortBy === 'rating-high') return { isSponsored: -1, rating: -1, createdAt: -1 };
-        if (sortBy === 'rating-low') return { isSponsored: -1, rating: 1, createdAt: -1 };
+        if (sortBy === 'rating' || sortBy === 'rating-high') return { isSponsored: -1, rating: -1, totalRatings: -1, createdAt: -1 };
+        if (sortBy === 'rating-low') return { isSponsored: -1, rating: 1, totalRatings: 1, createdAt: -1 };
         if (sortBy === 'price-low') return { isSponsored: -1, featuredPrice: 1, createdAt: -1 };
         if (sortBy === 'price-high') return { isSponsored: -1, featuredPrice: -1, createdAt: -1 };
         if (sortBy === 'deliveryTime') return { isSponsored: -1, estimatedDeliveryTimeMinutes: 1, createdAt: -1 };
-        return { isSponsored: -1, createdAt: -1 };
+        // Default: Sponsored first, then ranked strictly on the basis of review/rating in the zone
+        return { isSponsored: -1, rating: -1, totalRatings: -1, createdAt: -1 };
     })();
 
     const [restaurantsRaw, total] = await Promise.all([
@@ -1637,7 +1688,7 @@ export const listApprovedRestaurants = async (query = {}) => {
     ]);
 
     const restaurantsWithRecommendedImages = await attachRecommendedImagesToRestaurants(restaurantsRaw || []);
-    const restaurants = restaurantsWithRecommendedImages.map((r) => ({
+    const mappedRawDocs = restaurantsWithRecommendedImages.map((r) => ({
         ...r,
         // Frontend user app expects `name` and often checks `profileImage.url`
         restaurantId: r._id,
@@ -1659,6 +1710,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
     }));
 
+    const restaurants = await attachActiveOffersToRestaurants(mappedRawDocs);
     return { restaurants, total, page, limit };
 };
 
@@ -1666,31 +1718,31 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug) => {
     const value = String(idOrSlug || '').trim();
     if (!value) return null;
 
+    let foundDoc = null;
     // ObjectId path
     if (/^[0-9a-fA-F]{24}$/.test(value)) {
-        const doc = await FoodRestaurant.findOne({ _id: value, status: 'approved' }).lean();
-        if (!doc) return null;
-        return {
-            ...doc,
-            rating: normalizeRatingValue(doc.rating),
-            totalRatings: normalizeTotalRatingsValue(doc.totalRatings)
-        };
+        foundDoc = await FoodRestaurant.findOne({ _id: value, status: 'approved' }).lean();
+    } else {
+        // Slug path: use normalized field for index-friendly exact match.
+        const restaurantNameNormalized = normalizeName(value);
+        if (restaurantNameNormalized) {
+            foundDoc = await FoodRestaurant.findOne({
+                status: 'approved',
+                restaurantNameNormalized
+            }).lean();
+        }
     }
 
-    // Slug path: use normalized field for index-friendly exact match.
-    const restaurantNameNormalized = normalizeName(value);
-    if (!restaurantNameNormalized) return null;
+    if (!foundDoc) return null;
 
-    const doc = await FoodRestaurant.findOne({
-        status: 'approved',
-        restaurantNameNormalized
-    }).lean();
-    if (!doc) return null;
-    return {
-        ...doc,
-        rating: normalizeRatingValue(doc.rating),
-        totalRatings: normalizeTotalRatingsValue(doc.totalRatings)
+    const formattedDoc = {
+        ...foundDoc,
+        rating: normalizeRatingValue(foundDoc.rating),
+        totalRatings: normalizeTotalRatingsValue(foundDoc.totalRatings)
     };
+
+    const withOffers = await attachActiveOffersToRestaurants([formattedDoc]);
+    return withOffers[0];
 };
 
 export const listPublicOffers = async () => {
@@ -1760,13 +1812,44 @@ export const getRestaurantComplaints = async (restaurantId, query = {}) => {
  * Create a new offer for a restaurant.
  */
 export async function createRestaurantOffer(restaurantId, body) {
-    const existing = await FoodOffer.findOne({ couponCode: body.couponCode }).lean();
+    const formattedCode = String(body.couponCode || '').trim().toUpperCase();
+    if (!formattedCode) {
+        throw new ValidationError('Coupon code is required');
+    }
+
+    const existing = await FoodOffer.findOne({ couponCode: formattedCode });
     if (existing) {
-        throw new ValidationError('Coupon code already exists');
+        const now = Date.now();
+        const isExpired = existing.status === 'inactive' || (existing.endDate && new Date(existing.endDate).getTime() <= now);
+
+        if (isExpired) {
+            existing.couponCode = formattedCode;
+            existing.discountType = body.discountType;
+            existing.discountValue = body.discountValue;
+            existing.customerScope = body.customerScope || 'all';
+            existing.restaurantScope = 'selected';
+            existing.restaurantId = new mongoose.Types.ObjectId(restaurantId);
+            existing.minOrderValue = body.minOrderValue ?? 0;
+            existing.maxDiscount = body.maxDiscount ?? null;
+            existing.usageLimit = body.usageLimit ?? null;
+            existing.perUserLimit = body.perUserLimit ?? null;
+            existing.startDate = body.startDate;
+            existing.isFirstOrderOnly = body.isFirstOrderOnly ?? false;
+            existing.endDate = body.endDate;
+            existing.status = body.endDate && new Date(body.endDate).getTime() <= now ? 'inactive' : 'active';
+            existing.showInCart = true;
+            existing.createdByRole = 'RESTAURANT';
+            existing.usedCount = 0;
+
+            await existing.save();
+            return existing.toObject();
+        } else {
+            throw new ValidationError('An active coupon with this code already exists. Please choose a different code or wait until it expires.');
+        }
     }
 
     const doc = await FoodOffer.create({
-        couponCode: body.couponCode,
+        couponCode: formattedCode,
         discountType: body.discountType,
         discountValue: body.discountValue,
         customerScope: body.customerScope || 'all',
@@ -1784,14 +1867,14 @@ export async function createRestaurantOffer(restaurantId, body) {
         createdByRole: 'RESTAURANT'
     });
 
-    return doc;
+    return doc.toObject();
 }
 
 /**
  * List offers for a specific restaurant.
  */
 export async function listRestaurantOffers(restaurantId) {
-    const list = await FoodOffer.find({ 
+    const list = await FoodOffer.find({
         restaurantId: new mongoose.Types.ObjectId(restaurantId),
         restaurantScope: 'selected'
     }).sort({ createdAt: -1 }).lean();
@@ -1807,7 +1890,7 @@ export async function listRestaurantOffers(restaurantId) {
  * Delete a restaurant offer.
  */
 export async function deleteRestaurantOffer(restaurantId, offerId) {
-    const res = await FoodOffer.deleteOne({ 
+    const res = await FoodOffer.deleteOne({
         _id: new mongoose.Types.ObjectId(offerId),
         restaurantId: new mongoose.Types.ObjectId(restaurantId),
         createdByRole: 'RESTAURANT'
@@ -1828,7 +1911,7 @@ export async function updateRestaurantOfferStatus(restaurantId, offerId, status)
     }
 
     const doc = await FoodOffer.findOneAndUpdate(
-        { 
+        {
             _id: new mongoose.Types.ObjectId(offerId),
             restaurantId: new mongoose.Types.ObjectId(restaurantId),
             createdByRole: 'RESTAURANT'

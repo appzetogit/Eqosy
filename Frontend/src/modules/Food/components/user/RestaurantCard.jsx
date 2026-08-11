@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { motion } from "framer-motion";
-import { Star, Clock, IndianRupee, Heart } from "lucide-react";
+import { Star, Clock, IndianRupee, Heart, Leaf } from "lucide-react";
 import OptimizedImage from "@food/components/OptimizedImage";
 import { normalizeImageUrl } from "../../utils/common";
 
@@ -202,17 +202,23 @@ const RestaurantImageCarousel = React.memo(({ restaurant, priority = false, back
         </div>
       )}
       
-      {/* Discount Badge if any */}
+      {/* Badges / Overlay */}
       {restaurant.isSponsored && (
         <div className="absolute top-2 left-0 px-2.5 py-1 bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] sm:text-xs font-black rounded-r-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-10">
           <Star className="w-3 h-3 fill-current" />
           Sponsored
         </div>
       )}
-      {!restaurant.isSponsored && restaurant.discount && (
-        <div className="absolute top-2 left-0 px-2.5 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] sm:text-xs font-black rounded-r-lg shadow-lg uppercase tracking-wider flex items-center gap-1">
+      {restaurant.pureVegRestaurant && (
+        <div className="absolute top-2 left-0 px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-[10px] sm:text-xs font-black rounded-r-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-10">
+          <Leaf className="w-3 h-3 fill-current" />
+          PURE VEG
+        </div>
+      )}
+      {!restaurant.isSponsored && !restaurant.pureVegRestaurant && (restaurant.discount || restaurant.offer) && (
+        <div className="absolute top-2 left-0 px-2.5 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] sm:text-xs font-black rounded-r-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-10">
           <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12.864 2.227l8.909 8.91a2.182 2.182 0 010 3.085l-7.364 7.364a2.182 2.182 0 01-3.085 0l-8.91-8.91A2.182 2.182 0 012 11.137V4.41A2.182 2.182 0 014.182 2.23h6.727a2.182 2.182 0 011.955-.003z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          {restaurant.discount}
+          {restaurant.discount || restaurant.offer}
         </div>
       )}
     </div>
@@ -250,9 +256,17 @@ const RestaurantCard = ({
 
       <div className="p-3 sm:p-4">
         <div className="flex justify-between items-start gap-2 mb-1.5">
-          <h3 className="text-[15px] sm:text-[17px] font-bold text-gray-900 line-clamp-1 group-hover:text-primary-orange transition-colors duration-200 flex-1 tracking-tight">
-            {restaurant.name}
-          </h3>
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <h3 className="text-[15px] sm:text-[17px] font-bold text-gray-900 line-clamp-1 group-hover:text-primary-orange transition-colors duration-200 tracking-tight">
+              {restaurant.name}
+            </h3>
+            {restaurant.pureVegRestaurant && (
+              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 shadow-2xs">
+                <Leaf className="w-2.5 h-2.5 fill-current" />
+                Pure Veg
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 bg-green-600 text-white px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold shadow-sm flex-shrink-0">
             <span>{restaurant.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}</span>
             <Star className="w-2.5 h-2.5 fill-current" />

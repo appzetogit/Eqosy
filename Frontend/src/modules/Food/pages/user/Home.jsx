@@ -592,7 +592,7 @@ const RecommendedFoodImageStrip = React.memo(
       >
         {/* Dynamic Dish Badge for Active Slide */}
         {activeItem && (
-          <div className="absolute top-3 left-3 flex items-center z-20 pointer-events-none transform transition-all duration-300 group-hover:scale-105">
+          <div className={`absolute ${restaurant?.isSponsored ? 'top-11' : 'top-3'} left-3 flex items-center z-20 pointer-events-none transform transition-all duration-300 group-hover:scale-105`}>
             <div className="bg-black/75 backdrop-blur-md text-white px-3 py-1 rounded-full text-[11px] font-medium tracking-tight flex items-center gap-1.5 shadow-2xl border border-white/20">
               {/* Veg / Non-Veg Indicator Dot */}
               <span className={`inline-flex items-center justify-center w-3 h-3 rounded-sm border p-0.5 ${activeItem.foodType === 'Veg' || restaurant?.pureVegRestaurant ? 'border-emerald-500 bg-emerald-950/40' : 'border-rose-500 bg-rose-950/40'}`}>
@@ -704,7 +704,7 @@ export default function Home() {
   const [loadingRealCategories, setLoadingRealCategories] = useState(true);
   const [menuCategories, setMenuCategories] = useState([]);
   const [loadingMenuCategories, setLoadingMenuCategories] = useState(false);
-  const [, setRestaurantDietMeta] = useState({});
+  const [restaurantDietMeta, setRestaurantDietMeta] = useState({});
   const [showAllCategoriesModal, setShowAllCategoriesModal] = useState(false);
   const [availabilityTick, setAvailabilityTick] = useState(Date.now());
   const RESTAURANTS_BATCH_SIZE = 9;
@@ -2079,7 +2079,19 @@ export default function Home() {
                 return (a.rating || 0) - (b.rating || 0);
               }
 
-              // Default: sort by distance
+              // Default: strictly on the basis of review/rating for non-sponsored restaurants
+              const aRating = Number(a.rating || 0);
+              const bRating = Number(b.rating || 0);
+              if (bRating !== aRating) {
+                return bRating - aRating;
+              }
+
+              const aTotalRatings = Number(a.totalRatings || 0);
+              const bTotalRatings = Number(b.totalRatings || 0);
+              if (bTotalRatings !== aTotalRatings) {
+                return bTotalRatings - aTotalRatings;
+              }
+
               const aDistance =
                 a.distanceInKm !== null ? a.distanceInKm : Infinity;
               const bDistance =
@@ -2550,9 +2562,18 @@ export default function Home() {
   const matchesVegMode = useCallback(
     (restaurant) => {
       if (!vegMode) return true;
-      return restaurant?.pureVegRestaurant === true;
+      // If user explicitly chose "pure-veg" only option, filter for pure veg stores
+      if (vegModeOption === "pure-veg") {
+        return restaurant?.pureVegRestaurant === true;
+      }
+      // In standard Veg Mode ("Show Veg items from all restaurants"), keep all restaurants that serve veg dishes
+      const diet = restaurantDietMeta[restaurant.id || restaurant._id || restaurant.mongoId];
+      if (diet && diet.hasVeg === false && !restaurant?.pureVegRestaurant) {
+        return false;
+      }
+      return true;
     },
-    [vegMode],
+    [vegMode, vegModeOption, restaurantDietMeta],
   );
 
     // Filter restaurants and foods based on active filters
@@ -2564,15 +2585,15 @@ export default function Home() {
       if (a.isSponsored && !b.isSponsored) return -1;
       if (!a.isSponsored && b.isSponsored) return 1;
 
-      // 2. Zone featured rank (1 to 10)
-      const aRank = Number(a.zoneFeaturedRank);
-      const bRank = Number(b.zoneFeaturedRank);
-      const aHasRank = aRank >= 1 && aRank <= 10;
-      const bHasRank = bRank >= 1 && bRank <= 10;
+      // 2. Rank non-sponsored restaurants strictly on the basis of review/rating
+      const aRating = Number(a.rating || 0);
+      const bRating = Number(b.rating || 0);
+      if (bRating !== aRating) return bRating - aRating;
 
-      if (aHasRank && bHasRank) return aRank - bRank;
-      if (aHasRank) return -1;
-      if (bHasRank) return 1;
+      const aTotalRatings = Number(a.totalRatings || 0);
+      const bTotalRatings = Number(b.totalRatings || 0);
+      if (bTotalRatings !== aTotalRatings) return bTotalRatings - aTotalRatings;
+
       return 0;
     });
   }, [restaurantsData, matchesVegMode]);
@@ -3103,6 +3124,7 @@ export default function Home() {
         vegModeToggleRef={vegModeToggleRef}
         isCategoryStuck={isCategoryStuck}
         heroBannerImages={heroBannerImages}
+        heroBanners={heroBannersData}
       />
 
       <AnimatePresence mode="wait">
@@ -3464,7 +3486,7 @@ export default function Home() {
                             {/* Image Section with Carousel */}
                             <div className="relative">
                               {restaurant.isSponsored && (
-                                <div className="absolute top-3 left-3 px-2.5 py-1 bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] sm:text-xs font-black rounded-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-20">
+                                <div className="absolute top-3 left-3 px-2.5 py-1 bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[10px] sm:text-xs font-black rounded-lg shadow-lg uppercase tracking-wider flex items-center gap-1 z-30 pointer-events-none">
                                   <Star className="w-3.5 h-3.5 fill-current" />
                                   Sponsored
                                 </div>

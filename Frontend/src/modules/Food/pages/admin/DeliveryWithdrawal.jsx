@@ -325,24 +325,38 @@ export default function DeliveryWithdrawal() {
                   <label className="text-xs font-semibold text-slate-500 uppercase">Phone</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.deliveryPhone || "N/A"}</p>
                 </div>
-                {selectedRequest.upiId && (
-                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 mb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <QrCode className="w-4 h-4 text-emerald-600" />
-                      <label className="text-xs font-bold text-emerald-800 uppercase">UPI Information</label>
-                    </div>
+                {(selectedRequest.upiId || selectedRequest.upiQrCode) && (
+                  <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200/80 mb-2 space-y-2">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">{selectedRequest.upiId}</p>
+                      <div className="flex items-center gap-2">
+                        <QrCode className="w-4 h-4 text-emerald-600" />
+                        <label className="text-xs font-extrabold text-emerald-900 uppercase">UPI Information & QR Code</label>
+                      </div>
                       {selectedRequest.upiQrCode && (
                         <button 
                           onClick={() => window.open(selectedRequest.upiQrCode, '_blank')}
-                          className="text-[10px] bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                          className="text-[10px] bg-emerald-600 text-white font-bold px-2.5 py-1 rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1 shadow-sm"
                         >
                           <Eye className="w-3 h-3" />
-                          View QR
+                          Full View
                         </button>
                       )}
                     </div>
+                    {selectedRequest.upiId && (
+                      <p className="text-sm font-bold text-slate-900">
+                        <span className="text-slate-500 font-medium">UPI ID:</span> {selectedRequest.upiId}
+                      </p>
+                    )}
+                    {selectedRequest.upiQrCode && (
+                      <div className="pt-1">
+                        <p className="text-xs font-semibold text-slate-700 mb-1.5">Scan to Pay via UPI:</p>
+                        <img 
+                          src={selectedRequest.upiQrCode} 
+                          alt="Delivery Partner UPI QR Code" 
+                          className="w-36 h-36 object-contain border border-slate-200 rounded-lg bg-white p-1.5 shadow-sm"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4">

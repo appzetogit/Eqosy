@@ -260,6 +260,19 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     if (body.description !== undefined) update.description = toStr(body.description);
     if (body.image !== undefined) update.image = toStr(body.image);
     Object.assign(update, getUpdatedFoodPricing(existing, body));
+    if (body.stockQuantity !== undefined) {
+        const qty = body.stockQuantity === null || body.stockQuantity === '' ? null : Number(body.stockQuantity);
+        update.stockQuantity = qty;
+        if (typeof qty === 'number' && qty <= 0) {
+            update.isAvailable = false;
+            update.isActive = false;
+        }
+    }
+
+    if (body.lowStockThreshold !== undefined) {
+        update.lowStockThreshold = Number(body.lowStockThreshold) || 5;
+    }
+
     if (body.isActive !== undefined || body.isAvailable !== undefined) {
         const nextIsActive = body.isActive !== undefined
             ? body.isActive !== false
@@ -305,6 +318,17 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
         { new: true }
     ).lean();
 
+    if (updated) {
+        // Trigger Automatic Inventory Control Notifications
+        void notifyInventoryControl({
+            foodItem: updated,
+            previousIsAvailable: existing.isAvailable,
+            currentIsAvailable: updated.isAvailable,
+            stockQuantity: updated.stockQuantity,
+            restaurantId
+        });
+    }
+
     if (updated && shouldResubmitForApproval) {
         try {
             const { notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
@@ -323,4 +347,57 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     }
 
     return updated;
+}
+
+export async function notifyInventoryControl({ foodItem, previousIsAvailable, currentIsAvailable, stockQuantity, restaurantId }) {
+    try {
+        const { notifyOwnerSafely, notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
+        const { FoodRestaurant } = await import('../models/restaurant.model.js');
+        const restaurant = await FoodRestaurant.findById(restaurantId).select('name restaurantName').lean();
+        const restaurantName = restaurant?.restaurantName || restaurant?.name || 'Restaurant';
+
+        if (currentIsAvailable === false && previousIsAvailable !== false) {
+            // Out of Stock Notification to Restaurant Owner
+            void notifyOwnerSafely(
+                { ownerType: 'RESTAURANT', ownerId: String(restaurantId) },
+                {
+                    title: 'Out of Stock Alert 🚨',
+                    body: `"${foodItem.name}" is OUT OF STOCK! It has been automatically marked unavailable to prevent unfillable customer orders.`,
+                    data: {
+                        type: 'inventory_alert',
+                        subType: 'out_of_stock',
+                        foodId: String(foodItem._id || foodItem.id)
+                    }
+                }
+            );
+
+            // Notify Admin
+            void notifyAdminsSafely({
+                title: 'Inventory Alert: Out of Stock 📦',
+                body: `"${foodItem.name}" at ${restaurantName} is now Out of Stock.`,
+                data: {
+                    type: 'inventory_alert',
+                    subType: 'out_of_stock',
+                    foodId: String(foodItem._id || foodItem.id),
+                    restaurantId: String(restaurantId)
+                }
+            });
+        } else if (stockQuantity != null && stockQuantity > 0 && stockQuantity <= (foodItem.lowStockThreshold || 5)) {
+            // Low Stock Warning to Restaurant Owner
+            void notifyOwnerSafely(
+                { ownerType: 'RESTAURANT', ownerId: String(restaurantId) },
+                {
+                    title: 'Low Stock Warning ⚠️',
+                    body: `"${foodItem.name}" is running low on stock (${stockQuantity} items remaining). Please replenish inventory soon.`,
+                    data: {
+                        type: 'inventory_alert',
+                        subType: 'low_stock',
+                        foodId: String(foodItem._id || foodItem.id)
+                    }
+                }
+            );
+        }
+    } catch (err) {
+        console.error('Inventory control notification error:', err);
+    }
 }

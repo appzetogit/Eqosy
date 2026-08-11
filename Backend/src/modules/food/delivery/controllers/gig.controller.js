@@ -1,6 +1,7 @@
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import * as gigService from '../services/gig.service.js';
 import * as selfieService from '../services/selfieVerification.service.js';
+import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 
 // --- Admin Gig Handlers ---
 export const createGigHandler = asyncHandler(async (req, res) => {
@@ -55,7 +56,16 @@ export const cancelGigHandler = asyncHandler(async (req, res) => {
 export const getActiveGigHandler = asyncHandler(async (req, res) => {
   const partnerId = req.user?.userId || req.user?.id;
   const activeGig = await gigService.getActiveGigForPartner(partnerId);
-  res.status(200).json({ success: true, data: { activeGig } });
+  let availabilityStatus = undefined;
+  if (!activeGig && partnerId) {
+    const partner = await FoodDeliveryPartner.findById(partnerId);
+    if (partner && partner.availabilityStatus === 'online') {
+      partner.availabilityStatus = 'offline';
+      await partner.save();
+      availabilityStatus = 'offline';
+    }
+  }
+  res.status(200).json({ success: true, data: { activeGig, ...(availabilityStatus ? { availabilityStatus } : {}) } });
 });
 
 // --- Selfie Verification Handlers ---

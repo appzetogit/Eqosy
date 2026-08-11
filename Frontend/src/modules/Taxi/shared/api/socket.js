@@ -44,10 +44,12 @@ const getSessionItem = (key) => {
 const getStoredTokenByRole = (role) => {
   const normalizedRole = String(role || '').toLowerCase();
   const entries = (
-    normalizedRole === 'driver' || normalizedRole === 'owner'
+    normalizedRole === 'driver' || normalizedRole === 'owner' || normalizedRole === 'bus_driver'
       ? [
           getSessionItem('driverToken'),
           getSessionItem('token'),
+          localStorage.getItem('driverToken'),
+          localStorage.getItem('token'),
         ]
       : [
           localStorage.getItem(`${role}Token`),
@@ -55,14 +57,17 @@ const getStoredTokenByRole = (role) => {
         ]
   ).filter(Boolean);
 
-  return entries.find((token) => String(getTokenPayload(token)?.role || '').toLowerCase() === normalizedRole) || null;
+  return entries.find((token) => {
+    const payloadRole = String(getTokenPayload(token)?.role || '').toLowerCase();
+    return payloadRole === normalizedRole || (normalizedRole === 'driver' && ['driver', 'owner', 'bus_driver'].includes(payloadRole));
+  }) || null;
 };
 
 const resolveTokenForRole = (role) => {
   const normalizedRole = String(role || '').toLowerCase();
-  const adminToken = getStoredTokenByRole('admin') || localStorage.getItem('adminToken');
+  const adminToken = getStoredTokenByRole('admin') || localStorage.getItem('adminToken') || localStorage.getItem('admin_accessToken');
   const userToken = getStoredTokenByRole('user');
-  const driverToken = getStoredTokenByRole('driver');
+  const driverToken = getStoredTokenByRole('driver') || localStorage.getItem('driverToken') || localStorage.getItem('token');
   const ownerToken = getStoredTokenByRole('owner');
 
   if (normalizedRole === 'admin') {
@@ -70,18 +75,18 @@ const resolveTokenForRole = (role) => {
   }
 
   if (normalizedRole === 'driver') {
-    return driverToken || ownerToken;
+    return driverToken || ownerToken || localStorage.getItem('driverToken') || localStorage.getItem('token');
   }
 
   if (normalizedRole === 'owner') {
-    return ownerToken || driverToken;
+    return ownerToken || driverToken || localStorage.getItem('driverToken') || localStorage.getItem('token');
   }
 
   if (normalizedRole === 'user') {
     return userToken;
   }
 
-  return userToken || driverToken || ownerToken || adminToken || null;
+  return driverToken || userToken || ownerToken || adminToken || null;
 };
 
 class SocketService {

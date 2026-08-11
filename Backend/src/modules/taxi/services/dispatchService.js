@@ -257,6 +257,8 @@ const emitRideRequestToDrivers = async ({
       rideId: String(ride._id),
       serviceType: ride.serviceType || 'ride',
       userId: String(ride.userId?._id || ride.userId || ''),
+      targetUrl: `/taxi/driver/home?rideId=${String(ride._id)}`,
+      link: `/taxi/driver/home?rideId=${String(ride._id)}`,
     },
   }).catch((error) => {
     console.error('Failed to send driver ride-request push notification', error);
@@ -650,6 +652,7 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
       vehicleTypeIds: dispatchVehicleTypeIds,
+      serviceType: ride.serviceType || 'ride',
     });
     const effectiveRadius = Number.isFinite(searchRadiusMeters) && searchRadiusMeters > 0
       ? searchRadiusMeters
@@ -897,6 +900,7 @@ export const notifyLateAvailableDriver = async (driverId) => {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
       vehicleTypeIds: dispatchVehicleTypeIds,
+      serviceType: ride.serviceType || 'ride',
     });
 
     const matchedDriver = drivers.find((item) => String(item._id) === driverKey);
@@ -1101,4 +1105,137 @@ export const notifyRideBiddingUpdated = async (ride) => {
   for (const driverId of dispatchState.notifiedDriverIds) {
     emitToDriver(driverId, 'rideBiddingUpdated', payload);
   }
+};
+
+export const getActivePendingDispatchForDriver = async (driverId, requestedRideId = null) => {
+  if (!driverId) return null;
+
+  const driverKey = String(driverId);
+  let candidateRideIds = [];
+
+  if (requestedRideId) {
+    candidateRideIds.push(String(requestedRideId));
+  }
+
+  for (const rId of activeDispatches.keys()) {
+    if (!candidateRideIds.includes(rId)) {
+      candidateRideIds.push(rId);
+    }
+  }
+
+  if (candidateRideIds.length === 0) {
+    const recentRides = await Ride.find({
+      status: RIDE_STATUS.SEARCHING,
+      liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+      createdAt: { $gte: new Date(Date.now() - 3 * 60 * 1000) },
+    })
+      .select('_id')
+      .lean();
+
+    candidateRideIds = recentRides.map((r) => String(r._id));
+  }
+
+  for (const rideId of candidateRideIds) {
+    const dispatchState = getDispatchState(rideId);
+
+    if (dispatchState.rejectedDriverIds.includes(driverKey)) {
+      continue;
+    }
+
+    const ride = await Ride.findById(rideId).populate('userId', 'name phone countryCode').lean();
+    if (!ride || ride.status !== RIDE_STATUS.SEARCHING) {
+      continue;
+    }
+
+    const isDriverTargeted =
+      dispatchState.notifiedDriverIds.includes(driverKey) ||
+      dispatchState.driverIds.includes(driverKey);
+
+    let isMatched = isDriverTargeted;
+
+    if (!isMatched) {
+      const driver = await Driver.findById(driverId)
+        .select('_id isOnline isOnRide wallet location zoneId vehicleTypeId vehicleType vehicleIconType')
+        .lean();
+
+      if (driver?.isOnline && !driver?.isOnRide && !driver?.wallet?.isBlocked && driver?.location?.coordinates?.length) {
+        const dispatchConfig = await resolveTransportDispatchConfig();
+        const attemptIndex = Number.isInteger(dispatchState.radiusIndex) ? dispatchState.radiusIndex : 0;
+        const radius = getAttemptRadiusMeters(
+          dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
+          attemptIndex,
+        );
+        const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
+        const { drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
+          maxDistance: radius,
+          vehicleTypeId: ride.vehicleTypeId,
+          vehicleTypeIds: dispatchVehicleTypeIds,
+        });
+
+        if (drivers.some((d) => String(d._id) === driverKey)) {
+          isMatched = true;
+        }
+      }
+    }
+
+    if (isMatched) {
+      const dispatchConfig = await resolveTransportDispatchConfig();
+      const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
+      const attemptIndex = Number.isInteger(dispatchState.radiusIndex) ? dispatchState.radiusIndex : 0;
+      const requestExpiresAt = new Date(Date.now() + (dispatchConfig.retryDelayMs || 25000)).toISOString();
+
+      return {
+        rideId: String(ride._id),
+        type: ride.serviceType || 'ride',
+        serviceType: ride.serviceType || 'ride',
+        userId: String(ride.userId?._id || ride.userId || ''),
+        user: {
+          id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
+          name: ride.userId?.name || 'Customer',
+          phone: ride.userId?.phone || '',
+          countryCode: ride.userId?.countryCode || '',
+        },
+        pickupLocation: ride.pickupLocation,
+        pickupAddress: ride.pickupAddress || '',
+        dropLocation: ride.dropLocation,
+        dropAddress: ride.dropAddress || '',
+        scheduledAt: ride.scheduledAt || null,
+        estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
+        estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
+        vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
+        vehicleTypeIds: dispatchVehicleTypeIds,
+        vehicleIconType: ride.vehicleIconType,
+        vehicleIconUrl: ride.vehicleIconUrl || '',
+        fare: ride.fare,
+        baseFare: Number(ride.baseFare || ride.fare || 0),
+        bookingMode: ride.bookingMode || 'normal',
+        pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
+        biddingStatus: ride.biddingStatus || 'none',
+        bidding: ride.pricingNegotiationMode === 'driver_bid'
+          ? {
+              enabled: true,
+              baseFare: Number(ride.baseFare || ride.fare || 0),
+              bidFloorFare: Number(ride.bidFloorFare ?? ride.baseFare ?? ride.fare ?? 0),
+              userMaxBidFare: Number(ride.userMaxBidFare || ride.fare || 0),
+              bidCeilingMaxFare: Number(ride.bidCeilingMaxFare || ride.userMaxBidFare || ride.fare || 0),
+              bidStepAmount: Number(ride.bidStepAmount || 10),
+            }
+          : {
+              enabled: false,
+            },
+        fareIncreaseWaitMinutes: Number(ride.fareIncreaseWaitMinutes || 0),
+        nextFareIncreaseAt: ride.nextFareIncreaseAt || null,
+        paymentMethod: ride.paymentMethod || 'cash',
+        parcel: ride.parcel || null,
+        intercity: ride.intercity || null,
+        attempt: attemptIndex + 1,
+        maxAttempts: dispatchConfig.maxAttempts || 5,
+        acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds || 30,
+        expiresInSeconds: dispatchConfig.retryWindowSeconds || 30,
+        requestExpiresAt,
+      };
+    }
+  }
+
+  return null;
 };

@@ -494,57 +494,69 @@ export default function ProfessionalSearch() {
                    </h2>
                 </div>
                 <div className="grid gap-4">
-                   {results.dishes.map((r) => {
-                     const dishImgUrl = getMediaUrl(r.matchedDishImage || extractImageUrl(r)) || DEFAULT_DISH_IMAGE;
-                     return (
-                    <Link
-                      to={buildStoreLink(r, r.matchedDishId)}
-                      key={`${r._id}-${r.matchedDishId || "dish"}`}
-                      onClick={() => addToHistory(query)}
-                      className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800 hover:shadow-md transition-shadow group"
-                    >
-                       <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
-                           <img 
-                            src={dishImgUrl} 
-                            alt={r.matchedDish || r.restaurantName}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = DEFAULT_DISH_IMAGE;
-                            }}
-                          />
-                          {r.pureVegRestaurant && (
-                            <div className="absolute top-1 left-1 w-4 h-4 border border-green-600 p-[1px] bg-white rounded-sm">
-                               <div className="w-full h-full bg-green-600 rounded-full" />
-                            </div>
-                          )}
-                       </div>
-                       <div className="flex-1 min-w-0 flex flex-col justify-center">
-                          <div className="text-rose-500 text-[10px] font-bold uppercase tracking-wider mb-1">
-                             Matched: {r.matchedDish || query}
-                          </div>
-                          <h3 className="font-bold text-slate-900 dark:text-white line-clamp-1">{r.restaurantName}</h3>
-                          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                             <div className="flex items-center gap-1">
-                                <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
-                                <span className="font-semibold text-slate-700 dark:text-white">{r.rating || "New"}</span>
-                             </div>
-                             <span>•</span>
-                             <span>{r.estimatedDeliveryTime || r.estimatedDeliveryTimeMinutes ? `${r.estimatedDeliveryTimeMinutes} mins` : "30-40 mins"}</span>
-                             {r.cuisines?.length > 0 && (
-                               <>
-                                 <span>•</span>
-                                 <span className="line-clamp-1">{r.cuisines.slice(0, 2).join(", ")}</span>
-                               </>
-                             )}
-                          </div>
-                          {isGrocerySearch && (
-                            <span className="mt-2 inline-flex w-fit rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                              Open now
-                            </span>
-                          )}
-                       </div>
-                    </Link>
+                    {results.dishes.map((r) => {
+                      const dishImgUrl = getMediaUrl(r.matchedDishImage || extractImageUrl(r)) || DEFAULT_DISH_IMAGE;
+                      const isVeg = r.matchedDishFoodType === 'Veg' || r.pureVegRestaurant;
+                      const dishPrice = r.matchedDishPrice || r.featuredPrice || 149;
+
+                      return (
+                     <Link
+                       to={buildStoreLink(r, r.matchedDishId)}
+                       key={`${r._id}-${r.matchedDishId || "dish"}`}
+                       onClick={() => addToHistory(query)}
+                       className="flex gap-4 p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800 hover:shadow-md transition-shadow group"
+                     >
+                        <div className="w-24 h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
+                            <img 
+                             src={dishImgUrl} 
+                             alt={r.matchedDish || r.restaurantName}
+                             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                             onError={(e) => {
+                               e.target.onerror = null;
+                               e.target.src = DEFAULT_DISH_IMAGE;
+                             }}
+                           />
+                           <div className="absolute top-1.5 left-1.5">
+                             <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm flex items-center gap-0.5 ${
+                               isVeg 
+                                 ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-500' 
+                                 : 'bg-rose-950/90 text-rose-400 border border-rose-500'
+                             }`}>
+                               <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                               {isVeg ? 'VEG' : 'NON-VEG'}
+                             </span>
+                           </div>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                           <div className="flex items-center gap-2 mb-0.5">
+                             <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                               isVeg
+                                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                                 : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                             }`}>
+                               <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                               {isVeg ? 'VEG' : 'NON-VEG'}
+                             </span>
+                             <span className="text-sm font-extrabold text-[#EB590E]">
+                               ₹{Math.round(dishPrice)}
+                             </span>
+                           </div>
+                           <h3 className="font-bold text-slate-900 dark:text-white text-base line-clamp-1">
+                             {r.matchedDish || r.restaurantName}
+                           </h3>
+                           <p className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-1 mb-1">
+                             by {r.restaurantName}
+                           </p>
+                           <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-zinc-400">
+                              <div className="flex items-center gap-1">
+                                 <Star className="w-3 h-3 text-orange-500 fill-orange-500" />
+                                 <span className="font-semibold text-slate-700 dark:text-white">{r.rating || "New"}</span>
+                              </div>
+                              <span>•</span>
+                              <span>{r.estimatedDeliveryTime || r.estimatedDeliveryTimeMinutes ? `${r.estimatedDeliveryTimeMinutes} mins` : "30-40 mins"}</span>
+                           </div>
+                        </div>
+                     </Link>
                    );
                   })}
                 </div>

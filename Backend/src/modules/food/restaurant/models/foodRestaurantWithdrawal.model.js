@@ -26,7 +26,10 @@ const foodRestaurantWithdrawalSchema = new mongoose.Schema({
         accountNumber: String,
         ifscCode: String,
         bankName: String,
-        accountHolderName: String
+        accountHolderName: String,
+        upiId: String,
+        upiQrImage: String,
+        upiQrCode: String
     },
     adminNote: String,
     rejectionReason: String,

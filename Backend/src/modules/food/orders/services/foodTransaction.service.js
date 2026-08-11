@@ -68,16 +68,12 @@ export async function getRestaurantCommissionSnapshot(orderDoc) {
     rules.find((r) => String(r.restaurant || r.restaurant_id || '') === String(restaurantIdRaw)) ||
     null;
 
-  if (!rule) {
-    return {
-      commissionAmount: 0,
-      commissionType: 'percentage',
-      commissionValue: 0,
-      baseAmount,
-    };
-  }
+  // Fallback default commission rule (10% percentage) if no explicit custom rule is configured for this restaurant
+  const effectiveRule = rule || {
+    defaultCommission: { type: 'percentage', value: 10 }
+  };
 
-  return computeRestaurantCommissionAmount(baseAmount, rule);
+  return computeRestaurantCommissionAmount(baseAmount, effectiveRule);
 }
 
 /**

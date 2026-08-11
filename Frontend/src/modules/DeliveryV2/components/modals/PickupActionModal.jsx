@@ -22,12 +22,15 @@ export const PickupActionModal = ({
   eta,
   onReachedPickup, 
   onPickedUp,
-  onMinimize
+  onMinimize,
+  onCancel
 }) => {
   const [showItems, setShowItems] = useState(false);
   const [isUploadingBill, setIsUploadingBill] = useState(false);
   const [billImageUploaded, setBillImageUploaded] = useState(false);
   const [billImageUrl, setBillImageUrl] = useState(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const cameraInputRef = useRef(null);
 
   if (!order) return null;
@@ -180,14 +183,13 @@ export const PickupActionModal = ({
             <div className="space-y-4">
               {/* Real-time Food Preparation Status Banner */}
               {(() => {
-                const normalizedStatus = String(order?.orderStatus || order?.status || order?.deliveryState?.currentPhase || '').toLowerCase();
+                const normalizedStatus = String(order?.orderStatus || order?.status || order?.deliveryState?.status || '').toLowerCase();
                 const isFoodReady = 
                   normalizedStatus === 'ready_for_pickup' || 
                   normalizedStatus === 'ready' || 
-                  normalizedStatus === 'at_pickup' ||
-                  normalizedStatus === 'reached_pickup' ||
                   Boolean(order?.isFoodReady) || 
-                  Boolean(order?.deliveryState?.isFoodReady);
+                  Boolean(order?.deliveryState?.isFoodReady) ||
+                  Boolean(order?.deliveryState?.foodReadyAt);
 
                 return (
                   <div className={`p-4 rounded-[2rem] border transition-all ${
@@ -266,12 +268,37 @@ export const PickupActionModal = ({
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden space-y-2 px-2"
                     >
-                      {items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-4 bg-gray-50/30 rounded-2xl border border-gray-50">
-                          <span className="text-gray-800 text-sm font-bold uppercase tracking-tight">{item.name || 'Item Name'}</span>
-                          <span className="text-emerald-700 font-black bg-emerald-100/50 px-3 py-1 rounded-xl text-xs">x{item.quantity || 1}</span>
-                        </div>
-                      ))}
+                      {items.map((item, idx) => {
+                        const variant = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size || '';
+                        const addons = Array.isArray(item.addons) ? item.addons.map(a => a.name || a.title || a).join(', ') : '';
+                        return (
+                          <div key={idx} className="flex justify-between items-start p-3.5 bg-gray-50/50 rounded-2xl border border-gray-100">
+                            <div className="flex-1 pr-2">
+                              <span className="text-gray-900 text-sm font-black uppercase tracking-tight block">
+                                {item.name || 'Item Name'}
+                              </span>
+                              {variant && (
+                                <span className="text-xs font-bold text-orange-600 block mt-0.5">
+                                  Variation: {variant}
+                                </span>
+                              )}
+                              {addons && (
+                                <span className="text-[11px] font-semibold text-gray-500 block mt-0.5">
+                                  Addons: {addons}
+                                </span>
+                              )}
+                              {item.notes && (
+                                <span className="text-[11px] italic text-gray-400 block mt-0.5">
+                                  Note: {item.notes}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-emerald-700 font-black bg-emerald-100/60 px-3 py-1 rounded-xl text-xs shrink-0">
+                              x{item.quantity || 1}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -356,6 +383,49 @@ export const PickupActionModal = ({
                   color="bg-orange-500"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Cancel Order */}
+          {onCancel && (
+            <div className="pt-2">
+              {!showCancelConfirm ? (
+                <button
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="w-full py-3.5 text-sm font-black text-red-500 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-100 active:scale-95 transition-all uppercase tracking-widest"
+                >
+                  ✕ Cancel Order
+                </button>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3">
+                  <p className="text-center text-sm font-black text-red-700">Cancel this order?</p>
+                  <p className="text-center text-xs text-red-500 font-semibold">This will unassign you from the order. This action cannot be undone.</p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowCancelConfirm(false)}
+                      disabled={isCancelling}
+                      className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                    >
+                      Go Back
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setIsCancelling(true);
+                        try {
+                          await onCancel();
+                        } finally {
+                          setIsCancelling(false);
+                          setShowCancelConfirm(false);
+                        }
+                      }}
+                      disabled={isCancelling}
+                      className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black text-xs uppercase tracking-widest active:scale-95 transition-all disabled:opacity-60"
+                    >
+                      {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

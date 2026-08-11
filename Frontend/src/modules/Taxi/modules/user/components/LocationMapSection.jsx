@@ -1,9 +1,67 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LoaderCircle, Navigation } from 'lucide-react';
-import { GoogleMap } from '@react-google-maps/api';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { getSavedLocation, saveLocation } from '../services/locationStore';
+import api from '../../../shared/api/axiosInstance';
+// Inline SVG data URLs used as Google Maps marker icons (no external file dependency)
+const carIcon =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="40" height="40">
+      <rect x="8" y="22" width="48" height="24" rx="8" fill="#1e293b"/>
+      <rect x="14" y="26" width="36" height="14" rx="4" fill="#7dd3fc"/>
+      <circle cx="18" cy="48" r="6" fill="#334155"/>
+      <circle cx="18" cy="48" r="3" fill="#94a3b8"/>
+      <circle cx="46" cy="48" r="6" fill="#334155"/>
+      <circle cx="46" cy="48" r="3" fill="#94a3b8"/>
+      <rect x="6" y="32" width="6" height="8" rx="2" fill="#f59e0b"/>
+      <rect x="52" y="32" width="6" height="8" rx="2" fill="#ef4444"/>
+    </svg>`
+  );
+
+const bikeIcon =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="36" height="36">
+      <circle cx="14" cy="44" r="10" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+      <circle cx="14" cy="44" r="5" fill="#94a3b8"/>
+      <circle cx="50" cy="44" r="10" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+      <circle cx="50" cy="44" r="5" fill="#94a3b8"/>
+      <path d="M14 44 L32 20 L50 44" stroke="#f59e0b" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="32" cy="20" r="4" fill="#f59e0b"/>
+    </svg>`
+  );
+
+const autoIcon =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="38" height="38">
+      <rect x="10" y="24" width="38" height="22" rx="6" fill="#f59e0b"/>
+      <rect x="14" y="28" width="30" height="12" rx="3" fill="#fef9c3"/>
+      <circle cx="18" cy="48" r="6" fill="#1e293b"/>
+      <circle cx="18" cy="48" r="3" fill="#94a3b8"/>
+      <circle cx="42" cy="48" r="6" fill="#1e293b"/>
+      <circle cx="42" cy="48" r="3" fill="#94a3b8"/>
+      <rect x="4" y="30" width="8" height="6" rx="2" fill="#fbbf24"/>
+    </svg>`
+  );
+
+const deliveryIcon =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="42" height="42">
+      <rect x="4" y="20" width="40" height="26" rx="4" fill="#334155"/>
+      <rect x="44" y="28" width="16" height="18" rx="3" fill="#475569"/>
+      <rect x="8" y="24" width="32" height="16" rx="3" fill="#7dd3fc"/>
+      <circle cx="16" cy="48" r="6" fill="#1e293b"/>
+      <circle cx="16" cy="48" r="3" fill="#94a3b8"/>
+      <circle cx="48" cy="48" r="6" fill="#1e293b"/>
+      <circle cx="48" cy="48" r="3" fill="#94a3b8"/>
+    </svg>`
+  );
+
 const DEFAULT_CENTER = { lat: 17.385, lon: 78.4867 };
 const DEFAULT_ZOOM = 16;
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -13,12 +71,21 @@ const areCentersNearlyEqual = (first, second, threshold = 0.00001) => (
   Math.abs(Number(first?.lon ?? 0) - Number(second?.lon ?? 0)) < threshold
 );
 
+const getDriverIconAsset = (driver) => {
+  const iconType = String(driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
+  if (iconType.includes('bike')) return bikeIcon;
+  if (iconType.includes('auto')) return autoIcon;
+  if (iconType.includes('truck') || iconType.includes('delivery')) return deliveryIcon;
+  return carIcon;
+};
+
 const LocationMapSection = ({ plain = false }) => {
   const [coords, setCoords] = useState(null);
   const [centerCoords, setCenterCoords] = useState(DEFAULT_CENTER);
   const [status, setStatus] = useState('idle');
   const [isDragging, setIsDragging] = useState(false);
   const [map, setMap] = useState(null);
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const isDraggingRef = useRef(false);
   const requestedLocationRef = useRef(false);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
@@ -117,6 +184,37 @@ const LocationMapSection = ({ plain = false }) => {
       optionsHigh
     );
   };
+
+  useEffect(() => {
+    if (!centerCoords?.lat || !centerCoords?.lon) return;
+    let active = true;
+
+    const fetchNearby = async () => {
+      try {
+        const response = await api.get('/rides/available-drivers', {
+          params: {
+            lat: centerCoords.lat,
+            lng: centerCoords.lon,
+            maxDistance: 10000,
+            limit: 20,
+          },
+        });
+        const driversList = response?.data?.data?.drivers || response?.data?.drivers || [];
+        if (active && Array.isArray(driversList)) {
+          setNearbyDrivers(driversList);
+        }
+      } catch (_err) {
+        if (active) setNearbyDrivers([]);
+      }
+    };
+
+    fetchNearby();
+    const interval = setInterval(fetchNearby, 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [centerCoords?.lat, centerCoords?.lon]);
 
   const helperText = (() => {
     if (status === 'loading') return 'Pinning your current location...';
@@ -297,7 +395,25 @@ const LocationMapSection = ({ plain = false }) => {
                   mapTypeControl: false,
                   gestureHandling: 'greedy',
                 }}
-              />
+              >
+                {nearbyDrivers.map((driver, index) => {
+                  const coordsPair = driver?.location?.coordinates;
+                  if (!Array.isArray(coordsPair) || coordsPair.length < 2) return null;
+                  const pos = { lat: Number(coordsPair[1]), lng: Number(coordsPair[0]) };
+                  const iconAsset = getDriverIconAsset(driver);
+                  return (
+                    <MarkerF
+                      key={driver.id || driver._id || index}
+                      position={pos}
+                      title={driver.name || 'Available Rider'}
+                      icon={{
+                        url: iconAsset,
+                        scaledSize: new window.google.maps.Size(32, 32),
+                      }}
+                    />
+                  );
+                })}
+              </GoogleMap>
             )}
 
             {/* The Pinpoint */}

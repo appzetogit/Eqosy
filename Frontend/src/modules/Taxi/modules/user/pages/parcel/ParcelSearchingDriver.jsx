@@ -14,7 +14,14 @@ const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^(https?:|data:image\/|blob:)/i.test(raw)) return raw;
-  if (raw.startsWith('/')) return `${BACKEND_ORIGIN}${raw}`;
+  if (/^\/(1_Bike|2_Auto|4_Taxi|ehcv|hcv|LCV|mcv|truck|Luxury|Premium|SUV|assets)/i.test(raw)) return raw;
+  if (raw.startsWith('/uploads/') || raw.startsWith('/storage/') || raw.startsWith('/public/uploads/')) {
+    return `${BACKEND_ORIGIN}${raw}`;
+  }
+  if (raw.startsWith('uploads/') || raw.startsWith('storage/')) {
+    return `${BACKEND_ORIGIN}/${raw}`;
+  }
+  if (raw.startsWith('/')) return raw;
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
 import LuxuryIcon from '@/assets/icons/Luxury.png';
@@ -111,11 +118,11 @@ const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
 
 const getVehicleIcon = (type = 'car') => {
   const val = String(type).toLowerCase();
-  if (val.includes('bike') || val.includes('2wheel')) return BikeIcon;
-  if (val.includes('auto')) return AutoIcon;
+  if (val.includes('bike') || val.includes('2wheel') || val.includes('motorcycle')) return BikeIcon;
+  if (val.includes('auto') || val.includes('rickshaw') || val.includes('3wheel')) return AutoIcon;
   if (val.includes('lux')) return LuxuryIcon;
   if (val.includes('premium')) return PremiumIcon;
-  if (val.includes('suv')) return SuvIcon;
+  if (val.includes('suv') || val.includes('truck') || val.includes('mover') || val.includes('packers') || val.includes('lcv') || val.includes('hcv') || val.includes('mcv') || val.includes('tempo') || val.includes('heavy')) return SuvIcon;
   return CarIcon;
 };
 
@@ -248,11 +255,32 @@ const findVehicleMatch = (types, preferredLabel) => {
   });
 };
 
-const pickParcelVehicles = (types = [], preferredType = '') => {
+const pickParcelVehicles = (types = [], preferredType = '', deliveryCat = '') => {
   const activeTypes = types.filter((type) => type.active !== false && Number(type.status ?? 1) !== 0);
   const preferredLabels = normalizePreferredVehicleTypes(preferredType).filter((entry) => entry !== 'both');
-  const matches = [];
+  const catToken = String(deliveryCat || '').toLowerCase();
+  const isHeavy = preferredLabels.some((l) => l.includes('mover') || l.includes('packers') || l.includes('truck')) ||
+                  catToken.includes('mover') || catToken.includes('packers') || catToken.includes('truck');
 
+  if (isHeavy) {
+    const nonBikeTypes = activeTypes.filter((t) => {
+      const v = `${t.name || ''} ${t.icon_types || ''}`.toLowerCase();
+      return !v.includes('bike') && !v.includes('scooter') && !v.includes('2wheel');
+    });
+
+    const matches = [];
+    for (const preferredLabel of preferredLabels) {
+      const match = findVehicleMatch(nonBikeTypes, preferredLabel);
+      if (match && !matches.some((item) => String(item._id || item.id) === String(match._id || match.id))) {
+        matches.push(match);
+      }
+    }
+    if (matches.length > 0) return matches;
+    if (nonBikeTypes.length > 0) return nonBikeTypes;
+    return [{ _id: 'heavy_truck', name: 'Delivery Truck', icon_types: 'truck', active: true }];
+  }
+
+  const matches = [];
   for (const preferredLabel of preferredLabels) {
     const match = findVehicleMatch(activeTypes, preferredLabel);
     if (match && !matches.some((item) => String(item._id || item.id) === String(match._id || match.id))) {
@@ -338,6 +366,10 @@ const ParcelSearchingDriver = () => {
   const searchNonce = String(routeState.searchNonce || '');
   const preferredVehicleType = String(
     routeState.goodsTypeFor ||
+    routeState.parcel?.goodsTypeFor ||
+    routeState.deliveryCategory ||
+    routeState.category ||
+    routeState.parcel?.category ||
     routeState.selectedGoodsType?.goodsTypeFor ||
     routeState.selectedGoodsType?.goods_types_for ||
     routeState.selectedGoodsType?.goods_type_for ||
@@ -367,7 +399,13 @@ const ParcelSearchingDriver = () => {
     const raw = String(
       routeState.vehicleIconUrl ||
       routeState.vehicle?.vehicleIconUrl ||
+      routeState.vehicle?.map_icon ||
       routeState.vehicle?.icon ||
+      routeState.vehicle?.image ||
+      routeState.selectedVehicle?.map_icon ||
+      routeState.selectedVehicle?.icon ||
+      routeState.selectedVehicle?.image ||
+      routeState.selectedVehicle?.vehicleIconUrl ||
       ''
     ).trim();
 
@@ -375,8 +413,14 @@ const ParcelSearchingDriver = () => {
       return resolveAssetUrl(raw);
     }
 
-    return getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || preferredVehicleType || 'bike');
-  }, [preferredVehicleType, routeState.vehicle, routeState.vehicleIconType, routeState.vehicleIconUrl]);
+    const deliveryCategory = String(routeState.deliveryCategory || routeState.category || '').toLowerCase();
+    const iconTypeStr = String(routeState.vehicleIconType || routeState.vehicle?.iconType || routeState.selectedVehicle?.icon_types || routeState.selectedVehicle?.name || '').toLowerCase();
+    const isHeavy = deliveryCategory === 'movers' || deliveryCategory === 'trucks' || preferredVehicleType.includes('mover') || preferredVehicleType.includes('truck') || iconTypeStr.includes('truck') || iconTypeStr.includes('mover') || iconTypeStr.includes('packers');
+    const isBike = deliveryCategory === '2wheeler' || iconTypeStr.includes('bike') || preferredVehicleType.includes('bike');
+    const fallbackIconType = isHeavy ? 'suv' : isBike ? 'bike' : 'car';
+
+    return getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || (preferredVehicleType && preferredVehicleType !== 'both' ? preferredVehicleType : fallbackIconType));
+  }, [preferredVehicleType, routeState.category, routeState.deliveryCategory, routeState.selectedVehicle, routeState.vehicle, routeState.vehicleIconType, routeState.vehicleIconUrl]);
 
   const availableVehicleMarkers = useMemo(
     () => buildAvailableVehicleMarkers(pickupPos, nearbyVehicleCount),
@@ -609,7 +653,7 @@ const ParcelSearchingDriver = () => {
           ? requestedVehicleTypes
           : requestedVehicle && isVehicleCompatibleWithGoodsType(requestedVehicle, preferredVehicleType)
             ? [requestedVehicle]
-            : pickParcelVehicles(vehicleTypes, preferredVehicleType);
+            : pickParcelVehicles(vehicleTypes, preferredVehicleType, routeState.deliveryCategory || routeState.category || routeState.parcel?.category || '');
         const selectedVehicleType = selectedVehicleTypes[0];
         const selectedVehicleTypeIds = selectedVehicleTypes.map((type) => type?._id || type?.id).filter(Boolean);
 
@@ -980,7 +1024,7 @@ const ParcelSearchingDriver = () => {
                     <div className="relative h-20 w-24 shrink-0">
                       <div className="absolute right-0 top-0 h-20 w-20 overflow-hidden rounded-[24px] bg-[#1d2333] border-4 border-white shadow-xl flex items-center justify-center">
                         <img
-                          src={driver.vehicleIconUrl || availableVehicleIcon || BikeIcon}
+                          src={driver.vehicleIconUrl || driver.map_icon || availableVehicleIcon || CarIcon}
                           className="h-12 w-12 object-contain brightness-0 invert opacity-90"
                           alt="Vehicle"
                         />

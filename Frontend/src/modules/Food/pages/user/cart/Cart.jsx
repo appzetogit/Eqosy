@@ -2369,89 +2369,78 @@ export default function Cart() {
                 ) : (
                   /* Available / Input View */
                   <div className="px-4 py-3 md:px-6 md:py-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-[#EB590E]" />
+                        <span className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">Coupons & Offers</span>
+                      </div>
+                      {availableCoupons.length > 0 && (
+                        <span className="bg-gradient-to-r from-[#EB590E] to-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider shadow-sm">
+                          {availableCoupons.length} OFFER{availableCoupons.length > 1 ? 'S' : ''} AVAILABLE
+                        </span>
+                      )}
+                    </div>
+
                     {loadingCoupons ? (
                       <p className="text-sm text-gray-500">Loading offers...</p>
                     ) : availableCoupons.length > 0 ? (
-                      <div className="flex items-start justify-between w-full">
-                        <div className="flex items-start gap-3 flex-1">
-                          <Percent className="h-5 w-5 text-gray-700 dark:text-gray-300 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight mb-0.5">
-                              {availableCoupons[0].discountDisplay || `Save ${RUPEE_SYMBOL}${availableCoupons[0].discount}`} with '{availableCoupons[0].code}'
-                            </p>
-                            {availableCoupons[0].customerGroup === "new" ? (
-                              <p className="text-[11px] text-[#EB590E] mb-1">First-time users only</p>
-                            ) : subtotal < availableCoupons[0].minOrder ? (
-                              <p className="text-xs text-blue-600 font-medium mb-1">Add items worth {RUPEE_SYMBOL}{(availableCoupons[0].minOrder - subtotal).toFixed(0)} more to unlock</p>
-                            ) : null}
+                      <div className="flex flex-col gap-3">
+                        {availableCoupons.map((coupon, idx) => {
+                          const isLocked = subtotal < coupon.minOrder || (coupon.customerGroup === "new" && userOrderCount > 0);
+                          if (idx > 0 && !showCoupons) return null;
 
-                            {availableCoupons.length > 1 && (
-                              <button onClick={() => setShowCoupons(!showCoupons)} className="text-[11px] text-[#EB590E] hover:underline flex items-center mt-1">
-                                View all coupons <ChevronRight className="h-3 w-3 ml-0.5" />
+                          return (
+                            <div key={coupon.code || idx} className="flex items-start justify-between p-3 rounded-xl bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/60 dark:border-orange-900/40">
+                              <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                <div className="mt-0.5 bg-[#EB590E] text-white p-1 rounded-md shrink-0">
+                                  <Percent className="h-3.5 w-3.5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                                    <span className="bg-[#EB590E]/15 text-[#EB590E] font-black text-[10px] uppercase px-1.5 py-0.5 rounded tracking-wider">
+                                      OFFER
+                                    </span>
+                                    <span className="text-xs font-mono font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded">
+                                      {coupon.code}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">
+                                    {coupon.discountDisplay || `Save ${RUPEE_SYMBOL}${coupon.discount}`}
+                                  </p>
+                                  {coupon.customerGroup === "new" ? (
+                                    <p className="text-[11px] text-[#EB590E] mt-0.5">First-time users only</p>
+                                  ) : isLocked ? (
+                                    <p className="text-xs text-blue-600 font-medium mt-0.5">Add items worth {RUPEE_SYMBOL}{(coupon.minOrder - subtotal).toFixed(0)} more to unlock</p>
+                                  ) : (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{coupon.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                className="border border-[#EB590E] text-[#EB590E] dark:hover:bg-[#EB590E]/10 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed ml-2 shrink-0 bg-white dark:bg-[#1a1a1a] shadow-sm hover:bg-orange-50"
+                                onClick={() => handleApplyCoupon(coupon)}
+                                disabled={isLocked}
+                              >
+                                APPLY
                               </button>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          className="border border-[#EB590E] text-[#EB590E] dark:hover:bg-[#EB590E]/10 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ml-2 shadow-sm"
-                          onClick={() => handleApplyCoupon(availableCoupons[0])}
-                          disabled={subtotal < availableCoupons[0].minOrder || (availableCoupons[0].customerGroup === "new" && userOrderCount > 0)}
-                        >
-                          APPLY
-                        </button>
+                            </div>
+                          );
+                        })}
+
+                        {availableCoupons.length > 1 && (
+                          <button
+                            onClick={() => setShowCoupons(!showCoupons)}
+                            className="text-xs text-[#EB590E] font-bold hover:underline flex items-center justify-center gap-1 pt-1"
+                          >
+                            {showCoupons ? "Hide additional offers" : `View all ${availableCoupons.length} offers`}
+                            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showCoupons ? "rotate-90" : ""}`} />
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 py-2">
                         <Percent className="h-5 w-5 text-gray-400" />
-                        <p className="text-sm text-gray-500">No offers available</p>
-                      </div>
-                    )}
-
-                    {/* Show All Coupons List */}
-                    {showCoupons && !appliedCoupon && availableCoupons.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-dashed border-gray-200 dark:border-gray-800 space-y-4">
-                        {/* Input for manual code */}
-                        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                          <input
-                            type="text"
-                            value={manualCouponCode}
-                            onChange={(e) => setManualCouponCode(e.target.value.toUpperCase())}
-                            placeholder="Enter coupon code"
-                            className="flex-1 h-9 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a0a0a] px-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#EB590E]"
-                          />
-                          <button
-                            className="bg-white dark:bg-[#1a1a1a] border border-[#EB590E] text-[#EB590E] rounded px-4 h-9 text-xs font-semibold uppercase hover:bg-orange-50 dark:hover:bg-orange-900/10"
-                            onClick={handleApplyCouponCode}
-                          >
-                            APPLY
-                          </button>
-                        </div>
-                        {availableCoupons.slice(1).map((coupon) => (
-                          <div key={coupon.code} className="flex items-start justify-between">
-                            <div className="flex items-start gap-3 flex-1">
-                              <Percent className="h-5 w-5 text-gray-700 dark:text-gray-300 mt-0.5 opacity-50" />
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight mb-0.5">
-                                  {coupon.discountDisplay || `Save ${RUPEE_SYMBOL}${coupon.discount}`} with '{coupon.code}'
-                                </p>
-                                {coupon.customerGroup === "new" ? (
-                                  <p className="text-[11px] text-[#EB590E] mb-1">First-time users only</p>
-                                ) : subtotal < coupon.minOrder ? (
-                                  <p className="text-xs text-blue-600 font-medium mb-1 line-clamp-1">Add items worth {RUPEE_SYMBOL}{(coupon.minOrder - subtotal).toFixed(0)} more to unlock</p>
-                                ) : (
-                                  <p className="text-xs text-gray-500 mb-1 line-clamp-1">{coupon.description}</p>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              className="border border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-400 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ml-2"
-                              onClick={() => handleApplyCoupon(coupon)}
-                              disabled={subtotal < coupon.minOrder || (coupon.customerGroup === "new" && userOrderCount > 0)}
-                            >
-                              APPLY
-                            </button>
-                          </div>
-                        ))}
+                        <p className="text-sm text-gray-500">No offers available for this order</p>
                       </div>
                     )}
                   </div>
@@ -2572,12 +2561,17 @@ export default function Cart() {
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                handleSelectAddressByLabel(label)
+                                if (label === "Other") {
+                                  openLocationSelector()
+                                } else {
+                                  handleSelectAddressByLabel(label)
+                                }
                               }}
-                              disabled={!addressExists}
-                              className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${addressExists
-                                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300'
-                                : 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed dark:bg-gray-900'
+                              disabled={label !== "Other" && !addressExists}
+                              className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${
+                                label === "Other" || addressExists
+                                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300 cursor-pointer'
+                                  : 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed dark:bg-gray-900'
                                 }`}
                             >
                               {label}

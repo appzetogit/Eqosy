@@ -75,6 +75,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const [addressAutocompleteValue, setAddressAutocompleteValue] = useState("")
   const [keywordAddressSuggestions, setKeywordAddressSuggestions] = useState([])
   const [isKeywordSearching, setIsKeywordSearching] = useState(false)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [lockMapToAutocomplete, setLockMapToAutocomplete] = useState(true)
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState(null)
   // Backend reverse geocode (on by default unless explicitly disabled)
@@ -938,6 +939,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Store selection mode so Cart can prefer this current location for delivery address.
       try {
         localStorage.setItem("deliveryAddressMode", "current");
+        if (locationData) {
+          const currentLocData = { ...locationData, isManual: false };
+          localStorage.setItem("userLocation", JSON.stringify(currentLocData));
+        }
       } catch {}
       setShowAddressForm(false)
       setAddressFormData((prev) => ({
@@ -1982,6 +1987,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         // User saved an address; prefer saved delivery address in Cart.
         try {
           localStorage.setItem("deliveryAddressMode", "saved")
+          const activeLocData = {
+            ...addressToSave,
+            formattedAddress: addressToSave.additionalDetails || `${trimmedStreet}, ${trimmedCity}, ${trimmedState}`,
+            address: `${trimmedStreet}, ${trimmedCity}`,
+            isManual: true,
+          }
+          localStorage.setItem("userLocation", JSON.stringify(activeLocData))
         } catch {}
       }
 
@@ -2071,7 +2083,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         zipCode: address.zipCode,
         latitude,
         longitude,
-        formattedAddress: `${address.street}, ${address.city}, ${address.state}`
+        formattedAddress: `${address.street}, ${address.city}, ${address.state}`,
+        isManual: true
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
 
@@ -2240,12 +2253,16 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
               <div className="relative">
                 <Input
                   value={addressAutocompleteValue}
-                  onChange={(e) => setAddressAutocompleteValue(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => {
+                    setIsSearchFocused(true)
+                    setAddressAutocompleteValue(e.target.value)
+                  }}
                   placeholder="Type a keyword (area, street, landmark)..."
                   className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700"
                 />
 
-                {addressAutocompleteValue.trim().length > 0 &&
+                {isSearchFocused && addressAutocompleteValue.trim().length > 0 &&
                   (keywordAddressSuggestions.length > 0 || addressAutocompleteSuggestions.length > 0) && (
                   <div className="absolute z-50 left-0 right-0 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] shadow-xl overflow-hidden">
                     {isKeywordSearching && (

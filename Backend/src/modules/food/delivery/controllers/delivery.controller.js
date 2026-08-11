@@ -129,7 +129,7 @@ export const getWalletController = async (req, res, next) => {
             createdAt: tx?.createdAt || tx?.date
         });
 
-        if (requestedTypeRaw === 'bonus' || requestedTypeRaw === 'deposit' || requestedTypeRaw === 'deduction') {
+        if (['bonus', 'deposit', 'deduction', 'withdrawal', 'payment', 'earning', 'order'].includes(requestedTypeRaw)) {
             if (!deliveryPartnerId || !mongoose.Types.ObjectId.isValid(deliveryPartnerId)) {
                 return sendResponse(res, 200, 'Wallet fetched successfully', { wallet: { transactions: [] } });
             }
@@ -153,9 +153,16 @@ export const getWalletController = async (req, res, next) => {
                     transactionId: b.transactionId
                 }));
             } else {
-                const allowedTypes = requestedTypeRaw === 'deposit'
-                    ? new Set(['deposit'])
-                    : new Set(['withdrawal', 'deposit']);
+                let allowedTypes;
+                if (requestedTypeRaw === 'withdrawal') {
+                    allowedTypes = new Set(['withdrawal']);
+                } else if (requestedTypeRaw === 'deposit') {
+                    allowedTypes = new Set(['deposit']);
+                } else if (['payment', 'earning', 'order'].includes(requestedTypeRaw)) {
+                    allowedTypes = new Set(['payment']);
+                } else {
+                    allowedTypes = new Set(['withdrawal', 'deposit']);
+                }
 
                 wallet.transactions = (wallet.transactions || [])
                     .filter((tx) => allowedTypes.has(String(tx?.type || '').trim().toLowerCase()))
@@ -293,6 +300,29 @@ export const getDeliveryPartnerReviewsController = async (req, res, next) => {
         const deliveryPartnerId = req.user?.userId;
         const data = await getDeliveryPartnerReviews(deliveryPartnerId);
         return sendResponse(res, 200, 'Reviews fetched successfully', data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const requestEmergencyOfflineController = async (req, res, next) => {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const reason = req.body?.reason;
+        const { requestEmergencyOffline } = await import('../services/delivery.service.js');
+        const data = await requestEmergencyOffline(deliveryPartnerId, reason);
+        return sendResponse(res, 201, 'Emergency offline request submitted successfully', data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getEmergencyOfflineStatusController = async (req, res, next) => {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const { getEmergencyOfflineStatus } = await import('../services/delivery.service.js');
+        const data = await getEmergencyOfflineStatus(deliveryPartnerId);
+        return sendResponse(res, 200, 'Emergency offline status fetched successfully', data);
     } catch (error) {
         next(error);
     }

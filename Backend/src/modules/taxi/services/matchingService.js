@@ -32,7 +32,20 @@ const normalizeVehicleTypeIds = (vehicleTypeIds = [], vehicleTypeId = null) => {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 };
 
-const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys }) => {
+const TWO_WHEELER_KEYS = ['bike', 'scooter', '2wheeler', '2-wheeler', '2_wheeler', 'two_wheeler', 'twowheeler'];
+const TRUCK_MOVER_KEYS = ['truck', 'lcv', 'hcv', 'mcv', 'loader', 'mover', 'movers', 'packers'];
+
+const isTwoWheelerVehicle = (name = '', type = '', icon = '') => {
+  const str = `${name} ${type} ${icon}`.toLowerCase();
+  return TWO_WHEELER_KEYS.some((key) => str.includes(key));
+};
+
+const isTruckOrMoverVehicle = (name = '', type = '', icon = '') => {
+  const str = `${name} ${type} ${icon}`.toLowerCase();
+  return TRUCK_MOVER_KEYS.some((key) => str.includes(key));
+};
+
+const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys, allowedVehicles = [] }) => {
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const normalizedVehicleTypeKeys = Array.isArray(vehicleTypeKeys)
     ? [...new Set(vehicleTypeKeys.map(normalizeVehicleKey).filter(Boolean))]
@@ -51,12 +64,29 @@ const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicl
       ? { $or: vehicleTypeClauses }
       : vehicleTypeClauses[0] || {};
 
+  const isRideTwoWheeler = allowedVehicles.some((v) => isTwoWheelerVehicle(v.name, v.vehicle_type, v.icon_types));
+  const isRideTruckOrMover = allowedVehicles.some((v) => isTruckOrMoverVehicle(v.name, v.vehicle_type, v.icon_types));
+
+  let categoryExclusionFilter = {};
+  if (isRideTwoWheeler) {
+    categoryExclusionFilter = {
+      vehicleType: { $nin: TRUCK_MOVER_KEYS },
+      vehicleIconType: { $nin: TRUCK_MOVER_KEYS },
+    };
+  } else if (isRideTruckOrMover) {
+    categoryExclusionFilter = {
+      vehicleType: { $nin: TWO_WHEELER_KEYS },
+      vehicleIconType: { $nin: TWO_WHEELER_KEYS },
+    };
+  }
+
   return {
     isOnline: true,
     isOnRide: false,
     'wallet.isBlocked': { $ne: true },
     ...(zoneId ? { zoneId } : {}),
     ...vehicleTypeFilter,
+    ...categoryExclusionFilter,
   };
 };
 
@@ -194,14 +224,18 @@ const findDriversForZone = async ({
   limit,
   normalizedVehicleTypeIds,
   vehicleTypeKeys,
+  allowedVehicles = [],
+  serviceType = 'ride',
 }) => {
   const commonFilters = buildDriverMatchFilters({
     zoneId,
     vehicleTypeIds: normalizedVehicleTypeIds,
     vehicleTypeKeys,
+    allowedVehicles,
+    serviceType,
   });
   const selectedFields =
-    'name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location zoneId isOnline isOnRide routeBooking';
+    'name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating ratingCount location zoneId isOnline isOnRide routeBooking serviceCategories registerFor';
 
   const [liveLocationDrivers, routeBookingDrivers] = await Promise.all([
     Driver.find({
@@ -237,6 +271,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     limit = DISPATCH_TOP_DRIVERS,
     vehicleTypeId,
     vehicleTypeIds,
+    serviceType = 'ride',
   } = options;
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const allowedVehicles = normalizedVehicleTypeIds.length
@@ -245,18 +280,17 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
   const vehicleTypeKeys = normalizeVehicleKeys(allowedVehicles);
 
   const zone = await findZoneByPickup(coordinates);
-  const zoneBoundaryCapMeters = zone ? getZoneBoundaryCapMeters(zone, coordinates) : null;
-  const effectiveMaxDistance = Number.isFinite(zoneBoundaryCapMeters) && zoneBoundaryCapMeters >= 0
-    ? Math.min(Math.max(1, Math.round(maxDistance)), Math.max(1, zoneBoundaryCapMeters))
-    : Math.max(1, Math.round(maxDistance));
+  const effectiveMaxDistance = Math.max(1, Math.round(maxDistance));
 
   let drivers = await findDriversForZone({
-    zoneId: zone?._id || null,
+    zoneId: zone?._id || undefined,
     coordinates,
     effectiveMaxDistance,
     limit,
     normalizedVehicleTypeIds,
     vehicleTypeKeys,
+    allowedVehicles,
+    serviceType,
   });
 
   const blockedDriverIds = await getDriverIdsBlockedByUpcomingScheduledRides(
@@ -266,12 +300,14 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
 
   if (drivers.length === 0 && zone?._id) {
     drivers = await findDriversForZone({
-      zoneId: null,
+      zoneId: undefined,
       coordinates,
       effectiveMaxDistance,
       limit,
       normalizedVehicleTypeIds,
       vehicleTypeKeys,
+      allowedVehicles,
+      serviceType,
     });
 
     const fallbackBlockedDriverIds = await getDriverIdsBlockedByUpcomingScheduledRides(
@@ -284,6 +320,5 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     zone,
     drivers,
     searchRadiusMeters: effectiveMaxDistance,
-    zoneBoundaryCapMeters,
   };
 };

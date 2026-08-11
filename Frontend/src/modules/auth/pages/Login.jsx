@@ -43,9 +43,10 @@ export default function UnifiedOTPFastLogin() {
 
   const handleBack = (e) => {
     if (e) {
-      e.preventDefault()
-      e.stopPropagation()
+      if (typeof e.preventDefault === 'function') e.preventDefault()
+      if (typeof e.stopPropagation === 'function') e.stopPropagation()
     }
+
     // Instantly dismiss soft keyboard across all browsers & native WebView
     if (typeof document !== 'undefined') {
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -65,20 +66,22 @@ export default function UnifiedOTPFastLogin() {
       setStep(1)
       return
     }
+
     const fromPath = location.state?.from
     const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
-    const fallbackPath = currentPath.includes('taxi') ? '/taxi/user' : '/food/user'
+    const fallbackPath = (currentPath.includes('taxi') || localStorage.getItem('eqosy_active_module') === 'taxi') 
+      ? '/taxi/user' 
+      : '/food/user'
 
-    const targetPath = (fromPath && fromPath !== '/login' && !fromPath.includes('/auth/login')) ? fromPath : fallbackPath
+    // If fromPath points back to a login page itself or is missing, use module home
+    const isLoginPath = (p) => !p || p === '/login' || p.includes('/auth/login')
+    const targetPath = !isLoginPath(fromPath) ? fromPath : fallbackPath
 
-    // Wait 30ms for browser soft keyboard dismiss animation to complete before unmounting input
-    setTimeout(() => {
-      if (typeof window !== 'undefined' && window.history.state && window.history.state.idx > 0) {
-        navigate(-1)
-      } else {
-        navigate(targetPath, { replace: true })
-      }
-    }, 30)
+    if (typeof window !== 'undefined' && window.history.length > 1 && !isLoginPath(fromPath)) {
+      navigate(-1)
+    } else {
+      navigate(targetPath, { replace: true })
+    }
   }
 
   const getWebFcmTokenForLogin = async () => {
@@ -505,10 +508,6 @@ export default function UnifiedOTPFastLogin() {
             <button
               type="button"
               onClick={handleBack}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                handleBack(e);
-              }}
               className="w-10 h-10 rounded-full bg-white hover:bg-gray-50 active:scale-95 flex items-center justify-center text-[#1A1A1A] transition-all border border-gray-300 shadow-md cursor-pointer pointer-events-auto relative z-[100]"
               aria-label="Back"
             >

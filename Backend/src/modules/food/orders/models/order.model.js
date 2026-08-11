@@ -154,6 +154,7 @@ const deliveryStateSchema = new mongoose.Schema(
         deliveredAt: { type: Date, default: null },
         foodPrepStartedAt: { type: Date, default: null },
         foodReadyAt: { type: Date, default: null },
+        isFoodReady: { type: Boolean, default: false },
         riderWaitDurationMs: { type: Number, default: 0 }
     },
     { _id: false }

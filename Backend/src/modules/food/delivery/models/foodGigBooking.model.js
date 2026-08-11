@@ -32,6 +32,22 @@ const foodGigBookingSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
+    reminder30MinSent: {
+      type: Boolean,
+      default: false
+    },
+    reminder30MinSentAt: {
+      type: Date,
+      default: null
+    },
+    reminder15MinSent: {
+      type: Boolean,
+      default: false
+    },
+    reminder15MinSentAt: {
+      type: Date,
+      default: null
+    },
     reminder10MinSent: {
       type: Boolean,
       default: false

@@ -96,6 +96,7 @@ export const adminService = {
 
   adjustOwnerWallet: (id, data) => api.post(`/admin/wallet/owners/${id}/adjust`, data),
   getOwnerWalletHistory: (id) => api.get(`/admin/wallet/owners/${id}/history`),
+  getOwnerWithdrawals: (ownerId, params = {}) => api.get(`/admin/wallet/owners/${ownerId}/withdrawals`, { params }),
 
   getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 

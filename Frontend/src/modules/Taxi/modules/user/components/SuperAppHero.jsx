@@ -13,7 +13,7 @@ export default function SuperAppHero({ onSearchFocus }) {
 
   // Trigger the split door animation automatically on load
   useEffect(() => {
-    const timer = setTimeout(() => setIsOpen(true), 800);
+    const timer = setTimeout(() => setIsOpen(true), 1600);
     return () => clearTimeout(timer);
   }, []);
 

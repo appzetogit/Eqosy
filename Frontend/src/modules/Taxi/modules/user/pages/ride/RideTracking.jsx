@@ -358,7 +358,25 @@ const RideTracking = () => {
   const isScheduledUpcoming = isScheduledRide && scheduledTimestamp > waitingNow;
   const scheduledCountdown = getScheduledCountdownLabel(scheduledAt, waitingNow);
   const scheduledDateLabel = formatScheduledDateTime(scheduledAt);
-  const fare = rideRealtime?.fare || state.fare || 22;
+  const fare = useMemo(() => {
+    const candidates = [
+      rideRealtime?.fare,
+      rideRealtime?.baseFare,
+      rideRealtime?.estimatedFare,
+      state.fare,
+      state.baseFare,
+      state.estimatedFare?.approx,
+      state.estimatedFare?.min,
+      state.estimatedFare,
+      state.vehicle?.price,
+    ];
+
+    for (const candidate of candidates) {
+      const num = Number(String(candidate || '').replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(num) && num > 0) return num;
+    }
+    return 0;
+  }, [rideRealtime?.baseFare, rideRealtime?.estimatedFare, rideRealtime?.fare, state.baseFare, state.estimatedFare, state.fare, state.vehicle?.price]);
   const previousCancellationFee = Math.round(Number(rideRealtime?.previousCancellationFee || state?.previousCancellationFee || 0));
   const baseRideFare = Math.round(Number(rideRealtime?.baseRideFare || state?.baseRideFare || (previousCancellationFee > 0 ? fare - previousCancellationFee : fare)));
   const displayFare = Math.round(previousCancellationFee > 0 ? baseRideFare + previousCancellationFee : fare);

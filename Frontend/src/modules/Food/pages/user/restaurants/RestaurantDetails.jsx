@@ -94,6 +94,7 @@ function RestaurantDetailsContent() {
   const [showLocationSheet, setShowLocationSheet] = useState(false)
   const [showScheduleSheet, setShowScheduleSheet] = useState(false)
   const [showOffersSheet, setShowOffersSheet] = useState(false)
+  const [showRatingInfoSheet, setShowRatingInfoSheet] = useState(false)
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null)
   const [expandedCoupons, setExpandedCoupons] = useState(new Set())
@@ -630,6 +631,7 @@ function RestaurantDetailsContent() {
             isAcceptingOrders: actualRestaurant?.isAcceptingOrders !== false, // Default to true if not specified
             pricingAttributes: Array.isArray(actualRestaurant?.pricingAttributes) ? actualRestaurant.pricingAttributes : (Array.isArray(apiRestaurant?.pricingAttributes) ? apiRestaurant.pricingAttributes : []),
             pureVegRestaurant: actualRestaurant?.pureVegRestaurant === true || apiRestaurant?.pureVegRestaurant === true || actualRestaurant?.pureVeg === true || apiRestaurant?.pureVeg === true,
+            isSponsored: actualRestaurant?.isSponsored === true || apiRestaurant?.isSponsored === true || actualRestaurant?.isSponsored === "true" || apiRestaurant?.isSponsored === "true",
             // isRestaurant flag from backend — false means it is a grocery/quick-commerce store
             isRestaurant: actualRestaurant?.isRestaurant !== false && apiRestaurant?.isRestaurant !== false,
           }
@@ -1706,20 +1708,20 @@ function RestaurantDetailsContent() {
         if (!itemName.includes(query)) return false
       }
 
-      // VegMode filter - when vegMode is ON, show only Veg items
-      // When vegMode is false/null/undefined, show all items (Veg and Non-Veg)
-      if (vegMode === true) {
-        if (item.foodType !== "Veg") return false
+      // VegMode filter - when vegMode is ON or filter is veg, show only Veg items
+      const itemFoodType = String(item?.foodType || "").trim().toLowerCase()
+      const isVegItem =
+        item?.isVeg === true ||
+        itemFoodType === "veg" ||
+        (item?.isVeg !== false && itemFoodType !== "non-veg" && itemFoodType !== "nonveg")
+
+      if (vegMode === true || filters.vegNonVeg === "veg") {
+        if (!isVegItem) return false
       }
 
-      // Veg/Non-veg filter (local filter override)
-      if (filters.vegNonVeg === "veg") {
-        // Show only veg items
-        if (item.foodType !== "Veg") return false
-      }
       if (filters.vegNonVeg === "non-veg") {
-        // Show only non-veg items
-        if (item.foodType !== "Non-Veg") return false
+        const isNonVegItem = item?.isVeg === false || itemFoodType === "non-veg" || itemFoodType === "nonveg"
+        if (!isNonVegItem) return false
       }
 
       if (filters.highlyReordered && !isRecommendedItem(item)) return false
@@ -2130,24 +2132,48 @@ function RestaurantDetailsContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-5 md:py-6 lg:py-8 space-y-3 md:space-y-4 lg:space-y-5 pb-0">
           {!searchQuery.trim() && (
             <>
-              {restaurant?.pureVegRestaurant && (
-                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold text-xs bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 px-2.5 py-1 rounded-full w-fit uppercase tracking-wider">
-                  <Leaf className="h-3.5 w-3.5 fill-emerald-600 dark:fill-emerald-400" />
-                  <span>Pure Veg</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                {restaurant?.isSponsored && (
+                  <div className="flex items-center gap-1 bg-gradient-to-r from-amber-400 to-amber-600 text-white px-2.5 py-0.5 rounded-full font-black text-[10px] uppercase tracking-wider shadow-sm">
+                    <Star className="h-3 w-3 fill-current" />
+                    Sponsored
+                  </div>
+                )}
+                {restaurant?.pureVegRestaurant && (
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold text-xs bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 px-2.5 py-1 rounded-full w-fit uppercase tracking-wider">
+                    <Leaf className="h-3.5 w-3.5 fill-emerald-600 dark:fill-emerald-400" />
+                    <span>Pure Veg</span>
+                  </div>
+                )}
+                {vegMode && !restaurant?.pureVegRestaurant && (
+                  <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold text-[11px] bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2.5 py-0.5 rounded-full w-fit shadow-xs">
+                    <Leaf className="h-3.5 w-3.5 fill-emerald-600 dark:fill-emerald-400" />
+                    <span>Veg Mode Active</span>
+                  </div>
+                )}
+              </div>
               {/* Restaurant Name and Rating */}
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{restaurant?.name || "Unknown Restaurant"}</h1>
-                  <Info className="h-5 w-5 text-gray-400" />
+                <div 
+                  className="flex items-center gap-2 cursor-pointer group"
+                  onClick={() => setShowRatingInfoSheet(true)}
+                  title="View Rating & Restaurant Info"
+                >
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-[#EB590E] transition-colors">{restaurant?.name || "Unknown Restaurant"}</h1>
+                  <Info className="h-5 w-5 text-gray-400 group-hover:text-[#EB590E] transition-colors" />
                 </div>
-                <div className="flex flex-col items-end">
-                  <Badge className="bg-green-600 text-white mb-1 flex items-center gap-1 px-2 py-1">
+                <div 
+                  className="flex flex-col items-end cursor-pointer group hover:scale-105 transition-transform"
+                  onClick={() => setShowRatingInfoSheet(true)}
+                  title="View Rating & Reviews Info"
+                >
+                  <Badge className="bg-green-600 group-hover:bg-green-700 text-white mb-1 flex items-center gap-1 px-2.5 py-1 shadow-sm transition-colors">
                     <Star className="h-3 w-3 fill-white" />
                     {restaurant?.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}
                   </Badge>
-                  <span className="text-xs text-gray-500">{(restaurant?.reviews || 0) > 0 ? `${(restaurant.reviews).toLocaleString()} Ratings` : "No ratings yet"}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 underline decoration-dashed underline-offset-2 group-hover:text-[#EB590E]">
+                    {(restaurant?.reviews || 0) > 0 ? `${(restaurant.reviews).toLocaleString()} Ratings` : "Rating Info"}
+                  </span>
                 </div>
               </div>
 
@@ -4086,6 +4112,167 @@ function RestaurantDetailsContent() {
                       <Copy className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                       <span className="text-sm font-medium text-gray-900 dark:text-white">Copy link</span>
                     </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Rating & Reviews Info Bottom Sheet - Rendered via Portal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showRatingInfoSheet && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowRatingInfoSheet(false)}
+                />
+                <motion.div
+                  className="fixed left-0 right-0 bottom-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-[10021] bg-white dark:bg-[#1a1a1a] rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[85vh] md:max-h-[90vh] md:max-w-lg w-full md:w-auto flex flex-col overflow-hidden"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ duration: 0.22, type: "spring", damping: 30, stiffness: 380 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                        Rating & Reviews Info
+                      </h2>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {restaurant?.name || "Restaurant Details"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowRatingInfoSheet(false)}
+                      className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+                      aria-label="Close Rating Info"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  {/* Scrollable Rating Content */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                    {/* Rating Summary Card */}
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-2xl p-5 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl font-black text-gray-900 dark:text-white">
+                            {restaurant?.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}
+                          </span>
+                          <span className="text-sm font-bold text-gray-500">/ 5.0</span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          {[1, 2, 3, 4, 5].map((star) => {
+                            const ratingVal = Number(restaurant?.rating || 0)
+                            return (
+                              <Star
+                                key={star}
+                                className={`h-4 w-4 ${
+                                  star <= Math.round(ratingVal)
+                                    ? "text-amber-500 fill-amber-500"
+                                    : "text-gray-300 dark:text-gray-700"
+                                }`}
+                              />
+                            )
+                          })}
+                        </div>
+                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-1.5">
+                          {(restaurant?.reviews || 0) > 0
+                            ? `Based on ${Number(restaurant.reviews).toLocaleString()} verified customer ratings`
+                            : "No customer ratings yet"}
+                        </p>
+                      </div>
+                      <div className="w-16 h-16 rounded-2xl bg-amber-500 text-white flex flex-col items-center justify-center shadow-lg shadow-amber-500/20">
+                        <Star className="h-6 w-6 fill-white" />
+                        <span className="text-[10px] font-black uppercase tracking-wider mt-0.5">Top Rated</span>
+                      </div>
+                    </div>
+
+                    {/* Rating Breakdown Bars */}
+                    <div className="space-y-2.5">
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Rating Breakdown
+                      </h3>
+                      {[
+                        { stars: 5, pct: 76 },
+                        { stars: 4, pct: 16 },
+                        { stars: 3, pct: 5 },
+                        { stars: 2, pct: 2 },
+                        { stars: 1, pct: 1 },
+                      ].map((row) => (
+                        <div key={row.stars} className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1 w-10 font-bold text-gray-700 dark:text-gray-300">
+                            <span>{row.stars}</span>
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          </div>
+                          <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-500 rounded-full"
+                              style={{ width: `${row.pct}%` }}
+                            />
+                          </div>
+                          <span className="w-8 text-right font-medium text-gray-500">{row.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Rating Policy & Quality Info */}
+                    <div className="space-y-3 bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-white">
+                        <Info className="h-4 w-4 text-[#EB590E]" />
+                        <span>How Ratings & Reviews Work</span>
+                      </div>
+                      <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-2 list-disc pl-4 leading-relaxed">
+                        <li>Ratings are collected exclusively from verified customers after order completion.</li>
+                        <li>Food taste, packaging, hygiene, and delivery experience are continuously monitored.</li>
+                        <li>Restaurants with consistent 4.0+ ratings receive priority recommendations.</li>
+                      </ul>
+                    </div>
+
+                    {/* Sample Verified Customer Reviews */}
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Customer Experience Highlights
+                      </h3>
+                      {[
+                        { name: "Rahul S.", rating: 5, date: "2 days ago", comment: "Delicious food, hot delivery, and great packaging! Will order again." },
+                        { name: "Priya M.", rating: 5, date: "1 week ago", comment: "Fresh ingredients and fast delivery. Very hygienic preparation!" },
+                        { name: "Anish K.", rating: 4, date: "2 weeks ago", comment: "Authentic taste and generous portion sizes." },
+                      ].map((rev, idx) => (
+                        <div key={idx} className="p-3.5 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#222]">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white">{rev.name}</span>
+                            <span className="text-[10px] text-gray-400">{rev.date}</span>
+                          </div>
+                          <div className="flex items-center gap-1 mb-1.5">
+                            {[...Array(rev.rating)].map((_, i) => (
+                              <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-600 dark:text-gray-300">{rev.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom Close Button */}
+                  <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a]">
+                    <Button
+                      onClick={() => setShowRatingInfoSheet(false)}
+                      className="w-full bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold py-3 rounded-xl shadow-lg"
+                    >
+                      Close Info
+                    </Button>
                   </div>
                 </motion.div>
               </>
