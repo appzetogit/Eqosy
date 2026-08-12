@@ -946,14 +946,26 @@ export const verifyRazorpayRideTip = async (req, res) => {
 };
 
 export const getRideAppTipSettings = async (_req, res) => {
-  const tipSettings = await getTipSettings();
+  try {
+    const tipSettings = await getTipSettings();
 
-  res.json({
-    success: true,
-    data: {
-      settings: tipSettings,
-    },
-  });
+    res.json({
+      success: true,
+      data: {
+        settings: tipSettings,
+      },
+    });
+  } catch (_e) {
+    res.json({
+      success: true,
+      data: {
+        settings: {
+          enable_tips: '1',
+          min_tip_amount: '0',
+        },
+      },
+    });
+  }
 };
 
 export const cancelRide = async (req, res) => {
@@ -1116,14 +1128,23 @@ export const listAvailableDrivers = async (req, res) => {
     };
   });
 
+  let allowedPaymentMethods = ['cash', 'online'];
+  try {
+    const paymentInfo = await getAllowedRidePaymentMethodsForPricing({
+      serviceLocationId: service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
+        ? new mongoose.Types.ObjectId(service_location_id)
+        : null,
+      transportType: transport_type || 'taxi',
+      vehicleTypeId: vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId) ? vehicleTypeId : null,
+    });
+    if (Array.isArray(paymentInfo?.allowedPaymentMethods) && paymentInfo.allowedPaymentMethods.length) {
+      allowedPaymentMethods = paymentInfo.allowedPaymentMethods;
+    }
+  } catch (_e) {
+    allowedPaymentMethods = ['cash', 'online'];
+  }
+
   const closestDriver = enrichedDrivers[0] || null;
-  const { allowedPaymentMethods } = await getAllowedRidePaymentMethodsForPricing({
-    serviceLocationId: service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
-      ? new mongoose.Types.ObjectId(service_location_id)
-      : null,
-    transportType: transport_type || 'taxi',
-    vehicleTypeId: vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId) ? vehicleTypeId : null,
-  });
 
   res.json({
     success: true,

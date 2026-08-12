@@ -43,6 +43,7 @@ const IntercityConfirm = () => {
           serviceType: 'intercity',
           transport_type: 'intercity',
           bookingMode: isBiddingRide ? 'bidding' : (state.bookingMode || 'normal'),
+          pricingNegotiationMode: isBiddingRide ? 'driver_bid' : (state.pricingNegotiationMode || 'none'),
           bidStepAmount: Number(state.bidStepAmount || 10),
           userMaxBidFare: Number(state.userMaxBidFare || state.fare || 0),
           intercity: {

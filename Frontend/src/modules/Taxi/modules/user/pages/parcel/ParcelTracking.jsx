@@ -722,6 +722,10 @@ const ParcelTracking = () => {
         completedAt: payload?.completedAt || completedAt,
         feedback,
       });
+      setTimeout(() => {
+        clearCurrentRide();
+        navigate(userHomeRoute, { replace: true });
+      }, 1200);
     } catch (error) {
       setFeedbackError(error?.message || 'Could not submit feedback right now.');
     } finally {
@@ -792,7 +796,7 @@ const ParcelTracking = () => {
       <motion.div
         initial={{ y: 300 }}
         animate={{ y: 0 }}
-        className="absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-[40px] shadow-[0_-20px_60px_rgba(0,0,0,0.1)] p-6 pb-8 border-t border-gray-100"
+        className="absolute bottom-0 left-0 right-0 z-20 bg-white rounded-t-[32px] sm:rounded-t-[40px] shadow-[0_-20px_60px_rgba(0,0,0,0.15)] p-5 sm:p-6 pb-8 border-t border-gray-100 max-h-[85vh] sm:max-h-[90vh] overflow-y-auto"
       >
         <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-6" />
 
@@ -952,11 +956,14 @@ const ParcelTracking = () => {
 
               <button
                 type="button"
-                onClick={submitParcelFeedback}
-                disabled={isSubmittingFeedback || isFeedbackSubmitted}
+                onClick={isFeedbackSubmitted ? () => {
+                  clearCurrentRide();
+                  navigate(userHomeRoute, { replace: true });
+                } : submitParcelFeedback}
+                disabled={isSubmittingFeedback}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-[16px] bg-slate-900 py-3.5 text-[14px] font-black text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] disabled:opacity-60"
               >
-                {isSubmittingFeedback ? 'Saving your feedback...' : isFeedbackSubmitted ? 'Feedback already saved' : 'Submit rating'}
+                {isSubmittingFeedback ? 'Saving your feedback...' : isFeedbackSubmitted ? 'Done - Return Home' : 'Submit rating'}
                 <ChevronRight size={16} />
               </button>
 

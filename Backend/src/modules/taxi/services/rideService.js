@@ -19,7 +19,10 @@ import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '
 import { applyPromoToRideInTransaction } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
-import { emitToDriver, emitToRoom, getDriverRoom } from './dispatchService.js';
+import { emitToDriver, emitToRoom, getDriverRoom, getRideRoom, getUserRoom } from './dispatchService.js';
+import { sendPushNotificationToEntities } from './pushNotificationService.js';
+
+export { getRideRoom } from './dispatchService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -960,8 +963,9 @@ export const createRideRecord = async ({
     2,
   );
   const isOutstationBiddingFlow = normalizedServiceType === 'intercity';
+  const isBiddingEnable = (supportsBidding || isOutstationBiddingFlow) && requestedBookingMode === 'bidding';
   const pricingNegotiationMode =
-    supportsBidding && requestedBookingMode === 'bidding'
+    isBiddingEnable
       ? isOutstationBiddingFlow
         ? 'driver_bid'
         : 'user_increment_only'
@@ -1271,6 +1275,10 @@ export const createRideRecord = async ({
 };
 
 export const getRideDetails = async (rideId) => {
+  if (!rideId || !mongoose.Types.ObjectId.isValid(rideId)) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
   const ride = await Ride.findById(rideId)
     .populate('deliveryId')
     .populate('userId', 'name phone')
@@ -1282,8 +1290,6 @@ export const getRideDetails = async (rideId) => {
 
   return ride;
 };
-
-export const getRideRoom = (rideId) => `ride_${rideId}`;
 
 const activeRideStatuses = [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING];
 
@@ -1411,6 +1417,10 @@ export const serializeRideRealtime = (ride) => ({
 });
 
 export const ensureRideParticipantAccess = async ({ rideId, role, entityId }) => {
+  if (!rideId || !mongoose.Types.ObjectId.isValid(rideId)) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
   const ride = await Ride.findById(rideId).select('userId driverId status liveStatus');
 
   if (!ride) {
@@ -1800,6 +1810,27 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   const populatedRide = await populateRideRealtime(ride._id);
   populatedRide.$locals.walletUpdate = walletUpdate;
+
+  try {
+    const serializedPayload = serializeRideRealtime(populatedRide);
+    const rideRoom = getRideRoom(ride._id);
+    emitToRoom(rideRoom, 'ride:status:updated', serializedPayload);
+    emitToRoom(rideRoom, 'ride:state', serializedPayload);
+
+    if (ride.userId) {
+      const userRoom = getUserRoom(ride.userId);
+      emitToRoom(userRoom, 'ride:status:updated', serializedPayload);
+      emitToRoom(userRoom, 'ride:state', serializedPayload);
+    }
+
+    if (driverId) {
+      const driverRoom = getDriverRoom(driverId);
+      emitToRoom(driverRoom, 'ride:status:updated', serializedPayload);
+      emitToRoom(driverRoom, 'ride:state', serializedPayload);
+    }
+  } catch (socketErr) {
+    console.warn('Failed to emit status socket updates in updateRideLifecycle:', socketErr?.message);
+  }
 
   return populatedRide;
 };
@@ -2234,32 +2265,43 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
   await Promise.all([ride.save(), driver.save()]);
 
   if (numericTip > 0) {
-    const isOnlinePayment = String(ride.paymentMethod || '').toLowerCase() !== 'cash';
-    if (isOnlinePayment) {
-      try {
-        const walletResult = await applyDriverWalletAdjustment({
-          driverId: ride.driverId,
-          rideId: ride._id,
-          amount: numericTip,
-          type: 'ride_tip',
-          description: `Tip of Rs ${numericTip} received from rider (online)`,
-          metadata: { source: 'ride_tip', tipAmount: numericTip, paymentMode: 'online' },
-        });
+    try {
+      const walletResult = await applyDriverWalletAdjustment({
+        driverId: ride.driverId,
+        rideId: ride._id,
+        amount: numericTip,
+        type: 'ride_tip',
+        description: `Tip of Rs ${numericTip} received from rider (${ride.serviceType || 'ride'})`,
+        metadata: { source: 'ride_tip', tipAmount: numericTip, paymentMode: ride.paymentMethod || 'cash', serviceType: ride.serviceType || 'ride' },
+      });
 
-        const tipFormatted = Number.isInteger(numericTip) ? String(numericTip) : numericTip.toFixed(2);
-        emitToDriver(ride.driverId, 'driver:wallet:updated', {
-          wallet: walletResult?.wallet,
-          transaction: walletResult?.transaction,
-          notification: {
-            id: `ride-tip-${ride._id}-${Date.now()}`,
-            title: 'Payment received',
-            body: `Rs ${tipFormatted} tip received from rider.`,
-            sentAt: new Date().toISOString(),
-          },
-        });
-      } catch (walletErr) {
-        console.warn('Failed to credit tip to driver wallet:', walletErr?.message);
-      }
+      const tipFormatted = Number.isInteger(numericTip) ? String(numericTip) : numericTip.toFixed(2);
+      emitToDriver(ride.driverId, 'driver:wallet:updated', {
+        wallet: walletResult?.wallet,
+        transaction: walletResult?.transaction,
+        notification: {
+          id: `ride-tip-${ride._id}-${Date.now()}`,
+          title: 'Payment received',
+          body: `Rs ${tipFormatted} tip received from rider.`,
+          sentAt: new Date().toISOString(),
+        },
+      });
+
+      sendPushNotificationToEntities({
+        driverIds: [String(ride.driverId)],
+        title: '🎉 Tip Received!',
+        body: `Rs ${tipFormatted} tip received from passenger!`,
+        data: {
+          type: 'ride_tip',
+          rideId: String(ride._id),
+          tipAmount: String(numericTip),
+          targetUrl: '/taxi/driver/home',
+        },
+      }).catch((pushErr) => {
+        console.warn('Failed to send driver tip push notification:', pushErr?.message);
+      });
+    } catch (walletErr) {
+      console.warn('Failed to credit tip to driver wallet:', walletErr?.message);
     }
 
     try {

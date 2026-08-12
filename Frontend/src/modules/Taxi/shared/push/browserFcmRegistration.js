@@ -15,6 +15,8 @@ const FIREBASE_CONFIG = {
 const VAPID_KEY = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
 
 let messagingSupportPromise = null;
+let lastFcmTokenErrorTime = 0;
+const FCM_ERROR_COOLOFF_MS = 300000;
 
 const isDriverPendingApprovalScreen = () => {
   if (typeof window === 'undefined') {
@@ -140,6 +142,10 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
     }
   }
 
+  if (!interactive && (Date.now() - lastFcmTokenErrorTime < FCM_ERROR_COOLOFF_MS)) {
+    return { ok: false, reason: 'fcm-error-cooloff' };
+  }
+
   const app = getFirebaseApp();
   if (!app) {
     return { ok: false, reason: 'firebase-app-missing' };
@@ -155,6 +161,7 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
       serviceWorkerRegistration,
     });
   } catch (fcmErr) {
+    lastFcmTokenErrorTime = Date.now();
     console.warn('[FCM Web Push] Token retrieval skipped/failed (VAPID key mismatch or 403 Forbidden):', fcmErr?.message || fcmErr);
     return { ok: false, reason: 'fcm-token-error', error: fcmErr };
   }

@@ -21,13 +21,15 @@ export const attachSocketAuth = (io) => {
         const user = await User.findById(socket.auth.sub).select('active isActive deletedAt').lean();
 
         if (!user || user.deletedAt || user.isActive === false || user.active === false) {
-          throw new ApiError(401, 'User account is not active');
+          return next(new Error('User account is not active'));
         }
       }
 
       next();
     } catch (error) {
-      next(error);
+      const err = new Error(error?.message || 'Socket authentication failed');
+      err.data = { code: 'UNAUTHORIZED' };
+      next(err);
     }
   });
 };

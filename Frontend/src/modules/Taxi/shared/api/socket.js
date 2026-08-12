@@ -46,15 +46,15 @@ const getStoredTokenByRole = (role) => {
   const entries = (
     normalizedRole === 'driver' || normalizedRole === 'owner' || normalizedRole === 'bus_driver'
       ? [
-          getSessionItem('driverToken'),
-          getSessionItem('token'),
-          localStorage.getItem('driverToken'),
-          localStorage.getItem('token'),
-        ]
+        getSessionItem('driverToken'),
+        getSessionItem('token'),
+        localStorage.getItem('driverToken'),
+        localStorage.getItem('token'),
+      ]
       : [
-          localStorage.getItem(`${role}Token`),
-          localStorage.getItem('token'),
-        ]
+        localStorage.getItem(`${role}Token`),
+        localStorage.getItem('token'),
+      ]
   ).filter(Boolean);
 
   return entries.find((token) => {

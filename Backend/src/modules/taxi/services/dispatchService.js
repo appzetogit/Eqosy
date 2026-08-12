@@ -8,7 +8,6 @@ import {
   RIDE_STATUS,
 } from '../constants/index.js';
 import { Delivery } from '../user/models/Delivery.js';
-import { getRideRoom } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
@@ -31,6 +30,7 @@ const clearActualTimeNotificationTimer = (rideId) => {
 export const getUserRoom = (userId) => `user:${userId}`;
 export const getDriverRoom = (driverId) => `driver:${driverId}`;
 export const getAdminRoom = () => 'admin:broadcast';
+export const getRideRoom = (rideId) => `ride:${rideId}`;
 
 export const setSocketServer = (io) => {
   ioInstance = io;

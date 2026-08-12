@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, ChevronRight, Clock3, Info, MapPin, Users } from 'lucide-react';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
@@ -119,9 +120,11 @@ const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   cancellationFee: Number(vehicle.cancellationFee || 0),
 });
 
-const calculateFare = (vehicle, tripType) => {
+const calculateFare = (vehicle, tripType, passengers = 1) => {
   const baseFare = Number(vehicle.baseFare || 0);
-  return tripType === 'Round Trip' ? Math.round(baseFare * 1.8) : Math.round(baseFare);
+  const tripMultiplier = tripType === 'Round Trip' ? 1.8 : 1.0;
+  const safePassengers = Math.max(1, Number(passengers || 1));
+  return Math.round(baseFare * tripMultiplier * safePassengers);
 };
 
 const calculateDefaultBidCeiling = (fare, stepAmount = DEFAULT_BID_STEP_AMOUNT, headroomPercent = DEFAULT_BID_HEADROOM_PERCENT) => {
@@ -232,7 +235,7 @@ const IntercityVehicle = () => {
     return null;
   }
 
-  const finalFare = selectedVehicle ? calculateFare(selectedVehicle, tripType) : 0;
+  const finalFare = selectedVehicle ? calculateFare(selectedVehicle, tripType, passengers) : 0;
   const configuredBidStepAmount = toConfiguredPositiveInteger(
     settings?.bidRide?.bidding_amount_increase_or_decrease,
     DEFAULT_BID_STEP_AMOUNT,

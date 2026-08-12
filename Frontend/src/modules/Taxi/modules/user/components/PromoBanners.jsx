@@ -343,9 +343,9 @@ const PromoBanners = ({ plain = false }) => {
                 strokeDasharray="3 3"
               />
               <motion.circle
-                cx="15"
-                cy="90"
-                r="3"
+                cx={15}
+                cy={90}
+                r={3}
                 fill="#F59E0B"
                 animate={{
                   cx: [15, 65, 115],

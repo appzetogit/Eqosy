@@ -21,6 +21,7 @@ import {
     Sparkles,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
@@ -993,6 +994,7 @@ const ActiveTrip = () => {
         const onTipReceived = (data) => {
             if (data?.tipAmount) {
                 setReceivedTip(data);
+                toast.success(`🎉 Tip Received: Rs ${data.tipAmount} from passenger!`, { duration: 6000 });
             }
         };
         if (socket) {
@@ -2504,30 +2506,30 @@ const ActiveTrip = () => {
                     </div>
                 )}
 
-                <div className="absolute top-44 left-4 z-40 w-44 sm:w-48 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/80 bg-white/94 px-3 py-3 shadow-lg backdrop-blur-md">
-                    <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="absolute top-44 left-4 z-40 w-36 sm:w-40 max-w-[calc(100vw-2rem)] rounded-xl border border-white/80 bg-white/94 px-2.5 py-2 shadow-md backdrop-blur-md">
+                    <div className="mb-1 flex items-center justify-between gap-1.5">
                         <div className="min-w-0">
-                            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Simulation</p>
-                            <p className="mt-0.5 truncate text-[11px] font-black text-slate-900">
+                            <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400">Simulation</p>
+                            <p className="mt-0.5 truncate text-[10px] font-black text-slate-900">
                                 {isSimulationRunning ? 'Following route' : isSimulationEnabled ? 'Paused' : 'Real GPS'}
                             </p>
                         </div>
                         <span
-                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${isSimulationRunning ? 'animate-pulse' : ''}`}
+                            className={`h-2 w-2 shrink-0 rounded-full ${isSimulationRunning ? 'animate-pulse' : ''}`}
                             style={{ backgroundColor: isSimulationEnabled ? routeStrokeColor : '#cbd5e1' }}
                         />
                     </div>
-                    <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="mb-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
                         <div
                             className="h-full rounded-full transition-all"
                             style={{ backgroundColor: routeStrokeColor, width: `${isSimulationEnabled ? simulationProgress : 0}%` }}
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                         <button
                             type="button"
                             onClick={isSimulationRunning ? pauseSimulation : isSimulationEnabled ? resumeSimulation : startSimulation}
-                            className="h-9 rounded-xl px-2 text-[9px] font-black uppercase tracking-wide text-white active:scale-95"
+                            className="h-7 rounded-lg px-1 text-[8px] font-black uppercase tracking-wide text-white active:scale-95"
                             style={{ backgroundColor: routeStrokeColor }}
                         >
                             {isSimulationRunning ? 'Pause' : isSimulationEnabled ? 'Resume' : 'Start'}
@@ -2536,18 +2538,15 @@ const ActiveTrip = () => {
                             type="button"
                             onClick={resetSimulation}
                             disabled={!isSimulationEnabled}
-                            className="h-9 rounded-xl border border-slate-100 bg-slate-50 px-2 text-[9px] font-black uppercase tracking-wide text-slate-500 active:scale-95 disabled:opacity-40"
+                            className="h-7 rounded-lg border border-slate-100 bg-slate-50 px-1 text-[8px] font-black uppercase tracking-wide text-slate-500 active:scale-95 disabled:opacity-40"
                         >
                             Reset
                         </button>
                     </div>
-                    <p className="mt-2 text-[9px] font-semibold leading-tight text-slate-400">
-                        Test mode emits live location events along this polyline.
-                    </p>
                 </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 z-40 max-h-[85vh] overflow-y-auto">
+            <div className="absolute bottom-0 left-0 right-0 z-40 max-h-[50vh] overflow-y-auto">
                 <AnimatePresence mode="wait">
                     {phase === 'to_pickup' && (
                         <motion.div
@@ -2555,48 +2554,48 @@ const ActiveTrip = () => {
                             initial={{ y: '100%' }}
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
-                            className="bg-white rounded-t-[2.5rem] p-5 pb-8 shadow-2xl border-t border-slate-100"
+                            className="bg-white rounded-t-[2rem] p-3.5 pb-5 shadow-2xl border-t border-slate-100"
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center">
-                                        {isParcel ? <Package size={22} className="text-slate-900" /> : <User size={22} className="text-slate-400" />}
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-center">
+                                        {isParcel ? <Package size={16} className="text-slate-900" /> : <User size={16} className="text-slate-400" />}
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h4 className="text-[15px] font-semibold text-slate-900 tracking-tight uppercase">
+                                        <h4 className="text-[12px] font-semibold text-slate-900 tracking-tight uppercase">
                                             {isParcel ? tripData.sender.name : tripData.user.name}
                                         </h4>
-                                        <div className="flex items-center gap-1.5 opacity-60">
-                                            <Star size={10} fill={routeStrokeColor} className="text-black" />
-                                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
+                                        <div className="flex items-center gap-1 opacity-60">
+                                            <Star size={9} fill={routeStrokeColor} className="text-black" />
+                                            <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">
                                                 {isParcel ? tripData.sender.rating : tripData.user.rating} • {riderDistanceLabel}
                                             </p>
                                         </div>
                                     </div>
                                 </div>
-                            <div className="flex gap-2">
-                                    <button onClick={openTripChat} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={18} strokeWidth={2.5} /></button>
-                                    <button onClick={openGoogleMapsNavigation} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Navigate to destination"><Navigation size={18} strokeWidth={2.5} /></button>
-                                    <button onClick={() => callContact(pickupContact?.phone)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center active:scale-95 transition-transform" style={{ color: routeStrokeColor }} aria-label="Call contact"><Phone size={18} strokeWidth={2.5} /></button>
+                                <div className="flex gap-1.5">
+                                    <button onClick={openTripChat} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={15} strokeWidth={2.5} /></button>
+                                    <button onClick={openGoogleMapsNavigation} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Navigate to destination"><Navigation size={15} strokeWidth={2.5} /></button>
+                                    <button onClick={() => callContact(pickupContact?.phone)} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center active:scale-95 transition-transform" style={{ color: routeStrokeColor }} aria-label="Call contact"><Phone size={15} strokeWidth={2.5} /></button>
                                 </div>
                             </div>
-                            <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                                <div className="flex items-center justify-between gap-3">
+                            <div className="mb-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-1.5">
+                                <div className="flex items-center justify-between gap-2.5">
                                     <div>
-                                        <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Arrival Radius</p>
-                                        <p className="mt-1 text-[12px] font-black text-slate-900">
+                                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Arrival Radius</p>
+                                        <p className="mt-0.5 text-[11px] font-black text-slate-900">
                                             {pickupDistanceMeters >= 1000
                                                 ? `${parseFloat((pickupDistanceMeters / 1000).toFixed(2))} km away from pickup`
                                                 : `${Math.round(pickupDistanceMeters)} m away from pickup`}
                                         </p>
                                     </div>
-                                    <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${canMarkArrived ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                    <div className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${canMarkArrived ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                         {canMarkArrived ? 'Unlocked' : 'Within 100 m'}
                                     </div>
                                 </div>
                             </div>
                             {arrivalGuardError && (
-                                <p className="-mt-1 mb-4 text-center text-[11px] font-black text-red-500 uppercase tracking-wider">
+                                <p className="-mt-1 mb-2 text-center text-[10px] font-black text-red-500 uppercase tracking-wider">
                                     {arrivalGuardError}
                                 </p>
                             )}
@@ -2613,10 +2612,10 @@ const ActiveTrip = () => {
                                     setPhase('otp_verification');
                                     publishRideStatus('arriving');
                                 }}
-                                className={`w-full h-15 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-lg transition-opacity ${canMarkArrived ? '' : 'opacity-70'}`}
-                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` }}
+                                className={`w-full h-11 text-white rounded-xl flex items-center justify-center gap-2 text-[13px] font-semibold uppercase tracking-wide shadow-md transition-opacity ${canMarkArrived ? '' : 'opacity-70'}`}
+                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 10px 20px ${routeAccentMuted}` }}
                             >
-                                {isParcel ? 'Arrived at Sender' : 'I Have Arrived'} <CheckCircle2 size={18} strokeWidth={3} />
+                                {isParcel ? 'Arrived at Sender' : 'I Have Arrived'} <CheckCircle2 size={16} strokeWidth={3} />
                             </motion.button>
                         </motion.div>
                     )}
@@ -2714,55 +2713,55 @@ const ActiveTrip = () => {
                             initial={{ y: '100%' }}
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
-                            className="bg-white rounded-t-[2.5rem] p-5 pb-8 shadow-2xl border-t border-slate-100"
+                            className="bg-white rounded-t-[2rem] p-3.5 pb-5 shadow-2xl border-t border-slate-100"
                         >
-                                <div className="mb-5 rounded-[22px] border border-slate-100 bg-slate-50/85 px-4 py-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-                                <div className="flex items-start justify-between gap-3">
+                            <div className="mb-2 rounded-xl border border-slate-100 bg-slate-50/85 px-3 py-2 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+                                <div className="flex items-center justify-between gap-2.5">
                                     <div className="min-w-0 flex-1">
-                                        <h4 className="text-[9px] font-semibold uppercase tracking-[0.22em] leading-none mb-1.5" style={{ color: routeStrokeColor }}>Destination</h4>
-                                        <p className="text-[15px] font-semibold text-slate-900 tracking-tight leading-5 break-words">
+                                        <h4 className="text-[8px] font-semibold uppercase tracking-[0.22em] leading-none mb-1" style={{ color: routeStrokeColor }}>Destination</h4>
+                                        <p className="text-[13px] font-semibold text-slate-900 tracking-tight leading-4 truncate">
                                             {tripData.drop}
                                         </p>
                                     </div>
                                     <button
                                         onClick={triggerEmergencySos}
-                                        className="shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center active:scale-90 transition-transform shadow-sm"
+                                        className="shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center active:scale-90 transition-transform shadow-sm"
                                         style={{ backgroundColor: routeAccentSoft, color: routeStrokeColor, borderColor: routeAccentBorder }}
                                         aria-label="Call emergency SOS"
                                     >
-                                        <ShieldAlert size={22} strokeWidth={2.5} />
+                                        <ShieldAlert size={16} strokeWidth={2.5} />
                                     </button>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 rounded-2xl p-3 mb-6 border border-slate-100 flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
-                                        {isParcel ? <Package size={18} className="text-white" /> : <User size={18} className="text-white opacity-40" />}
+                            <div className="bg-slate-50 rounded-xl p-2 mb-2 border border-slate-100 flex items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+                                        {isParcel ? <Package size={15} className="text-white" /> : <User size={15} className="text-white opacity-40" />}
                                     </div>
                                     <div className="min-w-0 space-y-0.5">
-                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase truncate">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
+                                        <p className="text-[12px] font-semibold text-slate-900 leading-none uppercase truncate">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
                                         <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => callContact(destinationContact?.phone)} className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center" style={{ color: routeStrokeColor }} aria-label="Call destination contact"><Phone size={16} strokeWidth={2.5} /></button>
+                                <button onClick={() => callContact(destinationContact?.phone)} className="shrink-0 w-8 h-8 bg-white rounded-lg border border-slate-100 flex items-center justify-center" style={{ color: routeStrokeColor }} aria-label="Call destination contact"><Phone size={15} strokeWidth={2.5} /></button>
                             </div>
                             {isParcel && (
-                                <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3">
-                                    <div className="flex items-center justify-between gap-3">
+                                <div className="mb-2 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-1.5">
+                                    <div className="flex items-center justify-between gap-2.5">
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Delivery Radius</p>
-                                            <p className="mt-1 text-[12px] font-black text-slate-900">
+                                            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Delivery Radius</p>
+                                            <p className="mt-0.5 text-[11px] font-black text-slate-900">
                                                 {Math.round(dropDistanceMeters)} m away from receiver
                                             </p>
                                         </div>
-                                        <div className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${canDeliverParcel ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                                        <div className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${canDeliverParcel ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                                             {canDeliverParcel ? 'Unlocked' : 'Within 100 m'}
                                         </div>
                                     </div>
                                 </div>
                             )}
                             {isParcel && arrivalGuardError && (
-                                <p className="-mt-1 mb-4 text-center text-[11px] font-black text-red-500 uppercase tracking-wider">
+                                <p className="-mt-1 mb-2 text-center text-[10px] font-black text-red-500 uppercase tracking-wider">
                                     {arrivalGuardError}
                                 </p>
                             )}
@@ -2783,10 +2782,10 @@ const ActiveTrip = () => {
                                     setDriverPaymentStatus('pending');
                                     setPhase('payment_confirm');
                                 }}
-                                className={`w-full h-15 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl transition-opacity ${isParcel && !canDeliverParcel ? 'opacity-70' : ''}`}
-                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` }}
+                                className={`w-full h-11 text-white rounded-xl flex items-center justify-center gap-2 text-[13px] font-semibold uppercase tracking-wide shadow-md transition-opacity ${isParcel && !canDeliverParcel ? 'opacity-70' : ''}`}
+                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 10px 20px ${routeAccentMuted}` }}
                             >
-                                {isParcel ? 'Deliver Parcel' : 'Arrived at Destination'} <ChevronRight size={18} strokeWidth={3} />
+                                {isParcel ? 'Deliver Parcel' : 'Arrived at Destination'} <ChevronRight size={16} strokeWidth={3} />
                             </motion.button>
                         </motion.div>
                     )}

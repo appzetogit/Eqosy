@@ -221,7 +221,10 @@ const SearchingDriver = () => {
   const [rideBids, setRideBids] = useState([]);
   const [biddingSummary, setBiddingSummary] = useState(() => ({
     bookingMode: String(routeState.bookingMode || 'normal'),
-    pricingNegotiationMode: String(routeState.pricingNegotiationMode || 'none'),
+    pricingNegotiationMode: String(
+      routeState.pricingNegotiationMode ||
+      (String(routeState.bookingMode || '').toLowerCase() === 'bidding' ? 'driver_bid' : 'none')
+    ),
     baseFare: Number(routeState.baseFare || routeState.fare || routeState.vehicle?.price || 0),
     bidFloorFare: Number(routeState.bidFloorFare || routeState.baseFare || routeState.fare || routeState.vehicle?.price || 0),
     userMaxBidFare: Number(routeState.userMaxBidFare || routeState.fare || routeState.vehicle?.price || 0),
@@ -256,7 +259,7 @@ const SearchingDriver = () => {
   );
   const activeRideIdRef = useRef('');
   const searchNonce = String(routeState.searchNonce || '');
-  const isDriverBidRide = biddingSummary.pricingNegotiationMode === 'driver_bid';
+  const isDriverBidRide = biddingSummary.pricingNegotiationMode === 'driver_bid' || String(routeState.bookingMode || '').toLowerCase() === 'bidding';
   const isUserIncrementRide = biddingSummary.pricingNegotiationMode === 'user_increment_only';
   const isBiddingRide = isDriverBidRide;
   const isScheduledRide = Boolean(routeState.scheduledAt);

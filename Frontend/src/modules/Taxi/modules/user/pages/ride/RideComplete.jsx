@@ -500,7 +500,7 @@ const RideComplete = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] max-w-lg mx-auto relative overflow-hidden">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] max-w-lg mx-auto relative overflow-y-auto">
       <AnimatePresence>
         {shareToast && (
           <motion.div
@@ -776,14 +776,17 @@ const RideComplete = () => {
 
           <button
             type="button"
-            onClick={submitFeedback}
-            disabled={isSubmitting || isSubmitted || !isRideFinalized}
+            onClick={isSubmitted ? () => {
+              clearCurrentRide();
+              navigate(routeHome, { replace: true });
+            } : submitFeedback}
+            disabled={isSubmitting || (!isSubmitted && !isRideFinalized)}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-[16px] bg-slate-900 py-3.5 text-[14px] font-black text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] disabled:opacity-60"
           >
             {isSubmitting
               ? (tipsEnabled && selectedTip > 0 && tipPaymentMode === 'online' ? 'Processing tip payment...' : 'Saving your feedback...')
               : isSubmitted
-                ? 'Feedback already saved'
+                ? 'Done - Return Home'
                 : !isRideFinalized
                   ? 'Waiting for driver to finalize trip'
                   : tipsEnabled && selectedTip > 0 && tipPaymentMode === 'online'

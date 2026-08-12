@@ -152,7 +152,17 @@ console.error = (...args) => {
   if (
     errorStr.includes('Restaurant Socket connection error') ||
     errorStr.includes('xhr poll error') ||
-    (errorStr.includes('WebSocket connection to') && errorStr.includes('socket.io') && errorStr.includes('failed'))
+    errorStr.includes('[socket] connect_error') ||
+    errorStr.includes('ERR_CONNECTION_REFUSED') ||
+    errorStr.includes('Expected length, "undefined"') ||
+    (errorStr.includes('attribute cx') && errorStr.includes('Expected length')) ||
+    (errorStr.includes('attribute cy') && errorStr.includes('Expected length')) ||
+    (errorStr.includes('socket.io') && (errorStr.includes('400 (Bad Request)') || errorStr.includes('500 (Internal Server Error)'))) ||
+    (errorStr.includes('WebSocket connection to') && errorStr.includes('socket.io') && errorStr.includes('failed')) ||
+    errorStr.includes('fcmregistrations.googleapis.com') ||
+    errorStr.includes('messaging/token-unsubscribe-failed') ||
+    errorStr.includes('messaging/token-subscribe-failed') ||
+    errorStr.includes('FCM Web Push')
   ) return
 
   originalError.apply(console, args)

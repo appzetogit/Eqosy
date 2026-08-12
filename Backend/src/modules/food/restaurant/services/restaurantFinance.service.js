@@ -118,14 +118,13 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         0
     );
 
-    // Calculate global estimated payout (all unsettled transactions)
-    const allUnsettledTransactions = await FoodTransaction.find({
+    // Calculate global estimated payout (all captured/authorized transactions)
+    const allTransactions = await FoodTransaction.find({
         restaurantId: rid,
-        status: { $in: ['captured', 'authorized'] },
-        'settlement.isRestaurantSettled': { $ne: true }
+        status: { $in: ['captured', 'authorized'] }
     }).select('amounts.restaurantShare').lean();
 
-    const globalEstimatedPayout = allUnsettledTransactions.reduce(
+    const globalEstimatedPayout = allTransactions.reduce(
         (sum, tx) => sum + (Number(tx.amounts?.restaurantShare) || 0),
         0
     );
@@ -152,7 +151,7 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         start: { ...nowWindow.startMeta },
         end: { ...nowWindow.endMeta },
         totalEarnings: currentCycleEstimatedPayout, // We still show current cycle earnings label
-        totalWithdrawn: totalPendingWithdrawals,
+        totalWithdrawn: totalDeductedWithdrawals,
         estimatedPayout: availableBalance,
         netAvailable: availableBalance,
         minimumWithdrawalAmount,

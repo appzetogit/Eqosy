@@ -182,8 +182,8 @@ const EarningsLineChart = ({ points }) => {
         {chartPoints.map((point) => (
           <circle
             key={point.label}
-            cx={point.x}
-            cy={point.y}
+            cx={Number.isFinite(point?.x) ? point.x : 0}
+            cy={Number.isFinite(point?.y) ? point.y : 90}
             r="4.5"
             fill="#27AE60"
             className="cursor-pointer"

@@ -1480,21 +1480,32 @@ const RideTracking = () => {
                 </div>
               </div>
             )}
-            <div className="flex items-end justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="space-y-0.5">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] leading-none mb-1">Total Payable</p>
                 <div className="flex items-center gap-2">
                   <span className="text-[19px] font-black text-slate-950 tracking-tight leading-none">Rs {displayFare}.00</span>
-                  <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg uppercase tracking-wider border border-slate-200/50 shadow-sm">{paymentMethod}</span>
+                  <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2 py-1 rounded-lg uppercase tracking-wider border border-slate-200/50 shadow-sm">{paymentMethod}</span>
                 </div>
               </div>
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setShowCancelConfirm(true)}
-                className="bg-white border-2 border-slate-50 text-red-500 font-black text-[11px] uppercase tracking-[0.16em] px-5 py-3 rounded-[18px] shadow-[0_8px_20px_rgba(239,68,68,0.08)] active:shadow-none hover:bg-red-50/10 transition-all"
-              >
-                Cancel
-              </motion.button>
+              <div className="flex items-center gap-2">
+                {isScheduledUpcoming && (
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => navigate(routeHome)}
+                    className="bg-slate-950 text-white font-black text-[11px] uppercase tracking-[0.14em] px-4 py-3 rounded-[18px] shadow-md active:scale-95 transition-all"
+                  >
+                    Home
+                  </motion.button>
+                )}
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="bg-white border-2 border-slate-100 text-red-500 font-black text-[11px] uppercase tracking-[0.14em] px-4 py-3 rounded-[18px] shadow-sm active:shadow-none hover:bg-red-50/10 transition-all"
+                >
+                  Cancel
+                </motion.button>
+              </div>
             </div>
           </div>
         </div>

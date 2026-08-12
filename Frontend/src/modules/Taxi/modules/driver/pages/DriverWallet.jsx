@@ -95,8 +95,10 @@ const transactionHint = (tx = {}) => {
 
     if (tx.type === 'ride_tip') {
         const mode = String(tx.metadata?.paymentMode || '').toLowerCase();
-        const tipAmt = tx.metadata?.tipAmount;
-        return `${mode === 'online' ? 'Online' : 'Cash'} tip${tipAmt ? ` of ${money(tipAmt)}` : ''} from rider`;
+        const tipAmt = tx.metadata?.tipAmount || tx.amount;
+        const service = String(tx.metadata?.serviceType || '').toLowerCase();
+        const serviceLabel = service === 'parcel' ? 'Parcel delivery' : service === 'outstation' ? 'Outstation trip' : service === 'pooling' ? 'Pooling trip' : 'Ride';
+        return `${serviceLabel} ${mode === 'online' ? 'online' : 'cash'} tip${tipAmt ? ` of ${money(tipAmt)}` : ''} from rider`;
     }
 
     if (tx.type === 'adjustment' && source === 'user_wallet_transfer') {
@@ -294,21 +296,16 @@ const DriverWallet = () => {
             .filter((tx) => tx.type === 'commission_deduction')
             .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
         const tipEarnings = transactions
-            .filter((tx) => tx.type === 'ride_tip' && String(tx.metadata?.paymentMode || '').toLowerCase() !== 'cash')
+            .filter((tx) => tx.type === 'ride_tip')
             .reduce((sum, tx) => sum + Math.max(Number(tx.amount || 0), 0), 0);
         const totalAppEarnings = transactions
             .filter((tx) => ['ride_earning', 'adjustment', 'ride_tip'].includes(tx.type))
             .reduce((sum, tx) => {
                 const amount = Number(tx.amount || 0);
                 const source = String(tx.metadata?.source || tx.metadata?.category || '').toLowerCase();
-                const mode = String(tx.metadata?.paymentMode || '').toLowerCase();
 
-                if (tx.type === 'ride_earning') {
+                if (tx.type === 'ride_earning' || tx.type === 'ride_tip') {
                     return sum + Math.max(amount, 0);
-                }
-
-                if (tx.type === 'ride_tip') {
-                    return mode !== 'cash' ? sum + Math.max(amount, 0) : sum;
                 }
 
                 return source === 'driver_incentive' ? sum + Math.max(amount, 0) : sum;
