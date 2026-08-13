@@ -9,8 +9,10 @@ export const createDefaultBusinessSettings = () => ({
     footer_2: 'Design & Develop by Eqosy',
     default_lat: '22.7196',
     default_lng: '75.8577',
-    logo: '',
-    favicon: '',
+    logo: '/eqosy-logo.png',
+    footer_logo: '/eqosy-logo.png',
+    hero_video_url: '/eqosy_promotional_video.mp4',
+    favicon: '/favicon.ico',
   },
   customization: {
     admin_theme_color: '#405189',

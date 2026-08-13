@@ -45,7 +45,87 @@ const isTruckOrMoverVehicle = (name = '', type = '', icon = '') => {
   return TRUCK_MOVER_KEYS.some((key) => str.includes(key));
 };
 
-const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys, allowedVehicles = [] }) => {
+const buildServiceCategoryFilter = (serviceType = 'ride') => {
+  const norm = String(serviceType || '').toLowerCase().trim();
+
+  if (norm === 'outstation' || norm === 'intercity') {
+    const outstationKeys = [
+      'outstation', 'Outstation', 'OUTSTATION',
+      'both', 'Both', 'BOTH',
+      'taxi,outstation', 'outstation,taxi',
+      'Taxi,Outstation', 'Outstation,Taxi',
+      'Taxi, Outstation', 'Outstation, Taxi',
+    ];
+    return {
+      $or: [
+        { serviceCategories: { $in: outstationKeys } },
+        { service_categories: { $in: outstationKeys } },
+        { registerFor: { $in: ['outstation', 'Outstation', 'OUTSTATION', 'both', 'Both', 'BOTH'] } },
+        { 'onboarding.activeServices': { $in: outstationKeys } },
+        { 'onboarding.registerFor': { $in: ['outstation', 'Outstation', 'both', 'Both', 'BOTH'] } },
+      ],
+    };
+  }
+
+  if (norm === 'parcel' || norm === 'delivery') {
+    const deliveryKeys = [
+      'delivery', 'Delivery', 'DELIVERY',
+      'parcel', 'Parcel', 'PARCEL',
+      'both', 'Both', 'BOTH',
+      'taxi,delivery', 'delivery,taxi',
+      'Taxi,Delivery', 'Delivery,Taxi',
+      'Taxi, Delivery', 'Delivery, Taxi',
+    ];
+    return {
+      $or: [
+        { serviceCategories: { $in: deliveryKeys } },
+        { service_categories: { $in: deliveryKeys } },
+        { registerFor: { $in: ['delivery', 'Delivery', 'DELIVERY', 'both', 'Both', 'BOTH'] } },
+        { 'onboarding.activeServices': { $in: deliveryKeys } },
+        { 'onboarding.registerFor': { $in: ['delivery', 'Delivery', 'both', 'Both', 'BOTH'] } },
+      ],
+    };
+  }
+
+  if (norm === 'pooling') {
+    const poolingKeys = [
+      'pooling', 'Pooling', 'POOLING',
+      'taxi', 'Taxi', 'TAXI',
+      'both', 'Both', 'BOTH',
+    ];
+    return {
+      $or: [
+        { serviceCategories: { $in: poolingKeys } },
+        { service_categories: { $in: poolingKeys } },
+        { registerFor: { $in: ['pooling', 'Pooling', 'POOLING', 'taxi', 'Taxi', 'both', 'Both', 'BOTH'] } },
+        { 'onboarding.activeServices': { $in: poolingKeys } },
+      ],
+    };
+  }
+
+  // Normal city ride / taxi
+  const taxiKeys = [
+    'taxi', 'Taxi', 'TAXI',
+    'both', 'Both', 'BOTH',
+    'city', 'City', 'CITY',
+    'taxi,delivery', 'delivery,taxi',
+    'Taxi,Delivery', 'Delivery,Taxi',
+    'Taxi, Delivery', 'Delivery, Taxi',
+    'taxi,outstation', 'outstation,taxi',
+  ];
+  return {
+    $or: [
+      { serviceCategories: { $size: 0 } },
+      { serviceCategories: { $exists: false } },
+      { serviceCategories: { $in: taxiKeys } },
+      { service_categories: { $in: taxiKeys } },
+      { registerFor: { $in: ['taxi', 'Taxi', 'TAXI', 'both', 'Both', 'BOTH', 'city'] } },
+      { 'onboarding.activeServices': { $in: taxiKeys } },
+    ],
+  };
+};
+
+const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys, allowedVehicles = [], serviceType = 'ride' }) => {
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const normalizedVehicleTypeKeys = Array.isArray(vehicleTypeKeys)
     ? [...new Set(vehicleTypeKeys.map(normalizeVehicleKey).filter(Boolean))]
@@ -80,14 +160,31 @@ const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicl
     };
   }
 
-  return {
-    isOnline: true,
-    isOnRide: false,
-    'wallet.isBlocked': { $ne: true },
-    ...(zoneId ? { zoneId } : {}),
-    ...vehicleTypeFilter,
-    ...categoryExclusionFilter,
-  };
+  const serviceCategoryFilter = buildServiceCategoryFilter(serviceType);
+
+  const conditions = [
+    { isOnline: true },
+    { isOnRide: false },
+    { 'wallet.isBlocked': { $ne: true } },
+  ];
+
+  if (zoneId) {
+    conditions.push({ zoneId });
+  }
+
+  if (vehicleTypeFilter && Object.keys(vehicleTypeFilter).length > 0) {
+    conditions.push(vehicleTypeFilter);
+  }
+
+  if (categoryExclusionFilter && Object.keys(categoryExclusionFilter).length > 0) {
+    conditions.push(categoryExclusionFilter);
+  }
+
+  if (serviceCategoryFilter && Object.keys(serviceCategoryFilter).length > 0) {
+    conditions.push(serviceCategoryFilter);
+  }
+
+  return { $and: conditions };
 };
 
 export const findZoneByPickup = async (pickupCoords) => {

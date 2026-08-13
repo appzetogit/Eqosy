@@ -1852,8 +1852,22 @@ const DriverHome = () => {
                 }
             };
 
+            const onScheduledRideCancelled = (payload = {}) => {
+                const targetRideId = String(payload?.rideId || payload?._id || '');
+                if (targetRideId) {
+                    setScheduledRides((prev) => prev.filter((item) => String(item.rideId || item._id) !== targetRideId));
+                }
+                loadScheduledRides();
+            };
+
+            const onScheduledRideCreated = () => {
+                loadScheduledRides();
+            };
+
             socketService.on('rideRequest', onRideRequest);
             socketService.on('rideRequestClosed', onRideRequestClosed);
+            socketService.on('scheduledRideCancelled', onScheduledRideCancelled);
+            socketService.on('scheduledRideCreated', onScheduledRideCreated);
             socketService.on('errorMessage', onSocketError);
             socketService.on('rideAccepted', openAcceptedRide);
             socketService.on('rideBidSubmitted', onRideBidSubmitted);
@@ -1889,6 +1903,8 @@ const DriverHome = () => {
                 console.info('[driver-home] cleaning up socket listeners');
                 socketService.off('rideRequest', onRideRequest);
                 socketService.off('rideRequestClosed', onRideRequestClosed);
+                socketService.off('scheduledRideCancelled', onScheduledRideCancelled);
+                socketService.off('scheduledRideCreated', onScheduledRideCreated);
                 socketService.off('errorMessage', onSocketError);
                 socketService.off('rideAccepted', openAcceptedRide);
                 socketService.off('rideBidSubmitted', onRideBidSubmitted);

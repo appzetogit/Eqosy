@@ -125,7 +125,9 @@ console.error = (...args) => {
     args[0].includes('chrome-extension://') ||
     args[0].includes('_$initialUrl') ||
     args[0].includes('_$onReInit') ||
-    args[0].includes('_$bindListeners')
+    args[0].includes('_$bindListeners') ||
+    args[0].includes('simulator.js') ||
+    args[0].includes('spoofer.js')
   )) return
 
   if (
@@ -146,6 +148,12 @@ console.error = (...args) => {
   if (
     errorStr.includes('🌐 Network Error') ||
     errorStr.includes('Network Error - Backend server may not be running') ||
+    errorStr.includes('ERR_INTERNET_DISCONNECTED') ||
+    errorStr.includes('ERR_NETWORK_CHANGED') ||
+    errorStr.includes('fonts.googleapis.com') ||
+    errorStr.includes('maps.googleapis.com') ||
+    errorStr.includes('Failed to fetch settings') ||
+    errorStr.includes('Failed to load services') ||
     (errorStr.includes('ERR_NETWORK') && errorStr.includes('AxiosError'))
   ) return
 
@@ -159,6 +167,9 @@ console.error = (...args) => {
     (errorStr.includes('attribute cy') && errorStr.includes('Expected length')) ||
     (errorStr.includes('socket.io') && (errorStr.includes('400 (Bad Request)') || errorStr.includes('500 (Internal Server Error)'))) ||
     (errorStr.includes('WebSocket connection to') && errorStr.includes('socket.io') && errorStr.includes('failed')) ||
+    errorStr.includes('WebSocket is closed before the connection is established') ||
+    errorStr.includes('reason: \'transport close\'') ||
+    errorStr.includes('reason: \'io client disconnect\'') ||
     errorStr.includes('fcmregistrations.googleapis.com') ||
     errorStr.includes('messaging/token-unsubscribe-failed') ||
     errorStr.includes('messaging/token-subscribe-failed') ||
@@ -166,6 +177,20 @@ console.error = (...args) => {
   ) return
 
   originalError.apply(console, args)
+}
+
+const originalWarn = console.warn
+console.warn = (...args) => {
+  const warnStr = args.join(' ')
+  if (
+    warnStr.includes('Slow network is detected') ||
+    warnStr.includes('Fallback font will be used') ||
+    warnStr.includes('Download the React DevTools') ||
+    warnStr.includes('Failed to load Google Maps script') ||
+    (warnStr.includes('attribute cx') && warnStr.includes('Expected length')) ||
+    (warnStr.includes('attribute cy') && warnStr.includes('Expected length'))
+  ) return
+  originalWarn.apply(console, args)
 }
 
 window.addEventListener('unhandledrejection', (event) => {
@@ -176,6 +201,9 @@ window.addEventListener('unhandledrejection', (event) => {
     errorMsg.includes('Timeout expired') ||
     errorMsg.includes('User denied Geolocation') ||
     errorMsg.includes('permission denied') ||
+    errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+    errorMsg.includes('ERR_NETWORK_CHANGED') ||
+    errorMsg.includes('fonts.googleapis.com') ||
     errorName === 'GeolocationPositionError'
   ) {
     event.preventDefault()

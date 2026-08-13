@@ -173,22 +173,22 @@ const IncomingRideRequest = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 px-3 pb-4 sm:pb-8 backdrop-blur-[2px]"
+        className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-950/55 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
       >
         <Motion.div
           initial={{ y: 80, scale: 0.96 }}
           animate={{ y: 0, scale: 1 }}
           exit={{ y: 80, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 360, damping: 34 }}
-          className="relative w-full max-w-[430px] overflow-hidden rounded-[28px] bg-white shadow-[0_30px_90px_rgba(0,0,0,0.28)]"
+          className="relative w-full max-w-[430px] max-h-[85vh] sm:max-h-[90vh] flex flex-col my-auto overflow-hidden rounded-[28px] bg-white shadow-[0_30px_90px_rgba(0,0,0,0.28)]"
         >
           {!isPreviewMode ? (
-            <div className="absolute inset-x-0 top-0 h-1 bg-slate-100">
+            <div className="absolute inset-x-0 top-0 h-1 bg-slate-100 z-10">
               <Motion.div className={`h-full ${accentClass}`} animate={{ width: `${timerProgress}%` }} transition={{ duration: 0.35 }} />
             </div>
           ) : null}
 
-          <div className="bg-slate-950 px-5 pb-5 pt-6 text-white">
+          <div className="bg-slate-950 px-5 pb-5 pt-6 text-white shrink-0">
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] ${accentClass} text-slate-950 shadow-[0_10px_24px_rgba(0,0,0,0.24)]`}>
@@ -241,7 +241,7 @@ const IncomingRideRequest = ({
             </div>
           </div>
 
-          <div className="px-5 pb-5 pt-4">
+          <div className="px-5 pb-5 pt-4 overflow-y-auto flex-1">
             <div className="mb-4 grid grid-cols-3 overflow-hidden rounded-[18px] border border-slate-100 bg-slate-50">
               <div className="px-3 py-3">
                 <div className="mb-1 flex items-center gap-1.5 text-slate-400">

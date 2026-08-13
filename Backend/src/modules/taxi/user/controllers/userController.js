@@ -1839,6 +1839,17 @@ export const transferUserWalletToDriver = async (req, res) => {
       },
     }).catch(() => {});
 
+    await Notification.create({
+      service_location_id: recipientDriver.service_location_id || 'all',
+      send_to: 'driver',
+      recipient_driver_id: recipientDriver._id,
+      push_title: '💰 Wallet Credited',
+      message: `You received Rs ${amount.toFixed(2)} from ${senderDisplayName}.`,
+      type: 'tip',
+      status: 'sent',
+      sent_at: new Date(),
+    }).catch((notifErr) => console.warn('Failed to save wallet credit notification:', notifErr?.message));
+
     const refreshedWallet = await UserWallet.findOne({ userId: senderId })
       .select('balance refundWallet transactions')
       .slice('transactions', -10)

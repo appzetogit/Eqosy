@@ -362,7 +362,7 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const staticPages = ['/taxi', '/taxi/about', '/taxi/contact', '/taxi/faq', '/taxi/services', '/taxi/privacy', '/taxi/terms', '/taxi/refund', '/taxi/cancellation', '/taxi/blog', '/taxi/links'];
+  const staticPages = ['/', '', '/taxi', '/taxi/', '/taxi/about', '/taxi/contact', '/taxi/faq', '/taxi/services', '/taxi/privacy', '/taxi/terms', '/taxi/refund', '/taxi/cancellation', '/taxi/blog', '/taxi/links'];
   const isStaticPath = staticPages.includes(location.pathname);
   const isAdminPath =
     location.pathname.startsWith('/taxi/admin') ||
@@ -375,8 +375,8 @@ const MainLayout = ({ children }) => {
 
   if (isStaticPath) {
     return (
-      <div className="redigo-landing-root min-h-screen bg-white">
-        <main className="min-h-screen">{children}</main>
+      <div className="redigo-landing-root min-h-screen w-full bg-[#F7F5F0] text-[#172033] overflow-x-hidden">
+        <main className="min-h-screen w-full">{children}</main>
       </div>
     );
   }
@@ -411,7 +411,7 @@ const clearUserSession = () => {
     localStorage.removeItem('userToken');
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
-  } catch {}
+  } catch { }
 };
 
 const UserProtectedRoute = () => {

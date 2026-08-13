@@ -15,10 +15,25 @@ const notificationSchema = new mongoose.Schema(
     },
     send_to: {
       type: String,
-      enum: ['all', 'drivers', 'users'],
+      enum: ['all', 'drivers', 'users', 'driver', 'user'],
       default: 'all',
       trim: true,
       index: true,
+    },
+    recipient_driver_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Driver',
+      index: true,
+    },
+    recipient_user_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    type: {
+      type: String,
+      default: 'general',
+      trim: true,
     },
     push_title: {
       type: String,

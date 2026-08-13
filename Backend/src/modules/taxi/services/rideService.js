@@ -21,6 +21,7 @@ import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
 import { emitToDriver, emitToRoom, getDriverRoom, getRideRoom, getUserRoom } from './dispatchService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
+import { Notification } from '../admin/promotions/models/Notification.js';
 
 export { getRideRoom } from './dispatchService.js';
 
@@ -2299,6 +2300,20 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
         },
       }).catch((pushErr) => {
         console.warn('Failed to send driver tip push notification:', pushErr?.message);
+      });
+
+      const serviceLabel = ride.serviceType === 'parcel' ? 'parcel delivery' : 'ride';
+      await Notification.create({
+        service_location_id: ride.service_location_id || 'all',
+        send_to: 'driver',
+        recipient_driver_id: ride.driverId,
+        push_title: '🎉 Tip Received!',
+        message: `You received a tip of Rs ${tipFormatted} from rider for ${serviceLabel}.`,
+        type: 'tip',
+        status: 'sent',
+        sent_at: new Date(),
+      }).catch((notifErr) => {
+        console.warn('Failed to save tip notification document:', notifErr?.message);
       });
     } catch (walletErr) {
       console.warn('Failed to credit tip to driver wallet:', walletErr?.message);

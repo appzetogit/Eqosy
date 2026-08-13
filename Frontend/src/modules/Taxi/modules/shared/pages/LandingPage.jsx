@@ -1,309 +1,125 @@
-import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Home, Clock, Gift, Map, Car, Phone, Mail, LogIn } from 'lucide-react';
-import './LandingPage.css';
-import { useSettings } from '../../../shared/context/SettingsContext';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-// Using the existing project images
-import heroImg from '@/assets/landing/hero.png';
-import rideImg from '@/assets/landing/ride.png';
-import parcelImg from '@/assets/landing/parcel.png';
-import bikeImg from '@/assets/landing/bike.png';
-import heroBgImg from '@/assets/landing/hero-bg.png';
-import newHeroTaxiImg from '@/assets/ride-removebg-preview.png';
 
-function LandingPage() {
+import Hero from "./components/Hero";
+import {
+  Stats,
+  Showcase,
+  CityScene,
+  Partners,
+  Faq,
+  SiteFooter,
+} from "./components/Sections";
+import "./LandingPage.css";
+
+export default function LandingPage() {
   const navigate = useNavigate();
-  const { settings } = useSettings();
-  const appName = settings.general?.app_name || 'easytaxi';
-  const [activeTab, setActiveTab] = React.useState('home');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
-  // Custom logo rendering to match 'easytaxi' style (first part yellow, second part white)
-  const renderLogo = () => {
-    const nameStr = appName.toString();
-    if (nameStr.toLowerCase() === 'easytaxi' || nameStr.length > 4) {
-      const mid = Math.floor(nameStr.length / 2);
-      return (
-        <>
-          {nameStr.substring(0, mid)}
-          <span className="text-white">{nameStr.substring(mid)}</span>
-        </>
-      );
-    }
-    return nameStr;
-  };
-
-  const handleRedirect = (path, tabName) => (e) => {
-    e?.preventDefault();
-    if (tabName) setActiveTab(tabName);
-    setIsMobileMenuOpen(false);
-    if (path.startsWith('#')) {
-      const element = document.querySelector(path);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
-    } else {
-      navigate(path);
-    }
+  const handleScroll = (id) => (e) => {
+    e.preventDefault();
+    const el = document.querySelector(id);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-    <div className="landing-page">
-      {/* New Header & Hero Wrapper */}
-      <div className="new-hero-wrapper">
-        <div className="new-hero-background" style={{ backgroundImage: `url(${heroBgImg})` }}></div>
-        
-        {/* Top Info Bar */}
-        <div className="new-top-bar">
-          <div className="new-logo-container">
-             <a href="/" className="new-logo">
-               <span style={{color: '#333'}}>Eqosy</span>
-             </a>
-          </div>
-          <div className="new-top-contacts">
-             <div className="top-contact-item">
-               <Phone size={16} />
-               <span>7409129517</span>
-             </div>
-             <div className="top-contact-item">
-               <Mail size={16} />
-               <span>eqosyindia@gmail.com</span>
-             </div>
-          </div>
-        </div>
+    <div className="landing-root min-h-screen w-full bg-[#F7F5F0] text-[#172033] selection:bg-[#FF6B1A] selection:text-white">
 
-        {/* Main Header / Nav */}
-        <header className="new-main-header">
-          <div className="new-nav-bg-slant"></div>
-          <div className="new-nav-container">
-            <a href="/" className="mobile-only-logo">
-               <span>Eqosy</span>
+      {/* ── STICKY NAVBAR (always on top) ── */}
+      <header className="fixed inset-x-0 top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E5E7EB] shadow-xs transition-all duration-200">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 py-3.5">
+
+          {/* Left: Brand Logo + Brand Name + SUPER APP badge */}
+          <div className="flex items-center">
+            <div
+              className="flex items-center gap-3 cursor-pointer group"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            >
+              <img
+                src="/eqosy-logo.png"
+                alt="Eqosy Logo"
+                className="h-8 sm:h-9 w-auto object-contain"
+              />
+              <span className="font-display text-2xl sm:text-3xl font-black tracking-tight inline-flex items-center">
+                <span className="text-[#74D000]">E</span>
+                <span className="text-[#FF6000]">q</span>
+                <span className="text-[#1E2A38]">osy</span>
+              </span>
+              <span className="hidden sm:inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FFF5EF] text-[#FF6B1A] border border-[#FFE0CC]">
+                SUPER APP
+              </span>
+            </div>
+          </div>
+
+          {/* Center Navigation Links */}
+          <div className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-[#667085]">
+            <a href="#ecosystem" onClick={handleScroll("#ecosystem")} className="hover:text-[#FF6B1A] transition-colors">
+              OFFERS
             </a>
-            <nav className={`new-nav-links ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-              <a href="#home" className={`new-nav-link ${activeTab === 'home' ? 'active' : ''}`} onClick={handleRedirect('#home', 'home')}>Home</a>
-              <Link to="/about" className={`new-nav-link ${activeTab === 'about' ? 'active' : ''}`} onClick={() => { setActiveTab('about'); setIsMobileMenuOpen(false); }}>Company</Link>
-              <Link to="/services" className={`new-nav-link ${activeTab === 'services' ? 'active' : ''}`} onClick={() => { setActiveTab('services'); setIsMobileMenuOpen(false); }}>Our Taxi</Link>
-              <Link to="/faq" className={`new-nav-link ${activeTab === 'faq' ? 'active' : ''}`} onClick={() => { setActiveTab('faq'); setIsMobileMenuOpen(false); }}>FAQs</Link>
-              <Link to="/blog" className={`new-nav-link ${activeTab === 'blog' ? 'active' : ''}`} onClick={() => { setActiveTab('blog'); setIsMobileMenuOpen(false); }}>Blog</Link>
-              <Link to="/contact" className={`new-nav-link ${activeTab === 'contact' ? 'active' : ''}`} onClick={() => { setActiveTab('contact'); setIsMobileMenuOpen(false); }}>Contact</Link>
-              <Link to="/taxi/user/login" className={`new-nav-link ${activeTab === 'login' ? 'active' : ''}`} onClick={() => { setActiveTab('login'); setIsMobileMenuOpen(false); }}>Login</Link>
-            </nav>
-            <div className="new-nav-actions">
-              <button className="new-login-btn hidden-mobile" onClick={() => navigate('/taxi/user/login')}>Login</button>
-              <button className="new-book-btn hidden-mobile" onClick={() => window.open('https://play.google.com/store/apps/details?id=com.eqosy.user', '_blank')}>Book a Taxi</button>
-              <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                ☰
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Hero Content */}
-        <section id="home" className="new-hero-section">
-          <div className="new-hero-left">
-            <span className="new-hero-subtitle">Travel securely with us!</span>
-            <h1 className="new-hero-title">Book your taxi from<br/>anywhere today!</h1>
-            <p className="new-hero-desc">Everything your taxi business needs is already here!<br/>Eqosy made for taxi service companies!</p>
-            <div className="new-hero-cta-row">
-              <button className="new-hero-action-btn" onClick={() => window.open('https://play.google.com/store/apps/details?id=com.eqosy.user', '_blank')}>Book Your Ride</button>
-              <button className="new-hero-login-btn" onClick={() => navigate('/taxi/user/login')}>
-                <LogIn size={18} />
-                <span>Login</span>
-              </button>
-            </div>
-          </div>
-          
-          <div className="new-hero-graphic">
-             <div className="new-hero-ribbon"></div>
-             <img src={newHeroTaxiImg} alt="Taxi" className="new-hero-taxi" />
+            <a href="#partners" onClick={handleScroll("#partners")} className="hover:text-[#18B981] transition-colors">
+              PARTNER WITH US
+            </a>
+            <a href="#faq" onClick={handleScroll("#faq")} className="hover:text-[#172033] transition-colors">
+              HELP & FAQ
+            </a>
           </div>
 
+          {/* Right: Get App CTA only */}
+          <div className="flex items-center gap-3">
+            <a
+              href="#get"
+              onClick={handleScroll("#get")}
+              className="rounded-xl bg-[#FF6B1A] hover:bg-[#E5580C] px-5 py-2 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              Get App
+            </a>
+          </div>
+        </nav>
+      </header>
 
-        </section>
+      {/* ══════════════════════════════════════════════════════════════════════
+          STACKED CARD SCROLL
+          Each section is wrapped in a sticky container with increasing z-index.
+          As the user scrolls, each new section rises from below and slides
+          over the previous one — exactly like k9bharat.com's effect.
+          The .stack-card class adds rounded-top corners + top shadow.
+      ══════════════════════════════════════════════════════════════════════ */}
+
+      {/* LAYER 1 — Hero (base, no card rounding needed) */}
+      <div className="stack-layer" style={{ zIndex: 1 }}>
+        <Hero />
       </div>
 
-      {/* Services Section */}
-      <section id="services" className="subscriptions-section">
-        <div className="section-header">
-          <h2 className="section-title">OUR SERVICES</h2>
-          <div className="section-triangle"></div>
-        </div>
-        
-        <div className="subscriptions-grid">
-          {/* Card 1 */}
-          <div className="sub-card yellow">
-            <h3>TAXI SERVICE</h3>
-            <p>Comfortable and safe city rides to any destination you want to go with our professional drivers.</p>
-            <div className="sub-card-image">
-              <img src={rideImg} alt="City Taxi" />
-            </div>
-          </div>
+      {/* LAYER 2 — Trending Near You */}
+      <div className="stack-layer stack-card" style={{ zIndex: 2 }}>
+        <Stats />
+      </div>
 
-          {/* Card 2 */}
-          <div className="sub-card grey">
-            <h3>BIKE RIDE</h3>
-            <p>Beat the traffic and reach your destination faster with our quick and affordable bike taxi service.</p>
-            <div className="sub-card-image">
-              <img src={bikeImg} alt="Bike Ride" />
-            </div>
-          </div>
+      {/* LAYER 3 — Four Core Services */}
+      <div className="stack-layer stack-card" style={{ zIndex: 3 }}>
+        <Showcase />
+      </div>
 
-          {/* Card 3 */}
-          <div className="sub-card grey">
-            <h3>PARCEL DELIVERY</h3>
-            <p>Fast and reliable parcel delivery services to send packages across the city securely.</p>
-            <div className="sub-card-image">
-              <img src={parcelImg} alt="Parcel Delivery" />
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* LAYER 4 — Unified App / CityScene (dark) */}
+      <div className="stack-layer stack-card" style={{ zIndex: 4 }}>
+        <CityScene />
+      </div>
 
-      {/* Benefits Section */}
-      <section className="benefits-section">
-        <div className="benefits-container">
-          <div className="section-header">
-            <h2 className="section-title">SOME BENEFITS</h2>
-            <div className="section-triangle"></div>
-          </div>
+      {/* LAYER 5 — Partner / Join Section */}
+      <div className="stack-layer stack-card" style={{ zIndex: 5 }}>
+        <Partners />
+      </div>
 
-          <div className="benefits-grid">
-            <div className="benefit-item">
-              <div className="benefit-icon">
-                <Home strokeWidth={2.5} />
-              </div>
-              <div className="benefit-content">
-                <h3>HOME PICKUP</h3>
-                <p>We run do home pickup to serve you more better and to your convenience</p>
-              </div>
-            </div>
+      {/* LAYER 6 — FAQ (dark) */}
+      <div className="stack-layer stack-card" style={{ zIndex: 6 }}>
+        <Faq />
+      </div>
 
-            <div className="benefit-item">
-              <div className="benefit-icon">
-                <Gift strokeWidth={2.5} />
-              </div>
-              <div className="benefit-content">
-                <h3>BONUSES FOR RIDE</h3>
-                <p>When you book us frequently we give you different bonuses that can put a smile on your face</p>
-              </div>
-            </div>
+      {/* FOOTER — sits below all sticky layers, normal flow */}
+      <div style={{ position: "relative", zIndex: 7 }}>
+        <SiteFooter />
+      </div>
 
-            <div className="benefit-item">
-              <div className="benefit-icon">
-                <Clock strokeWidth={2.5} />
-              </div>
-              <div className="benefit-content">
-                <h3>FAST BOOKING</h3>
-                <p>Our book method is very fast and easy. It won't stress you.</p>
-              </div>
-            </div>
-
-            <div className="benefit-item">
-              <div className="benefit-icon">
-                <Map strokeWidth={2.5} />
-              </div>
-              <div className="benefit-content">
-                <h3>GPS SEARCHING</h3>
-                <p>We run GPS searching incase you aren't sure of your destination. So you don't have to worry.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-login-section">
-        <div className="landing-login-card">
-          <div className="landing-login-copy">
-            <p className="landing-login-eyebrow">Account Access</p>
-            <h2>Login from the homepage to manage rides, bookings, refunds, and support requests.</h2>
-            <p>
-              Sign in to view trip history, track active services, update your account,
-              and reach support faster from one place.
-            </p>
-          </div>
-          <div className="landing-login-actions">
-            <button className="landing-login-primary" onClick={() => navigate('/taxi/user/login')}>
-              <LogIn size={18} />
-              <span>Go to Login</span>
-            </button>
-            <button className="landing-login-secondary" onClick={() => navigate('/signup')}>
-              Create Account
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer Section (New) */}
-      <footer id="contact" className="new-landing-footer">
-        <div className="footer-newsletter-banner">
-          <div className="newsletter-image">
-            <img src={heroImg} alt="Subscribe" />
-          </div>
-          <div className="newsletter-content">
-            <div className="newsletter-bg-slant"></div>
-            <div className="newsletter-text">
-              <h4 className="newsletter-subtitle"><Car size={16} /> GET TO ACCESS</h4>
-              <h3 className="newsletter-title">Subscribe Our Newsletter.</h3>
-              <form className="newsletter-form">
-                <input type="email" placeholder="Email" />
-                <button type="button" onClick={() => window.open('https://play.google.com/store/apps/details?id=com.eqosy.user', '_blank')}>Book Now →</button>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div className="footer-main-content">
-          <div className="footer-col-1">
-            <a href="/" className="footer-logo">
-               <span style={{color: '#FFB300', fontSize: '2.5rem', fontWeight: 800}}>Eqosy</span>
-            </a>
-            <p>We provide the best taxi and ride services in the region. Reliable, fast, and secure rides at your fingertips.</p>
-            <p>Our fleet consists of well-maintained vehicles driven by professional drivers to ensure a comfortable journey.</p>
-            <div className="footer-socials">
-              <a href="#" className="social-icon">f</a>
-              <a href="#" className="social-icon">t</a>
-              <a href="#" className="social-icon">in</a>
-              <a href="#" className="social-icon">y</a>
-            </div>
-            <div className="footer-website">www.Eqosy.com</div>
-          </div>
-          <div className="footer-col-2">
-            <h3>Quick Links</h3>
-            <ul>
-              <li><Link to="/terms">Terms & Conditions</Link></li>
-              <li><Link to="/privacy">Privacy Policy</Link></li>
-              <li><Link to="/refund">Refund Policy</Link></li>
-              <li><Link to="/cancellation">Cancellation Policy</Link></li>
-              <li><Link to="/contact">Contact Us</Link></li>
-              <li><Link to="/about">About Us</Link></li>
-            </ul>
-          </div>
-          <div className="footer-col-3">
-            <h3>Our Services</h3>
-            <ul>
-              <li><Link to="/services">City Rides</Link></li>
-              <li><Link to="/services">Airport transfers</Link></li>
-              <li><Link to="/services">Outstation Trips</Link></li>
-              <li><Link to="/services">Parcel Delivery</Link></li>
-              <li><Link to="/services">Bike Taxis</Link></li>
-              <li><Link to="/contact">24/7 Customer Support</Link></li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="footer-bottom-bar">
-          <div className="footer-legal">
-            <Link to="/privacy">Privacy Policy</Link>
-            <Link to="/terms">Terms & Conditions</Link>
-          </div>
-          <div className="footer-copyright">
-            Copyright 2026 © All Right Reserved Design by Eqosy
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
-
-export default LandingPage;

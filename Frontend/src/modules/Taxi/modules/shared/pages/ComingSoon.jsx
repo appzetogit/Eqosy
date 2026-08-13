@@ -19,7 +19,7 @@ const FEATURE_META = {
   '/intercity': {
     icon: <Car size={48} strokeWidth={1.5} />,
     title: 'Intercity Travel',
-    subtitle: 'Indore ↔ Bhopal · Ujjain · Mumbai',
+    subtitle: 'City to City · Outstation Rides',
     description: 'Book scheduled city-to-city cab rides. One-way or round trip — Mini, Sedan, or SUV.',
     color: 'bg-blue-50',
     accent: 'text-blue-600',

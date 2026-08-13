@@ -396,8 +396,20 @@ const DriverNotifications = () => {
               exit={{ opacity: 0, y: -8 }}
               className="relative rounded-[20px] border border-white/80 bg-white p-4 flex items-start gap-3 transition-all shadow-[0_4px_14px_rgba(15,23,42,0.07)]"
             >
-              <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-emerald-50">
-                <Radio size={16} className="text-emerald-500" strokeWidth={2.3} />
+              <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 ${
+                notification.type === 'tip' || (notification.title && notification.title.includes('Tip'))
+                  ? 'bg-amber-50 text-amber-600'
+                  : notification.type === 'ride_cancelled' || (notification.title && String(notification.title).toLowerCase().includes('cancelled'))
+                  ? 'bg-rose-50 text-rose-500'
+                  : 'bg-emerald-50 text-emerald-500'
+              }`}>
+                {notification.type === 'tip' || (notification.title && notification.title.includes('Tip')) ? (
+                  <span className="text-[18px]">💰</span>
+                ) : notification.type === 'ride_cancelled' || (notification.title && String(notification.title).toLowerCase().includes('cancelled')) ? (
+                  <span className="text-[18px]">❌</span>
+                ) : (
+                  <Radio size={16} strokeWidth={2.3} />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">

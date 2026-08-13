@@ -6,6 +6,7 @@ import { resolveConfiguredGatewayCredentials } from '../../services/paymentGatew
 import { Driver } from '../../driver/models/Driver.js';
 import { WalletTransaction } from '../../driver/models/WalletTransaction.js';
 import { applyDriverWalletAdjustment, serializeDriverWallet } from '../../driver/services/walletService.js';
+import { Notification } from '../../admin/promotions/models/Notification.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
 import {
   acceptRideBidAssignment,
@@ -936,6 +937,21 @@ export const verifyRazorpayRideTip = async (req, res) => {
       message: `You received a tip of Rs ${verifiedTipAmount} from passenger!`,
     });
   } catch (_e) {}
+
+  if (verifiedTipAmount > 0) {
+    const serviceName = ride.serviceType === 'parcel' ? 'parcel delivery' : 'ride';
+    const tipFormatted = Number.isInteger(verifiedTipAmount) ? String(verifiedTipAmount) : verifiedTipAmount.toFixed(2);
+    await Notification.create({
+      service_location_id: ride.service_location_id || 'all',
+      send_to: 'driver',
+      recipient_driver_id: ride.driverId,
+      push_title: '🎉 Tip Received!',
+      message: `You received an online tip of Rs ${tipFormatted} from rider for ${serviceName}.`,
+      type: 'tip',
+      status: 'sent',
+      sent_at: new Date(),
+    }).catch((notifErr) => console.warn('Failed to save tip notification:', notifErr?.message));
+  }
 
   const populatedRide = await getRideDetails(ride._id);
 

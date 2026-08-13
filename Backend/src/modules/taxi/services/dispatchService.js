@@ -12,6 +12,8 @@ import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
 import { processRideCancellation } from './cancellationService.js';
+import { Notification } from '../admin/promotions/models/Notification.js';
+import { RideBid } from '../user/models/RideBid.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;
@@ -480,12 +482,57 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '', comment = 
     message: 'User cancelled the ride.',
   });
 
+  emitToRoom('drivers', 'scheduledRideCancelled', {
+    rideId: String(ride._id),
+    reason: 'user-cancelled',
+    message: 'User cancelled the ride.',
+  });
+
+  emitToRoom('drivers', 'rideRequestClosed', {
+    rideId: String(ride._id),
+    reason: 'user-cancelled',
+    message: 'User cancelled the ride.',
+  });
+
   emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
     rideId: String(ride._id),
     status: ride.status,
     liveStatus: ride.liveStatus,
     cancellationBill,
   });
+
+  // Create persistent cancellation notification in driver inbox
+  const cancelReasonText = String(reason || comment || 'User cancelled the ride').trim();
+  const targetDriverIds = new Set();
+
+  if (ride.driverId) {
+    targetDriverIds.add(String(ride.driverId));
+  }
+  if (Array.isArray(dispatchState?.notifiedDriverIds)) {
+    dispatchState.notifiedDriverIds.forEach((id) => targetDriverIds.add(String(id)));
+  }
+
+  RideBid.find({ rideId: ride._id })
+    .select('driverId')
+    .lean()
+    .then((bids) => {
+      (bids || []).forEach((b) => {
+        if (b?.driverId) targetDriverIds.add(String(b.driverId));
+      });
+
+      targetDriverIds.forEach((drvId) => {
+        Notification.create({
+          send_to: 'driver',
+          recipient_driver_id: drvId,
+          type: 'ride_cancelled',
+          push_title: 'Ride Cancelled',
+          message: `User has cancelled this ride. Reason: ${cancelReasonText}`,
+          status: 'sent',
+          sent_at: new Date(),
+        }).catch((err) => console.error('[cancelRideByUser] Failed to save driver cancellation notification:', err));
+      });
+    })
+    .catch((err) => console.error('[cancelRideByUser] Failed to query bids for notification:', err));
 
   return ride;
 };

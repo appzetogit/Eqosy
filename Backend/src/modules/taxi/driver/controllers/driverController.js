@@ -2630,25 +2630,37 @@ export const getDriverEmergencyContacts = async (req, res) => {
 };
 
 export const getDriverNotifications = async (req, res) => {
-  const driver = await Driver.findById(req.auth.sub).lean();
+  const driverId = req.auth.sub;
+  const driver = await Driver.findById(driverId).lean();
 
   if (!driver) {
     throw new ApiError(404, "Driver not found");
   }
 
   const serviceLocationId = driver.service_location_id || null;
-  const query = {
-    status: "sent",
-    send_to: { $in: ["all", "drivers"] },
-  };
+  const conditions = [
+    { status: "sent" },
+    {
+      $or: [
+        { recipient_driver_id: driverId },
+        { send_to: { $in: ["all", "drivers"] } },
+      ],
+    },
+  ];
 
   if (serviceLocationId) {
-    query.$or = [
-      { service_location_id: serviceLocationId },
-      { send_to: "all" },
-      { send_to: "drivers" },
-    ];
+    conditions.push({
+      $or: [
+        { recipient_driver_id: driverId },
+        { service_location_id: serviceLocationId },
+        { service_location_id: "all" },
+        { service_location_id: { $exists: false } },
+        { service_location_id: null },
+      ],
+    });
   }
+
+  const query = { $and: conditions };
 
   const notifications = await Notification.find(query)
     .sort({ sent_at: -1, createdAt: -1 })
@@ -2665,12 +2677,27 @@ export const getDriverNotifications = async (req, res) => {
 
 export const getDriverScheduledRides = async (req, res) => {
   const driver = await Driver.findById(req.auth.sub)
-    .select("service_location_id vehicleTypeId")
+    .select("service_location_id vehicleTypeId serviceCategories registerFor onboarding")
     .lean();
 
   if (!driver) {
     throw new ApiError(404, "Driver not found");
   }
+
+  const driverCategories = [
+    ...(Array.isArray(driver.serviceCategories) ? driver.serviceCategories : []),
+    ...(Array.isArray(driver.onboarding?.activeServices) ? driver.onboarding.activeServices : []),
+  ].map((c) => String(c).toLowerCase().trim());
+  const registerFor = String(driver.registerFor || '').toLowerCase().trim();
+
+  const supportsOutstation = driverCategories.some((c) => c.includes('outstation') || c === 'both') || registerFor === 'outstation' || registerFor === 'both';
+  const supportsDelivery = driverCategories.some((c) => c.includes('delivery') || c.includes('parcel') || c === 'both') || registerFor === 'delivery' || registerFor === 'both';
+  const supportsTaxi = driverCategories.length === 0 || driverCategories.some((c) => c.includes('taxi') || c.includes('city') || c === 'both') || registerFor === 'taxi' || registerFor === 'both' || registerFor === 'city';
+
+  const allowedServiceTypes = [];
+  if (supportsTaxi) allowedServiceTypes.push('ride', 'taxi', 'normal', 'city');
+  if (supportsOutstation) allowedServiceTypes.push('outstation', 'intercity');
+  if (supportsDelivery) allowedServiceTypes.push('parcel', 'delivery');
 
   const safePage = Math.max(1, Number(req.query?.page) || 1);
   const safeLimit = Math.min(100, Math.max(1, Number(req.query?.limit) || 20));
@@ -2678,6 +2705,7 @@ export const getDriverScheduledRides = async (req, res) => {
     driverId: null,
     status: RIDE_STATUS.SEARCHING,
     liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+    ...(allowedServiceTypes.length ? { serviceType: { $in: allowedServiceTypes } } : {}),
     ...(driver.service_location_id ? { service_location_id: driver.service_location_id } : {}),
   };
 
