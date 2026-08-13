@@ -42,10 +42,14 @@ function isNativeLikeShell() {
 }
 
 function resolveNativeInitialRoute() {
-  if (typeof window === 'undefined') return '/food/user'
+  if (typeof window === 'undefined') return '/'
 
   const rawPathname = String(window.location?.pathname || '')
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
+
+  // Root domain '/' or empty pathname must ALWAYS stay on '/' (Landing Page)
+  if (pathname === '/' || pathname === '') return '/'
+
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
 
   // Routes that depend on React Router state (pickup/drop etc.) must never
@@ -77,16 +81,20 @@ function resolveNativeInitialRoute() {
   if (isModuleAuthenticated('admin')) return '/admin'
   if (isModuleAuthenticated('user')) return '/food/user'
 
-  return '/food/user'
+  return '/'
 }
 
 function bootstrapNativeHashRoute() {
   if (!isNativeLikeShell() || typeof window === 'undefined') return
 
-  const currentHash = String(window.location?.hash || '')
-  const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
   const rawPathname = String(window.location?.pathname || '')
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
+
+  // Web root domain '/' must never be redirected to a hash route
+  if (pathname === '/' || pathname === '') return
+
+  const currentHash = String(window.location?.hash || '')
+  const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
   const targetPath = resolveNativeInitialRoute()
   const search = String(window.location?.search || '')
 
