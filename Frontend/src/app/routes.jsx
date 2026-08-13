@@ -43,6 +43,7 @@ const RedirectToFood = () => {
   return <Navigate to={`/food${location.pathname}${location.search}`} replace />
 }
 
+const LandingPage = lazy(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
 
 const AppRoutes = () => {
@@ -99,7 +100,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<TaxiAppWrapper />} />
+      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
