@@ -93,212 +93,167 @@ function RevealSection({ children, delay = 0, className = "" }) {
 }
 
 /* ==========================================================================
-   CATEGORY CARD — internal component for premium micro-interactions
-   ========================================================================== */
-function CategoryCard({ cat, cardVariants, prefersReducedMotion, navigate, i }) {
-  const [hovered, setHovered] = useState(false);
-
-  // Continuous subtle float — only on non-reduced-motion desktops
-  const floatTransition = prefersReducedMotion
-    ? {}
-    : { duration: 2.7 + i * 0.15, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 };
-
-  const floatAnimate = prefersReducedMotion
-    ? {}
-    : { y: [0, -3, 0] };
-
-  return (
-    <motion.div
-      variants={cardVariants}
-      onClick={() => navigate(cat.route)}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      whileHover={prefersReducedMotion ? {} : {
-        y: -7,
-        scale: 1.03,
-        boxShadow: "0 14px 36px rgba(0,0,0,0.11), 0 2px 8px rgba(0,0,0,0.06)",
-        transition: { duration: 0.25, ease: "easeOut" },
-      }}
-      className="warm-card p-3.5 sm:p-4 flex flex-col items-center justify-center text-center cursor-pointer relative overflow-hidden"
-      style={{ backgroundColor: hovered ? cat.color + "0E" : cat.color + "06", borderColor: cat.color + "30", willChange: "transform", backfaceVisibility: "hidden" }}
-    >
-      {/* Radial glow — category-specific color, appears on hover */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none rounded-[inherit]"
-        animate={{
-          opacity: hovered ? 1 : 0,
-          background: `radial-gradient(circle at 50% 38%, ${cat.color}1A 0%, transparent 68%)`,
-        }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-      />
-
-      {/* Icon wrapper — float + hover rotate */}
-      <motion.div
-        className="size-14 sm:size-16 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl mb-2 relative z-10"
-        style={{ backgroundColor: `${cat.color}12` }}
-        animate={floatAnimate}
-        transition={floatTransition}
-        whileHover={prefersReducedMotion ? {} : {
-          scale: 1.09,
-          rotate: 4,
-          transition: { duration: 0.22, ease: "easeOut" },
-        }}
-      >
-        <span className="select-none">{cat.emoji}</span>
-      </motion.div>
-
-      {/* Label */}
-      <motion.span
-        className="text-xs font-bold leading-tight relative z-10 block"
-        animate={{ color: hovered ? cat.color : "#172033" }}
-        transition={{ duration: 0.2 }}
-      >
-        {cat.name}
-      </motion.span>
-
-      {/* Bottom accent indicator — animated width 0 → 24px */}
-      <motion.div
-        className="absolute bottom-2 left-1/2 -translate-x-1/2 h-[2px] rounded-full"
-        style={{ backgroundColor: cat.color }}
-        animate={{ width: hovered ? 24 : 0, opacity: hovered ? 1 : 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-      />
-    </motion.div>
-  );
-}
-
-/* ==========================================================================
-   1. TRENDING SECTION — bg: #F1EEE7 (Soft Warm Cream)
+   1. HOW EQOSY WORKS SECTION (Replaces old duplicate cards & removes rating bar)
+      bg: #FAF8F4 (Soft Warm Cream)
    ========================================================================== */
 export function Stats() {
   const navigate = useNavigate();
   const sectionRef = useRef(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-60px 0px" });
   const prefersReducedMotion = useReducedMotion();
-
-  const categories = [
-    { name: "Dum Biryani",       emoji: "🍗", tag: "Food",    color: "#FF6B1A", route: "/food" },
-    { name: "Cheese Pizza",      emoji: "🍕", tag: "Food",    color: "#FF6B1A", route: "/food" },
-    { name: "Burgers & Fries",   emoji: "🍔", tag: "Food",    color: "#FF6B1A", route: "/food" },
-    { name: "Pure Veg Thali",    emoji: "🍛", tag: "Food",    color: "#FF6B1A", route: "/food" },
-    { name: "Instant City Cab",  emoji: "🚕", tag: "Taxi",    color: "#3977FF", route: "/taxi/user" },
-    { name: "Ride Pooling",      emoji: "👥", tag: "Taxi",    color: "#3977FF", route: "/taxi/user" },
-    { name: "Fresh Milk & Dairy",emoji: "🥛", tag: "Grocery", color: "#18B981", route: "/food" },
-    { name: "Organic Veggies",   emoji: "🥦", tag: "Grocery", color: "#18B981", route: "/food" },
-    { name: "Express Courier",   emoji: "📦", tag: "Parcel",  color: "#7657E8", route: "/taxi/user" },
-  ];
-
-  /* ── Variants ─────────────────────────────────────────────────────────── */
   const reduced = prefersReducedMotion;
 
-  const badgeVariants = {
-    hidden:  { opacity: 0, y: reduced ? 0 : 12 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-  };
-  const headingVariants = {
-    hidden:  { opacity: 0, y: reduced ? 0 : 16 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut", delay: 0.08 } },
-  };
-  const exploreVariants = {
-    hidden:  { opacity: 0, x: reduced ? 0 : 16 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: "easeOut", delay: 0.18 } },
-  };
-  const gridVariants = {
-    hidden:  {},
-    visible: { transition: { staggerChildren: reduced ? 0 : 0.065, delayChildren: 0.25 } },
-  };
-  const cardVariants = {
-    hidden:  { opacity: 0, y: reduced ? 0 : 24, scale: reduced ? 1 : 0.96 },
-    visible: {
-      opacity: 1, y: 0, scale: 1,
-      transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+  const steps = [
+    {
+      step: "01",
+      title: "Pick Service & Location",
+      desc: "Select Food, Rides, Groceries or Parcel. Enter your pickup & drop address for instant upfront fares.",
+      icon: MapPin,
+      color: "#FF6B1A",
+      bgTint: "#FFF5EF",
+      borderTint: "#FFE0CC",
+      chip: "Upfront Pricing • Zero Hidden Fees",
     },
-  };
+    {
+      step: "02",
+      title: "Live GPS & Kitchen Prep",
+      desc: "Track your rider or chef live on the interactive map. Receive real-time OTP passcodes for maximum safety.",
+      icon: Navigation,
+      color: "#3977FF",
+      bgTint: "#F0F5FF",
+      borderTint: "#D0E1FF",
+      chip: "Live Driver Tracking • OTP Passcode",
+    },
+    {
+      step: "03",
+      title: "Fast Arrival & Doorstep Drop",
+      desc: "Enjoy piping hot meals, sub-2 min cabs, 15-minute groceries, or verified parcel drop-offs hassle-free.",
+      icon: ShieldCheck,
+      color: "#18B981",
+      bgTint: "#F0FDF8",
+      borderTint: "#C3F5E1",
+      chip: "100% Guaranteed On-Time",
+    },
+  ];
 
-  const animate = isInView ? "visible" : "hidden";
+  const quickBadges = [
+    { label: "Instant Cab Dispatch", emoji: "🚕", color: "#3977FF" },
+    { label: "20-Min Hot Meals", emoji: "🍔", color: "#FF6B1A" },
+    { label: "15-Min Fresh Produce", emoji: "🥦", color: "#18B981" },
+    { label: "Express Parcel Courier", emoji: "📦", color: "#7657E8" },
+    { label: "Shared Ride Pooling", emoji: "👥", color: "#3977FF" },
+    { label: "Outstation Trips", emoji: "🚙", color: "#FF6B1A" },
+  ];
 
   return (
     <section
       ref={sectionRef}
-      className="w-full bg-[#F1EEE7] py-16 border-y border-[#E5E7EB] relative overflow-hidden"
+      className="w-full bg-[#FAF8F4] py-16 sm:py-20 border-y border-[#E5E7EB] relative overflow-hidden text-[#172033]"
     >
-      {/* ── Very slow animated radial gradient behind cards ─────────────── */}
+      {/* Background Ambient Aura Lighting */}
       {!reduced && (
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          animate={{
-            background: [
-              "radial-gradient(ellipse 65% 55% at 18% 50%, rgba(255,107,26,0.05) 0%, transparent 70%)",
-              "radial-gradient(ellipse 65% 55% at 50% 50%, rgba(57,119,255,0.04) 0%, transparent 70%)",
-              "radial-gradient(ellipse 65% 55% at 82% 50%, rgba(24,185,129,0.04) 0%, transparent 70%)",
-              "radial-gradient(ellipse 65% 55% at 18% 50%, rgba(255,107,26,0.05) 0%, transparent 70%)",
-            ],
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/3 size-[450px] rounded-full blur-[140px] opacity-30 bg-radial from-[#FF6B1A]/20 to-transparent" />
+          <div className="absolute bottom-1/4 right-1/3 size-[450px] rounded-full blur-[140px] opacity-30 bg-radial from-[#3977FF]/20 to-transparent" />
+        </div>
       )}
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
+        
+        {/* Section Header */}
+        <RevealSection className="text-center max-w-2xl mx-auto mb-14">
+          <span className="text-xs font-extrabold uppercase tracking-widest text-[#FF6B1A] bg-[#FFF5EF] px-3.5 py-1.5 rounded-full border border-[#FFE0CC] mb-3 inline-block shadow-xs">
+            HOW EQOSY WORKS
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black text-[#172033] tracking-tight leading-tight">
+            3 Simple Steps to Anything You Need
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-[#667085] font-medium leading-relaxed">
+            No complicated steps. Choose your service, track live on the map, and enjoy fast doorstep delivery or safe city rides.
+          </p>
+        </RevealSection>
 
-        {/* ── Section header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <motion.span
-              variants={badgeVariants}
-              initial="hidden"
-              animate={animate}
-              className="text-xs font-bold uppercase tracking-wider text-[#FF6B1A] bg-[#FFF5EF] px-3 py-1 rounded-full border border-[#FFE0CC] mb-2 inline-block"
-            >
-              Trending Near You
-            </motion.span>
-            <motion.h2
-              variants={headingVariants}
-              initial="hidden"
-              animate={animate}
-              className="text-2xl sm:text-3xl font-extrabold text-[#172033]"
-            >
-              What are you looking for today?
-            </motion.h2>
-          </div>
+        {/* 3 Step Workflow Cards Grid */}
+        <div className="grid md:grid-cols-3 gap-6 sm:gap-8 mb-12 relative">
+          
+          {steps.map((s, i) => {
+            const StepIcon = s.icon;
+            return (
+              <RevealSection key={s.step} delay={i * 120}>
+                <motion.div
+                  whileHover={reduced ? {} : {
+                    y: -6,
+                    scale: 1.015,
+                    boxShadow: "0 20px 44px rgba(23,32,51,0.07), 0 4px 12px rgba(23,32,51,0.03)",
+                    transition: { duration: 0.25, ease: "easeOut" },
+                  }}
+                  className="rounded-3xl p-7 flex flex-col justify-between border h-full relative overflow-hidden transition-all duration-300 group"
+                  style={{
+                    backgroundColor: s.bgTint,
+                    borderColor: s.borderTint,
+                    willChange: "transform",
+                  }}
+                >
+                  <div>
+                    {/* Top Row: Step Badge & Icon */}
+                    <div className="flex items-center justify-between mb-6">
+                      <span
+                        className="text-xs font-black px-3 py-1 rounded-full border bg-white shadow-xs"
+                        style={{ color: s.color, borderColor: s.borderTint }}
+                      >
+                        STEP {s.step}
+                      </span>
+                      <div
+                        className="size-12 rounded-2xl flex items-center justify-center text-white shadow-md transition-transform group-hover:scale-110 group-hover:rotate-6"
+                        style={{ backgroundColor: s.color }}
+                      >
+                        <StepIcon size={22} strokeWidth={2.2} />
+                      </div>
+                    </div>
 
-          {/* Explore All — arrow slides right on hover */}
-          <motion.button
-            variants={exploreVariants}
-            initial="hidden"
-            animate={animate}
-            type="button"
-            onClick={() => navigate("/food")}
-            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#FF6B1A] hover:text-[#E5580C] transition-colors cursor-pointer group"
-          >
-            <span>Explore All</span>
-            <motion.span
-              className="inline-flex items-center"
-              whileHover={reduced ? {} : { x: 5 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <ArrowRight size={14} />
-            </motion.span>
-          </motion.button>
+                    {/* Step Title & Description */}
+                    <h3 className="text-xl font-black text-[#172033] mb-2.5 group-hover:text-[#FF6B1A] transition-colors">
+                      {s.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[#667085] font-medium leading-relaxed mb-6">
+                      {s.desc}
+                    </p>
+                  </div>
+
+                  {/* Bottom Accent Chip */}
+                  <div
+                    className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border bg-white/90 text-[11px] font-bold shadow-xs text-center"
+                    style={{ color: s.color, borderColor: s.borderTint }}
+                  >
+                    <Sparkles size={13} />
+                    <span>{s.chip}</span>
+                  </div>
+                </motion.div>
+              </RevealSection>
+            );
+          })}
         </div>
 
-        {/* ── Staggered category cards ───────────────────────────────────── */}
-        <motion.div
-          variants={gridVariants}
-          initial="hidden"
-          animate={animate}
-          className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3 sm:gap-4"
-        >
-          {categories.map((cat, i) => (
-            <CategoryCard
-              key={cat.name}
-              cat={cat}
-              i={i}
-              cardVariants={cardVariants}
-              prefersReducedMotion={reduced}
-              navigate={navigate}
-            />
-          ))}
-        </motion.div>
+        {/* Live Service Pill Badges Bar (Replaces old rating box) */}
+        <RevealSection delay={380}>
+          <div className="rounded-2xl bg-white border border-[#E5E7EB] p-4 sm:p-5 shadow-xs flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+            <span className="text-xs font-extrabold text-[#98A2B3] uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+              <Zap size={14} className="text-[#FF6B1A]" />
+              <span>LIVE CITY SERVICES:</span>
+            </span>
+            <div className="flex items-center gap-2 flex-nowrap">
+              {quickBadges.map((b) => (
+                <div
+                  key={b.label}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap bg-[#FAF8F4] text-[#172033] border-[#E5E7EB]"
+                >
+                  <span>{b.emoji}</span>
+                  <span>{b.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </RevealSection>
 
       </div>
     </section>

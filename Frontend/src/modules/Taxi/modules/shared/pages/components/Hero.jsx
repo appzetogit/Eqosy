@@ -210,20 +210,20 @@ export default function Hero() {
       ref={heroRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="relative w-full pt-16 sm:pt-20 pb-16 sm:pb-20 px-4 sm:px-6 lg:px-8 overflow-hidden bg-[#FAF8F4] border-b border-[#E5E7EB] text-[#172033]"
+      className="relative min-h-[90vh] lg:min-h-screen w-full bg-[#FAF8F4] pt-16 pb-12 sm:pt-24 sm:pb-16 flex items-center overflow-hidden text-[#172033] selection:bg-[#FF641F] selection:text-white max-w-full box-border"
     >
       {/* =========================================================================
-          1. SUBTLE STUDIO ATMOSPHERE LIGHTING (4-COLOR AMBIENT AURA)
+          1. DYNAMIC COLOR AURA LIGHTING (Changes ambient glow per selected service)
           ========================================================================= */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden z-0">
-        {/* Orange Aura (Food) */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Orange Ambient Aura (Food) */}
         <motion.div
           animate={{
-            x: [0, 15, 0] + mousePos.x * 2,
-            y: [0, -10, 0] + mousePos.y * 2,
+            x: [0, -15, 0] + mousePos.x * 3,
+            y: [0, 10, 0] + mousePos.y * 3,
           }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-24 -left-24 size-[550px] rounded-full blur-[140px] opacity-40"
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-32 -left-32 size-[400px] sm:size-[500px] rounded-full blur-[140px] opacity-40"
           style={{
             background: "radial-gradient(circle, rgba(255, 100, 31, 0.15) 0%, transparent 70%)",
           }}
@@ -231,11 +231,11 @@ export default function Hero() {
         {/* Blue Aura (Taxi) */}
         <motion.div
           animate={{
-            x: [0, -15, 0] + mousePos.x * 3,
-            y: [0, 12, 0] + mousePos.y * 3,
+            x: [0, 20, 0] + mousePos.x * 4,
+            y: [0, -15, 0] + mousePos.y * 4,
           }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/6 right-1/12 size-[600px] rounded-full blur-[150px] opacity-45"
+          className="absolute top-1/3 -right-32 size-[400px] sm:size-[550px] rounded-full blur-[150px] opacity-35"
           style={{
             background: "radial-gradient(circle, rgba(55, 124, 246, 0.12) 0%, transparent 75%)",
           }}
@@ -247,7 +247,7 @@ export default function Hero() {
             y: [0, 15, 0] + mousePos.y * 2,
           }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-20 left-1/4 size-[480px] rounded-full blur-[130px] opacity-35"
+          className="absolute -bottom-20 left-1/4 size-[400px] sm:size-[480px] rounded-full blur-[130px] opacity-35"
           style={{
             background: "radial-gradient(circle, rgba(22, 185, 129, 0.12) 0%, transparent 70%)",
           }}
@@ -259,7 +259,7 @@ export default function Hero() {
             y: [0, -12, 0] + mousePos.y * 2.5,
           }}
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 right-1/4 size-[450px] rounded-full blur-[140px] opacity-30"
+          className="absolute top-1/2 right-1/4 size-[380px] sm:size-[450px] rounded-full blur-[140px] opacity-30"
           style={{
             background: "radial-gradient(circle, rgba(118, 87, 232, 0.10) 0%, transparent 70%)",
           }}
@@ -269,24 +269,24 @@ export default function Hero() {
       {/* =========================================================================
           2. MAIN HERO CONTAINER: 46% LEFT CONTENT vs 54% CINEMATIC VIDEO STAGE
           ========================================================================= */}
-      <div className="relative mx-auto max-w-7xl w-full z-10">
+      <div className="relative mx-auto max-w-7xl w-full px-3 sm:px-6 lg:px-8 z-10 overflow-hidden">
         
-        <div className="grid lg:grid-cols-[46%_54%] items-center gap-10 lg:gap-12">
+        <div className="grid lg:grid-cols-[46%_54%] items-center gap-6 sm:gap-8 lg:gap-12">
           
           {/* ==================== LEFT COLUMN: HEADLINE, INTERACTIVE CARD & PROOF ==================== */}
-          <div className="flex flex-col justify-center max-w-[540px]">
+          <div className="flex flex-col justify-center w-full max-w-full lg:max-w-[540px] overflow-hidden">
             
             {/* Top Eyebrow Badge */}
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
-              className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-3.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.18em] shadow-xs text-[#172033] w-fit mb-3.5"
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-[#E5E7EB] bg-white px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider shadow-xs text-[#172033] w-max max-w-full truncate mb-2.5 sm:mb-3.5"
             >
-              <span className="size-2 rounded-full bg-[#FF641F] animate-pulse" />
-              <span>INDIA'S #1 UNIFIED SUPER APP</span>
+              <span className="size-2 rounded-full bg-[#FF641F] animate-pulse shrink-0" />
+              <span className="truncate">INDIA'S #1 UNIFIED SUPER APP</span>
               <span className="text-[#D1D5DB]">•</span>
-              <span className="text-[#667085] font-bold lowercase">live 24/7</span>
+              <span className="text-[#667085] font-bold lowercase shrink-0">live 24/7</span>
             </motion.div>
 
             {/* Main Headline */}
@@ -294,10 +294,10 @@ export default function Hero() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.1, ease: "easeOut" }}
-              className="font-display text-4xl sm:text-5xl lg:text-[54px] font-black tracking-tight text-[#172033] leading-[1.04]"
+              className="font-display text-[26px] xs:text-3xl sm:text-4xl lg:text-[52px] font-black tracking-tight text-[#172033] leading-[1.12] max-w-full break-words"
             >
               <span>Move, Eat & Shop </span>
-              <br />
+              <br className="hidden sm:inline" />
               <span>in </span>
               <span className="bg-gradient-to-r from-[#FF641F] via-[#377CF6] to-[#16B981] bg-clip-text text-transparent">
                 One Unified App.
@@ -309,7 +309,7 @@ export default function Hero() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="mt-3 text-sm sm:text-base text-[#667085] font-medium leading-relaxed"
+              className="mt-2 sm:mt-3 text-xs sm:text-base text-[#667085] font-medium leading-relaxed max-w-full"
             >
               Fast food delivery, instant rides, 15-min groceries and express parcels — seamlessly connected in one app.
             </motion.p>
@@ -322,10 +322,10 @@ export default function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.3 }}
               style={{ backgroundColor: current.bgTint }}
-              className="mt-6 p-3 sm:p-3.5 rounded-[24px] border border-[#E5E7EB] shadow-[0_12px_36px_rgba(23,32,51,0.06)] transition-colors duration-300"
+              className="mt-3.5 sm:mt-6 w-full max-w-full p-2 sm:p-3.5 rounded-[18px] sm:rounded-[24px] border border-[#E5E7EB] shadow-[0_12px_36px_rgba(23,32,51,0.06)] transition-colors duration-300 overflow-hidden box-border"
             >
               {/* 4 Rich Service Tabs with Micro Badges */}
-              <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-[#FAF8F4] border border-[#E5E7EB]/70">
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-xl sm:rounded-2xl bg-[#FAF8F4] border border-[#E5E7EB]/70 w-full overflow-hidden box-border">
                 {Object.values(SERVICE_CONFIG).map((tab) => {
                   const isActive = activeVertical === tab.id;
                   return (
@@ -333,33 +333,33 @@ export default function Hero() {
                       key={tab.id}
                       type="button"
                       onClick={() => handleSelectService(tab.id)}
-                      className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer ${
+                      className={`relative flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 sm:py-2 px-0.5 rounded-lg sm:rounded-xl font-extrabold text-[10px] sm:text-xs transition-all duration-200 cursor-pointer overflow-hidden text-center ${
                         isActive ? "text-[#172033]" : "text-[#667085] hover:text-[#172033]"
                       }`}
                     >
                       {isActive && (
                         <motion.div
                           layoutId="activeServiceHeroSuperTab"
-                          className="absolute inset-0 rounded-xl shadow-xs bg-white"
+                          className="absolute inset-0 rounded-lg sm:rounded-xl shadow-xs bg-white"
                           style={{
                             border: `1.5px solid ${tab.color}35`,
                           }}
                           transition={{ type: "spring", stiffness: 400, damping: 30 }}
                         />
                       )}
-                      <span className="relative z-10 text-base sm:text-lg">{tab.emoji}</span>
-                      <span className="relative z-10 font-bold tracking-tight">{tab.name}</span>
+                      <span className="relative z-10 text-sm sm:text-lg shrink-0">{tab.emoji}</span>
+                      <span className="relative z-10 font-bold tracking-tight text-[9px] sm:text-xs truncate w-full text-center">{tab.name}</span>
                     </button>
                   );
                 })}
               </div>
 
               {/* Dynamic Integrated Search Input & CTA Button */}
-              <form onSubmit={handleAction} className="mt-3 flex flex-col sm:flex-row items-center gap-2">
-                <div className="relative flex-1 w-full flex items-center bg-[#FAF8F4] rounded-xl border border-[#E5E7EB] focus-within:border-[#FF641F]/60 focus-within:bg-white transition-all">
+              <form onSubmit={handleAction} className="mt-2.5 sm:mt-3 flex flex-col sm:flex-row items-center gap-2 w-full">
+                <div className="relative flex-1 w-full min-w-0 flex items-center bg-[#FAF8F4] rounded-xl border border-[#E5E7EB] focus-within:border-[#FF641F]/60 focus-within:bg-white transition-all overflow-hidden">
                   <MapPin
-                    size={16}
-                    className="ml-3 text-[#FF641F] shrink-0"
+                    size={15}
+                    className="ml-2.5 sm:ml-3 text-[#FF641F] shrink-0"
                   />
                   <input
                     type="text"
@@ -367,10 +367,10 @@ export default function Hero() {
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-11 pl-2.5 pr-3 text-xs sm:text-sm font-semibold text-[#172033] placeholder:text-transparent focus:outline-none bg-transparent"
+                    className="w-full h-9 sm:h-11 pl-2 pr-2 text-xs sm:text-sm font-semibold text-[#172033] placeholder:text-transparent focus:outline-none bg-transparent"
                   />
                   {!searchQuery && (
-                    <div className="absolute left-9 pointer-events-none overflow-hidden h-5 flex items-center text-xs sm:text-sm font-medium text-[#98A2B3] pr-2">
+                    <div className="absolute left-7 sm:left-9 pointer-events-none overflow-hidden h-5 flex items-center text-[10px] sm:text-sm font-medium text-[#98A2B3] pr-2 max-w-[calc(100%-35px)]">
                       <AnimatePresence mode="wait">
                         <motion.span
                           key={`${activeVertical}-${placeholderIdx}`}
@@ -392,7 +392,7 @@ export default function Hero() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   style={{ backgroundColor: current.color }}
-                  className="w-full sm:w-auto h-11 px-5 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:brightness-105 transition-all cursor-pointer shrink-0"
+                  className="w-full sm:w-auto h-9 sm:h-11 px-4 sm:px-5 rounded-xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs hover:brightness-105 transition-all cursor-pointer shrink-0"
                 >
                   <span>{current.cta}</span>
                   <ArrowRight size={14} />
@@ -400,8 +400,8 @@ export default function Hero() {
               </form>
 
               {/* Instant Quick Suggestion Chips */}
-              <div className="mt-2.5 pt-2.5 border-t border-[#E5E7EB]/70 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                <span className="text-[11px] font-bold text-[#98A2B3] uppercase tracking-wider shrink-0 flex items-center gap-1">
+              <div className="mt-2 pt-2 border-t border-[#E5E7EB]/70 flex items-center gap-1.5 w-full overflow-x-auto no-scrollbar max-w-full">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#98A2B3] uppercase tracking-wider shrink-0 flex items-center gap-1">
                   <TrendingUp size={11} className="text-[#FF641F]" />
                   <span>Popular:</span>
                 </span>
@@ -411,7 +411,7 @@ export default function Hero() {
                       key={chip}
                       type="button"
                       onClick={() => handleChipClick(chip)}
-                      className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-[#FAF8F4] hover:bg-white text-[#172033] border border-[#E5E7EB] transition-colors whitespace-nowrap cursor-pointer"
+                      className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-lg bg-[#FAF8F4] hover:bg-white text-[#172033] border border-[#E5E7EB] transition-colors whitespace-nowrap cursor-pointer shrink-0"
                     >
                       {chip}
                     </button>
@@ -421,21 +421,21 @@ export default function Hero() {
             </motion.div>
 
             {/* Honest Brand Trust Strip */}
-            <div className="mt-5 flex items-center gap-3 text-xs font-semibold text-[#667085]">
-              <div className="flex items-center gap-1.5 text-[#16B981] font-bold">
-                <ShieldCheck size={14} />
+            <div className="mt-3.5 flex flex-wrap items-center justify-start gap-1.5 sm:gap-3 text-[10px] sm:text-xs font-semibold text-[#667085] max-w-full overflow-hidden">
+              <div className="flex items-center gap-1 text-[#16B981] font-bold shrink-0">
+                <ShieldCheck size={13} />
                 <span>Verified Drivers & Kitchens</span>
               </div>
-              <span className="text-[#D1D5DB]">•</span>
-              <span className="text-[#667085] font-medium">FSSAI Certified Restaurants</span>
-              <span className="text-[#D1D5DB]">•</span>
-              <span className="text-[#667085] font-medium">OTP-Secured Deliveries</span>
+              <span className="hidden sm:inline text-[#D1D5DB]">•</span>
+              <span className="text-[#667085] font-medium shrink-0">FSSAI Certified</span>
+              <span className="hidden sm:inline text-[#D1D5DB]">•</span>
+              <span className="text-[#667085] font-medium shrink-0">OTP Secured</span>
             </div>
 
           </div>
 
           {/* ==================== RIGHT COLUMN: CINEMATIC SHOWCASE STAGE ==================== */}
-          <div className="relative flex flex-col items-center justify-center w-full">
+          <div className="relative flex flex-col items-center justify-center w-full mt-4 lg:mt-0 overflow-hidden">
             
             {/* VIDEO DEVICE CONTAINER: 480-520px Height, 32px Radius, Rich Glow */}
             <motion.div
@@ -443,10 +443,10 @@ export default function Hero() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
               style={{
-                x: mousePos.x * 5,
-                y: mousePos.y * 4,
+                x: mousePos.x * 2,
+                y: mousePos.y * 2,
               }}
-              className="relative w-full rounded-[32px] overflow-hidden border border-black/[0.08] bg-[#172033] shadow-[0_24px_60px_rgba(23,32,51,0.12)] z-10"
+              className="relative w-full rounded-[24px] sm:rounded-[32px] overflow-hidden border border-black/[0.08] bg-[#172033] shadow-[0_24px_60px_rgba(23,32,51,0.12)] z-10"
             >
               <video
                 ref={videoRef}
@@ -456,11 +456,11 @@ export default function Hero() {
                 loop
                 playsInline
                 controls={false}
-                className="w-full h-[280px] sm:h-[380px] lg:h-[480px] object-cover object-center block select-none"
+                className="w-full h-[220px] sm:h-[380px] lg:h-[480px] object-cover object-center block select-none"
               />
 
               {/* Inner Glossy Frame Highlight */}
-              <div className="absolute inset-0 pointer-events-none rounded-[32px] ring-1 ring-inset ring-white/20" />
+              <div className="absolute inset-0 pointer-events-none rounded-[24px] sm:rounded-[32px] ring-1 ring-inset ring-white/20" />
             </motion.div>
 
             {/* LIVE OVERLAY STATUS CARD (Bottom-Left) */}
@@ -471,29 +471,25 @@ export default function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
-                style={{
-                  x: mousePos.x * 3,
-                  y: mousePos.y * 3,
-                }}
-                className="pointer-events-auto absolute -bottom-3 sm:-bottom-4 left-3 sm:left-6 z-20 bg-white/95 border border-[#E5E7EB] rounded-2xl p-3.5 shadow-xl max-w-[240px] backdrop-blur-md"
+                className="pointer-events-auto absolute -bottom-2 sm:-bottom-4 left-2 sm:left-6 z-20 bg-white/95 border border-[#E5E7EB] rounded-2xl p-2.5 sm:p-3.5 shadow-xl max-w-[190px] xs:max-w-[210px] sm:max-w-[240px] backdrop-blur-md"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{current.statusCard.icon}</span>
-                  <div>
-                    <h4 className="text-xs font-bold text-[#172033] leading-tight">
+                <div className="flex items-center gap-2">
+                  <span className="text-base sm:text-xl shrink-0">{current.statusCard.icon}</span>
+                  <div className="overflow-hidden">
+                    <h4 className="text-[11px] sm:text-xs font-bold text-[#172033] leading-tight truncate">
                       {current.statusCard.title}
                     </h4>
-                    <p className="text-[10px] text-[#667085] font-medium leading-tight mt-0.5 truncate max-w-[150px]">
+                    <p className="text-[9px] sm:text-[10px] text-[#667085] font-medium leading-tight mt-0.5 truncate">
                       {current.statusCard.subtitle}
                     </p>
                   </div>
                 </div>
-                <div className="mt-2.5 pt-2 border-t border-[#E5E7EB] flex items-center justify-between text-[10px] font-bold">
-                  <span className="flex items-center gap-1.5" style={{ color: current.color }}>
+                <div className="mt-2 pt-1.5 border-t border-[#E5E7EB] flex items-center justify-between text-[9px] sm:text-[10px] font-bold">
+                  <span className="flex items-center gap-1 shrink-0" style={{ color: current.color }}>
                     <span className="size-1.5 rounded-full bg-[#16B981] animate-live-dot" />
-                    <span>{current.statusCard.status}</span>
+                    <span className="truncate max-w-[90px]">{current.statusCard.status}</span>
                   </span>
-                  <span className="text-[#172033] bg-[#FAF8F4] px-2 py-0.5 rounded font-bold border border-[#E5E7EB]">
+                  <span className="text-[#172033] bg-[#FAF8F4] px-1.5 py-0.5 rounded font-bold border border-[#E5E7EB] shrink-0">
                     {current.statusCard.eta}
                   </span>
                 </div>
@@ -502,14 +498,10 @@ export default function Hero() {
 
             {/* LIVE TOP BADGE (Top-Right) */}
             <motion.div
-              style={{
-                x: mousePos.x * 4,
-                y: mousePos.y * 4,
-              }}
-              className="absolute top-4 right-4 z-20 px-3 py-1.5 rounded-full bg-white/90 border border-white/80 shadow-md backdrop-blur-md flex items-center gap-1.5 text-xs font-black text-[#172033]"
+              className="absolute top-3 right-3 z-20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/90 border border-white/80 shadow-md backdrop-blur-md flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-black text-[#172033]"
             >
-              <span className="size-2 rounded-full bg-[#16B981] animate-pulse" />
-              <span>Active City Fleet</span>
+              <span className="size-1.5 sm:size-2 rounded-full bg-[#16B981] animate-pulse shrink-0" />
+              <span>Active Fleet</span>
             </motion.div>
 
           </div>
