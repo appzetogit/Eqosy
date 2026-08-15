@@ -39,6 +39,7 @@ const OrderTracking = lazy(() => import("@food/pages/user/orders/OrderTracking")
 const SharedOrderTrackingPage = lazy(() => import("@food/pages/user/orders/SharedOrderTrackingPage"))
 const OrderInvoice = lazy(() => import("@food/pages/user/orders/OrderInvoice"))
 const UserOrderDetails = lazy(() => import("@food/pages/user/orders/UserOrderDetails"))
+const FoodOrderChatScreen = lazy(() => import("@food/pages/user/orders/FoodOrderChatScreen"))
 
 // Offers
 const Offers = lazy(() => import("@food/pages/user/Offers"))
@@ -179,6 +180,14 @@ export default function UserRouter() {
             element={
               <ProtectedRoute requiredRole="user" loginPath="/login">
                 <UserOrderDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="orders/:orderId/chat"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/login">
+                <FoodOrderChatScreen />
               </ProtectedRoute>
             }
           />

@@ -8,6 +8,7 @@ import { writeOrderTracking } from '@food/realtimeTracking';
 import { deliveryAPI } from '@food/api';
 import { uploadService } from '@/modules/Taxi/shared/services/uploadService';
 import { toast } from 'sonner';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 
 // Components
 import LiveMap from '@/modules/DeliveryV2/components/map/LiveMap';
@@ -29,7 +30,7 @@ import {
   Bell, HelpCircle, AlertTriangle, 
   Wallet, History, User as UserIcon, LayoutGrid,
   Plus, Minus, Navigation2, Navigation, Target, Play, CheckCircle2, Clock, ChevronDown, Phone,
-  Contact, Package, Camera
+  Contact, Package, Camera, MessageCircle
 } from 'lucide-react';
 
 import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
@@ -275,6 +276,24 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [eta, setEta] = useState(null);
+  const [partnerUnreadChatCount, setPartnerUnreadChatCount] = useState(0);
+
+  // Real-time delivery partner chat listener
+  useEffect(() => {
+    const activeOrderId = activeOrder?.order_id || activeOrder?.orderId || activeOrder?._id;
+    if (!activeOrderId) return;
+
+    fetch(`/api/v1/food/orders/${activeOrderId}/chat`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken') || ''}` }
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data?.conversation?.partnerUnreadCount != null) {
+          setPartnerUnreadChatCount(Number(d.data.conversation.partnerUnreadCount || 0));
+        }
+      })
+      .catch(() => {});
+  }, [activeOrder]);
   const lastLocationSentAt = useRef(0);
   const lastCoordRef = useRef(null);
   const rollingSpeedRef = useRef([]);
@@ -1506,6 +1525,25 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                                </div>
                             </div>
                             <div className="flex items-center gap-2.5 shrink-0">
+                              <button
+                                onClick={() => {
+                                  const orderId = activeOrder?.order_id || activeOrder?.orderId || activeOrder?._id;
+                                  if (orderId) {
+                                    setPartnerUnreadChatCount(0);
+                                    navigate(`/food/user/orders/${orderId}/chat`);
+                                  }
+                                }}
+                                className="w-11 h-11 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 border border-orange-100 hover:bg-orange-100 transition-colors active:scale-90 relative"
+                                aria-label="Chat with customer"
+                                title="Chat with Customer"
+                              >
+                                <MessageCircle className="w-5 h-5" />
+                                {partnerUnreadChatCount > 0 && (
+                                  <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white font-black text-[10px] min-w-[20px] h-[20px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                                    {partnerUnreadChatCount}
+                                  </span>
+                                )}
+                              </button>
                               {customerPhone && (
                                 <button
                                   onClick={() => {

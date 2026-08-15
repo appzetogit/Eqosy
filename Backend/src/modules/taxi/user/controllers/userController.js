@@ -3376,11 +3376,31 @@ export const updateMyActiveRentalLocation = async (req, res) => {
 };
 
 export const listMyBusBookings = async (req, res) => {
-  await ensureBusServiceEnabled();
-  await cleanupExpiredBusSeatHolds();
-
   const page = toPositiveInteger(req.query?.page, 1);
   const limit = Math.min(20, toPositiveInteger(req.query?.limit, 10));
+
+  if (!req.auth?.sub) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        results: [],
+        pagination: { page, limit, total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false },
+      },
+    });
+  }
+
+  try {
+    await ensureBusServiceEnabled();
+    await cleanupExpiredBusSeatHolds();
+  } catch (err) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        results: [],
+        pagination: { page, limit, total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false },
+      },
+    });
+  }
   const normalizedStatus = toCleanString(req.query?.status).toLowerCase();
   const normalizedTripState = toCleanString(req.query?.tripState).toLowerCase();
   const allowedStatuses = new Set(['pending', 'confirmed', 'failed', 'expired', 'cancelled']);

@@ -9,6 +9,7 @@ import api from '../../../../shared/api/axiosInstance';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import RideCancellationModal from '../../components/RideCancellationModal';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import toast from 'react-hot-toast';
 import carIcon from '../../../../assets/icons/car.png';
 import bikeIcon from '../../../../assets/icons/bike.png';
@@ -1071,14 +1072,44 @@ const RideTracking = () => {
     window.open(`tel:${phone}`, '_self');
   };
 
+  const [unreadUserChatCount, setUnreadUserChatCount] = useState(0);
+
+  useEffect(() => {
+    const socket = socketService.connect({ role: 'user' });
+    const onChatMessage = (data) => {
+      const senderRole = String(data?.sender?.role || data?.senderRole || '').toLowerCase();
+      if (senderRole !== 'user') {
+        setUnreadUserChatCount((prev) => prev + 1);
+        const msgText = data?.message?.message || data?.message?.text || data?.text || (typeof data?.message === 'string' ? data.message : 'New message');
+        const senderName = data?.senderName || data?.sender?.name || 'Driver';
+        showChatNotification(senderName, msgText);
+      }
+    };
+
+    if (socket) {
+      socketService.on('chat:message', onChatMessage);
+      socketService.on('chat:notification', onChatMessage);
+      socketService.on('order-chat-notification', onChatMessage);
+    }
+    return () => {
+      if (socket) {
+        socketService.off('chat:message', onChatMessage);
+        socketService.off('chat:notification', onChatMessage);
+        socketService.off('order-chat-notification', onChatMessage);
+      }
+    };
+  }, []);
+
   const openRideChat = () => {
+    setUnreadUserChatCount(0);
     navigate(routeChat, {
       state: {
         rideId,
+        serviceType: 'ride',
         peer: {
           name: driver.name || 'Driver',
           phone: driver.phone || driver.mobile || driver.phoneNumber || '',
-          subtitle: 'Driver - Active now',
+          subtitle: 'Driver • Active now',
           role: 'Driver',
         },
       },
@@ -1448,7 +1479,7 @@ const RideTracking = () => {
           <div className="grid grid-cols-4 gap-2.5">
             {[
               { id: 'call', icon: Phone, label: 'CALL', action: handleCallDriver },
-              { id: 'chat', icon: MessageCircle, label: 'CHAT', action: openRideChat },
+              { id: 'chat', icon: MessageCircle, label: 'CHAT', action: openRideChat, badge: unreadUserChatCount },
               { id: 'share', icon: Share2, label: 'SHARE', action: handleShare },
               { id: 'help', icon: AlertTriangle, label: 'HELP', action: () => navigate(routeSupport) }
             ].map((btn) => (
@@ -1456,10 +1487,15 @@ const RideTracking = () => {
                 key={btn.id}
                 whileTap={{ scale: 0.94 }}
                 onClick={btn.action}
-                className="flex flex-col items-center gap-1.5 py-3 rounded-[18px] bg-white border border-slate-100/60 shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:bg-slate-50 transition-all duration-200"
+                className="flex flex-col items-center gap-1.5 py-3 rounded-[18px] bg-white border border-slate-100/60 shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:bg-slate-50 transition-all duration-200 relative"
               >
-                <div className="p-0.5">
+                <div className="p-0.5 relative">
                   <btn.icon size={18} className="text-slate-800" strokeWidth={2} />
+                  {btn.badge > 0 && (
+                    <span className="absolute -top-2 -right-3 bg-red-600 text-white font-black text-[9px] min-w-[17px] h-[17px] px-0.5 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                      {btn.badge}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.1em] leading-none">{btn.label}</span>
               </motion.button>

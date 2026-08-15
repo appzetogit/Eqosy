@@ -72,15 +72,25 @@ export const getPaymentGatewayConfig = asyncHandler(async (_req, res) => {
 });
 
 export const getPublicSettingsBootstrap = asyncHandler(async (_req, res) => {
-    const [businessSettings, appSettings, paymentGateway] = await Promise.all([
-        AdminBusinessSetting.findOne({ scope: 'default' })
-            .select('general customization transport_ride bid_ride')
-            .lean(),
-        AdminAppSetting.findOne({ scope: 'default' })
-            .select('wallet_setting tip_setting country')
-            .lean(),
-        getPublicActivePaymentGateway(),
-    ]);
+    let businessSettings = null;
+    let appSettings = null;
+    let paymentGateway = null;
+
+    try {
+        [businessSettings, appSettings, paymentGateway] = await Promise.all([
+            AdminBusinessSetting.findOne({ scope: 'default' })
+                .select('general customization transport_ride bid_ride')
+                .lean()
+                .catch(() => null),
+            AdminAppSetting.findOne({ scope: 'default' })
+                .select('wallet_setting tip_setting country')
+                .lean()
+                .catch(() => null),
+            getPublicActivePaymentGateway().catch(() => null),
+        ]);
+    } catch (err) {
+        // use defaults
+    }
 
     const defaultBusinessSettings = createDefaultBusinessSettings();
     const defaultAppSettings = createDefaultAppSettings();

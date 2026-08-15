@@ -1,6 +1,6 @@
 import { normalizePoint } from '../../../../utils/geo.js';
 import { RIDE_LIVE_STATUS } from '../../constants/index.js';
-import { getDriverRoom } from '../../services/dispatchService.js';
+import { getDriverRoom, getUserRoom } from '../../services/dispatchService.js';
 import {
   appendRideMessage,
   getActiveRideForIdentity,
@@ -59,24 +59,22 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
   socket.on(
     SOCKET_EVENTS.RIDE_REJOIN_CURRENT,
     onAsync(socket, async () => {
-      const ride = await getActiveRideForIdentity({
+      const activeRide = await getActiveRideForIdentity({
         role: socket.auth.role,
         entityId: socket.auth.sub,
       });
 
-      if (!ride) {
-        socket.emit(SOCKET_EVENTS.RIDE_STATE, null);
+      if (!activeRide) {
         return;
       }
 
-      const room = getRideRoom(ride._id);
+      const room = getRideRoom(activeRide._id);
       socket.join(room);
       socket.emit(SOCKET_EVENTS.RIDE_JOINED, {
-        rideId: String(ride._id),
+        rideId: String(activeRide._id),
         room,
-        rejoined: true,
       });
-      socket.emit(SOCKET_EVENTS.RIDE_STATE, serializeRideRealtime(ride));
+      socket.emit(SOCKET_EVENTS.RIDE_STATE, serializeRideRealtime(activeRide));
     }),
   );
 
@@ -158,7 +156,7 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
   socket.on(
     SOCKET_EVENTS.RIDE_MESSAGE_SEND,
     onAsync(socket, async ({ rideId, message }) => {
-      await authorizeRideRoomAccess({ socket, rideId });
+      const ride = await authorizeRideRoomAccess({ socket, rideId });
 
       const savedMessage = await appendRideMessage({
         rideId,
@@ -167,7 +165,32 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
         message,
       });
 
-      io.to(getRideRoom(rideId)).emit(SOCKET_EVENTS.RIDE_MESSAGE_NEW, savedMessage);
+      const notifPayload = {
+        rideId: String(rideId),
+        senderRole: socket.auth.role,
+        senderName: socket.auth.role === 'driver' ? 'Driver' : 'Passenger',
+        text: message,
+        message: savedMessage,
+      };
+
+      const room = getRideRoom(rideId);
+      io.to(room).emit(SOCKET_EVENTS.RIDE_MESSAGE_NEW, savedMessage);
+      io.to(room).emit('chat:message', savedMessage);
+      io.to(room).emit('chat:notification', notifPayload);
+
+      const userId = ride?.userId?._id || ride?.userId || ride?.user;
+      const driverId = ride?.driverId?._id || ride?.driverId || ride?.driver;
+
+      if (userId) {
+        io.to(getUserRoom(userId)).emit('chat:message', savedMessage);
+        io.to(getUserRoom(userId)).emit('chat:notification', notifPayload);
+        io.to(getUserRoom(userId)).emit('order-chat-notification', notifPayload);
+      }
+      if (driverId) {
+        io.to(getDriverRoom(driverId)).emit('chat:message', savedMessage);
+        io.to(getDriverRoom(driverId)).emit('chat:notification', notifPayload);
+        io.to(getDriverRoom(driverId)).emit('order-chat-notification', notifPayload);
+      }
     }),
   );
 };

@@ -2,6 +2,7 @@ import { useParams, Link, useSearchParams } from "react-router-dom"
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { showChatNotification } from "@/shared/utils/chatNotificationSound"
 import {
   ArrowLeft,
   Share2,
@@ -21,7 +22,9 @@ import {
   Star,
   AlertCircle,
   Store,
-  FileText
+  FileText,
+  MessageCircle,
+  Truck
 } from "lucide-react"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Card, CardContent } from "@food/components/ui/card"
@@ -614,6 +617,55 @@ export default function OrderTracking({ isSharedView = false }) {
   const [customCancellationComment, setCustomCancellationComment] = useState("")
   const [cancellationPolicyText, setCancellationPolicyText] = useState("")
   const [isCancelling, setIsCancelling] = useState(false)
+  const [unreadChatCount, setUnreadChatCount] = useState(0)
+
+  // Real-time chat notification and unread count listener
+  useEffect(() => {
+    const socket = getSocket ? getSocket() : null;
+    const targetId = orderId || trackingKey;
+    if (!targetId) return;
+
+    // Fetch initial chat unread count
+    fetch(`${API_BASE_URL}/v1/food/orders/${targetId}/chat`, {
+      headers: { Authorization: `Bearer ${getLocalUserToken()}` }
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data?.conversation?.userUnreadCount != null) {
+          setUnreadChatCount(Number(d.data.conversation.userUnreadCount || 0));
+        }
+      })
+      .catch(() => {});
+
+    if (!socket) return;
+
+    const handleChatNotif = (payload) => {
+      if (String(payload?.orderId || '').toLowerCase() === String(targetId).toLowerCase()) {
+        if (payload?.userUnreadCount != null) {
+          setUnreadChatCount(Number(payload.userUnreadCount));
+        } else {
+          setUnreadChatCount((prev) => prev + 1);
+        }
+        showChatNotification(payload?.senderName || 'Delivery Partner', payload?.text || 'New message');
+      }
+    };
+
+    const handleUnreadUpdate = (payload) => {
+      if (String(payload?.orderId || '').toLowerCase() === String(targetId).toLowerCase()) {
+        if (payload?.unreadCount != null) {
+          setUnreadChatCount(Number(payload.unreadCount));
+        }
+      }
+    };
+
+    socket.on('order-chat-notification', handleChatNotif);
+    socket.on('order-chat-unread-update', handleUnreadUpdate);
+
+    return () => {
+      socket.off('order-chat-notification', handleChatNotif);
+      socket.off('order-chat-unread-update', handleUnreadUpdate);
+    };
+  }, [orderId, trackingKey]);
 
   // Fetch admin configured cancellation policy
   useEffect(() => {
@@ -1807,35 +1859,74 @@ export default function OrderTracking({ isSharedView = false }) {
         )}
 
         {/* Delivery Partner Profile Card */}
-        {order?.deliveryPartnerId && (
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-zinc-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center border-2 border-white dark:border-zinc-800">
-                    <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+        {!isCancelledOrder && (
+          (order?.dispatch?.deliveryPartnerId || order?.deliveryPartnerId || order?.deliveryPartner) ? (
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-100 dark:border-orange-900/40 flex items-center justify-center overflow-hidden shrink-0">
+                      {order.deliveryPartner?.avatar || order.deliveryPartner?.profileImage ? (
+                        <img src={order.deliveryPartner?.avatar || order.deliveryPartner?.profileImage} alt={order.deliveryPartner?.name || 'Rider'} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-7 h-7 text-[#EB590E]" />
+                      )}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 bg-emerald-500 w-4 h-4 rounded-full border-2 border-white dark:border-zinc-900" />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-white dark:border-zinc-900" />
+                  <div>
+                    <h3 className="font-bold text-gray-900 dark:text-white text-base">
+                      {order.deliveryPartner?.fullName || order.deliveryPartner?.name || 'Delivery Partner'}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      <span className="flex items-center gap-0.5 text-amber-500 font-bold">
+                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                        {order.deliveryPartner?.rating || 4.8} Rating
+                      </span>
+                      {(order.deliveryPartner?.vehicleNumber || order.deliveryPartner?.vehicleType) && (
+                        <span>&middot; 🏍️ {order.deliveryPartner?.vehicleNumber || order.deliveryPartner?.vehicleType}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link to={`/food/user/orders/${orderId || mapOrderId}/chat`} className="relative inline-block">
+                    <Button className="bg-[#EB590E] hover:bg-[#D44D0D] text-white rounded-xl px-4 py-2 text-xs font-bold shadow-md flex items-center gap-1.5 relative">
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Chat</span>
+                      {unreadChatCount > 0 && (
+                        <span className="absolute -top-2 -right-2 bg-red-600 text-white font-black text-[10px] min-w-[20px] h-[20px] px-1 rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-md animate-pulse">
+                          {unreadChatCount}
+                        </span>
+                      )}
+                    </Button>
+                  </Link>
+                  <motion.button className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-colors" onClick={handleCallRider}>
+                    <Phone className="w-4 h-4" />
+                  </motion.button>
+                </div>
+              </div>
+              {order?.note && (
+                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 mt-4 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900">
+                  <MessageSquare className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed italic">"{order.note}"</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-amber-600 border border-amber-200 dark:border-amber-800 flex items-center justify-center shrink-0">
+                  <Truck className="w-6 h-6 animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white">{order.deliveryPartner?.name || 'Delivery Partner'}</h3>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">4.9</span>
-                  </div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery Partner</p>
+                  <p className="text-xs text-amber-600 font-semibold mt-0.5">🚚 Finding a delivery partner...</p>
                 </div>
               </div>
-              <motion.button className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center" onClick={handleCallRider}>
-                <Phone className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </motion.button>
             </div>
-            {order?.note && (
-              <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 mt-4 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900">
-                <MessageSquare className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed italic">"{order.note}"</p>
-              </div>
-            )}
-          </div>
+          )
         )}
 
         {/* Post-Delivery Rating & Complaint Card */}

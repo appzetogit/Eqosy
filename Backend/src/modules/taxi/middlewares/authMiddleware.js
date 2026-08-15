@@ -44,15 +44,16 @@ const resolveOpenUserIdentity = async (req) => {
     req.params?.userId ||
     null;
 
-  const query = explicitUserId ? { _id: explicitUserId } : {};
-  const user = await User.findOne(query).sort({ createdAt: 1 });
-
-  if (!user) {
-    throw new ApiError(404, 'No user account is available for open user access');
+  let user = null;
+  try {
+    const query = explicitUserId ? { _id: explicitUserId } : {};
+    user = await User.findOne(query).sort({ createdAt: 1 });
+  } catch (err) {
+    user = null;
   }
 
   attachResolvedAuth(req, {
-    sub: String(user._id),
+    sub: user ? String(user._id) : null,
     role: 'user',
   });
 };

@@ -218,6 +218,16 @@ const Home = ({ embedded = false }) => {
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const currentRideRef = useRef(currentRide);
 
+  const [unreadHomeChatCount, setUnreadHomeChatCount] = useState(0);
+
+  useEffect(() => {
+    const handleUnreadIncrement = () => {
+      setUnreadHomeChatCount((prev) => prev + 1);
+    };
+    window.addEventListener('chat:unread-increment', handleUnreadIncrement);
+    return () => window.removeEventListener('chat:unread-increment', handleUnreadIncrement);
+  }, []);
+
   const persistCurrentRide = (ride) => {
     const normalizedRide = isActiveCurrentRide(ride) ? ride : null;
     setCurrentRide(normalizedRide);
@@ -804,8 +814,13 @@ const Home = ({ embedded = false }) => {
               <p className="text-[11px] font-black text-slate-900 px-2 py-0.5 rounded-lg bg-slate-100">
                 Rs {Number(serviceType === 'rental' ? rentalCurrentCharge : currentRide.fare || 0).toFixed(0)}
               </p>
-              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-slate-900 text-white shadow-md">
+              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-slate-900 text-white shadow-md relative">
                 <ChevronRight size={18} strokeWidth={3} />
+                {unreadHomeChatCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white font-black text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                    {unreadHomeChatCount}
+                  </span>
+                )}
               </div>
             </div>
           </Motion.button>

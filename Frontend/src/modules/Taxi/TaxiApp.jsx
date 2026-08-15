@@ -18,6 +18,7 @@ import { getAuthenticatedDriverRole, getLocalDriverToken } from './modules/drive
 import { installBrowserFcmRegistration } from './shared/push/browserFcmRegistration';
 import { installNativeFcmBridge } from './shared/push/nativeFcmBridge';
 import { POOLING_ENABLED, RENTAL_ENABLED } from './shared/featureFlags';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import './App.css';
 
 
@@ -482,9 +483,28 @@ const UserAccountInvalidationListener = () => {
       });
     };
 
+    const handleDriverOrPartnerChatMessage = (payload = {}) => {
+      const senderRole = String(payload.senderRole || payload.sender?.role || '').toLowerCase();
+      if (senderRole === 'user') {
+        return;
+      }
+
+      if (location.pathname.endsWith('/chat')) {
+        return;
+      }
+
+      const msgText = payload?.message?.message || payload?.message?.text || payload?.text || (typeof payload?.message === 'string' ? payload.message : 'New message');
+      const senderName = payload?.senderName || payload?.sender?.name || (senderRole === 'driver' ? 'Driver' : 'Delivery Partner');
+
+      showChatNotification(senderName, msgText);
+      window.dispatchEvent(new CustomEvent('chat:unread-increment', { detail: payload }));
+    };
+
     const socket = socketService.connect({ role: 'user' });
     socketService.on('account:deleted', handleLogout);
     socketService.on('chat:message', handleAdminChatMessage);
+    socketService.on('chat:notification', handleDriverOrPartnerChatMessage);
+    socketService.on('order-chat-notification', handleDriverOrPartnerChatMessage);
 
     const handleAuthStale = (event) => {
       const staleToken = event.detail?.token || '';
@@ -507,6 +527,8 @@ const UserAccountInvalidationListener = () => {
     return () => {
       socketService.off('account:deleted', handleLogout);
       socketService.off('chat:message', handleAdminChatMessage);
+      socketService.off('chat:notification', handleDriverOrPartnerChatMessage);
+      socketService.off('order-chat-notification', handleDriverOrPartnerChatMessage);
       window.removeEventListener('app:auth-stale', handleAuthStale);
 
       if (socket) {
@@ -686,7 +708,7 @@ function TaxiApp() {
             <Toaster position="top-right" closeButton />
             <Routes>
               {/* Static / Public routes */}
-              <Route index element={<LandingPage />} />
+              <Route index element={<Navigate to="/taxi/user" replace />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />
               <Route path="faq" element={<FaqPage />} />
@@ -726,6 +748,7 @@ function TaxiApp() {
                   element={<ParcelSearchingDriver />}
                 />
                 <Route path="parcel/tracking" element={<ParcelTracking />} />
+                <Route path="parcel/chat" element={<Chat />} />
                 <Route path="parcel/detail/:id" element={<RideDetail />} />
 
                 {/* New Service Routes — Real pages replacing ComingSoon */}
@@ -848,6 +871,7 @@ function TaxiApp() {
                   path="user/parcel/tracking"
                   element={<ParcelTracking />}
                 />
+                <Route path="user/parcel/chat" element={<Chat />} />
                 <Route
                   path="user/parcel/detail/:id"
                   element={<RideDetail />}

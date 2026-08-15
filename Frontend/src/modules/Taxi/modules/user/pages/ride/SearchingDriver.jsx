@@ -20,6 +20,7 @@ const resolveAssetUrl = (value = '') => {
   return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
 };
 import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import RideCancellationModal from '../../components/RideCancellationModal';
 
 const MAP_OPTIONS = {
@@ -73,14 +74,17 @@ const clampVehicleCount = (value) => {
   const numeric = Number(value);
 
   if (!Number.isFinite(numeric) || numeric <= 0) {
-    return 4;
+    return 0;
   }
 
-  return Math.max(3, Math.min(8, Math.round(numeric)));
+  return Math.max(0, Math.min(8, Math.round(numeric)));
 };
 
 const buildAvailableVehicleMarkers = (center, count) => {
   const safeCount = clampVehicleCount(count);
+  if (safeCount <= 0) {
+    return [];
+  }
   const lat = Number(center?.lat || 0);
   const lng = Number(center?.lng || 0);
 
@@ -217,7 +221,7 @@ const SearchingDriver = () => {
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
   const [rideOtp, setRideOtp] = useState('');
   const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
-  const [nearbyVehicleCount, setNearbyVehicleCount] = useState(4);
+  const [nearbyVehicleCount, setNearbyVehicleCount] = useState(0);
   const [rideBids, setRideBids] = useState([]);
   const [biddingSummary, setBiddingSummary] = useState(() => ({
     bookingMode: String(routeState.bookingMode || 'normal'),
@@ -235,6 +239,33 @@ const SearchingDriver = () => {
   }));
   const [bidActionLoading, setBidActionLoading] = useState(false);
   const [scheduledStatus, setScheduledStatus] = useState(() => (routeState.scheduledAt ? 'saving' : 'idle'));
+  const [unreadSearchingChatCount, setUnreadSearchingChatCount] = useState(0);
+
+  useEffect(() => {
+    const socket = socketService.connect({ role: 'user' });
+    const onChatMessage = (data) => {
+      const senderRole = String(data?.sender?.role || data?.senderRole || '').toLowerCase();
+      if (senderRole !== 'user') {
+        setUnreadSearchingChatCount((prev) => prev + 1);
+        const msgText = data?.message?.message || data?.message?.text || data?.text || (typeof data?.message === 'string' ? data.message : 'New message');
+        const senderName = data?.senderName || data?.sender?.name || 'Driver';
+        showChatNotification(senderName, msgText);
+      }
+    };
+
+    if (socket) {
+      socketService.on('chat:message', onChatMessage);
+      socketService.on('chat:notification', onChatMessage);
+      socketService.on('order-chat-notification', onChatMessage);
+    }
+    return () => {
+      if (socket) {
+        socketService.off('chat:message', onChatMessage);
+        socketService.off('chat:notification', onChatMessage);
+        socketService.off('order-chat-notification', onChatMessage);
+      }
+    };
+  }, []);
   const [scheduledError, setScheduledError] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [fareHistory, setFareHistory] = useState(() => {
@@ -1343,11 +1374,19 @@ const SearchingDriver = () => {
                     </motion.button>
                      <motion.button
                       whileTap={{ scale: 0.96 }}
-                      onClick={() => navigate(`${routePrefix}/ride/chat`, { state: { driver } })}
-                      className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-950 py-4.5 shadow-[0_12px_24px_rgba(15,23,42,0.15)] active:shadow-none"
+                      onClick={() => {
+                        setUnreadSearchingChatCount(0);
+                        navigate(`${routePrefix}/ride/chat`, { state: { driver, rideId: activeRideIdRef.current, serviceType: 'ride', from: `${routePrefix}/ride/searching` } });
+                      }}
+                      className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-950 py-4.5 shadow-[0_12px_24px_rgba(15,23,42,0.15)] active:shadow-none relative"
                     >
                       <MessageCircle size={18} className="text-white" strokeWidth={2.5} />
                       <span className="text-[13px] font-black text-white uppercase tracking-widest leading-none">Chat</span>
+                      {unreadSearchingChatCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white font-black text-[10px] min-w-[20px] h-[20px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                          {unreadSearchingChatCount}
+                        </span>
+                      )}
                     </motion.button>
                   </div>
                 </div>

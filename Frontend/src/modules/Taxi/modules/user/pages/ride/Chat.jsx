@@ -5,6 +5,7 @@ import { ArrowLeft, Send, Phone, Smile, Loader2 } from 'lucide-react';
 import SupportChatPanel from '../../../shared/components/SupportChatPanel';
 import { socketService } from '../../../../shared/api/socket';
 import { getCurrentRide } from '../../services/currentRideService';
+import { playChatNotificationSound } from '@/shared/utils/chatNotificationSound';
 
 const RIDE_EVENTS = {
   joined: 'ride:joined',
@@ -38,10 +39,13 @@ const normalizeMessage = (message, fallbackRole) => ({
   sentAt: message?.sentAt || new Date().toISOString(),
 });
 
-const buildPeerFromRideState = (ride, chatRole, fallbackPeer = {}) => {
+const buildPeerFromRideState = (ride, chatRole, fallbackPeer = {}, isParcel = false) => {
   const otherParty = chatRole === 'driver' ? ride?.user : ride?.driver;
-  const fallbackName = chatRole === 'driver' ? 'Passenger' : 'Driver';
-  const fallbackSubtitle = chatRole === 'driver' ? 'Passenger - Active now' : 'Driver - Active now';
+  const defaultLabel = isParcel
+    ? (chatRole === 'driver' ? 'Parcel Sender' : 'Delivery Captain')
+    : (chatRole === 'driver' ? 'Passenger' : 'Driver');
+  const fallbackName = defaultLabel;
+  const fallbackSubtitle = `${defaultLabel} • Active now`;
 
   return {
     name: otherParty?.name || fallbackPeer.name || fallbackName,
@@ -66,6 +70,13 @@ const Chat = () => {
   const peerFromState = location.state?.peer || location.state?.driver || {};
   const initialDraft = String(location.state?.initialDraft || '').trim();
   const rideId = location.state?.rideId || getCurrentRide()?.rideId || '';
+  const serviceType = String(
+    location.state?.serviceType ||
+    location.state?.type ||
+    (location.pathname.includes('/parcel') || location.state?.parcel ? 'parcel' : 'ride')
+  ).toLowerCase();
+  const isParcel = serviceType === 'parcel';
+
   const hasLiveToken = Boolean(
     chatRole === 'driver'
       ? localStorage.getItem('driverToken') || localStorage.getItem('token')
@@ -80,21 +91,122 @@ const Chat = () => {
   const [input, setInput] = useState('');
   const [chatError, setChatError] = useState('');
   const [isJoiningRide, setIsJoiningRide] = useState(!isAdminChat);
+
+  const defaultPeerName = peerFromState.name || (
+    isParcel
+      ? (chatRole === 'driver' ? 'Parcel Sender' : 'Delivery Captain')
+      : (chatRole === 'driver' ? 'Passenger' : 'Driver')
+  );
+
+  const defaultPeerSub = peerFromState.subtitle || (
+    isParcel
+      ? (chatRole === 'driver' ? 'Parcel Sender • Active now' : 'Delivery Captain • Active now')
+      : (chatRole === 'driver' ? 'Passenger • Active now' : 'Driver • Active now')
+  );
+
   const [resolvedPeer, setResolvedPeer] = useState({
-    name: peerFromState.name || (chatRole === 'driver' ? 'Passenger' : 'Driver'),
+    name: defaultPeerName,
     phone: peerFromState.phone || peerFromState.mobile || peerFromState.phoneNumber || '',
-    subtitle: peerFromState.subtitle || (chatRole === 'driver' ? 'Passenger - Active now' : 'Driver - Active now'),
+    subtitle: defaultPeerSub,
   });
 
   const bottomRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const prevMessagesLengthRef = useRef(0);
+  const initialScrollDoneRef = useRef(false);
+  const userScrolledUpRef = useRef(false);
+
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    // User is near bottom if within 100px of bottom
+    const isNearBottom = scrollHeight - (scrollTop + clientHeight) < 100;
+    userScrolledUpRef.current = !isNearBottom;
+  };
+
+  const scrollToBottom = (smooth = true) => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    } else if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' });
+    }
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const currentLength = messages.length;
+    const prevLength = prevMessagesLengthRef.current;
+    prevMessagesLengthRef.current = currentLength;
+
+    if (!initialScrollDoneRef.current && currentLength > 0) {
+      initialScrollDoneRef.current = true;
+      setTimeout(() => scrollToBottom(false), 50);
+      return;
+    }
+
+    // Only auto-scroll down if a new message arrived AND user hasn't scrolled up to read history
+    if (currentLength > prevLength && !userScrolledUpRef.current) {
+      setTimeout(() => scrollToBottom(true), 50);
+    }
   }, [messages]);
 
-  const quickReplies = isAdminChat
-    ? ['Payment Issue', 'Ride Cancelled', 'Lost Item', 'Safety']
-    : ['Wait for me', "I'm coming", 'Where exactly?', 'Okay'];
+  useEffect(() => {
+    if (!isJoiningRide && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      const timer = setTimeout(() => scrollToBottom(false), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isJoiningRide]);
+
+  const quickReplies = useMemo(() => {
+    if (isAdminChat) {
+      return ['Payment Issue', 'Ride Cancelled', 'Lost Item', 'Safety / Support'];
+    }
+
+    if (chatRole === 'driver') {
+      if (isParcel) {
+        return [
+          'Arrived at pickup for parcel',
+          'Is the package packed?',
+          'On my way to drop location',
+          'Arrived at drop location',
+          'Please send receiver outside',
+          'Parcel collected successfully',
+        ];
+      }
+      return [
+        'I have arrived at pickup location',
+        'In traffic, 2 mins delay',
+        'Where are you waiting?',
+        'Please share the start OTP',
+        'I am waiting near entrance',
+        'On my way to drop location',
+      ];
+    }
+
+    // User (Passenger or Sender)
+    if (isParcel) {
+      return [
+        'I am at pickup with the parcel',
+        'Parcel is packed and ready',
+        'Please call receiver on arrival',
+        'Please handle item carefully',
+        'Receiver will pay cash at drop',
+        'Where have you reached?',
+      ];
+    }
+
+    return [
+      "I'm at the pickup location",
+      'Wait for me, coming in 2 mins',
+      'Which car/color are you driving?',
+      'Please wait near main gate',
+      'Please call me when you reach',
+      'I am near the entrance',
+    ];
+  }, [isAdminChat, chatRole, isParcel]);
 
   useEffect(() => {
     if (isAdminChat || !hasLiveToken) {
@@ -119,7 +231,7 @@ const Chat = () => {
         return;
       }
 
-      setResolvedPeer(buildPeerFromRideState(ride, chatRole, peerFromState));
+      setResolvedPeer(buildPeerFromRideState(ride, chatRole, peerFromState, isParcel));
       setMessages(
         Array.isArray(ride.messages)
           ? ride.messages
@@ -147,6 +259,10 @@ const Chat = () => {
       const normalized = normalizeMessage(message, chatRole);
       if (!normalized.message || String(message?.rideId || '') !== String(rideId)) {
         return;
+      }
+
+      if (normalized.senderRole !== chatRole) {
+        playChatNotificationSound();
       }
 
       setMessages((prev) => {
@@ -219,12 +335,14 @@ const Chat = () => {
       return;
     }
 
+    userScrolledUpRef.current = false;
     setInput('');
     setChatError('');
     socketService.emit(RIDE_EVENTS.send, {
       rideId,
       message: outgoing,
     });
+    setTimeout(() => scrollToBottom(true), 50);
   };
 
   const otherName = resolvedPeer.name;
@@ -232,12 +350,39 @@ const Chat = () => {
   const otherPhone = resolvedPeer.phone;
   const avatarName = encodeURIComponent(otherName);
 
+  const handleBackNavigation = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const fromPath = location.state?.from;
+    if (fromPath) {
+      navigate(fromPath, { replace: true, state: { rideId } });
+      return;
+    }
+    const isDriver = chatRole === 'driver' || location.pathname.includes('/driver');
+    if (isDriver) {
+      navigate('/taxi/driver/active-trip', { replace: true, state: { rideId } });
+      return;
+    }
+    if (window.history.length > 1 && window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      const isUserRoute = location.pathname.startsWith('/taxi/user') || location.pathname.startsWith('/user');
+      const routePrefix = isUserRoute ? '/taxi/user' : '';
+      const fallback = isParcel
+        ? `${routePrefix}/parcel/searching`
+        : `${routePrefix}/ride/searching`;
+      navigate(fallback, { replace: true, state: { rideId } });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_60%,#EEF2F7_100%)] max-w-lg mx-auto flex flex-col font-sans relative overflow-hidden">
+    <div className="h-[100dvh] bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_60%,#EEF2F7_100%)] max-w-lg mx-auto flex flex-col font-sans relative overflow-hidden">
       <div className="absolute -top-16 right-[-40px] h-44 w-44 rounded-full bg-orange-100/50 blur-3xl pointer-events-none" />
 
-      <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white/90 backdrop-blur-md px-4 py-3.5 flex items-center gap-3 border-b border-white/80 shadow-[0_4px_20px_rgba(15,23,42,0.05)] sticky top-0 z-20">
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)] shrink-0">
+      <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white/90 backdrop-blur-md px-4 py-3.5 flex items-center gap-3 border-b border-white/80 shadow-[0_4px_20px_rgba(15,23,42,0.05)] shrink-0 z-20">
+        <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={handleBackNavigation} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)] shrink-0 active:scale-95 transition-all">
           <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
         </motion.button>
 
@@ -268,7 +413,11 @@ const Chat = () => {
         </motion.button>
       </motion.header>
 
-      <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto no-scrollbar">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 px-4 py-4 space-y-3 overflow-y-auto overflow-x-hidden no-scrollbar pb-6"
+      >
         {isJoiningRide ? (
           <div className="h-full flex items-center justify-center">
             <div className="flex items-center gap-3 rounded-2xl bg-white/90 border border-slate-100 px-4 py-3 shadow-sm">
@@ -322,7 +471,7 @@ const Chat = () => {
         <div ref={bottomRef} />
       </div>
 
-      <div className="bg-white/90 backdrop-blur-md border-t border-white/80 px-4 pt-3 pb-6 space-y-2.5 shadow-[0_-4px_20px_rgba(15,23,42,0.05)]">
+      <div className="bg-white/90 backdrop-blur-md border-t border-white/80 px-4 pt-3 pb-6 space-y-2.5 shadow-[0_-4px_20px_rgba(15,23,42,0.05)] shrink-0 z-20">
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
           {quickReplies.map((r) => (
             <motion.button key={r} whileTap={{ scale: 0.95 }} onClick={() => send(r)} className="shrink-0 px-3.5 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-black text-slate-600 active:bg-slate-100 transition-all">

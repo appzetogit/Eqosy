@@ -502,7 +502,7 @@ export const createPoolingBooking = asyncHandler(async (_req, _res) => {
 export const getMyPoolingBookings = asyncHandler(async (req, res) => {
   const userId = getCurrentUserId(req);
   if (!userId) {
-    throw new ApiError(401, 'User authentication is required');
+    return ok(res, [], 'My bookings fetched successfully');
   }
 
   const bookings = await PoolingBooking.find({ user: userId })

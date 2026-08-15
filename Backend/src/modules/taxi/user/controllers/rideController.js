@@ -376,20 +376,34 @@ export const getMyActiveRide = async (req, res) => {
 };
 
 export const listMyRides = async (req, res) => {
+  const role = req.auth?.role || 'user';
+  const entityId = req.auth?.sub;
+
+  if (!entityId) {
+    return res.json({
+      success: true,
+      data: {
+        results: [],
+        total: 0,
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      },
+    });
+  }
+
   const history = await listRideHistoryForIdentity({
-    role: req.auth.role,
-    entityId: req.auth.sub,
-    limit: req.query.limit,
-    page: req.query.page,
-    category: req.query.category,
+    role,
+    entityId,
+    limit: req.query?.limit,
+    page: req.query?.page,
+    category: req.query?.category,
   });
 
   res.json({
     success: true,
     data: {
-      results: history.results,
-      total: history.pagination.total,
-      pagination: history.pagination,
+      results: history?.results || [],
+      total: history?.pagination?.total || 0,
+      pagination: history?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
     },
   });
 };
@@ -1042,136 +1056,127 @@ export const getCancellationBillReceipt = async (req, res) => {
 };
 
 export const listAvailableDrivers = async (req, res) => {
-  const { vehicleTypeId, lat, lng, maxDistance, limit = 30, service_location_id, transport_type } = req.query;
-  const latitude = Number(lat);
-  const longitude = Number(lng);
-  const distance = Number(maxDistance);
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new ApiError(400, 'lat and lng are required');
-  }
-
-  const query = {
-    isOnline: true,
-    isOnRide: false,
-  };
-
-  if (vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
-    const isDelivery = transport_type === 'delivery' || transport_type === 'parcel';
-    if (isDelivery) {
-      query.$or = [
-        { vehicleTypeId },
-        { serviceCategories: { $in: ['delivery', 'parcel'] } },
-        { registerFor: { $in: ['delivery', 'both'] } },
-      ];
-    } else {
-      query.vehicleTypeId = vehicleTypeId;
-    }
-  }
-
-  const near = {
-    $geometry: {
-      type: 'Point',
-      coordinates: [longitude, latitude],
-    },
-    $maxDistance: Number.isFinite(distance) && distance > 0 ? Math.min(distance, 25000) : 15000,
-  };
-
-  query.location = { $near: near };
-
-  let drivers = [];
   try {
-    drivers = await Driver.find(query)
-      .limit(Math.min(Number(limit) || 30, 50))
-      .select('name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location')
-      .lean();
-  } catch (_e) {
-    drivers = [];
-  }
+    const { vehicleTypeId, lat, lng, maxDistance, limit = 30, service_location_id, transport_type } = req.query;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const distance = Number(maxDistance);
 
-  if (drivers.length < 3) {
-    const isDelivery = transport_type === 'delivery' || transport_type === 'parcel';
-    const offsets = [
-      { latOffset: 0.0028, lngOffset: 0.0021, heading: 45, icon: isDelivery ? 'truck' : 'bike', name: isDelivery ? 'Delivery Captain Rahul' : 'Rider Rahul' },
-      { latOffset: -0.0021, lngOffset: 0.0034, heading: 135, icon: 'bike', name: 'Rider Amit' },
-      { latOffset: 0.0039, lngOffset: -0.0026, heading: 220, icon: 'car', name: 'Captain Vikram' },
-      { latOffset: -0.0032, lngOffset: -0.0021, heading: 310, icon: 'auto', name: 'Captain Suresh' },
-      { latOffset: 0.0014, lngOffset: -0.0042, heading: 170, icon: isDelivery ? 'truck' : 'bike', name: isDelivery ? 'Delivery Captain Rajesh' : 'Rider Rajesh' },
-      { latOffset: -0.0041, lngOffset: 0.0015, heading: 85, icon: 'bike', name: 'Rider Priya' },
-    ];
-
-    const existingIds = new Set(drivers.map((d) => String(d._id)));
-    const syntheticDrivers = offsets
-      .filter((_, idx) => !existingIds.has(`mock_driver_${idx + 1}`))
-      .map((off, idx) => ({
-        _id: `mock_driver_${idx + 1}`,
-        name: off.name,
-        vehicleTypeId: vehicleTypeId || `mock_v_${idx + 1}`,
-        vehicleType: off.icon === 'bike' ? 'Bike' : off.icon === 'auto' ? 'Auto' : off.icon === 'truck' ? 'Delivery Truck' : 'Cab',
-        vehicleIconType: off.icon,
-        vehicleNumber: `MP-09-AB-${1000 + idx * 111}`,
-        rating: 4.8,
-        heading: off.heading,
-        location: {
-          type: 'Point',
-          coordinates: [longitude + off.lngOffset, latitude + off.latOffset],
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          totalDrivers: 0,
+          closestDriverDistanceMeters: null,
+          closestDriverEtaMinutes: null,
+          allowedPaymentMethods: ['cash', 'online'],
+          drivers: [],
         },
-      }));
-
-    drivers = [...drivers, ...syntheticDrivers];
-  }
-
-  const enrichedDrivers = drivers.map((driver) => {
-    const coords = driver.location?.coordinates || [longitude, latitude];
-    const distanceMeters = calculateDistanceMeters([longitude, latitude], coords);
-    const etaMinutes = estimateEtaMinutes(distanceMeters);
-
-    return {
-      id: String(driver._id),
-      name: driver.name || 'Rider',
-      vehicleTypeId: driver.vehicleTypeId,
-      vehicleType: driver.vehicleType,
-      vehicleIconType: driver.vehicleIconType || (transport_type === 'delivery' ? 'truck' : 'car'),
-      vehicleNumber: driver.vehicleNumber || 'MP-09-RIDER',
-      vehicleColor: driver.vehicleColor || '',
-      vehicleMake: driver.vehicleMake || '',
-      vehicleModel: driver.vehicleModel || '',
-      rating: driver.rating || 4.9,
-      heading: driver.heading || 90,
-      location: driver.location,
-      distanceMeters,
-      etaMinutes,
-    };
-  });
-
-  let allowedPaymentMethods = ['cash', 'online'];
-  try {
-    const paymentInfo = await getAllowedRidePaymentMethodsForPricing({
-      serviceLocationId: service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
-        ? new mongoose.Types.ObjectId(service_location_id)
-        : null,
-      transportType: transport_type || 'taxi',
-      vehicleTypeId: vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId) ? vehicleTypeId : null,
-    });
-    if (Array.isArray(paymentInfo?.allowedPaymentMethods) && paymentInfo.allowedPaymentMethods.length) {
-      allowedPaymentMethods = paymentInfo.allowedPaymentMethods;
+      });
     }
-  } catch (_e) {
-    allowedPaymentMethods = ['cash', 'online'];
+
+    const query = {
+      isOnline: true,
+      isOnRide: false,
+    };
+
+    if (vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
+      const isDelivery = transport_type === 'delivery' || transport_type === 'parcel';
+      if (isDelivery) {
+        query.$or = [
+          { vehicleTypeId },
+          { serviceCategories: { $in: ['delivery', 'parcel'] } },
+          { registerFor: { $in: ['delivery', 'both'] } },
+        ];
+      } else {
+        query.vehicleTypeId = vehicleTypeId;
+      }
+    }
+
+    const near = {
+      $geometry: {
+        type: 'Point',
+        coordinates: [longitude, latitude],
+      },
+      $maxDistance: Number.isFinite(distance) && distance > 0 ? Math.min(distance, 25000) : 15000,
+    };
+
+    query.location = { $near: near };
+
+    let drivers = [];
+    try {
+      drivers = await Driver.find(query)
+        .limit(Math.min(Number(limit) || 30, 50))
+        .select('name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location')
+        .lean();
+    } catch (_e) {
+      drivers = [];
+    }
+
+    const enrichedDrivers = (drivers || []).map((driver) => {
+      const coords = driver.location?.coordinates || [longitude, latitude];
+      const distanceMeters = calculateDistanceMeters([longitude, latitude], coords);
+      const etaMinutes = estimateEtaMinutes(distanceMeters);
+
+      return {
+        id: String(driver._id),
+        name: driver.name || 'Rider',
+        vehicleTypeId: driver.vehicleTypeId,
+        vehicleType: driver.vehicleType,
+        vehicleIconType: driver.vehicleIconType || (transport_type === 'delivery' ? 'truck' : 'car'),
+        vehicleNumber: driver.vehicleNumber || 'MP-09-RIDER',
+        vehicleColor: driver.vehicleColor || '',
+        vehicleMake: driver.vehicleMake || '',
+        vehicleModel: driver.vehicleModel || '',
+        rating: driver.rating || 4.9,
+        heading: driver.heading || 90,
+        location: driver.location,
+        distanceMeters,
+        etaMinutes,
+      };
+    });
+
+    let allowedPaymentMethods = ['cash', 'online'];
+    try {
+      const paymentInfo = await getAllowedRidePaymentMethodsForPricing({
+        serviceLocationId: service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
+          ? new mongoose.Types.ObjectId(service_location_id)
+          : null,
+        transportType: transport_type || 'taxi',
+        vehicleTypeId: vehicleTypeId && mongoose.Types.ObjectId.isValid(vehicleTypeId) ? vehicleTypeId : null,
+      });
+      if (Array.isArray(paymentInfo?.allowedPaymentMethods) && paymentInfo.allowedPaymentMethods.length) {
+        allowedPaymentMethods = paymentInfo.allowedPaymentMethods;
+      }
+    } catch (_e) {
+      allowedPaymentMethods = ['cash', 'online'];
+    }
+
+    const closestDriver = enrichedDrivers[0] || null;
+
+    return res.json({
+      success: true,
+      data: {
+        totalDrivers: enrichedDrivers.length,
+        closestDriverDistanceMeters: closestDriver?.distanceMeters ?? null,
+        closestDriverEtaMinutes: closestDriver?.etaMinutes ?? null,
+        allowedPaymentMethods,
+        drivers: enrichedDrivers,
+      },
+    });
+  } catch (error) {
+    console.error('[listAvailableDrivers] Handled error:', error);
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalDrivers: 0,
+        closestDriverDistanceMeters: null,
+        closestDriverEtaMinutes: null,
+        allowedPaymentMethods: ['cash', 'online'],
+        drivers: [],
+      },
+    });
   }
-
-  const closestDriver = enrichedDrivers[0] || null;
-
-  res.json({
-    success: true,
-    data: {
-      totalDrivers: enrichedDrivers.length,
-      closestDriverDistanceMeters: closestDriver?.distanceMeters ?? null,
-      closestDriverEtaMinutes: closestDriver?.etaMinutes ?? null,
-      allowedPaymentMethods,
-      drivers: enrichedDrivers,
-    },
-  });
 };
 
 export const getRideBids = async (req, res) => {

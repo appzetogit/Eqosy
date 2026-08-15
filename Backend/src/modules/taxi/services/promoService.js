@@ -398,7 +398,8 @@ export const listAvailablePromosForUser = async ({
   now = new Date(),
   limit = 50,
 }) => {
-  const serviceLocationId = toObjectIdOrThrow(service_location_id, 'service location id');
+  const isLocationObjectId = mongoose.isValidObjectId(service_location_id);
+  const serviceLocationId = isLocationObjectId ? new mongoose.Types.ObjectId(String(service_location_id)) : null;
   const transportType = normalizeTransportType(transport_type);
   const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
 
@@ -407,15 +408,17 @@ export const listAvailablePromosForUser = async ({
     from_date: { $lte: now },
     to_date: { $gte: now },
     transport_type: { $in: ['all', transportType] },
-    $and: [
-      {
-        $or: [
-          { service_location_id: serviceLocationId },
-          { service_location_ids: serviceLocationId },
-        ],
-      },
-    ],
+    $and: [],
   };
+
+  if (serviceLocationId) {
+    query.$and.push({
+      $or: [
+        { service_location_id: serviceLocationId },
+        { service_location_ids: serviceLocationId },
+      ],
+    });
+  }
 
   if (userId) {
     query.$and.push({

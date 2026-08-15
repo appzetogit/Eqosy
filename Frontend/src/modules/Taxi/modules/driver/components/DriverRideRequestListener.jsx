@@ -14,6 +14,8 @@ const ignoredRoutes = new Set([
     '/taxi/driver/home',
     '/taxi/driver/dashboard',
     '/taxi/driver/active-trip',
+    '/taxi/driver/chat',
+    '/taxi/driver/support/chat',
     '/taxi/driver/lang-select',
     '/taxi/driver/welcome',
     '/taxi/driver/login',

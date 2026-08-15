@@ -31,6 +31,7 @@ import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
 import carIcon from '../../../assets/icons/car.png';
 import { getLocalDriverToken } from '../services/registrationService';
 import CancellationReceiptModal from '../../shared/components/CancellationReceiptModal';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 
 const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
@@ -988,6 +989,7 @@ const ActiveTrip = () => {
     const [localDestinationArrivedAt, setLocalDestinationArrivedAt] = useState('');
     const [waitingNow, setWaitingNow] = useState(Date.now());
     const [receivedTip, setReceivedTip] = useState(null);
+    const [unreadTripChatCount, setUnreadTripChatCount] = useState(0);
 
     useEffect(() => {
         const socket = socketService.connect({ role: 'driver' });
@@ -997,12 +999,28 @@ const ActiveTrip = () => {
                 toast.success(`🎉 Tip Received: Rs ${data.tipAmount} from passenger!`, { duration: 6000 });
             }
         };
+        const onChatMessage = (data) => {
+            const senderRole = String(data?.sender?.role || data?.senderRole || '').toLowerCase();
+            if (senderRole !== 'driver') {
+                setUnreadTripChatCount((prev) => prev + 1);
+                const msgText = data?.message?.message || data?.message?.text || data?.text || (typeof data?.message === 'string' ? data.message : 'New message');
+                const senderName = data?.senderName || data?.sender?.name || 'Passenger';
+                showChatNotification(senderName, msgText);
+            }
+        };
+
         if (socket) {
             socketService.on('ride:tip:received', onTipReceived);
+            socketService.on('chat:message', onChatMessage);
+            socketService.on('chat:notification', onChatMessage);
+            socketService.on('order-chat-notification', onChatMessage);
         }
         return () => {
             if (socket) {
                 socketService.off('ride:tip:received', onTipReceived);
+                socketService.off('chat:message', onChatMessage);
+                socketService.off('chat:notification', onChatMessage);
+                socketService.off('order-chat-notification', onChatMessage);
             }
         };
     }, []);
@@ -1680,10 +1698,12 @@ const ActiveTrip = () => {
         navigate('/taxi/driver/chat', {
             state: {
                 rideId,
+                from: '/taxi/driver/active-trip',
+                serviceType: isParcel ? 'parcel' : 'ride',
                 peer: {
-                    name: pickupContact?.name || 'Passenger',
+                    name: pickupContact?.name || (isParcel ? 'Parcel Sender' : 'Passenger'),
                     phone: pickupContact?.phone || '',
-                    subtitle: `${isParcel ? 'Sender' : 'Passenger'} - Active now`,
+                    subtitle: `${isParcel ? 'Sender' : 'Passenger'} • Active now`,
                     role: isParcel ? 'Sender' : 'Passenger',
                 },
             },
@@ -2574,7 +2594,14 @@ const ActiveTrip = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-1.5">
-                                    <button onClick={openTripChat} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={15} strokeWidth={2.5} /></button>
+                                    <button onClick={() => { setUnreadTripChatCount(0); openTripChat(); }} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 active:scale-95 transition-transform relative" aria-label="Open trip chat">
+                                        <MessageSquare size={15} strokeWidth={2.5} />
+                                        {unreadTripChatCount > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white font-black text-[9px] min-w-[17px] h-[17px] px-0.5 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                                                {unreadTripChatCount}
+                                            </span>
+                                        )}
+                                    </button>
                                     <button onClick={openGoogleMapsNavigation} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Navigate to destination"><Navigation size={15} strokeWidth={2.5} /></button>
                                     <button onClick={() => callContact(pickupContact?.phone)} className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center active:scale-95 transition-transform" style={{ color: routeStrokeColor }} aria-label="Call contact"><Phone size={15} strokeWidth={2.5} /></button>
                                 </div>

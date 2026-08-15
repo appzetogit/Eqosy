@@ -623,8 +623,18 @@ export const broadcastSupportMessage = (message) => {
     chatIo.to(room).emit('chat:message', message);
   }
 
-  chatIo.to(getSupportParticipantRoom(message.sender.role, message.sender.id)).emit('chat:message', message);
-  chatIo.to(getSupportParticipantRoom(message.receiver.role, message.receiver.id)).emit('chat:message', message);
+  const senderRoom = getSupportParticipantRoom(message.sender.role, message.sender.id);
+  const receiverRoom = getSupportParticipantRoom(message.receiver.role, message.receiver.id);
+
+  chatIo.to(senderRoom).emit('chat:message', message);
+  chatIo.to(receiverRoom).emit('chat:message', message);
+  chatIo.to(receiverRoom).emit('chat:notification', {
+    conversationKey: message.conversationKey,
+    senderName: message.sender.name || message.sender.role,
+    text: message.message,
+    message,
+  });
+
   chatIo.to(getSupportRoleRoom('admin')).emit('chat:conversation-updated', {
     conversationKey: message.conversationKey,
     message,

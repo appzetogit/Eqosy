@@ -56,6 +56,7 @@ const roomNames = {
     user: (id) => `user:${resolveRoomOwnerId(id) || ''}`,
     delivery: (id) => `delivery:${resolveRoomOwnerId(id) || ''}`,
     tracking: (orderId) => `tracking:${resolveRoomOwnerId(orderId) || ''}`,
+    orderChat: (orderId) => `order-chat:${resolveRoomOwnerId(orderId) || ''}`,
 };
 
 /**
@@ -349,6 +350,103 @@ export const initSocket = async (server) => {
             if (!orderId) return;
             const room = roomNames.tracking(orderId);
             socket.leave(room);
+        });
+
+        // ─── Order Delivery Chat Events ────────────────────────────────
+        socket.on('join-order-chat', (orderId) => {
+            if (!orderId) return;
+            const room = roomNames.orderChat(orderId);
+            socket.join(room);
+            logger.info(`Socket ${socket.id} (${socket.user?.role}:${socket.user?.userId}) joined order chat room ${room}`);
+            socket.emit('order-chat-joined', { room, orderId: String(orderId) });
+        });
+
+        socket.on('leave-order-chat', (orderId) => {
+            if (!orderId) return;
+            const room = roomNames.orderChat(orderId);
+            socket.leave(room);
+        });
+
+        socket.on('send-order-chat-message', async (data) => {
+            if (!data || !data.orderId || !data.text) return;
+            try {
+                const { sendOrderChatMessage } = await import('../modules/food/orders/services/orderChat.service.js');
+                const result = await sendOrderChatMessage({
+                    orderId: data.orderId,
+                    text: data.text,
+                    messageType: data.messageType || 'text',
+                    currentUserId: socket.user?.userId,
+                    currentRole: socket.user?.role,
+                });
+
+                const room = roomNames.orderChat(data.orderId);
+                io.to(room).emit('new-order-chat-message', {
+                    orderId: String(data.orderId),
+                    message: result.message,
+                    conversation: result.conversation,
+                });
+
+                // Also notify peer's direct user/delivery room with unread count
+                if (result.conversation) {
+                  const targetUserRoom = roomNames.user(result.conversation.userId);
+                  const targetDeliveryRoom = roomNames.delivery(result.conversation.deliveryPartnerId);
+
+                  const notificationPayload = {
+                    orderId: String(data.orderId),
+                    message: result.message,
+                    senderRole: result.message.senderRole,
+                    senderName: result.message.senderRole === 'USER' ? 'Customer' : 'Delivery Partner',
+                    text: result.message.text,
+                    userUnreadCount: result.conversation.userUnreadCount || 0,
+                    partnerUnreadCount: result.conversation.partnerUnreadCount || 0,
+                  };
+
+                  socket.to(targetUserRoom).emit('order-chat-notification', notificationPayload);
+                  socket.to(targetDeliveryRoom).emit('order-chat-notification', notificationPayload);
+
+                  io.to(targetUserRoom).emit('order-chat-unread-update', {
+                    orderId: String(data.orderId),
+                    unreadCount: result.conversation.userUnreadCount || 0,
+                  });
+                  io.to(targetDeliveryRoom).emit('order-chat-unread-update', {
+                    orderId: String(data.orderId),
+                    unreadCount: result.conversation.partnerUnreadCount || 0,
+                  });
+                }
+            } catch (err) {
+                socket.emit('order-chat-error', { message: err.message || 'Failed to send message' });
+            }
+        });
+
+        socket.on('typing-order-chat', (data) => {
+            if (!data || !data.orderId) return;
+            const room = roomNames.orderChat(data.orderId);
+            socket.to(room).emit('partner-typing-order-chat', {
+                orderId: String(data.orderId),
+                isTyping: Boolean(data.isTyping),
+                senderId: String(socket.user?.userId || ''),
+                senderRole: socket.user?.role,
+            });
+        });
+
+        socket.on('mark-order-chat-read', async (data) => {
+            if (!data || !data.orderId) return;
+            try {
+                const { markOrderMessagesAsRead } = await import('../modules/food/orders/services/orderChat.service.js');
+                await markOrderMessagesAsRead({
+                    orderId: data.orderId,
+                    currentUserId: socket.user?.userId,
+                    currentRole: socket.user?.role,
+                });
+
+                const room = roomNames.orderChat(data.orderId);
+                io.to(room).emit('order-chat-messages-read', {
+                    orderId: String(data.orderId),
+                    readBy: String(socket.user?.userId || ''),
+                });
+            } catch (_err) {
+                // Silently ignore read status errors
+            }
         });
 
         socket.on('disconnect', () => {

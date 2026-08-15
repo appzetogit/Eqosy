@@ -134,13 +134,16 @@ const getOverlayCenterOffset = (width, height) => ({
 const clampVehicleCount = (value) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) {
-    return 4;
+    return 0;
   }
-  return Math.max(3, Math.min(8, Math.round(numeric)));
+  return Math.max(0, Math.min(8, Math.round(numeric)));
 };
 
 const buildAvailableVehicleMarkers = (center, count) => {
   const safeCount = clampVehicleCount(count);
+  if (safeCount <= 0) {
+    return [];
+  }
   const lat = Number(center?.lat || 0);
   const lng = Number(center?.lng || 0);
 
@@ -353,7 +356,7 @@ const ParcelSearchingDriver = () => {
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
   const [searchStatus, setSearchStatus] = useState('Preparing dispatch...');
   const [bookingError, setBookingError] = useState('');
-  const [nearbyVehicleCount, setNearbyVehicleCount] = useState(4);
+  const [nearbyVehicleCount, setNearbyVehicleCount] = useState(0);
   const activeRidePollRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   const requestStartedRef = useRef(false);
@@ -732,7 +735,6 @@ const ParcelSearchingDriver = () => {
         pollActiveRide();
         if (!disposed) {
           setSearchStatus('Booking created. Notifying nearby captains...');
-          setNearbyVehicleCount(clampVehicleCount(selectedVehicleTypeIds.length));
         }
 
         searchTimeoutRef.current = setTimeout(async () => {
@@ -1050,7 +1052,7 @@ const ParcelSearchingDriver = () => {
                     </motion.button>
                     <motion.button
                       whileTap={{ scale: 0.96 }}
-                      onClick={() => navigate(`${routePrefix}/parcel/chat`, { state: { driver } })}
+                      onClick={() => navigate(`${routePrefix}/parcel/chat`, { state: { driver, rideId: activeRideIdRef.current, serviceType: 'parcel' } })}
                       className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-950 py-4.5 shadow-[0_12px_24px_rgba(15,23,42,0.15)] active:shadow-none"
                     >
                       <MessageCircle size={18} className="text-white" strokeWidth={2.5} />
