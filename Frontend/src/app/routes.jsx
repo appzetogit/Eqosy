@@ -112,7 +112,7 @@ const AppRoutes = () => {
           </Suspense>
         }
       />
-      <Route path="/user/*" element={<RedirectToFood />} />
+      <Route path="/user/*" element={<Navigate to="/food/user" replace />} />
       <Route path="/restaurant/*" element={<RedirectToFood />} />
       <Route path="/delivery/*" element={<RedirectToFood />} />
       <Route path="/usermain/*" element={<RedirectToFood />} />
