@@ -100,7 +100,8 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+      <Route path="/" element={<Navigate to="/food/user" replace />} />
+      <Route path="/landing" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
@@ -119,7 +120,7 @@ const AppRoutes = () => {
       <Route path="/profile/*" element={<RedirectToFood />} />
       <Route path="/cart/*" element={<Navigate to="/food/user/cart" replace />} />
       <Route path="/orders/*" element={<RedirectToFood />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/food/user" replace />} />
     </Routes>
   )
 }
