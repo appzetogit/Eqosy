@@ -124,15 +124,43 @@ export async function getPublicApprovedRestaurantMenu(restaurantIdOrSlug) {
     if (!value) throw new ValidationError('Restaurant id is required');
 
     let restaurant = null;
-    if (/^[0-9a-fA-F]{24}$/.test(value)) {
-        restaurant = await FoodRestaurant.findOne({ _id: value, status: 'approved' })
+    const valueClean = value.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+
+    if (mongoose.Types.ObjectId.isValid(value)) {
+        restaurant = await FoodRestaurant.findOne({ _id: value, status: { $ne: 'rejected' } })
             .select('_id status')
             .lean();
-    } else {
+    }
+
+    if (!restaurant) {
+        restaurant = await FoodRestaurant.findOne({ restaurantId: value, status: { $ne: 'rejected' } })
+            .select('_id status')
+            .lean();
+    }
+
+    if (!restaurant) {
         const normalized = value.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ');
-        restaurant = await FoodRestaurant.findOne({ restaurantNameNormalized: normalized, status: 'approved' })
+        restaurant = await FoodRestaurant.findOne({ restaurantNameNormalized: normalized, status: { $ne: 'rejected' } })
             .select('_id status')
             .lean();
+    }
+
+    if (!restaurant && valueClean) {
+        const allActive = await FoodRestaurant.find({ status: { $ne: 'rejected' } }).select('_id restaurantName name slug restaurantId').lean();
+        const found = allActive.find((r) => {
+            const rName = String(r.restaurantName || r.name || '');
+            const rId = String(r._id || '');
+            const rRestId = String(r.restaurantId || '');
+            const rSlug = String(r.slug || '');
+
+            if (rId === value || rRestId === value || rSlug.toLowerCase() === value.toLowerCase()) return true;
+
+            const rClean = rName.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+            return rClean === valueClean;
+        });
+        if (found) {
+            restaurant = found;
+        }
     }
 
     if (!restaurant?._id) {
