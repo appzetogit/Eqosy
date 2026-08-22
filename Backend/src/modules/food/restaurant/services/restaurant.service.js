@@ -1719,18 +1719,43 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug) => {
     if (!value) return null;
 
     let foundDoc = null;
-    // ObjectId path
-    if (/^[0-9a-fA-F]{24}$/.test(value)) {
-        foundDoc = await FoodRestaurant.findOne({ _id: value, status: 'approved' }).lean();
-    } else {
-        // Slug path: use normalized field for index-friendly exact match.
+    const valueClean = value.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+
+    // 1. Try ObjectId match
+    if (mongoose.Types.ObjectId.isValid(value)) {
+        foundDoc = await FoodRestaurant.findOne({ _id: value, status: { $ne: 'rejected' } }).lean();
+    }
+
+    // 2. Try restaurantId match
+    if (!foundDoc) {
+        foundDoc = await FoodRestaurant.findOne({ restaurantId: value, status: { $ne: 'rejected' } }).lean();
+    }
+
+    // 3. Try exact restaurantNameNormalized match
+    if (!foundDoc) {
         const restaurantNameNormalized = normalizeName(value);
         if (restaurantNameNormalized) {
             foundDoc = await FoodRestaurant.findOne({
-                status: 'approved',
+                status: { $ne: 'rejected' },
                 restaurantNameNormalized
             }).lean();
         }
+    }
+
+    // 4. Try flexible clean slug / name match
+    if (!foundDoc && valueClean) {
+        const allActive = await FoodRestaurant.find({ status: { $ne: 'rejected' } }).lean();
+        foundDoc = allActive.find((r) => {
+            const rName = String(r.restaurantName || r.name || '');
+            const rId = String(r._id || '');
+            const rRestId = String(r.restaurantId || '');
+            const rSlug = String(r.slug || '');
+
+            if (rId === value || rRestId === value || rSlug.toLowerCase() === value.toLowerCase()) return true;
+
+            const rClean = rName.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+            return rClean === valueClean;
+        });
     }
 
     if (!foundDoc) return null;

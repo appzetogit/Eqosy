@@ -781,7 +781,7 @@ Order again from this restaurant in the ${companyName} app.`
                         </p>
                       )}
                       {order.restaurantId && (
-                        <Link to={`/user/restaurants/${order.restaurantId}`}>
+                        <Link to={`/food/user/restaurants/${order.restaurantId}`}>
                           <button className="text-xs text-[#EB590E] font-medium flex items-center mt-1 hover:text-[#D94F0C]">
                             View menu <span className="ml-0.5">&gt;</span>
                           </button>

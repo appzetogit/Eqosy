@@ -198,7 +198,7 @@ function StoreCard({ store, index }) {
       transition={{ duration: 0.32, delay: index * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="mb-4"
     >
-      <Link to={`/user/restaurants/${store.slug}`} className="block">
+      <Link to={`/food/user/restaurants/${store.slug}`} className="block">
         <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.08)] active:scale-[0.99] transition-transform duration-150">
 
           {/* Image */}

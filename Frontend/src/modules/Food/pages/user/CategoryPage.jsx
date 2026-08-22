@@ -1569,7 +1569,7 @@ export default function CategoryPage() {
                   return (
                     <Link
                       key={restaurant.id}
-                      to={`/user/restaurants/${restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      to={`/food/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
                       onClick={() => {
                         if (triggerEqosyCartLoader) {
                           triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
@@ -1680,7 +1680,7 @@ export default function CategoryPage() {
                 return (
                   <Link
                     key={restaurant.id}
-                    to={`/user/restaurants/${restaurantSlug}`}
+                    to={`/food/user/restaurants/${restaurant.slug || restaurantSlug}`}
                     onClick={() => {
                       if (triggerEqosyCartLoader) {
                         triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);

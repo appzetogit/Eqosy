@@ -3070,7 +3070,7 @@ export default function Home() {
                 className="flex-shrink-0 w-56 transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02]"
               >
                 <Link
-                  to={`/user/restaurants/${restaurantSlug}`}
+                  to={`/food/user/restaurants/${restaurantSlug}`}
                   className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="relative h-28 bg-gray-50">
@@ -3323,7 +3323,7 @@ export default function Home() {
                       viewport={{ once: true }}
                       transition={{ duration: 0.35, delay: index * 0.05 }}>
                       <Link
-                        to={`/user/restaurants/${restaurantSlug}`}
+                        to={`/food/user/restaurants/${restaurantSlug}`}
                         className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-shadow">
                         <div className="relative h-28 sm:h-32 bg-gray-50">
                           <RestaurantImageCarousel
@@ -3470,7 +3470,7 @@ export default function Home() {
                       }}>
                       <div className="h-full group">
                         <Link
-                          to={`/user/restaurants/${restaurantSlug}`}
+                          to={`/food/user/restaurants/${restaurantSlug}`}
                           onClick={() => {
                             if (triggerEqosyCartLoader) {
                               triggerEqosyCartLoader("Opening Restaurant...", "Loading fresh menu & food categories...", 900);

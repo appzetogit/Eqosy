@@ -872,7 +872,7 @@ export default function Under250() {
     const itemId = item.id || item._id
     const restaurantSlug = item.restaurantSlug || item.slug || ""
     const shareUrl = restaurantSlug
-      ? `${window.location.origin}/user/restaurants/${restaurantSlug}${itemId ? `?dish=${encodeURIComponent(itemId)}` : ""}`
+      ? `${window.location.origin}/food/user/restaurants/${restaurantSlug}${itemId ? `?dish=${encodeURIComponent(itemId)}` : ""}`
       : window.location.href
 
     try {
@@ -897,7 +897,7 @@ export default function Under250() {
     const itemId = selectedItem.id || selectedItem._id
     const restaurantSlug = selectedItem.restaurantSlug || selectedItem.slug || ""
     const shareUrl = restaurantSlug
-      ? `${window.location.origin}/user/restaurants/${restaurantSlug}${itemId ? `?dish=${encodeURIComponent(itemId)}` : ""}`
+      ? `${window.location.origin}/food/user/restaurants/${restaurantSlug}${itemId ? `?dish=${encodeURIComponent(itemId)}` : ""}`
       : window.location.href
     const shareText = `Check out ${selectedItem.name || "this dish"} from ${selectedItem.restaurant || "Switch 99"}`
     const encodedUrl = encodeURIComponent(shareUrl)
@@ -1309,7 +1309,7 @@ export default function Under250() {
                     </div>
 
                     {/* View Full Menu Button */}
-                    <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/user/restaurants/${restaurantSlug}?under250=true`}>
+                    <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/food/user/restaurants/${restaurantSlug}?under250=true`}>
                       <Button
                         variant="outline"
                         className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-50 dark:bg-[#1a1a1a] hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white text-gray-700 border-gray-200 dark:border-gray-800 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg"

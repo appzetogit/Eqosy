@@ -918,7 +918,7 @@ export default function SearchResults() {
                 return (
                   <Link
                     key={restaurant.id}
-                    to={`/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
+                    to={`/food/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
                     className="block"
                   >
                     <div className={`group ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
@@ -987,7 +987,7 @@ export default function SearchResults() {
               const isFavorite = favorites.has(restaurant.id)
 
               return (
-                <Link key={restaurant.id} to={`/user/restaurants/${restaurant.slug || restaurantSlug}`} className="h-full flex">
+                <Link key={restaurant.id} to={`/food/user/restaurants/${restaurant.slug || restaurantSlug}`} className="h-full flex">
                   <Card className={`overflow-hidden cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md flex flex-col h-full w-full ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
                     }`}>
                     {/* Image Section */}

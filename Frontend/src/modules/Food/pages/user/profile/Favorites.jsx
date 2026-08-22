@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useState } from "react"
 
 import { Heart, Star, Clock, MapPin, ArrowRight, ArrowLeft, Bookmark } from "lucide-react"
@@ -126,7 +126,7 @@ export default function Favorites() {
             ) : (
               restaurantFavorites.map((restaurant, index) => (
             <ScrollReveal key={restaurant.slug} delay={index * 0.1}>
-              <Link to={`/user/restaurants/${restaurant.slug}`}>
+              <Link to={`/food/user/restaurants/${restaurant.slug}`}>
                 <Card className="overflow-hidden h-full">
                   <div className="h-32 w-full relative overflow-hidden">
                     <img

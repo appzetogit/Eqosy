@@ -49,7 +49,7 @@ export default function StickyCartCard() {
                 </div>
 
                 {/* Restaurant Info */}
-                <Link to={`/user/restaurants/${restaurantSlug}`} className="flex-1 min-w-0">
+                <Link to={`/food/user/restaurants/${restaurantSlug}`} className="flex-1 min-w-0">
                   <h3 className="font-bold text-gray-900 dark:text-gray-200 text-base md:text-lg mb-0.5 line-clamp-1">
                     {restaurantName}
                   </h3>
