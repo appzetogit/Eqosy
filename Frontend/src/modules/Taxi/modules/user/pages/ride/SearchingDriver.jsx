@@ -249,7 +249,8 @@ const SearchingDriver = () => {
         setUnreadSearchingChatCount((prev) => prev + 1);
         const msgText = data?.message?.message || data?.message?.text || data?.text || (typeof data?.message === 'string' ? data.message : 'New message');
         const senderName = data?.senderName || data?.sender?.name || 'Driver';
-        showChatNotification(senderName, msgText);
+        const notifId = data?.id || data?._id || data?.message?._id || data?.message?.id || `${senderName}:${msgText}`;
+        showChatNotification(senderName, msgText, notifId);
       }
     };
 

@@ -46,10 +46,32 @@ export const playChatNotificationSound = () => {
   }
 };
 
-export const showChatNotification = (senderName, messageText) => {
-  playChatNotificationSound();
+const processedNotifications = new Set();
+let lastNotificationTime = 0;
+const DUP_WINDOW_MS = 6000;
+const SOUND_THROTTLE_MS = 1500;
+
+export const showChatNotification = (senderName, messageText, notifId = null) => {
   const text = String(messageText || '').trim();
   const name = String(senderName || '').trim();
+  const now = Date.now();
+
+  const uniqueKey = notifId ? String(notifId) : `${name}:${text}`;
+
+  if (processedNotifications.has(uniqueKey)) {
+    return false;
+  }
+
+  processedNotifications.add(uniqueKey);
+  setTimeout(() => {
+    processedNotifications.delete(uniqueKey);
+  }, DUP_WINDOW_MS);
+
+  if (now - lastNotificationTime >= SOUND_THROTTLE_MS) {
+    lastNotificationTime = now;
+    playChatNotificationSound();
+  }
+
   const title = name ? `💬 Message from ${name}` : '💬 New Chat Message';
   
   if (typeof toast !== 'undefined' && typeof toast.info === 'function') {
@@ -58,4 +80,6 @@ export const showChatNotification = (senderName, messageText) => {
       duration: 5000,
     });
   }
+
+  return true;
 };

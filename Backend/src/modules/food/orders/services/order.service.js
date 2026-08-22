@@ -525,6 +525,14 @@ export async function processDispatchTimeout(orderId, partnerId, options = {}) {
 // ----- User: list, get, cancel -----
 export async function listOrdersUser(userId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+    return buildPaginatedResult({
+      docs: [],
+      total: 0,
+      page,
+      limit,
+    });
+  }
   const filter = {
     userId: new mongoose.Types.ObjectId(userId),
     orderStatus: { $ne: 'pending_payment' }
@@ -680,6 +688,9 @@ export async function recoverStuckOrders() {
 }
 
 export async function resyncState(userId, role) {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+    return { activeOrder: null };
+  }
   if (role === "USER") {
     const order = await FoodOrder.findOne({
       userId: new mongoose.Types.ObjectId(userId),

@@ -642,29 +642,29 @@ export const getIntercityPackageCatalog = async (_req, res) => {
       availability: String(item.package_availability || 'available').trim().toLowerCase(),
       vehicles: Array.isArray(item.package_vehicle_prices)
         ? item.package_vehicle_prices
-            .filter((row) => row?.vehicle_type)
-            .map((row, index) => ({
-              id: `${String(item._id)}:${String(row.vehicle_type?._id || index)}`,
-              vehicleTypeId: row.vehicle_type?._id ? String(row.vehicle_type._id) : '',
-              vehicleName: row.vehicle_type?.name || 'Vehicle',
-              capacity: Number(row.vehicle_type?.capacity || 0),
-              icon: row.vehicle_type?.map_icon || row.vehicle_type?.icon || row.vehicle_type?.image || '',
-              iconType: row.vehicle_type?.icon_types || row.vehicle_type?.name || '',
-              dispatchType: String(row.vehicle_type?.dispatch_type || 'normal').trim().toLowerCase(),
-              basePrice: Number(row.base_price ?? 0),
-              freeDistance: Number(row.free_distance ?? 0),
-              distancePrice: Number(row.distance_price ?? 0),
-              freeTime: Number(row.free_time ?? 0),
-              timePrice: Number(row.time_price ?? 0),
-              adminCommisionType: Number(row.admin_commision_type ?? 1),
-              adminCommision: Number(row.admin_commision ?? 0),
-              adminCommissionTypeFromDriver: Number(row.admin_commission_type_from_driver ?? 1),
-              adminCommissionFromDriver: Number(row.admin_commission_from_driver ?? 0),
-              adminCommissionTypeForOwner: Number(row.admin_commission_type_for_owner ?? 1),
-              adminCommissionForOwner: Number(row.admin_commission_for_owner ?? 0),
-              serviceTax: Number(row.service_tax ?? 0),
-              cancellationFee: Number(row.cancellation_fee ?? 0),
-            }))
+          .filter((row) => row?.vehicle_type)
+          .map((row, index) => ({
+            id: `${String(item._id)}:${String(row.vehicle_type?._id || index)}`,
+            vehicleTypeId: row.vehicle_type?._id ? String(row.vehicle_type._id) : '',
+            vehicleName: row.vehicle_type?.name || 'Vehicle',
+            capacity: Number(row.vehicle_type?.capacity || 0),
+            icon: row.vehicle_type?.map_icon || row.vehicle_type?.icon || row.vehicle_type?.image || '',
+            iconType: row.vehicle_type?.icon_types || row.vehicle_type?.name || '',
+            dispatchType: String(row.vehicle_type?.dispatch_type || 'normal').trim().toLowerCase(),
+            basePrice: Number(row.base_price ?? 0),
+            freeDistance: Number(row.free_distance ?? 0),
+            distancePrice: Number(row.distance_price ?? 0),
+            freeTime: Number(row.free_time ?? 0),
+            timePrice: Number(row.time_price ?? 0),
+            adminCommisionType: Number(row.admin_commision_type ?? 1),
+            adminCommision: Number(row.admin_commision ?? 0),
+            adminCommissionTypeFromDriver: Number(row.admin_commission_type_from_driver ?? 1),
+            adminCommissionFromDriver: Number(row.admin_commission_from_driver ?? 0),
+            adminCommissionTypeForOwner: Number(row.admin_commission_type_for_owner ?? 1),
+            adminCommissionForOwner: Number(row.admin_commission_for_owner ?? 0),
+            serviceTax: Number(row.service_tax ?? 0),
+            cancellationFee: Number(row.cancellation_fee ?? 0),
+          }))
         : [],
     };
   });
@@ -749,95 +749,95 @@ const serializeBusBooking = (booking, busService = null) => {
   const primaryDropStop = busService ? getPrimaryBusStop(busService, 'drop') : null;
 
   return {
-  id: String(booking._id),
-  bookingCode: booking.bookingCode || '',
-  status: booking.status || 'pending',
-  bookingSource: booking.bookingSource || 'user',
-  reservedByDriverId: booking.reservedByDriverId ? String(booking.reservedByDriverId) : '',
-  travelDate: booking.travelDate || '',
-  scheduleId: booking.scheduleId || '',
-  seatIds: Array.isArray(booking.seatIds) ? booking.seatIds : [],
-  seatLabels: Array.isArray(booking.seatLabels) ? booking.seatLabels : [],
-  amount: Number(booking.amount || 0),
-  currency: booking.currency || 'INR',
-  passenger: booking.passenger || {},
-  notes: booking.notes || '',
-  payment: {
-    provider: booking.payment?.provider || 'razorpay',
-    orderId: booking.payment?.orderId || '',
-    paymentId: booking.payment?.paymentId || '',
-    status: booking.payment?.status || 'pending',
-    paidAt: booking.payment?.paidAt || null,
-  },
-  cancelledAt: booking.cancelledAt || null,
-  cancellation: {
-    allowed: quote ? quote.allowed && String(booking.status || '') === 'confirmed' : Boolean(persistedCancellation.allowed),
-    reason: quote?.reason || '',
-    appliedRuleId: persistedCancellation.appliedRuleId || quote?.appliedRuleId || '',
-    appliedRuleLabel: persistedCancellation.appliedRuleLabel || quote?.appliedRuleLabel || '',
-    refundType: persistedCancellation.refundType || quote?.refundType || 'none',
-    refundValue: Number(persistedCancellation.refundValue ?? quote?.refundValue ?? 0),
-    hoursBeforeDeparture: Number(
-      persistedCancellation.hoursBeforeDeparture ?? quote?.hoursBeforeDeparture ?? 0,
-    ),
-    refundAmount: Number(persistedCancellation.refundAmount ?? quote?.refundAmount ?? 0),
-    chargeAmount: Number(persistedCancellation.chargeAmount ?? quote?.chargeAmount ?? 0),
-    notes: persistedCancellation.notes || quote?.notes || '',
-    departureDateTime: quote?.departureDateTime || null,
-  },
-  cancellationPolicy: {
-    text: busService?.cancellationPolicy || '',
-    rules: normalizeBusCancellationRules(busService?.cancellationRules),
-  },
-  review: {
-    canRate: tripCompleted,
-    tripCompleted,
-    completedAt: arrivalDateTime || null,
-    averageRating: Number(busService?.rating || 0),
-    ratingCount: Number(busService?.ratingCount || 0),
-    userRating: reviewEntry ? Number(reviewEntry.rating || 0) : 0,
-    userComment: reviewEntry?.comment || '',
-    reviewedAt: reviewEntry?.reviewedAt || null,
-  },
-  seatSummary: {
-    total: totalSeatCount,
-    active: activeSeatCount,
-    cancelled: cancelledSeats.length,
-  },
-  activeSeatIds: activeSeats.map((item) => item.seatId),
-  activeSeatLabels: activeSeats.map((item) => item.seatLabel),
-  cancelledSeats: cancelledSeats.map((item) => ({
-    seatId: item.seatId || '',
-    seatLabel: item.seatLabel || item.seatId || '',
-    cancelledAt: item.cancelledAt || null,
-    refundAmount: Number(item.refundAmount || 0),
-    chargeAmount: Number(item.chargeAmount || 0),
-    refundStatus: item.refundStatus || '',
-    refundId: item.refundId || '',
-    refundProcessedAt: item.refundProcessedAt || null,
-    notes: item.notes || '',
-  })),
-  totalRefundedAmount: Math.round(totalRefundedAmount * 100) / 100,
-  totalChargedAmount: Math.round(totalChargedAmount * 100) / 100,
-  perSeatAmount,
-  hasPartialCancellation: cancelledSeats.length > 0 && activeSeatCount > 0,
-  bus: {
-    operator: booking.routeSnapshot?.operatorName || '',
-    busName: booking.routeSnapshot?.busName || '',
-    type: booking.routeSnapshot?.coachType || booking.routeSnapshot?.busCategory || 'Bus',
-    departure: booking.routeSnapshot?.departureTime || '',
-    arrival: booking.routeSnapshot?.arrivalTime || '',
-    duration: booking.routeSnapshot?.durationHours || '',
-    fromCity: booking.routeSnapshot?.originCity || '',
-    toCity: booking.routeSnapshot?.destinationCity || '',
-    registrationNumber: booking.routeSnapshot?.registrationNumber || busService?.registrationNumber || '',
-    driverName: booking.routeSnapshot?.driverName || busService?.driverName || '',
-    driverPhone: booking.routeSnapshot?.driverPhone || busService?.driverPhone || '',
-    pickupLocation: formatBusStopLabel(primaryPickupStop, booking.routeSnapshot?.originCity || ''),
-    dropLocation: formatBusStopLabel(primaryDropStop, booking.routeSnapshot?.destinationCity || ''),
-    routeStops: Array.isArray(busService?.route?.stops) ? busService.route.stops : [],
-  },
-  createdAt: booking.createdAt || null,
+    id: String(booking._id),
+    bookingCode: booking.bookingCode || '',
+    status: booking.status || 'pending',
+    bookingSource: booking.bookingSource || 'user',
+    reservedByDriverId: booking.reservedByDriverId ? String(booking.reservedByDriverId) : '',
+    travelDate: booking.travelDate || '',
+    scheduleId: booking.scheduleId || '',
+    seatIds: Array.isArray(booking.seatIds) ? booking.seatIds : [],
+    seatLabels: Array.isArray(booking.seatLabels) ? booking.seatLabels : [],
+    amount: Number(booking.amount || 0),
+    currency: booking.currency || 'INR',
+    passenger: booking.passenger || {},
+    notes: booking.notes || '',
+    payment: {
+      provider: booking.payment?.provider || 'razorpay',
+      orderId: booking.payment?.orderId || '',
+      paymentId: booking.payment?.paymentId || '',
+      status: booking.payment?.status || 'pending',
+      paidAt: booking.payment?.paidAt || null,
+    },
+    cancelledAt: booking.cancelledAt || null,
+    cancellation: {
+      allowed: quote ? quote.allowed && String(booking.status || '') === 'confirmed' : Boolean(persistedCancellation.allowed),
+      reason: quote?.reason || '',
+      appliedRuleId: persistedCancellation.appliedRuleId || quote?.appliedRuleId || '',
+      appliedRuleLabel: persistedCancellation.appliedRuleLabel || quote?.appliedRuleLabel || '',
+      refundType: persistedCancellation.refundType || quote?.refundType || 'none',
+      refundValue: Number(persistedCancellation.refundValue ?? quote?.refundValue ?? 0),
+      hoursBeforeDeparture: Number(
+        persistedCancellation.hoursBeforeDeparture ?? quote?.hoursBeforeDeparture ?? 0,
+      ),
+      refundAmount: Number(persistedCancellation.refundAmount ?? quote?.refundAmount ?? 0),
+      chargeAmount: Number(persistedCancellation.chargeAmount ?? quote?.chargeAmount ?? 0),
+      notes: persistedCancellation.notes || quote?.notes || '',
+      departureDateTime: quote?.departureDateTime || null,
+    },
+    cancellationPolicy: {
+      text: busService?.cancellationPolicy || '',
+      rules: normalizeBusCancellationRules(busService?.cancellationRules),
+    },
+    review: {
+      canRate: tripCompleted,
+      tripCompleted,
+      completedAt: arrivalDateTime || null,
+      averageRating: Number(busService?.rating || 0),
+      ratingCount: Number(busService?.ratingCount || 0),
+      userRating: reviewEntry ? Number(reviewEntry.rating || 0) : 0,
+      userComment: reviewEntry?.comment || '',
+      reviewedAt: reviewEntry?.reviewedAt || null,
+    },
+    seatSummary: {
+      total: totalSeatCount,
+      active: activeSeatCount,
+      cancelled: cancelledSeats.length,
+    },
+    activeSeatIds: activeSeats.map((item) => item.seatId),
+    activeSeatLabels: activeSeats.map((item) => item.seatLabel),
+    cancelledSeats: cancelledSeats.map((item) => ({
+      seatId: item.seatId || '',
+      seatLabel: item.seatLabel || item.seatId || '',
+      cancelledAt: item.cancelledAt || null,
+      refundAmount: Number(item.refundAmount || 0),
+      chargeAmount: Number(item.chargeAmount || 0),
+      refundStatus: item.refundStatus || '',
+      refundId: item.refundId || '',
+      refundProcessedAt: item.refundProcessedAt || null,
+      notes: item.notes || '',
+    })),
+    totalRefundedAmount: Math.round(totalRefundedAmount * 100) / 100,
+    totalChargedAmount: Math.round(totalChargedAmount * 100) / 100,
+    perSeatAmount,
+    hasPartialCancellation: cancelledSeats.length > 0 && activeSeatCount > 0,
+    bus: {
+      operator: booking.routeSnapshot?.operatorName || '',
+      busName: booking.routeSnapshot?.busName || '',
+      type: booking.routeSnapshot?.coachType || booking.routeSnapshot?.busCategory || 'Bus',
+      departure: booking.routeSnapshot?.departureTime || '',
+      arrival: booking.routeSnapshot?.arrivalTime || '',
+      duration: booking.routeSnapshot?.durationHours || '',
+      fromCity: booking.routeSnapshot?.originCity || '',
+      toCity: booking.routeSnapshot?.destinationCity || '',
+      registrationNumber: booking.routeSnapshot?.registrationNumber || busService?.registrationNumber || '',
+      driverName: booking.routeSnapshot?.driverName || busService?.driverName || '',
+      driverPhone: booking.routeSnapshot?.driverPhone || busService?.driverPhone || '',
+      pickupLocation: formatBusStopLabel(primaryPickupStop, booking.routeSnapshot?.originCity || ''),
+      dropLocation: formatBusStopLabel(primaryDropStop, booking.routeSnapshot?.destinationCity || ''),
+      routeStops: Array.isArray(busService?.route?.stops) ? busService.route.stops : [],
+    },
+    createdAt: booking.createdAt || null,
   };
 };
 
@@ -1837,7 +1837,7 @@ export const transferUserWalletToDriver = async (req, res) => {
         amount: String(amount),
         transferId,
       },
-    }).catch(() => {});
+    }).catch(() => { });
 
     await Notification.create({
       service_location_id: recipientDriver.service_location_id || 'all',
@@ -2020,8 +2020,8 @@ export const payRentalAdvanceWithWallet = async (req, res) => {
   const referenceKey = `rental_advance_${bookingReference}`;
   const existingTransaction = Array.isArray(wallet.transactions)
     ? wallet.transactions.find(
-        (item) => item?.kind === 'debit' && String(item.referenceKey || '') === referenceKey,
-      )
+      (item) => item?.kind === 'debit' && String(item.referenceKey || '') === referenceKey,
+    )
     : null;
 
   if (!existingTransaction) {
@@ -2657,8 +2657,8 @@ export const verifyBusBookingPayment = async (req, res) => {
 
   const busService = booking.busServiceId
     ? await BusService.findById(booking.busServiceId)
-        .select('registrationNumber driverName driverPhone cancellationPolicy cancellationRules schedules route rating ratingCount reviews')
-        .lean()
+      .select('registrationNumber driverName driverPhone cancellationPolicy cancellationRules schedules route rating ratingCount reviews')
+      .lean()
     : null;
 
   if (String(booking.status) === 'confirmed') {
@@ -2737,8 +2737,8 @@ export const getMyBusBookingById = async (req, res) => {
 
   const busService = booking.busServiceId
     ? await BusService.findById(booking.busServiceId)
-        .select('registrationNumber driverName driverPhone cancellationPolicy cancellationRules schedules route rating ratingCount reviews')
-        .lean()
+      .select('registrationNumber driverName driverPhone cancellationPolicy cancellationRules schedules route rating ratingCount reviews')
+      .lean()
     : null;
 
   res.status(200).json({
@@ -3103,15 +3103,15 @@ export const createRentalBookingRequest = async (req, res) => {
   const kycDocumentsPayload = payload.kycDocuments || {};
   const normalizedDrivingLicenseUrl = toCleanString(
     kycDocumentsPayload.drivingLicense?.imageUrl ||
-      kycDocumentsPayload.drivingLicense?.secureUrl ||
-      kycDocumentsPayload.drivingLicense?.url ||
-      '',
+    kycDocumentsPayload.drivingLicense?.secureUrl ||
+    kycDocumentsPayload.drivingLicense?.url ||
+    '',
   );
   const normalizedAadhaarUrl = toCleanString(
     kycDocumentsPayload.aadhaarCard?.imageUrl ||
-      kycDocumentsPayload.aadhaarCard?.secureUrl ||
-      kycDocumentsPayload.aadhaarCard?.url ||
-      '',
+    kycDocumentsPayload.aadhaarCard?.secureUrl ||
+    kycDocumentsPayload.aadhaarCard?.url ||
+    '',
   );
   const requestedLocationId = toCleanString(serviceLocation.id || serviceLocation._id || serviceLocation.locationId || '');
   const allowedServiceStoreIds = Array.isArray(vehicle.serviceStoreIds)
@@ -3119,11 +3119,11 @@ export const createRentalBookingRequest = async (req, res) => {
     : [];
   const matchingServiceCenters = allowedServiceStoreIds.length
     ? await ServiceStore.find({
-        _id: { $in: allowedServiceStoreIds },
-        ...(requestedLocationId ? { service_location_id: requestedLocationId } : {}),
-      })
-        .select('_id')
-        .lean()
+      _id: { $in: allowedServiceStoreIds },
+      ...(requestedLocationId ? { service_location_id: requestedLocationId } : {}),
+    })
+      .select('_id')
+      .lean()
     : [];
 
   const update = {
@@ -3180,7 +3180,7 @@ export const createRentalBookingRequest = async (req, res) => {
         ),
         uploadedAt:
           normalizedDrivingLicenseUrl &&
-          kycDocumentsPayload.drivingLicense?.uploadedAt
+            kycDocumentsPayload.drivingLicense?.uploadedAt
             ? new Date(kycDocumentsPayload.drivingLicense.uploadedAt)
             : normalizedDrivingLicenseUrl
               ? new Date()
@@ -3193,7 +3193,7 @@ export const createRentalBookingRequest = async (req, res) => {
         ),
         uploadedAt:
           normalizedAadhaarUrl &&
-          kycDocumentsPayload.aadhaarCard?.uploadedAt
+            kycDocumentsPayload.aadhaarCard?.uploadedAt
             ? new Date(kycDocumentsPayload.aadhaarCard.uploadedAt)
             : normalizedAadhaarUrl
               ? new Date()
@@ -3416,8 +3416,8 @@ export const listMyBusBookings = async (req, res) => {
   const busServiceIds = [...new Set(items.map((item) => String(item.busServiceId || '')).filter(Boolean))];
   const busServices = busServiceIds.length > 0
     ? await BusService.find({ _id: { $in: busServiceIds } })
-        .select('registrationNumber driverName driverPhone cancellationRules schedules route')
-        .lean()
+      .select('registrationNumber driverName driverPhone cancellationRules schedules route')
+      .lean()
     : [];
   const busServiceMap = new Map(busServices.map((item) => [String(item._id), item]));
 

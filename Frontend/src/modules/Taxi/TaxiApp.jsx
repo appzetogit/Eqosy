@@ -495,8 +495,9 @@ const UserAccountInvalidationListener = () => {
 
       const msgText = payload?.message?.message || payload?.message?.text || payload?.text || (typeof payload?.message === 'string' ? payload.message : 'New message');
       const senderName = payload?.senderName || payload?.sender?.name || (senderRole === 'driver' ? 'Driver' : 'Delivery Partner');
+      const notifId = payload?.id || payload?._id || payload?.message?._id || payload?.message?.id || `${senderName}:${msgText}`;
 
-      showChatNotification(senderName, msgText);
+      showChatNotification(senderName, msgText, notifId);
       window.dispatchEvent(new CustomEvent('chat:unread-increment', { detail: payload }));
     };
 
@@ -510,13 +511,14 @@ const UserAccountInvalidationListener = () => {
       const staleToken = event.detail?.token || '';
       const currentUserToken = localStorage.getItem('userToken') || localStorage.getItem('token') || '';
       const currentAdminToken = localStorage.getItem('adminToken') || '';
+      const targetRole = event.detail?.role || 'user';
 
-      if (event.detail?.role === 'user' && (!staleToken || staleToken === currentUserToken)) {
+      if (targetRole === 'user' && (!staleToken || staleToken === currentUserToken)) {
         handleLogout();
         return;
       }
 
-      if (event.detail?.role === 'admin' && (!staleToken || staleToken === currentAdminToken)) {
+      if (targetRole === 'admin' && (!staleToken || staleToken === currentAdminToken)) {
         socketService.disconnect();
         navigate('/admin/login');
       }

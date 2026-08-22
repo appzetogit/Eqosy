@@ -646,7 +646,8 @@ export default function OrderTracking({ isSharedView = false }) {
         } else {
           setUnreadChatCount((prev) => prev + 1);
         }
-        showChatNotification(payload?.senderName || 'Delivery Partner', payload?.text || 'New message');
+        const notifId = payload?.id || payload?._id || payload?.message?._id || payload?.message?.id || `${payload?.senderName}:${payload?.text}`;
+        showChatNotification(payload?.senderName || 'Delivery Partner', payload?.text || 'New message', notifId);
       }
     };
 

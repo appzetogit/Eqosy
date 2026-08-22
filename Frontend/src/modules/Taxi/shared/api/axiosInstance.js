@@ -270,23 +270,25 @@ api.interceptors.response.use(
     if (error.response) {
       // Global error handling: e.g. deleted or inactive account logout
       if (error.response.status === 401 || error.response.status === 403) {
-        const serverMessage = String(error.response.data?.message || '');
+        const rawData = error.response.data;
+        const serverMessage = String(
+          (typeof rawData === 'string' ? rawData : (rawData?.error || rawData?.message)) || ''
+        );
         const authHeader = error.config?.headers?.Authorization || error.config?.headers?.authorization || '';
         const token = String(authHeader).startsWith('Bearer ') ? String(authHeader).slice(7) : '';
-        const tokenRole = normalizeAuthRole(getTokenPayload(token)?.role || '');
+        const tokenRole = normalizeAuthRole(getTokenPayload(token)?.role || '') || 'user';
 
         const hasAuthToken = Boolean(token && token.length > 10);
         const isExplicitTokenExpired = isAuthTokenFailure(serverMessage) ||
+          error.response.status === 401 ||
           serverMessage === 'Authenticated account no longer exists' ||
           (tokenRole === 'user' && serverMessage === 'User account is not active');
 
-        // Only clear auth if request actually had an authorization token that was invalid/expired.
-        // Unauthenticated guest requests (which get 401 "token required") should NOT force redirect to login.
-        const shouldClearAuth = hasAuthToken && isExplicitTokenExpired;
+        const shouldClearAuth = hasAuthToken || isExplicitTokenExpired;
         if (shouldClearAuth) {
           clearStaleAuthState(tokenRole, token);
           window.dispatchEvent(new CustomEvent('app:auth-stale', {
-            detail: { role: tokenRole || null, message: serverMessage, token },
+            detail: { role: tokenRole, message: serverMessage || 'Authorization token has expired', token },
           }));
         }
       }

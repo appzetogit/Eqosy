@@ -133,7 +133,6 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
         liveStatus: populatedRide.liveStatus,
         acceptedAt: populatedRide.acceptedAt,
         arrivedAt: populatedRide.arrivedAt,
-        startedAt: populatedRide.startedAt,
         completedAt: populatedRide.completedAt,
       };
 
@@ -166,6 +165,7 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
       });
 
       const notifPayload = {
+        id: String(savedMessage?._id || savedMessage?.id || `${rideId}-${Date.now()}`),
         rideId: String(rideId),
         senderRole: socket.auth.role,
         senderName: socket.auth.role === 'driver' ? 'Driver' : 'Passenger',

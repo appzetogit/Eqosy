@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
+import { toast } from 'sonner'
 import { AppShellSkeleton } from '@food/components/ui/loading-skeletons'
 import {
   NATIVE_LAST_ROUTE_KEY,
@@ -43,11 +44,40 @@ const RedirectToFood = () => {
   return <Navigate to={`/food${location.pathname}${location.search}`} replace />
 }
 
+const RedirectToFoodUser = () => {
+  const location = useLocation()
+  return <Navigate to={`/food/user${location.pathname}${location.search}`} replace />
+}
+
 const LandingPage = lazy(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
 
 const AppRoutes = () => {
   const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleGlobalAuthStale = (event) => {
+      const role = String(event.detail?.role || 'user').toLowerCase()
+      if (role === 'admin') {
+        navigate('/admin/login', { replace: true })
+      } else if (role === 'driver') {
+        navigate('/taxi/driver/login', { replace: true })
+      } else {
+        localStorage.removeItem('token')
+        localStorage.removeItem('userToken')
+        localStorage.removeItem('user_accessToken')
+        localStorage.removeItem('user_authenticated')
+        localStorage.removeItem('user_user')
+        localStorage.removeItem('userInfo')
+        toast.error('Session expired. Please log in again.')
+        navigate('/food/user/auth/login', { replace: true })
+      }
+    }
+
+    window.addEventListener('app:auth-stale', handleGlobalAuthStale)
+    return () => window.removeEventListener('app:auth-stale', handleGlobalAuthStale)
+  }, [navigate])
 
   useEffect(() => {
     syncActiveModule(location.pathname)
@@ -113,13 +143,14 @@ const AppRoutes = () => {
           </Suspense>
         }
       />
-      <Route path="/user/*" element={<Navigate to="/food/user" replace />} />
+      <Route path="/user/*" element={<RedirectToFood />} />
       <Route path="/restaurant/*" element={<RedirectToFood />} />
+      <Route path="/restaurants/*" element={<RedirectToFoodUser />} />
       <Route path="/delivery/*" element={<RedirectToFood />} />
       <Route path="/usermain/*" element={<RedirectToFood />} />
-      <Route path="/profile/*" element={<RedirectToFood />} />
-      <Route path="/cart/*" element={<Navigate to="/food/user/cart" replace />} />
-      <Route path="/orders/*" element={<RedirectToFood />} />
+      <Route path="/profile/*" element={<RedirectToFoodUser />} />
+      <Route path="/cart/*" element={<RedirectToFoodUser />} />
+      <Route path="/orders/*" element={<RedirectToFoodUser />} />
       <Route path="*" element={<Navigate to="/food/user" replace />} />
     </Routes>
   )

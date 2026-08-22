@@ -36,62 +36,59 @@ export function HorizontalCarousel({
     }
   }
 
-  // Prevent vertical scroll only when scrolling horizontally
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (scrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
+  React.useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const onWheel = (e: WheelEvent) => {
+      const { scrollLeft, scrollWidth, clientWidth } = el
       const deltaX = Math.abs(e.deltaX)
       const deltaY = Math.abs(e.deltaY)
       
-      // Only prevent vertical scroll if horizontal scroll is significantly greater
-      // and there's actual horizontal scroll space available
       if (deltaX > deltaY && deltaX > 10) {
         const canScrollLeft = scrollLeft > 0
         const canScrollRight = scrollLeft < scrollWidth - clientWidth - 1
         
-        // Only prevent if we can actually scroll horizontally
         if (canScrollLeft || canScrollRight) {
-          e.preventDefault()
-          e.stopPropagation()
-          scrollRef.current.scrollLeft += e.deltaX
-          return
+          if (e.cancelable) {
+            e.preventDefault()
+          }
+          el.scrollLeft += e.deltaX
         }
       }
-      
-      // Allow vertical scrolling to pass through if not horizontal scrolling
     }
-  }
 
-  // Prevent vertical scroll on touch devices only when scrolling horizontally
+    const onTouchMove = (e: TouchEvent) => {
+      const touchCurrentX = e.touches[0].clientX
+      const touchCurrentY = e.touches[0].clientY
+      const diffX = Math.abs(touchCurrentX - touchStartX.current)
+      const diffY = Math.abs(touchCurrentY - touchStartY.current)
+
+      if (diffX > diffY && diffX > 10) {
+        const { scrollLeft, scrollWidth, clientWidth } = el
+        const canScrollLeft = scrollLeft > 0
+        const canScrollRight = scrollLeft < scrollWidth - clientWidth - 1
+
+        if (canScrollLeft || canScrollRight) {
+          if (e.cancelable) {
+            e.preventDefault()
+          }
+        }
+      }
+    }
+
+    el.addEventListener("wheel", onWheel, { passive: false })
+    el.addEventListener("touchmove", onTouchMove, { passive: false })
+
+    return () => {
+      el.removeEventListener("wheel", onWheel)
+      el.removeEventListener("touchmove", onTouchMove)
+    }
+  }, [])
+
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
-  }
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!scrollRef.current) return
-
-    const touchCurrentX = e.touches[0].clientX
-    const touchCurrentY = e.touches[0].clientY
-    const diffX = Math.abs(touchCurrentX - touchStartX.current)
-    const diffY = Math.abs(touchCurrentY - touchStartY.current)
-
-    // Only prevent vertical scroll if horizontal movement is significantly greater
-    // and there's actual horizontal scroll space
-    if (diffX > diffY && diffX > 10) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
-      const canScrollLeft = scrollLeft > 0
-      const canScrollRight = scrollLeft < scrollWidth - clientWidth - 1
-
-      // Only prevent if we can actually scroll horizontally
-      if (canScrollLeft || canScrollRight) {
-        e.preventDefault()
-        e.stopPropagation()
-        return
-      }
-    }
-    
-    // Allow vertical scrolling to pass through if not horizontal scrolling
   }
 
   const controlsClass = {
@@ -141,9 +138,7 @@ export function HorizontalCarousel({
           overflowY: "hidden",
           height: "min-content"
         }}
-        onWheel={handleWheel}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
       >
         {children}
       </div>

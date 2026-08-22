@@ -32,11 +32,16 @@ export const authMiddleware = (req, res, next) => {
             }
             // Enforce active status in real-time - deactivated users are logged out on next request.
             FoodUser.findById(userId).select('isActive').lean().then((doc) => {
+                if (res.headersSent) return;
                 if (!doc || doc.isActive === false) {
                     return sendError(res, 401, doc ? 'User account is deactivated' : 'User account not found');
                 }
                 next();
-            }).catch(() => sendError(res, 401, 'Invalid user token'));
+            }).catch(() => {
+                if (!res.headersSent) {
+                    sendError(res, 401, 'Invalid user token');
+                }
+            });
             return;
         }
         return next();
