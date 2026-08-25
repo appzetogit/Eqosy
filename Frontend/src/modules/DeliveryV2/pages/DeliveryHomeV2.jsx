@@ -593,22 +593,24 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             customerLocation: cusLoc
           };
 
-          setActiveOrder(syncedOrder);
-          
           const backendStatus = serverData.deliveryStatus || serverData.orderState?.status || serverData.orderStatus || serverData.status;
           const currentPhase = serverData.deliveryState?.currentPhase;
 
+          let targetTripStatus = 'PICKING_UP';
           if (['delivered', 'completed', 'DELIVERED'].includes(backendStatus)) {
-            updateTripStatus('COMPLETED');
+            targetTripStatus = 'COMPLETED';
           } else if (currentPhase === 'at_drop' || ['reached_drop', 'REACHED_DROP'].includes(backendStatus)) {
-            updateTripStatus('REACHED_DROP');
-          } else if (['picked_up', 'PICKED_UP', 'delivering'].includes(backendStatus)) {
-            updateTripStatus('PICKED_UP');
+            targetTripStatus = 'REACHED_DROP';
+          } else if (['picked_up', 'PICKED_UP', 'delivering'].includes(backendStatus) || currentPhase === 'en_route_to_delivery') {
+            targetTripStatus = 'PICKED_UP';
           } else if (currentPhase === 'at_pickup' || ['reached_pickup', 'REACHED_PICKUP'].includes(backendStatus)) {
-            updateTripStatus('REACHED_PICKUP');
+            targetTripStatus = 'REACHED_PICKUP';
           } else if (['confirmed', 'preparing', 'ready_for_pickup'].includes(backendStatus)) {
-            updateTripStatus('PICKING_UP');
+            targetTripStatus = 'PICKING_UP';
           }
+
+          setActiveOrder(syncedOrder, targetTripStatus);
+          updateTripStatus(targetTripStatus);
         } else {
           clearActiveOrder();
         }

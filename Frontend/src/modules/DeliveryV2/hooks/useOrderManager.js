@@ -81,12 +81,25 @@ export const useOrderManager = () => {
    * Mark "Reached Pickup" (Arrival at restaurant)
    */
   const reachPickup = async () => {
-    const orderId = activeOrder?.orderId;
+    const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
       const response = await deliveryAPI.confirmReachedPickup(orderId);
       if (response?.data?.success) {
-        updateTripStatus('REACHED_PICKUP');
-        // toast.info('Arrived at Restaurant');
+        const fullOrder = response.data.data?.order || response.data?.data;
+        if (fullOrder && typeof fullOrder === 'object') {
+          setActiveOrder({
+            ...activeOrder,
+            ...fullOrder,
+            deliveryState: {
+              ...(activeOrder?.deliveryState || {}),
+              ...(fullOrder.deliveryState || {}),
+              currentPhase: 'at_pickup',
+              status: 'reached_pickup'
+            }
+          }, 'REACHED_PICKUP');
+        } else {
+          updateTripStatus('REACHED_PICKUP');
+        }
       } else {
         throw new Error('Confirm pickup failed');
       }
@@ -100,19 +113,29 @@ export const useOrderManager = () => {
    * Mark "Picked Up" (Confirm order ID & start delivery)
    */
   const pickUpOrder = async (billImageUrl) => {
-    const orderId = activeOrder?.orderId;
+    const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
-      // confirmOrderId(orderId, confirmedOrderId, location, data)
       const response = await deliveryAPI.confirmOrderId(
         orderId, 
-        activeOrder.displayOrderId || orderId, 
+        activeOrder.displayOrderId || activeOrder.order_id || orderId, 
         riderLocation || {},
         { billImageUrl }
       );
       
       if (response?.data?.success) {
+        const fullOrder = response.data.data?.order || response.data?.data;
+        setActiveOrder({
+          ...activeOrder,
+          ...(typeof fullOrder === 'object' ? fullOrder : {}),
+          orderStatus: 'picked_up',
+          deliveryState: {
+            ...(activeOrder?.deliveryState || {}),
+            ...(fullOrder?.deliveryState || {}),
+            currentPhase: 'en_route_to_delivery',
+            status: 'picked_up'
+          }
+        }, 'PICKED_UP');
         updateTripStatus('PICKED_UP');
-        // toast.success('Order Collected! Heading to Drop-off');
       } else {
         throw new Error('Confirm order ID failed');
       }
@@ -126,12 +149,22 @@ export const useOrderManager = () => {
    * Mark "Reached Drop" (Arrival at customer)
    */
   const reachDrop = async () => {
-    const orderId = activeOrder?.orderId;
+    const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
       const response = await deliveryAPI.confirmReachedDrop(orderId);
       if (response?.data?.success) {
+        const fullOrder = response.data.data?.order || response.data?.data;
+        setActiveOrder({
+          ...activeOrder,
+          ...(typeof fullOrder === 'object' ? fullOrder : {}),
+          deliveryState: {
+            ...(activeOrder?.deliveryState || {}),
+            ...(fullOrder?.deliveryState || {}),
+            currentPhase: 'at_drop',
+            status: 'reached_drop'
+          }
+        }, 'REACHED_DROP');
         updateTripStatus('REACHED_DROP');
-        // toast.info('Arrived at Customer Location');
       } else {
         throw new Error('Confirm drop failed');
       }
@@ -145,7 +178,7 @@ export const useOrderManager = () => {
    * Finalize Delivery with OTP Check
    */
   const completeDelivery = async (otp) => {
-    const orderId = activeOrder?.orderId;
+    const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
       // 1. Verify OTP first
       const verifyRes = await deliveryAPI.verifyDropOtp(orderId, otp);
@@ -163,10 +196,9 @@ export const useOrderManager = () => {
         }
         
         // Update local order state so Summary Modal shows 'delivered' status
-        if (finalOrder) setActiveOrder(finalOrder);
+        if (finalOrder) setActiveOrder(finalOrder, 'COMPLETED');
         
         updateTripStatus('COMPLETED');
-        // toast.success('Delivery Success!');
       } else {
         toast.error('Invalid OTP. Please check with customer.');
         throw new Error('Invalid OTP');

@@ -23,6 +23,8 @@ const sanitizeNotificationText = (value) =>
 let sharedSocket = null;
 let activeSubscribers = 0;
 
+export const getSocket = () => sharedSocket;
+
 /**
  * Hook for user to receive real-time order notifications.
  * Dispatches 'orderStatusNotification' custom event for OrderTrackingCard.
