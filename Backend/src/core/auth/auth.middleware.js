@@ -20,10 +20,14 @@ export const authMiddleware = (req, res, next) => {
 
     try {
         const decoded = verifyAccessToken(token);
-        const userId = decoded.userId || decoded.sub || '';
-        const role = String(decoded.role || '').toUpperCase();
+        const userId = decoded.userId || decoded.id || decoded._id || decoded.sub || decoded.partnerId || '';
+        const rawRole = decoded.role || decoded.userType || decoded.type || (decoded.partnerId || decoded.vehicleNumber || decoded.driverId ? 'DELIVERY_PARTNER' : 'USER');
+        const role = String(rawRole).toUpperCase();
+
         req.user = {
+            ...decoded,
             userId,
+            id: userId,
             role
         };
         if (role === 'USER') {

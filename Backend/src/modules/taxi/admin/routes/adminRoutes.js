@@ -3,6 +3,8 @@ import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   approveOwner,
   approveOwnerSignupFromDriver,
+  approveBusService,
+  rejectBusService,
   createAirport,
   createAdminAccount,
   createAdminBusBooking,
@@ -320,6 +322,8 @@ adminRouter.patch('/admin/airports/:id', updateAirport);
 adminRouter.delete('/admin/airports/:id', deleteAirport);
 adminRouter.get('/admin/bus-services', getBusServices);
 adminRouter.post('/admin/bus-services', createBusService);
+adminRouter.patch('/admin/bus-services/:id/approve', approveBusService);
+adminRouter.patch('/admin/bus-services/:id/reject', rejectBusService);
 adminRouter.patch('/admin/bus-services/:id', updateBusService);
 adminRouter.delete('/admin/bus-services/:id', deleteBusService);
 adminRouter.get('/admin/bus-bookings', getAdminBusBookings);

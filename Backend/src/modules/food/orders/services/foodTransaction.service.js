@@ -1,5 +1,8 @@
 import { FoodTransaction } from '../models/foodTransaction.model.js';
 import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
+import { recordTransaction } from '../../../../core/payments/transaction.service.js';
+import { Transaction } from '../../../../core/payments/models/transaction.model.js';
+import { logger } from '../../../../utils/logger.js';
 import mongoose from 'mongoose';
 
 const RESTAURANT_COMMISSION_CACHE_MS = 60 * 1000;
@@ -247,14 +250,76 @@ export async function updateTransactionStatus(orderId, kind, details = {}) {
     
     transaction.history.push({
         kind,
-        amount: transaction.amounts.totalCustomerPaid,
+        amount: transaction.amounts?.totalCustomerPaid || 0,
         at: new Date(),
         note: details.note || `Transaction updated: ${kind}`,
         recordedBy: { role: details.recordedByRole || 'SYSTEM', id: details.recordedById }
     });
 
     await transaction.save();
+
+    // If transaction is captured or completed, credit store and rider wallets atomically
+    if (transaction.status === 'captured' || ['cod_marked_paid_on_delivery', 'payment_snapshot_sync', 'captured'].includes(kind)) {
+        await creditWalletsForTransaction(transaction);
+    }
+
     return transaction;
+}
+
+export async function creditWalletsForTransaction(transaction) {
+    if (!transaction || !transaction.orderId) return;
+
+    const restaurantShare = Number(transaction.amounts?.restaurantShare) || 0;
+    const restId = transaction.restaurantId?._id ? String(transaction.restaurantId._id) : (transaction.restaurantId ? String(transaction.restaurantId) : null);
+    if (restaurantShare > 0 && restId && restId !== '[object Object]') {
+        try {
+            const existingRestTxn = await Transaction.findOne({
+                orderId: transaction.orderId,
+                entityType: 'restaurant',
+                category: 'order_payout',
+            });
+            if (!existingRestTxn) {
+                await recordTransaction({
+                    entityType: 'restaurant',
+                    entityId: restId,
+                    type: 'credit',
+                    amount: restaurantShare,
+                    description: `Order payout credit for order ${transaction.orderId}`,
+                    category: 'order_payout',
+                    orderId: String(transaction.orderId),
+                });
+                logger.info(`[FoodTransaction] Credited store wallet ${restId} with ₹${restaurantShare} for order ${transaction.orderId}`);
+            }
+        } catch (err) {
+            logger.error(`[FoodTransaction] Error crediting store wallet for order ${transaction.orderId}: ${err?.message || err}`);
+        }
+    }
+
+    const riderShare = Number(transaction.amounts?.riderShare || transaction.amounts?.riderTotalPayout) || 0;
+    const riderId = transaction.deliveryPartnerId?._id ? String(transaction.deliveryPartnerId._id) : (transaction.deliveryPartnerId ? String(transaction.deliveryPartnerId) : null);
+    if (riderShare > 0 && riderId && riderId !== '[object Object]') {
+        try {
+            const existingRiderTxn = await Transaction.findOne({
+                orderId: transaction.orderId,
+                entityType: 'deliveryBoy',
+                category: 'delivery_payout',
+            });
+            if (!existingRiderTxn) {
+                await recordTransaction({
+                    entityType: 'deliveryBoy',
+                    entityId: riderId,
+                    type: 'credit',
+                    amount: riderShare,
+                    description: `Delivery payout credit for order ${transaction.orderId}`,
+                    category: 'delivery_payout',
+                    orderId: String(transaction.orderId),
+                });
+                logger.info(`[FoodTransaction] Credited delivery partner wallet ${riderId} with ₹${riderShare} for order ${transaction.orderId}`);
+            }
+        } catch (err) {
+            logger.error(`[FoodTransaction] Error crediting delivery partner wallet for order ${transaction.orderId}: ${err?.message || err}`);
+        }
+    }
 }
 
 /**

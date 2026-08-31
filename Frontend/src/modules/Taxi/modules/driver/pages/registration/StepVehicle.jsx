@@ -16,6 +16,7 @@ import {
     saveDriverVehicle,
     getDriverVehicleTypes,
     getDriverVehicleFieldTemplates,
+    normalizeDriverPortalRole,
 } from '../../services/registrationService';
 import { POOLING_ENABLED } from '../../../../shared/featureFlags';
 
@@ -88,8 +89,9 @@ const resolveOnboardingRole = (session = {}) => {
     ];
 
     for (const candidate of candidates) {
-        if (String(candidate || '').toLowerCase() === 'owner') {
-            return 'owner';
+        const normalized = normalizeDriverPortalRole(candidate);
+        if (normalized) {
+            return normalized;
         }
     }
 
@@ -355,9 +357,7 @@ const StepVehicle = () => {
                 });
 
                 const payload = response?.data?.data || response?.data || response;
-                const syncedRole = String(payload?.session?.role || role || 'driver').toLowerCase() === 'owner'
-                    ? 'owner'
-                    : 'driver';
+                const syncedRole = normalizeDriverPortalRole(payload?.session?.role || role || 'driver');
 
                 const nextState = saveDriverRegistrationSession({
                     ...session,

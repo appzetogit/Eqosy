@@ -76,7 +76,7 @@ const OwnerBusServicePage = () => {
             title="Add And Manage Your Buses"
             description="Create owner bus services from the same flow as admin, then manage routes, seats, pricing, and schedules in a mobile-friendly screen."
             emptyLabel="No buses added yet."
-            defaultStatus="active"
+            defaultStatus="pending_approval"
           />
         ) : (
           <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-6 text-sm font-bold text-amber-800 shadow-sm">

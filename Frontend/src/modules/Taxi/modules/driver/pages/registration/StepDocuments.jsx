@@ -213,6 +213,7 @@ const StepDocuments = () => {
   const [uploading, setUploading] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [submittedAttempted, setSubmittedAttempted] = useState(false);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -306,9 +307,23 @@ const StepDocuments = () => {
   };
 
   const handleMetaChange = (templateId, fieldName, nextValue) => {
+    let formattedValue = nextValue;
+    const template = documentTemplates.find((t) => t.id === templateId);
+    const id = String(templateId || '').toLowerCase();
+    const name = String(template?.name || '').toLowerCase();
+
+    if (fieldName === 'identifyNumber') {
+      if (id.includes('aadhaar') || id.includes('adhaar') || name.includes('aadhaar') || name.includes('adhaar')) {
+        const digits = String(nextValue || '').replace(/\D/g, '').slice(0, 12);
+        formattedValue = digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+      } else if (id.includes('pan') || name.includes('pan')) {
+        formattedValue = String(nextValue || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      }
+    }
+
     const nextMeta = {
       ...(documentMeta[templateId] || {}),
-      [fieldName]: nextValue,
+      [fieldName]: formattedValue,
     };
 
     setDocumentMeta((current) => ({
@@ -539,6 +554,40 @@ const StepDocuments = () => {
     }
   };
 
+  const validateDocumentIdentifyNumber = (template, value) => {
+    const cleanVal = String(value || '').trim();
+    if (!cleanVal) return null;
+
+    const id = String(template?.id || template?.slug || '').toLowerCase();
+    const name = String(template?.name || '').toLowerCase();
+
+    if (id.includes('aadhaar') || id.includes('adhaar') || name.includes('aadhaar') || name.includes('adhaar')) {
+      const digits = cleanVal.replace(/\D/g, '');
+      if (digits.length !== 12) {
+        return 'Aadhaar Card number must be exactly 12 digits (e.g. 1234 5678 9012)';
+      }
+    } else if (id.includes('pan') || name.includes('pan')) {
+      const upper = cleanVal.toUpperCase().replace(/\s/g, '');
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(upper)) {
+        return 'PAN Card number must be in 10-character format (e.g. ABCDE1234F)';
+      }
+    } else if (id.includes('license') || id.includes('dl') || name.includes('license')) {
+      const cleanDl = cleanVal.replace(/[^A-Za-z0-9]/g, '');
+      if (cleanDl.length < 10) {
+        return 'Driving License number must be at least 10 characters';
+      }
+    } else if (id.includes('passbook') || id.includes('bank') || name.includes('account')) {
+      const digits = cleanVal.replace(/\D/g, '');
+      if (digits.length < 9 || digits.length > 18) {
+        return 'Bank Account number must be between 9 and 18 digits';
+      }
+    }
+
+    return null;
+  };
+
+
+
   const isComplete =
     requiredUploadFields.every((item) => Boolean(docs[item.key]?.uploaded || docs[item.key]?.secureUrl)) &&
     documentTemplates.every((template) => {
@@ -547,7 +596,8 @@ const StepDocuments = () => {
       }
 
       const meta = documentMeta[template.id] || {};
-      const hasIdentifyNumber = !template.has_identify_number || Boolean(String(meta.identifyNumber || '').trim());
+      const identifyVal = String(meta.identifyNumber || '').trim();
+      const hasIdentifyNumber = !template.has_identify_number || (Boolean(identifyVal) && !validateDocumentIdentifyNumber(template, identifyVal));
       const hasExpiryDate = !template.has_expiry_date || Boolean(String(meta.expiryDate || '').trim());
       return hasIdentifyNumber && hasExpiryDate;
     }) &&
@@ -555,9 +605,94 @@ const StepDocuments = () => {
     !templatesLoading;
 
   const handleSubmit = async () => {
-    if (!isComplete) {
-      setError(uploading ? 'Please wait for the current upload to finish' : 'Please upload every required document image');
+    setSubmittedAttempted(true);
+
+    if (uploading) {
+      setError('Please wait for the current upload to finish');
       return;
+    }
+
+    const routePrefix = location.pathname.startsWith('/taxi/owner') ? '/taxi/owner' : '/taxi/driver';
+
+    if (!session.phone) {
+      setError('Phone registration is incomplete. Redirecting to Phone step...');
+      setTimeout(() => navigate(`${routePrefix}/reg-phone`, { state: session }), 800);
+      return;
+    }
+
+    if (!session.fullName && !session.personalSession?.fullName) {
+      setError('Personal details are incomplete. Redirecting to Step 1...');
+      setTimeout(() => navigate(`${routePrefix}/step-personal`, { state: session }), 800);
+      return;
+    }
+
+    for (const template of documentTemplates) {
+      const templateFields = Array.isArray(template.fields) ? template.fields : [];
+
+      for (const field of templateFields) {
+        const isRequired = Boolean(field.required ?? field.isRequired ?? template.is_required);
+        if (isRequired && !docs[field.key]?.uploaded && !docs[field.key]?.secureUrl) {
+          const msg = `Please upload ${field.label || template.name}`;
+          setError(msg);
+          const el = document.getElementById(`doc-box-${field.key}`) || document.getElementById(`doc-template-${template.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          return;
+        }
+      }
+
+      const meta = documentMeta[template.id] || {};
+      const identifyVal = String(meta.identifyNumber || '').trim();
+
+      if (template.has_identify_number) {
+        if (!identifyVal && template.is_required) {
+          const msg = `Please enter ${formatMetaLabel(template.identify_number_key) || `${template.name} Number`}`;
+          setError(msg);
+          const el = document.getElementById(`doc-template-${template.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          const inputEl = fileInputRefs.current[`input-${template.id}`];
+          if (inputEl) {
+            inputEl.focus();
+          }
+          return;
+        }
+
+        if (identifyVal) {
+          const validationError = validateDocumentIdentifyNumber(template, identifyVal);
+          if (validationError) {
+            setError(validationError);
+            const el = document.getElementById(`doc-template-${template.id}`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            const inputEl = fileInputRefs.current[`input-${template.id}`];
+            if (inputEl) {
+              inputEl.focus();
+            }
+            return;
+          }
+        }
+      }
+
+      if (template.has_expiry_date) {
+        const expiryVal = String(meta.expiryDate || '').trim();
+        if (!expiryVal && template.is_required) {
+          const msg = `Please select Expiry Date for ${template.name}`;
+          setError(msg);
+          const el = document.getElementById(`doc-template-${template.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          const inputEl = fileInputRefs.current[`expiry-${template.id}`];
+          if (inputEl) {
+            inputEl.focus();
+          }
+          return;
+        }
+      }
     }
 
     setLoading(true);
@@ -675,7 +810,7 @@ const StepDocuments = () => {
             </div>
           ) : (
             documentTemplates.map((template) => (
-              <section key={template.id} className="space-y-5 rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-[0_10px_40px_rgba(0,0,0,0.04)]">
+              <section key={template.id} id={`doc-template-${template.id}`} className="space-y-5 rounded-[2.5rem] border border-slate-100 bg-white p-6 shadow-[0_10px_40px_rgba(0,0,0,0.04)]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <h3 className="text-lg font-black tracking-tight text-slate-900">{template.name}</h3>
@@ -699,22 +834,37 @@ const StepDocuments = () => {
                     const document = docs[field.key];
                     const isUploading = uploading === field.key;
                     const isRequired = Boolean(field.required ?? field.isRequired);
+                    const isPhotoMissing = submittedAttempted && isRequired && !document?.previewUrl && !document?.uploaded;
 
                     return (
                       <div key={field.key} className="space-y-3">
                         <div className="flex items-center justify-between gap-2 px-1">
                           <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 opacity-80">{field.label}</label>
-                          <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded-md ${isRequired ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
-                            {isRequired ? 'Required' : 'Optional'}
+                          <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded-md ${
+                            isPhotoMissing
+                              ? 'bg-rose-100 text-rose-700 font-bold'
+                              : isRequired
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : 'bg-slate-50 text-slate-400'
+                          }`}>
+                            {isPhotoMissing ? 'Photo Required' : isRequired ? 'Required' : 'Optional'}
                           </span>
                         </div>
                         
                         <div className="grid grid-cols-1 gap-3">
                             <div
+                                id={`doc-box-${field.key}`}
+                                onClick={() => {
+                                    if (!document?.previewUrl && !isUploading) {
+                                        fileInputRefs.current[`gallery-${field.key}`]?.click();
+                                    }
+                                }}
                                 className={`relative min-h-[160px] rounded-[1.8rem] border-2 transition-all overflow-hidden flex flex-col items-center justify-center gap-2 ${
-                                    document?.previewUrl
+                                    isPhotoMissing
+                                        ? 'border-rose-500 bg-rose-50/60 shadow-[0_0_20px_rgba(244,63,94,0.2)] animate-pulse'
+                                        : document?.previewUrl
                                         ? 'border-emerald-500/20 bg-emerald-50/10'
-                                        : 'border-dashed border-slate-100 bg-slate-50 hover:border-slate-200'
+                                        : 'border-dashed border-slate-100 bg-slate-50 hover:border-slate-300 hover:bg-slate-100/50 cursor-pointer'
                                 }`}
                             >
                                 {isUploading ? (
@@ -736,14 +886,20 @@ const StepDocuments = () => {
                                     </>
                                 ) : (
                                     <>
-                                        <div className="w-12 h-12 rounded-2xl bg-white text-slate-400 flex items-center justify-center shadow-sm border border-slate-100">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm border ${
+                                          isPhotoMissing
+                                            ? 'bg-rose-100 text-rose-600 border-rose-200'
+                                            : 'bg-white text-slate-400 border-slate-100'
+                                        }`}>
                                             <UploadCloud size={20} />
                                         </div>
                                         <div className="text-center">
-                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Tap to upload</p>
+                                            <p className={`text-[11px] font-black uppercase tracking-widest ${isPhotoMissing ? 'text-rose-700' : 'text-slate-400'}`}>
+                                              {isPhotoMissing ? 'Please upload photo' : 'Tap to upload'}
+                                            </p>
                                         </div>
                                         <div className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-slate-900/5 flex items-center justify-center">
-                                            <Camera size={14} className="text-slate-400" />
+                                            <Camera size={14} className={isPhotoMissing ? 'text-rose-500' : 'text-slate-400'} />
                                         </div>
                                     </>
                                 )}
@@ -758,6 +914,7 @@ const StepDocuments = () => {
                                     <ImagePlus size={16} />
                                     Gallery
                                     <input
+                                    ref={(el) => (fileInputRefs.current[`gallery-${field.key}`] = el)}
                                     type="file"
                                     accept="image/*"
                                     disabled={isUploading}
@@ -801,48 +958,95 @@ const StepDocuments = () => {
 
                 {(template.has_identify_number || template.has_expiry_date) ? (
                   <div className="space-y-4 pt-2">
-                    {template.has_identify_number ? (
-                      <div className="group rounded-[1.8rem] border-2 transition-all p-4 border-slate-50 bg-slate-50 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5">
-                        <div className="flex items-center gap-4">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">
-                                <FileText size={20} strokeWidth={2.5} />
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                                <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70">
-                                    {formatMetaLabel(template.identify_number_key) || `${template.name} Number`}
-                                </label>
-                                <input
-                                    type="text"
-                                    value={documentMeta[template.id]?.identifyNumber || ''}
-                                    onChange={(event) => handleMetaChange(template.id, 'identifyNumber', event.target.value.trim().toUpperCase())}
-                                    placeholder={`Enter ${formatMetaLabel(template.identify_number_key) || 'Number'}`}
-                                    className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0 placeholder:text-slate-200"
-                                />
-                            </div>
-                        </div>
-                      </div>
-                    ) : null}
+                    {template.has_identify_number ? (() => {
+                      const metaVal = String(documentMeta[template.id]?.identifyNumber || '').trim();
+                      const numberValErr = validateDocumentIdentifyNumber(template, metaVal);
+                      const isNumberMissing = submittedAttempted && template.has_identify_number && template.is_required && !metaVal;
+                      const hasNumberErr = isNumberMissing || Boolean(numberValErr);
+                      const numberErrMsg = isNumberMissing
+                        ? `Please enter ${formatMetaLabel(template.identify_number_key) || `${template.name} Number`}`
+                        : numberValErr;
 
-                    {template.has_expiry_date ? (
-                      <div className="group rounded-[1.8rem] border-2 transition-all p-4 border-slate-50 bg-slate-50 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5">
-                        <div className="flex items-center gap-4">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">
-                                <AlertCircle size={20} strokeWidth={2.5} />
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                                <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70">
-                                    Expiry Date
-                                </label>
-                                <input
-                                    type="date"
-                                    value={documentMeta[template.id]?.expiryDate || ''}
-                                    onChange={(event) => handleMetaChange(template.id, 'expiryDate', event.target.value)}
-                                    className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0"
-                                />
-                            </div>
+                      return (
+                        <div className={`group rounded-[1.8rem] border-2 transition-all p-4 ${
+                          hasNumberErr
+                            ? 'border-rose-500 bg-rose-50/60 shadow-[0_0_20px_rgba(244,63,94,0.2)]'
+                            : 'border-slate-50 bg-slate-50 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5'
+                        }`}>
+                          <div className="flex items-center gap-4">
+                              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-all ${
+                                hasNumberErr
+                                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                                  : 'bg-white text-slate-400 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white'
+                              }`}>
+                                  <FileText size={20} strokeWidth={2.5} />
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                  <label className={`block text-[10px] font-black uppercase tracking-[0.15em] ${
+                                    hasNumberErr ? 'text-rose-600' : 'text-slate-400 opacity-70'
+                                  }`}>
+                                      {formatMetaLabel(template.identify_number_key) || `${template.name} Number`}
+                                  </label>
+                                  <input
+                                      ref={(el) => (fileInputRefs.current[`input-${template.id}`] = el)}
+                                      type="text"
+                                      value={documentMeta[template.id]?.identifyNumber || ''}
+                                      onChange={(event) => handleMetaChange(template.id, 'identifyNumber', event.target.value)}
+                                      placeholder={`Enter ${formatMetaLabel(template.identify_number_key) || 'Number'}`}
+                                      className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0 placeholder:text-slate-200 uppercase"
+                                  />
+                              </div>
+                          </div>
+                          {hasNumberErr && (
+                              <p className="text-[11px] font-bold text-rose-600 mt-2 ml-1 flex items-center gap-1.5">
+                                  <AlertCircle size={14} className="shrink-0 text-rose-600" /> {numberErrMsg}
+                              </p>
+                          )}
                         </div>
-                      </div>
-                    ) : null}
+                      );
+                    })() : null}
+
+                    {template.has_expiry_date ? (() => {
+                      const expiryVal = String(documentMeta[template.id]?.expiryDate || '').trim();
+                      const isExpiryMissing = submittedAttempted && template.has_expiry_date && template.is_required && !expiryVal;
+
+                      return (
+                        <div className={`group rounded-[1.8rem] border-2 transition-all p-4 ${
+                          isExpiryMissing
+                            ? 'border-rose-500 bg-rose-50/60 shadow-[0_0_20px_rgba(244,63,94,0.2)]'
+                            : 'border-slate-50 bg-slate-50 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5'
+                        }`}>
+                          <div className="flex items-center gap-4">
+                              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-all ${
+                                isExpiryMissing
+                                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                                  : 'bg-white text-slate-400 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white'
+                              }`}>
+                                  <AlertCircle size={20} strokeWidth={2.5} />
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                  <label className={`block text-[10px] font-black uppercase tracking-[0.15em] ${
+                                    isExpiryMissing ? 'text-rose-600' : 'text-slate-400 opacity-70'
+                                  }`}>
+                                      Expiry Date
+                                  </label>
+                                  <input
+                                      ref={(el) => (fileInputRefs.current[`expiry-${template.id}`] = el)}
+                                      type="date"
+                                      value={documentMeta[template.id]?.expiryDate || ''}
+                                      onChange={(event) => handleMetaChange(template.id, 'expiryDate', event.target.value)}
+                                      className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0"
+                                  />
+                              </div>
+                          </div>
+                          {isExpiryMissing && (
+                              <p className="text-[11px] font-bold text-rose-600 mt-2 ml-1 flex items-center gap-1.5">
+                                  <AlertCircle size={14} className="shrink-0 text-rose-600" /> Expiry date is required
+                              </p>
+                          )}
+                        </div>
+                      );
+                    })() : null}
                   </div>
                 ) : null}
               </section>
@@ -865,12 +1069,8 @@ const StepDocuments = () => {
                     whileHover={{ scale: 1.02, y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleSubmit}
-                    disabled={loading || !isComplete}
-                    className={`group flex h-16 w-full items-center justify-center gap-3 rounded-[1.8rem] text-[15px] font-black tracking-tight transition-all relative overflow-hidden ${
-                        isComplete
-                            ? 'bg-slate-900 text-white shadow-[0_20px_40px_rgba(0,0,0,0.2)] active:bg-black'
-                            : 'pointer-events-none bg-slate-200 text-slate-400 shadow-none'
-                    }`}
+                    disabled={loading}
+                    className="group flex h-16 w-full items-center justify-center gap-3 rounded-[1.8rem] text-[15px] font-black tracking-tight transition-all relative overflow-hidden bg-slate-900 text-white shadow-[0_20px_40px_rgba(0,0,0,0.2)] active:bg-black"
                 >
                     {loading ? (
                         <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

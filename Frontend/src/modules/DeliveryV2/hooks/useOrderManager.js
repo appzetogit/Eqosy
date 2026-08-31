@@ -47,15 +47,11 @@ export const useOrderManager = () => {
           return null;
         };
 
-        console.log('[OrderManager] Raw Full Order Data:', fullOrder);
-
         const resLoc = getLoc(fullOrder.restaurantId, ['latitude', 'lat'], ['longitude', 'lng']) || 
                        getLoc(fullOrder, ['restaurant_lat', 'restaurantLat', 'latitude'], ['restaurant_lng', 'restaurantLng', 'longitude']);
                        
         const cusLoc = getLoc(fullOrder.deliveryAddress, ['latitude', 'lat'], ['longitude', 'lng']) || 
                        getLoc(fullOrder, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']);
-
-        console.log('[OrderManager] Locations Mapped Result:', { resLoc, cusLoc });
 
         setActiveOrder({
           ...fullOrder,

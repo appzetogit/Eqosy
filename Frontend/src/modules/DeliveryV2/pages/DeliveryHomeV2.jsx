@@ -286,7 +286,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     fetch(`/api/v1/food/orders/${activeOrderId}/chat`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken') || ''}` }
     })
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const text = await r.text();
+        return text ? JSON.parse(text) : null;
+      })
       .then((d) => {
         if (d?.data?.conversation?.partnerUnreadCount != null) {
           setPartnerUnreadChatCount(Number(d.data.conversation.partnerUnreadCount || 0));
@@ -472,8 +476,6 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   useEffect(() => {
     let interval;
     if (isSimMode && simPath.length > 1 && simIndex < simPath.length - 1) {
-      console.log('[SimAuto] Glide Active âˆš');
-      
       interval = setInterval(() => {
         setSimProgress(prev => {
           const nextProgress = prev + 0.08; // 8% movement per tick
@@ -542,7 +544,6 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // Reset simulation when path, order or mode changes
   useEffect(() => {
     if (isSimMode) {
-      console.log('[SimAuto] Resetting simulation playhead...');
       setSimIndex(0);
       setSimProgress(0);
     }
@@ -1074,7 +1075,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           null;
 
         if (!cancelled && currentPayload && (currentPayload._id || currentPayload.orderId)) {
-          setActiveOrder(currentPayload);
+          const dispatchStatus = String(currentPayload?.dispatch?.status || '').toLowerCase();
+          if (dispatchStatus === 'assigned') {
+            setIncomingOrder(currentPayload);
+          } else {
+            setActiveOrder(currentPayload);
+          }
           return;
         }
 
@@ -1532,7 +1538,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                                   const orderId = activeOrder?.order_id || activeOrder?.orderId || activeOrder?._id;
                                   if (orderId) {
                                     setPartnerUnreadChatCount(0);
-                                    navigate(`/food/user/orders/${orderId}/chat`);
+                                    navigate(`/food/delivery/orders/${orderId}/chat`);
                                   }
                                 }}
                                 className="w-11 h-11 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 border border-orange-100 hover:bg-orange-100 transition-colors active:scale-90 relative"

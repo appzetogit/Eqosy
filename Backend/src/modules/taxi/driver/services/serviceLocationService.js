@@ -1,6 +1,8 @@
 import { listServiceLocations as listAdminServiceLocations } from '../../admin/services/adminService.js';
 
-const isActiveLocation = (location) => location?.active !== false && String(location?.status || 'active').toLowerCase() === 'active';
+const isActiveLocation = (location) =>
+  location?.active !== false &&
+  ['active', 'approved', 'true', '1', ''].includes(String(location?.status || 'active').trim().toLowerCase());
 
 export const listDriverServiceLocations = async () => {
   const locations = await listAdminServiceLocations();

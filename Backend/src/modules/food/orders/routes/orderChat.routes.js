@@ -13,7 +13,7 @@ import {
 const router = express.Router({ mergeParams: true });
 
 router.use(authMiddleware);
-router.use(requireRoles('USER', 'DELIVERY_PARTNER', 'ADMIN'));
+router.use(requireRoles('USER', 'DELIVERY_PARTNER', 'DELIVERY', 'DRIVER', 'PARTNER', 'RIDER', 'ADMIN'));
 
 router.get('/:orderId/chat', getOrderChat);
 router.get('/:orderId/chat/messages', getOrderMessages);

@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Bus, CalendarDays, Clock3, MapPin, Pencil } from 'lucide-react';
+import { ArrowLeft, Bus, CalendarDays, CheckCircle2, Clock3, MapPin, Pencil, XCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { countTotalSeats, getAdminBuses } from '../../services/busService';
+import { approveAdminBus, countTotalSeats, getAdminBuses, rejectAdminBus } from '../../services/busService';
 
 const statusTone = {
   active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  draft: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_approval: 'bg-amber-50 text-amber-700 border-amber-200',
+  rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+  draft: 'bg-slate-100 text-slate-600 border-slate-200',
   paused: 'bg-slate-100 text-slate-600 border-slate-200',
+  suspended: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 const stopTypeTone = {
@@ -52,6 +55,31 @@ const BusServiceDetails = () => {
     () => catalog.find((item) => String(item.id) === String(id)) || null,
     [catalog, id],
   );
+  const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+
+  const handleApprove = async () => {
+    if (!id) return;
+    try {
+      const updated = await approveAdminBus(id);
+      setCatalog((current) => current.map((item) => (String(item.id) === String(id) ? updated : item)));
+      toast.success('Bus approved successfully');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to approve bus service');
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!id) return;
+    try {
+      const updated = await rejectAdminBus(id, rejectionReasonInput);
+      setCatalog((current) => current.map((item) => (String(item.id) === String(id) ? updated : item)));
+      toast.success('Bus rejected successfully');
+      setRejectionModalOpen(false);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reject bus service');
+    }
+  };
   const stops = bus?.route?.stops || [];
   const returnStops = bus?.returnRoute?.stops || [];
   const pickupStops = stops.filter((stop) => stop.stopType === 'pickup' || stop.stopType === 'both');
@@ -97,15 +125,33 @@ const BusServiceDetails = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/taxi/admin/bus-service')}
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-900 shadow-lg transition hover:-translate-y-0.5"
-            >
-              <ArrowLeft size={16} />
-              Back To List
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wider ${statusTone[bus.status] || statusTone.draft}`}>
+              {bus.status || 'pending_approval'}
+            </span>
+            {bus.status !== 'active' ? (
+              <button
+                type="button"
+                onClick={handleApprove}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-emerald-700"
+              >
+                <CheckCircle2 size={16} />
+                Approve Bus
+              </button>
+            ) : null}
+            {bus.status !== 'rejected' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectionReasonInput(bus.rejectionReason || '');
+                  setRejectionModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-400 bg-rose-500/20 px-4 py-3 text-sm font-black text-white transition hover:bg-rose-500/30"
+              >
+                <XCircle size={16} />
+                Reject
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => navigate(`/taxi/admin/bus-service/edit/${bus.id}`)}
@@ -114,8 +160,23 @@ const BusServiceDetails = () => {
               <Pencil size={16} />
               Edit Bus
             </button>
+            <button
+              type="button"
+              onClick={() => navigate('/taxi/admin/bus-service')}
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-900 shadow-lg transition hover:-translate-y-0.5"
+            >
+              <ArrowLeft size={16} />
+              Back To List
+            </button>
           </div>
         </div>
+
+        {bus.status === 'rejected' && bus.rejectionReason ? (
+          <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
+            <p className="text-xs font-black uppercase tracking-wider text-rose-300">Rejection Reason</p>
+            <p className="mt-1 text-sm font-semibold">{bus.rejectionReason}</p>
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
@@ -413,6 +474,51 @@ const BusServiceDetails = () => {
           </div>
         </div>
       </section>
+      {rejectionModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-900">Reject Bus Service</h3>
+              <button
+                type="button"
+                onClick={() => setRejectionModalOpen(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-slate-500">
+              Provide a reason for rejecting <span className="font-bold text-slate-800">{bus.busName}</span> ({bus.operatorName}). The operator will see this feedback.
+            </p>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Rejection Reason</label>
+              <textarea
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-400/5"
+                placeholder="e.g. Invalid permit details / Registration document missing"
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectionModalOpen(false)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                className="rounded-2xl bg-rose-600 px-5 py-2.5 text-xs font-black text-white hover:bg-rose-700 shadow-sm"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js
 import { Driver } from '../models/Driver.js';
 import { DriverRegistrationSession } from '../models/DriverRegistrationSession.js';
 import { Owner } from '../../admin/models/Owner.js';
+import { BusDriver } from '../models/BusDriver.js';
 import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
 import { AdminBusinessSetting } from '../../admin/models/AdminBusinessSetting.js';
@@ -21,6 +22,7 @@ import { findZoneByPickup } from './locationService.js';
 import { sendOtpSms } from '../../services/smsService.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { applyDriverWalletAdjustment } from './walletService.js';
+import { emitToAdmins } from '../../services/dispatchService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -45,7 +47,14 @@ const normalizePhone = (phone) => {
   return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
 };
 
-const normalizeRole = (role) => (String(role || 'driver').toLowerCase() === 'owner' ? 'owner' : 'driver');
+const normalizeRole = (role) => {
+  const normalized = String(role || 'driver').toLowerCase();
+  if (normalized === 'owner') return 'owner';
+  if (normalized === 'bus_driver' || normalized === 'bus-driver' || normalized === 'busdriver') {
+    return 'bus_driver';
+  }
+  return 'driver';
+};
 const normalizeServiceCategories = (value, fallback = 'taxi') => {
   const rawValues = Array.isArray(value)
     ? value
@@ -493,7 +502,10 @@ export const startDriverOnboarding = async ({ phone, role = 'driver' }) => {
   }
 
   const normalizedRole = normalizeRole(role);
-  const existingDriver = await Driver.findOne({ phone: normalizedPhone });
+  const existingDriver =
+    normalizedRole === 'driver'
+      ? await Driver.findOne({ phone: normalizedPhone })
+      : null;
   const existingOwner =
     normalizedRole === 'owner'
       ? await Owner.findOne({
@@ -503,13 +515,19 @@ export const startDriverOnboarding = async ({ phone, role = 'driver' }) => {
           ],
         })
       : null;
+  const existingBusDriver =
+    normalizedRole === 'bus_driver'
+      ? await BusDriver.findOne({ phone: normalizedPhone })
+      : null;
 
-  if (existingDriver || existingOwner) {
+  if (existingDriver || existingOwner || existingBusDriver) {
     throw new ApiError(
       409,
       normalizedRole === 'owner'
         ? 'Phone number is already registered as an owner'
-        : 'Phone number is already registered',
+        : normalizedRole === 'bus_driver'
+          ? 'Phone number is already registered as a bus driver'
+          : 'Phone number is already registered',
     );
   }
 
@@ -953,8 +971,9 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
 
   const serviceLocationCoordinates = getValidatedServiceLocationCoordinates(resolvedServiceLocation || {});
   const isOwnerRegistration = String(session.role || '').toLowerCase() === 'owner';
+  const isBusDriverRegistration = String(session.role || '').toLowerCase() === 'bus_driver';
 
-  if (!serviceLocationCoordinates && !isOwnerRegistration) {
+  if (!serviceLocationCoordinates && !isOwnerRegistration && !isBusDriverRegistration) {
     throw new ApiError(400, `Unsupported service location: ${session.vehicle.locationName}`);
   }
 
@@ -1025,6 +1044,20 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
     await session.save();
     await DriverRegistrationSession.deleteOne({ _id: session._id });
 
+    try {
+      emitToAdmins('new_registration_alert', {
+        id: String(owner._id),
+        type: 'owner',
+        role: 'owner',
+        title: 'New Fleet Owner Registered',
+        name: owner.owner_name || owner.name || owner.company_name || 'Fleet Owner',
+        phone: owner.mobile || owner.phone || '',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('Failed to emit owner registration alert:', err);
+    }
+
     return {
       message: 'Owner registration completed successfully',
       owner: {
@@ -1038,6 +1071,66 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
       },
       documents: normalizedDocuments,
       token: signAccessToken({ sub: String(owner._id), role: 'owner' }),
+      session: publicSessionPayload(session),
+    };
+  }
+
+  if (isBusDriverRegistration) {
+    const normalizedEmail = String(session.personal.email || '').trim().toLowerCase();
+    const normalizedMobile = String(session.phone || '').trim();
+
+    const duplicateBusDriver = await BusDriver.findOne({
+      $or: [
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+        { phone: normalizedMobile },
+      ],
+    }).lean();
+
+    if (duplicateBusDriver) {
+      throw new ApiError(409, 'Bus driver account already exists with this phone or email');
+    }
+
+    const busDriver = await BusDriver.create({
+      name: String(session.personal.fullName || '').trim(),
+      phone: normalizedMobile,
+      email: normalizedEmail,
+      approve: false,
+      active: true,
+      status: 'pending',
+    });
+
+    session.status = 'completed';
+    session.completedAt = submittedAt;
+    await session.save();
+    await DriverRegistrationSession.deleteOne({ _id: session._id });
+
+    try {
+      emitToAdmins('new_registration_alert', {
+        id: String(busDriver._id),
+        type: 'bus_driver',
+        role: 'bus_driver',
+        title: 'New Bus Captain Registered',
+        name: busDriver.name || 'Bus Captain',
+        phone: busDriver.phone || '',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('Failed to emit bus driver registration alert:', err);
+    }
+
+    return {
+      message: 'Bus driver registration completed successfully',
+      driver: {
+        id: busDriver._id,
+        name: busDriver.name || '',
+        phone: busDriver.phone || '',
+        email: busDriver.email || '',
+        approve: busDriver.approve,
+        active: busDriver.active,
+        status: busDriver.status || 'pending',
+      },
+      documents: normalizedDocuments,
+      token: signAccessToken({ sub: String(busDriver._id), role: 'bus_driver' }),
       session: publicSessionPayload(session),
     };
   }
@@ -1119,6 +1212,20 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
   session.completedAt = submittedAt;
   await session.save();
   await DriverRegistrationSession.deleteOne({ _id: session._id });
+
+  try {
+    emitToAdmins('new_registration_alert', {
+      id: String(driver._id),
+      type: 'driver',
+      role: 'driver',
+      title: 'New Taxi Driver Registered',
+      name: driver.name || 'Taxi Driver',
+      phone: driver.phone || '',
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Failed to emit driver registration alert:', err);
+  }
 
   return {
     message: 'Driver registration completed successfully',

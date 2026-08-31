@@ -775,10 +775,18 @@ Order again from this restaurant in the ${companyName} app.`
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{location}</p>
                       {order.deliveryPartnerName && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          <span className="font-medium">Delivery:</span> {order.deliveryPartnerName}
-                          {order.deliveryPartnerPhone && ` | ${order.deliveryPartnerPhone}`}
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            <span className="font-medium">Delivery:</span> {order.deliveryPartnerName}
+                            {order.deliveryPartnerPhone && ` | ${order.deliveryPartnerPhone}`}
+                          </p>
+                          <Link to={`/food/user/orders/${order.orderId || order.id}/chat`}>
+                            <button type="button" className="text-xs text-[#EB590E] font-semibold flex items-center gap-1 hover:underline bg-orange-50 dark:bg-orange-950/30 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-900/40">
+                              <MessageCircle size={11} />
+                              Chat
+                            </button>
+                          </Link>
+                        </div>
                       )}
                       {order.restaurantId && (
                         <Link to={`/food/user/restaurants/${order.restaurantId}`}>
@@ -801,7 +809,18 @@ Order again from this restaurant in the ${companyName} app.`
 
                 {/* Three-dots dropdown menu */}
                 {activeMenuOrderId === order.id && (
-                  <div className="absolute right-3 top-10 z-20 w-40 rounded-xl bg-white shadow-lg border border-gray-100 py-1 text-xs">
+                  <div className="absolute right-3 top-10 z-20 w-44 rounded-xl bg-white shadow-lg border border-gray-100 py-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMenuOrderId(null)
+                        navigate(`/food/user/orders/${order.orderId || order.id}/chat`)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-800 flex items-center gap-2"
+                    >
+                      <MessageCircle size={14} className="text-[#EB590E]" />
+                      Chat History
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleShareRestaurant(order)}

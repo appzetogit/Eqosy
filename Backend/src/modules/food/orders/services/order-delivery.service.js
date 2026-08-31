@@ -57,7 +57,7 @@ function emitOrderUpdate(order, deliveryPartnerId) {
     }
 
     // Only send push notifications for key delivery milestones
-    const status = order.orderStatus;
+    const status = order.deliveryState?.status || order.orderStatus;
     if (!['picked_up', 'reached_drop', 'delivered'].includes(status)) return;
 
     let userTitle = '';
@@ -77,8 +77,10 @@ function emitOrderUpdate(order, deliveryPartnerId) {
       riderTitle = 'Order Picked Up! 📦';
       riderBody = `You have picked up order #${displayOrderId}. Proceed to the customer location.`;
     } else if (status === 'reached_drop') {
-      userTitle = 'Rider Arrived! 📍';
-      userBody = 'Rider has arrived at your location, please collect the order.';
+      const billAmount = order.pricing?.total || order.amounts?.totalCustomerPaid || order.total || 0;
+      const otpCode = String(order.deliveryOtp || '').trim() || '----';
+      userTitle = '🚚 Your Delivery Partner Has Arrived!';
+      userBody = `Your order has reached your location. Please come to the door to receive your order.\n\n💰 Total Bill: ₹${billAmount}\n🔐 Delivery OTP: ${otpCode}\n\nPlease share this OTP with the delivery partner to confirm and receive your order.\n\nThank you for choosing Eqosy! ❤️`;
       restTitle = 'Rider at Customer Location 📍';
       restBody = `Delivery partner has arrived at customer location for Order #${displayOrderId}.`;
       riderTitle = 'Arrived at Drop! 📍';
@@ -172,9 +174,16 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
   const order = await FoodOrder.findOne({
     'dispatch.deliveryPartnerId': partnerId,
-    'dispatch.status': 'accepted',
+    'dispatch.status': { $in: ['assigned', 'accepted', 'reaching_pickup', 'reached_pickup', 'picked_up', 'reaching_drop', 'reached_drop'] },
     orderStatus: {
-      $in: ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up'],
+      $nin: [
+        'delivered',
+        'cancelled_by_user',
+        'cancelled_by_restaurant',
+        'cancelled_by_admin',
+        'rejected',
+        'Rejected'
+      ],
     },
   })
     .populate({
@@ -203,8 +212,17 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   const filter = {
     $or: [
       {
-        'dispatch.status': 'unassigned',
-        orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup'] },
+        'dispatch.status': { $in: ['unassigned', 'assigned'] },
+        orderStatus: {
+          $nin: [
+            'delivered',
+            'cancelled_by_user',
+            'cancelled_by_restaurant',
+            'cancelled_by_admin',
+            'rejected',
+            'Rejected'
+          ]
+        },
       },
       {
         'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(deliveryPartnerId),
@@ -214,6 +232,8 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
             'cancelled_by_user',
             'cancelled_by_restaurant',
             'cancelled_by_admin',
+            'rejected',
+            'Rejected'
           ],
         },
       },

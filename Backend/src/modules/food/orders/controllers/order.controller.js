@@ -388,3 +388,25 @@ export async function resendDeliveryNotificationRestaurantController(req, res, n
         next(err);
     }
 }
+
+export async function listAvailableDeliveryPartnersForOrderController(req, res, next) {
+    try {
+        const orderId = req.params.orderId;
+        const onlineOnly = req.query.onlineOnly !== 'false';
+        const partners = await orderService.listAvailableDeliveryPartnersForOrder(orderId, { onlineOnly });
+        return sendResponse(res, 200, 'Available delivery partners retrieved', { deliveryPartners: partners });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function handoverDeliveryOrderController(req, res, next) {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const orderId = req.params.orderId;
+        const order = await orderService.handoverDeliveryOrder(orderId, deliveryPartnerId, req.body || {});
+        return sendResponse(res, 200, 'Order handed over successfully. Searching for another delivery partner.', { order });
+    } catch (err) {
+        next(err);
+    }
+}

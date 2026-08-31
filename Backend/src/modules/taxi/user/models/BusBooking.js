@@ -200,6 +200,15 @@ const busBookingSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    financialSnapshot: {
+      baseFare: { type: Number, default: 0 },
+      totalPaidAmount: { type: Number, default: 0 },
+      commissionType: { type: String, default: 'percentage' },
+      commissionValue: { type: Number, default: 0 },
+      calculatedPlatformEarning: { type: Number, default: 0 },
+      operatorEarning: { type: Number, default: 0 },
+      settlementStatus: { type: String, enum: ['pending', 'settled', 'paid'], default: 'pending' },
+    },
   },
   { timestamps: true },
 );

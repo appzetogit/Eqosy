@@ -13,6 +13,7 @@ import {
   MapPin,
   RotateCcw,
   FileText,
+  MessageCircle,
 } from "lucide-react"
 import { orderAPI, restaurantAPI } from "@food/api"
 import { useCart } from "@food/context/CartContext"
@@ -24,7 +25,6 @@ import { calculateDistance } from "@food/utils/common"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
-
 
 export default function UserOrderDetails() {
   const navigate = useNavigate()
@@ -427,22 +427,24 @@ export default function UserOrderDetails() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{restaurantLocation}</p>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={handleCallRestaurant}
-              className="w-8 h-8 rounded-full border border-gray-200 dark:border-zinc-700 flex items-center justify-center text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-950/30"
-            >
-              <Phone className="w-4 h-4" />
-            </button>
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">
-              Order ID: #{orderIdDisplay}
-            </span>
-            <button type="button" onClick={handleCopyOrderId}>
-              <Copy className="w-3 h-3 text-gray-400 dark:text-gray-500 cursor-pointer" />
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">
+                Order ID: #{orderIdDisplay}
+              </span>
+              <button type="button" onClick={handleCopyOrderId}>
+                <Copy className="w-3 h-3 text-gray-400 dark:text-gray-500 cursor-pointer" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/food/user/orders/${orderIdDisplay}/chat`)}
+              className="text-xs text-[#EB590E] font-semibold flex items-center gap-1 bg-orange-50 dark:bg-orange-950/30 px-2 py-1 rounded-md border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 transition-colors"
+            >
+              <MessageCircle size={13} />
+              Chat History
             </button>
           </div>
 

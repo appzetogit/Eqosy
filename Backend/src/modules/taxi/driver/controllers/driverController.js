@@ -6459,19 +6459,42 @@ export const createOwnerBusService = async (req, res) => {
     throw new ApiError(404, "Owner not found");
   }
 
-  const resolvedDriver = await resolveOwnerScopedBusDriverDetails(owner, req.body || {});
+  const payload = { ...(req.body || {}) };
+  delete payload.adminCommissionPercentage;
+  delete payload.commissionType;
+  delete payload.commissionValue;
+  payload.status = 'pending_approval';
+  payload.rejectionReason = '';
+
+  const resolvedDriver = await resolveOwnerScopedBusDriverDetails(owner, payload);
+
+  const createdBus = await createBusService(
+    {
+      ...payload,
+      ownerDriverId: resolvedDriver.ownerDriverId,
+      driverName: resolvedDriver.driverName,
+      driverPhone: resolvedDriver.driverPhone,
+    },
+    { ownerId: owner._id },
+  );
+
+  try {
+    emitToAdmins('new_registration_alert', {
+      type: 'bus_pending',
+      role: 'bus_pending',
+      id: `pending_bus:${createdBus._id || createdBus.id}`,
+      title: 'New Bus Service Approval Required',
+      name: `${createdBus.busName || 'Bus'} (${createdBus.operatorName || owner.name || 'Owner'})`,
+      phone: createdBus.driverPhone || owner.phone || '',
+      createdAt: new Date().toISOString(),
+    });
+  } catch (emitErr) {
+    console.warn('Failed to emit new bus registration alert to admins:', emitErr?.message);
+  }
 
   res.status(201).json({
     success: true,
-    data: await createBusService(
-      {
-        ...(req.body || {}),
-        ownerDriverId: resolvedDriver.ownerDriverId,
-        driverName: resolvedDriver.driverName,
-        driverPhone: resolvedDriver.driverPhone,
-      },
-      { ownerId: owner._id },
-    ),
+    data: createdBus,
   });
 };
 
@@ -6483,27 +6506,58 @@ export const updateOwnerBusService = async (req, res) => {
   }
 
   const existingBus = await BusService.findOne({ _id: req.params.id, ownerId: owner._id })
-    .select("ownerDriverId driverName driverPhone")
+    .select("ownerDriverId driverName driverPhone status")
     .lean();
 
   if (!existingBus) {
     throw new ApiError(404, "Bus service not found");
   }
 
-  const resolvedDriver = await resolveOwnerScopedBusDriverDetails(owner, req.body || {}, existingBus);
+  const payload = { ...(req.body || {}) };
+  delete payload.adminCommissionPercentage;
+  delete payload.commissionType;
+  delete payload.commissionValue;
+
+  let isResubmitted = false;
+  // If currently rejected, draft, or pending, resubmit as pending_approval
+  if (['rejected', 'draft', 'pending_approval'].includes(existingBus.status)) {
+    payload.status = 'pending_approval';
+    payload.rejectionReason = '';
+    isResubmitted = true;
+  }
+
+  const resolvedDriver = await resolveOwnerScopedBusDriverDetails(owner, payload, existingBus);
+
+  const updatedBus = await updateBusService(
+    req.params.id,
+    {
+      ...payload,
+      ownerDriverId: resolvedDriver.ownerDriverId,
+      driverName: resolvedDriver.driverName,
+      driverPhone: resolvedDriver.driverPhone,
+    },
+    { ownerId: owner._id },
+  );
+
+  if (isResubmitted) {
+    try {
+      emitToAdmins('new_registration_alert', {
+        type: 'bus_pending',
+        role: 'bus_pending',
+        id: `pending_bus:${updatedBus._id || updatedBus.id}`,
+        title: 'Bus Service Resubmitted for Approval',
+        name: `${updatedBus.busName || 'Bus'} (${updatedBus.operatorName || owner.name || 'Owner'})`,
+        phone: updatedBus.driverPhone || owner.phone || '',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (emitErr) {
+      console.warn('Failed to emit bus resubmission alert to admins:', emitErr?.message);
+    }
+  }
 
   res.json({
     success: true,
-    data: await updateBusService(
-      req.params.id,
-      {
-        ...(req.body || {}),
-        ownerDriverId: resolvedDriver.ownerDriverId,
-        driverName: resolvedDriver.driverName,
-        driverPhone: resolvedDriver.driverPhone,
-      },
-      { ownerId: owner._id },
-    ),
+    data: updatedBus,
   });
 };
 

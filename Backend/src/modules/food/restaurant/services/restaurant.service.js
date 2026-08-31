@@ -6,6 +6,7 @@ import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
+import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
 
 
 const normalizeName = (value) =>
@@ -537,6 +538,16 @@ export const registerRestaurant = async (payload, files) => {
         });
 
         try {
+            emitToAdmins('new_registration_alert', {
+                id: String(restaurant._id),
+                type: 'restaurant',
+                role: 'restaurant',
+                title: 'New Food Restaurant Registered',
+                name: restaurant.restaurantName || restaurant.ownerName || 'Food Restaurant',
+                phone: restaurant.ownerPhone || restaurant.primaryContactNumber || '',
+                createdAt: new Date().toISOString()
+            });
+
             const { notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
             void notifyAdminsSafely({
                 title: 'New Restaurant Registration 🏪',

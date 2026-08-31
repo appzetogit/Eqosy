@@ -27,11 +27,11 @@ import { RentalVehicleType } from '../../admin/models/RentalVehicleType.js';
 import { ServiceStore } from '../../admin/models/ServiceStore.js';
 import { SetPrice } from '../../admin/models/SetPrice.js';
 import { applyDriverWalletAdjustment } from '../../driver/services/walletService.js';
-import { emitToDriver } from '../../services/dispatchService.js';
+import { emitToDriver, emitToAdmins } from '../../services/dispatchService.js';
 import { sendPushNotificationToEntities } from '../../services/pushNotificationService.js';
 import { buildRentalTrackingSnapshot, updateUserRentalTracking } from '../../services/rentalTrackingService.js';
 import { listDriverServiceLocations } from '../../driver/services/serviceLocationService.js';
-import { listServiceStores } from '../../admin/services/adminService.js';
+import { listServiceStores, resolveBusCommissionRule } from '../../admin/services/adminService.js';
 import {
   getUserSubscriptionSummary,
   listCustomerSubscriptionPlans,
@@ -1244,9 +1244,20 @@ export const registerUser = async (req, res) => {
     await user.save();
   }
 
-  if (referrer?._id) {
-    await User.updateOne({ _id: referrer._id }, { $inc: { referralCount: 1 } });
-    await processSignupReferralRewards({ user, referrer });
+  if (!existingUser) {
+    try {
+      emitToAdmins('new_registration_alert', {
+        id: String(user._id),
+        type: 'user',
+        role: 'user',
+        title: 'New Customer Registered',
+        name: user.name || 'New Customer',
+        phone: user.phone || '',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('Failed to emit new user registration alert:', e);
+    }
   }
 
   res.status(201).json({
@@ -2554,6 +2565,29 @@ export const createBusBookingOrder = async (req, res) => {
   });
 
   const expiresAt = new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
+  const commissionRule = await resolveBusCommissionRule({ busService });
+  let calculatedPlatformEarning = 0;
+
+  if (commissionRule.commissionType === 'percentage') {
+    calculatedPlatformEarning = Math.round((amount * Math.min(100, commissionRule.commissionValue)) / 100 * 100) / 100;
+  } else if (commissionRule.commissionType === 'fixed') {
+    calculatedPlatformEarning = Math.min(amount, Math.round(commissionRule.commissionValue * 100) / 100);
+  } else if (commissionRule.commissionType === 'per_seat') {
+    calculatedPlatformEarning = Math.min(amount, Math.round((seatIds.length * commissionRule.commissionValue) * 100) / 100);
+  }
+
+  const operatorEarning = Math.max(0, Math.round((amount - calculatedPlatformEarning) * 100) / 100);
+
+  const financialSnapshot = {
+    baseFare: amount,
+    totalPaidAmount: amount,
+    commissionType: commissionRule.commissionType,
+    commissionValue: commissionRule.commissionValue,
+    calculatedPlatformEarning,
+    operatorEarning,
+    settlementStatus: 'pending',
+  };
+
   const booking = await BusBooking.create({
     userId,
     busServiceId,
@@ -2567,6 +2601,7 @@ export const createBusBookingOrder = async (req, res) => {
     currency: busService.fareCurrency || 'INR',
     status: 'pending',
     expiresAt,
+    financialSnapshot,
     routeSnapshot: {
       originCity: busService.route?.originCity || '',
       destinationCity: busService.route?.destinationCity || '',

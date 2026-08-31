@@ -257,6 +257,8 @@ export const adminService = {
   getPoolingBookings: () => api.get('/admin/pooling-bookings'),
   updatePoolingBookingStatus: (id, status) => api.patch(`/admin/pooling-bookings/${id}/status`, { status }),
 
+  getBusServices: () => api.get('/admin/bus-services'),
+  listBusServices: () => api.get('/admin/bus-services'),
   getAdminBusBookings: (params = {}) => api.get('/admin/bus-bookings', { params }),
   getAdminBusBookingCalendar: (params = {}) => api.get('/admin/bus-bookings/calendar', { params }),
   createAdminBusBooking: (payload) => api.post('/admin/bus-bookings/manual', payload),

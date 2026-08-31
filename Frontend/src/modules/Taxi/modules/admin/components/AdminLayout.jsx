@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, startTransition, Suspense } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, startTransition, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FOOD_ADMIN_HOME,
@@ -290,8 +290,8 @@ const SidebarBadge = ({ count, isActive = false }) => {
 
   return (
     <span
-      className={`ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-black ${
-        isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'
+      className={`ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-black tracking-tight ${
+        isActive ? 'bg-rose-600 text-white shadow-sm ring-1 ring-white/20' : 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
       }`}
     >
       {count > 99 ? '99+' : count}
@@ -600,6 +600,7 @@ const AdminLayout = () => {
   });
   const [bookingsFeed, setBookingsFeed] = useState([]);
   const [chatNotifications, setChatNotifications] = useState([]);
+  const [registrationNotifications, setRegistrationNotifications] = useState([]);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [rideRequestPage, setRideRequestPage] = useState(1);
   const [bookingPage, setBookingPage] = useState(1);
@@ -785,7 +786,8 @@ const AdminLayout = () => {
             icon: Bus,
             label: 'Bus Service',
             subItems: [
-              { label: 'Fleet Manager', path: '/taxi/admin/bus-service', permission: 'bus_service.view' },
+              { label: 'All Buses', path: '/taxi/admin/bus-service', permission: 'bus_service.view' },
+              { label: 'Pending Buses', path: '/taxi/admin/bus-service?status=pending_approval', permission: 'bus_service.view' },
               { label: 'Bus Commission', path: '/taxi/admin/bus-service/commission', permission: 'bus_service.view' },
               { label: 'Bus Bookings', path: '/taxi/admin/bus-service/bookings', permission: 'bus_service.view' },
             ],
@@ -1001,12 +1003,29 @@ const AdminLayout = () => {
     () => filterSidebarSectionsByAccess(mode === OWNER_MODE ? ownerSections : adminSections, adminProfile),
     [adminProfile, adminSections, mode, ownerSections],
   );
-  const unreadCountsByPath = useMemo(
-    () => ({
+  const unreadCountsByPath = useMemo(() => {
+    const counts = {
       '/taxi/admin/chat': chatUnreadCount,
-    }),
-    [chatUnreadCount],
-  );
+    };
+
+    for (const item of registrationNotifications) {
+      const role = String(item.role || item.type || '').toLowerCase();
+      let path = '';
+      if (role === 'driver') path = '/taxi/admin/drivers/pending';
+      else if (role === 'owner') path = '/taxi/admin/owners/pending';
+      else if (role === 'bus_driver') path = '/taxi/admin/bus-service/managers';
+      else if (role === 'bus_pending' || role === 'bus_service') path = '/taxi/admin/bus-service?status=pending_approval';
+      else if (role === 'refund') path = '/taxi/admin/drivers/wallet/withdrawals';
+      else if (role === 'restaurant') path = '/food/admin/restaurants';
+      else if (role === 'delivery_partner') path = '/food/admin/delivery-partners';
+
+      if (path) {
+        counts[path] = (counts[path] || 0) + 1;
+      }
+    }
+
+    return counts;
+  }, [chatUnreadCount, registrationNotifications]);
   useEffect(() => {
     const activeKeys = [];
     const traverse = (items, parentKey) => {
@@ -1074,11 +1093,14 @@ const AdminLayout = () => {
       ? rideRequestFeed.paginator
       : notificationTab === 'bookings'
         ? pagedBookings.paginator
-        : { current_page: 1, last_page: 1, total: chatNotifications.length };
+        : notificationTab === 'registrations'
+          ? { current_page: 1, last_page: 1, total: registrationNotifications.length }
+          : { current_page: 1, last_page: 1, total: chatNotifications.length };
 
   const totalNotificationItems =
     Math.max(0, Number(rideRequestFeed?.paginator?.total || 0) - dismissedRideRequestSet.size) +
     visibleBookingsFeed.length +
+    registrationNotifications.length +
     visibleChatNotifications.length;
 
   const currentNotificationCount =
@@ -1086,7 +1108,9 @@ const AdminLayout = () => {
       ? visibleRideRequestResults.length
       : notificationTab === 'bookings'
         ? pagedBookings.results.length
-        : visibleChatNotifications.length;
+        : notificationTab === 'registrations'
+          ? registrationNotifications.length
+          : visibleChatNotifications.length;
 
   const setMode = (nextMode) => {
     localStorage.setItem(MODE_STORAGE_KEY, nextMode);
@@ -1184,6 +1208,83 @@ const AdminLayout = () => {
     };
   }, [isAdminChatRoute, mode]);
 
+  const fetchPendingRegistrationsAndRefunds = useCallback(async () => {
+    try {
+      const [pendingDriversRes, withdrawalsRes, busesRes] = await Promise.allSettled([
+        adminService.getDrivers({ tab: 'pending', limit: 20 }),
+        adminService.getDriverWithdrawalSummaries({ status: 'pending', limit: 20 }),
+        adminService.listBusServices(),
+      ]);
+
+      const driversList =
+        pendingDriversRes.status === 'fulfilled'
+          ? pendingDriversRes.value?.data?.results || pendingDriversRes.value?.results || []
+          : [];
+
+      const withdrawalsList =
+        withdrawalsRes.status === 'fulfilled'
+          ? withdrawalsRes.value?.data?.results || withdrawalsRes.value?.results || []
+          : [];
+
+      const busesList =
+        busesRes.status === 'fulfilled'
+          ? busesRes.value?.data?.results || busesRes.value?.data?.data || busesRes.value?.results || busesRes.value?.data || (Array.isArray(busesRes.value) ? busesRes.value : [])
+          : [];
+
+      const mappedPendingDrivers = driversList
+        .filter((d) => String(d.status || '').toLowerCase() === 'pending' || !d.approve)
+        .map((d) => ({
+          id: `pending_driver:${d._id || d.id}`,
+          title: 'Pending Driver Approval',
+          name: d.name || d.driver_name || 'Driver',
+          phone: d.phone || d.mobile || '',
+          type: 'driver',
+          role: 'driver',
+          status: 'PENDING',
+          createdAt: d.createdAt || new Date().toISOString(),
+        }));
+
+      const mappedWithdrawals = withdrawalsList
+        .filter((w) => String(w.status || 'pending').toLowerCase() === 'pending')
+        .map((w) => ({
+          id: `pending_refund:${w._id || w.id || w.latest_request_id || Date.now()}`,
+          title: `Pending Refund / Payout (₹${w.pending_amount || w.amount || 0})`,
+          name: w.driver_name || w.name || 'Driver / Owner',
+          phone: w.phone || w.mobile || '',
+          type: 'refund',
+          role: 'refund',
+          status: 'PENDING',
+          createdAt: w.latest_request_date || w.createdAt || new Date().toISOString(),
+        }));
+
+      const mappedPendingBuses = busesList
+        .filter((b) => String(b.status || '').toLowerCase() === 'pending_approval')
+        .map((b) => ({
+          id: `pending_bus:${b._id || b.id}`,
+          title: 'Pending Bus Service Approval',
+          name: `${b.busName || 'Bus'} (${b.operatorName || 'Operator'})`,
+          phone: b.driverPhone || '',
+          type: 'bus_pending',
+          role: 'bus_pending',
+          status: 'PENDING',
+          createdAt: b.createdAt || new Date().toISOString(),
+        }));
+
+      setRegistrationNotifications((prev) => {
+        const socketOnlyItems = prev.filter(
+          (p) => !p.id.startsWith('pending_driver:') && !p.id.startsWith('pending_refund:') && !p.id.startsWith('pending_bus:')
+        );
+        return [...mappedPendingDrivers, ...mappedWithdrawals, ...mappedPendingBuses, ...socketOnlyItems].slice(0, 50);
+      });
+    } catch (err) {
+      console.error('Failed to fetch pending drivers/refunds/buses:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingRegistrationsAndRefunds();
+  }, [fetchPendingRegistrationsAndRefunds]);
+
   useEffect(() => {
     if (!isNotificationsOpen) return undefined;
 
@@ -1207,6 +1308,14 @@ const AdminLayout = () => {
             results: response?.data?.results || response?.results || [],
             paginator: response?.data?.paginator || response?.paginator || { current_page: 1, last_page: 1, total: 0 },
           });
+          return;
+        }
+
+        if (notificationTab === 'registrations') {
+          await fetchPendingRegistrationsAndRefunds();
+          if (isMounted) {
+            setNotificationsLoading(false);
+          }
           return;
         }
 
@@ -1243,7 +1352,7 @@ const AdminLayout = () => {
     return () => {
       isMounted = false;
     };
-  }, [bookingPage, isNotificationsOpen, notificationTab, rideRequestPage]);
+  }, [bookingPage, fetchPendingRegistrationsAndRefunds, isNotificationsOpen, notificationTab, rideRequestPage]);
 
   useEffect(() => {
     if (!isSearchOpen) return undefined;
@@ -1276,9 +1385,34 @@ const AdminLayout = () => {
       alert(`SOS ALERT: Driver ${data.driver_name} is in trouble!`);
     });
 
-    socketService.on('new_driver_registration', (data) => {
-      console.log('New driver registration:', data);
-    });
+    const handleRegistrationAlert = (data = {}) => {
+      console.log('New registration notification alert:', data);
+      const title = data.title || `New ${data.type || 'Account'} Registered`;
+      const name = data.name || data.fullName || 'New Account';
+      const phone = data.phone || data.mobile || '';
+
+      toast(`🆕 ${title}: ${name}${phone ? ` (${phone})` : ''}`, {
+        duration: 5000,
+        className: 'font-bold text-[13px] rounded-2xl shadow-xl border border-emerald-100 bg-white text-slate-900',
+      });
+
+      setRegistrationNotifications((prev) => {
+        const item = {
+          id: `reg:${data.id || Date.now()}`,
+          title,
+          name,
+          phone,
+          type: data.type || 'user',
+          role: data.role || data.type || 'user',
+          createdAt: data.createdAt || new Date().toISOString(),
+        };
+        const next = [item, ...prev.filter((p) => p.id !== item.id)].slice(0, 50);
+        return next;
+      });
+    };
+
+    socketService.on('new_registration_alert', handleRegistrationAlert);
+    socketService.on('new_driver_registration', handleRegistrationAlert);
 
     const handleSupportChatNotification = (payload = {}) => {
       const senderRole = String(payload.senderRole || payload.sender?.role || '').toLowerCase();
@@ -1334,7 +1468,8 @@ const AdminLayout = () => {
 
     return () => {
       socketService.off('new_sos');
-      socketService.off('new_driver_registration');
+      socketService.off('new_registration_alert', handleRegistrationAlert);
+      socketService.off('new_driver_registration', handleRegistrationAlert);
       socketService.off('chat:message', handleSupportChatNotification);
     };
   }, [isAdminChatRoute, navigate]);
@@ -1533,20 +1668,20 @@ const AdminLayout = () => {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-1">
+                    <div className="mt-4 grid grid-cols-4 gap-1 rounded-2xl bg-slate-50 p-1">
                       <button
                         type="button"
                         onClick={() => {
                           setNotificationTab('ride_requests');
                           setRideRequestPage(1);
                         }}
-                        className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
+                        className={`rounded-xl px-2 py-2 text-[10px] font-bold transition-all ${
                           notificationTab === 'ride_requests'
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-900'
                         }`}
                       >
-                        Ride Requests
+                        Trips
                       </button>
                       <button
                         type="button"
@@ -1554,7 +1689,7 @@ const AdminLayout = () => {
                           setNotificationTab('bookings');
                           setBookingPage(1);
                         }}
-                        className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
+                        className={`rounded-xl px-2 py-2 text-[10px] font-bold transition-all ${
                           notificationTab === 'bookings'
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-900'
@@ -1565,9 +1700,22 @@ const AdminLayout = () => {
                       <button
                         type="button"
                         onClick={() => {
+                          setNotificationTab('registrations');
+                        }}
+                        className={`rounded-xl px-2 py-2 text-[10px] font-bold transition-all ${
+                          notificationTab === 'registrations'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-900'
+                        }`}
+                      >
+                        Accounts ({registrationNotifications.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           setNotificationTab('chats');
                         }}
-                        className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
+                        className={`rounded-xl px-2 py-2 text-[10px] font-bold transition-all ${
                           notificationTab === 'chats'
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-900'
@@ -1701,6 +1849,99 @@ const AdminLayout = () => {
                           </button>
                         ))}
                       </div>
+                    ) : notificationTab === 'registrations' ? (
+                      registrationNotifications.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-8 text-center">
+                          <p className="text-sm font-bold text-slate-900">No new account signups</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            New driver, owner, bus captain, restaurant, and user signups will show up here in real time.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {registrationNotifications.map((item) => {
+                            const role = String(item.role || item.type || '').toLowerCase();
+                            const badgeColor =
+                              role === 'refund'
+                                ? 'bg-rose-50 text-rose-700 font-black border border-rose-200/80 shadow-xs'
+                                : role === 'owner'
+                                ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                : role === 'bus_driver'
+                                ? 'bg-purple-50 text-purple-700 font-bold'
+                                : role === 'driver'
+                                ? 'bg-amber-50 text-amber-800 font-bold'
+                                : role === 'restaurant'
+                                ? 'bg-emerald-50 text-emerald-700 font-bold'
+                                : role === 'delivery_partner'
+                                ? 'bg-sky-50 text-sky-700 font-bold'
+                                : 'bg-slate-100 text-slate-700 font-bold';
+
+                            const targetPath =
+                              role === 'refund'
+                                ? '/taxi/admin/drivers/wallet/withdrawals'
+                                : role === 'owner'
+                                ? '/taxi/admin/owners'
+                                : role === 'bus_driver'
+                                ? '/taxi/admin/bus-service/managers'
+                                : role === 'driver'
+                                ? '/taxi/admin/drivers/pending'
+                                : role === 'restaurant'
+                                ? '/food/admin/restaurants'
+                                : role === 'delivery_partner'
+                                ? '/food/admin/delivery-partners'
+                                : '/taxi/admin/users';
+
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => {
+                                  navigate(targetPath);
+                                  setIsNotificationsOpen(false);
+                                }}
+                                className="relative w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 text-left transition-all hover:border-emerald-200 hover:bg-emerald-50/30"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0 space-y-0.5">
+                                    <p className="truncate text-xs font-black text-slate-900">{item.title}</p>
+                                    <p className="truncate text-xs font-semibold text-slate-700">{item.name}</p>
+                                    {item.phone && (
+                                      <p className="truncate text-[11px] font-semibold text-slate-400">📞 {item.phone}</p>
+                                    )}
+                                  </div>
+                                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${badgeColor}`}>
+                                    {role === 'refund' ? 'Refund Pending' : role.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-[10px] font-bold text-slate-400">
+                                  <span className="text-emerald-600">Tap to inspect</span>
+                                  <span>{formatRelativeAdminTime(item.createdAt)}</span>
+                                </div>
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setRegistrationNotifications((prev) => prev.filter((p) => p.id !== item.id));
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setRegistrationNotifications((prev) => prev.filter((p) => p.id !== item.id));
+                                    }
+                                  }}
+                                  className="absolute right-3 top-3 inline-flex rounded-lg p-1.5 text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600"
+                                  aria-label="Delete notification"
+                                >
+                                  <Trash2 size={14} />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
                     ) : visibleChatNotifications.length === 0 ? (
                       <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-8 text-center">
                         <p className="text-sm font-bold text-slate-900">No new chats found</p>

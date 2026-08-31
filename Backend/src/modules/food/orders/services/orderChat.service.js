@@ -6,6 +6,8 @@ import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodOrder } from '../models/order.model.js';
 import { OrderConversation } from '../models/orderConversation.model.js';
 import { OrderMessage } from '../models/orderMessage.model.js';
+import { getIO, rooms } from '../../../../config/socket.js';
+import { logger } from '../../../../utils/logger.js';
 
 const TERMINAL_CANCELLED_STATUSES = new Set([
   'cancelled_by_user',
@@ -40,12 +42,30 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
   const normalizedRole = String(currentRole || 'USER').toUpperCase();
   const normalizedUserId = String(currentUserId || '');
 
-  // Authorization check
+  // Fetch partner details first to check ownership
+  const partnerDoc = (deliveryPartnerId && mongoose.Types.ObjectId.isValid(deliveryPartnerId))
+    ? await FoodDeliveryPartner.findById(deliveryPartnerId)
+        .select('_id userId fullName name phone vehicleNumber vehicleType rating avatar profileImage')
+        .lean()
+    : null;
+
+  // Fetch user details
+  const userDoc = (order.userId && mongoose.Types.ObjectId.isValid(order.userId))
+    ? await FoodUser.findById(order.userId)
+        .select('name phone avatar')
+        .lean()
+    : null;
+
   const isUserOwner = orderUserId === normalizedUserId;
-  const isPartnerOwner = deliveryPartnerId && deliveryPartnerId === normalizedUserId;
+  const isPartnerOwner = partnerDoc && (
+    String(partnerDoc._id) === normalizedUserId ||
+    (partnerDoc.userId && String(partnerDoc.userId) === normalizedUserId) ||
+    deliveryPartnerId === normalizedUserId
+  );
+  const isDeliveryRole = ['DELIVERY_PARTNER', 'DELIVERY', 'DRIVER', 'PARTNER', 'RIDER'].includes(normalizedRole);
   const isAdmin = normalizedRole === 'ADMIN';
 
-  if (!isUserOwner && !isPartnerOwner && !isAdmin) {
+  if (!isUserOwner && !isPartnerOwner && !isDeliveryRole && !isAdmin) {
     throw new ApiError(403, 'You are not authorized to access this delivery chat');
   }
 
@@ -54,21 +74,12 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
       conversation: null,
       order,
       peer: null,
+      partnerDoc: null,
       status: 'WAITING_FOR_PARTNER',
       canChat: false,
       message: 'Delivery partner not assigned yet. Chat will activate when partner is assigned.',
     };
   }
-
-  // Fetch partner details
-  const partnerDoc = await FoodDeliveryPartner.findById(deliveryPartnerId)
-    .select('fullName name phone vehicleNumber vehicleType rating avatar profileImage')
-    .lean();
-
-  // Fetch user details
-  const userDoc = await FoodUser.findById(order.userId)
-    .select('name phone avatar')
-    .lean();
 
   // Determine chat lifecycle status
   let lifecycleStatus = 'CHAT_ACTIVE';
@@ -97,12 +108,13 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
     await conversation.save();
   }
 
-  const isUserView = normalizedRole === 'USER' || (isUserOwner && !isPartnerOwner);
+  const isUserView = isUserOwner || (!isPartnerOwner && !isDeliveryRole);
+  const isDeliveredOrCancelled = ['READ_ONLY', 'EXPIRED'].includes(lifecycleStatus);
   const peer = isUserView
     ? {
         id: deliveryPartnerId,
         name: partnerDoc?.fullName || partnerDoc?.name || 'Delivery Partner',
-        phone: partnerDoc?.phone || '',
+        phone: isDeliveredOrCancelled ? '' : (partnerDoc?.phone || ''),
         avatar: partnerDoc?.profileImage || partnerDoc?.avatar || '',
         rating: partnerDoc?.rating || 4.8,
         vehicleNumber: partnerDoc?.vehicleNumber || '',
@@ -113,7 +125,7 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
     : {
         id: orderUserId,
         name: order.customerName || userDoc?.name || 'Customer',
-        phone: order.customerPhone || userDoc?.phone || '',
+        phone: isDeliveredOrCancelled ? '' : (order.customerPhone || userDoc?.phone || ''),
         avatar: userDoc?.avatar || '',
         role: 'USER',
         title: 'Customer',
@@ -122,7 +134,7 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
   const canChat = ['CHAT_ACTIVE', 'OUT_FOR_DELIVERY', 'PARTNER_ASSIGNED'].includes(conversation.status);
 
   return {
-    conversation: conversation.toObject(),
+    conversation: typeof conversation.toObject === 'function' ? conversation.toObject() : conversation,
     order: {
       orderId: order.order_id || order.orderId,
       mongoId: order._id,
@@ -132,6 +144,7 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
       deliveryAddress: order.deliveryAddress,
     },
     peer,
+    partnerDoc,
     status: conversation.status,
     canChat,
   };
@@ -147,7 +160,7 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
   }
 
   const chatSession = await getOrCreateOrderConversation({ orderId, currentUserId, currentRole });
-  const { conversation, canChat, status } = chatSession;
+  const { conversation, canChat, status, order } = chatSession;
 
   if (!conversation) {
     throw new ApiError(400, 'Delivery partner is not assigned to this order yet');
@@ -163,7 +176,27 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
     throw new ApiError(400, 'Chat is not active for this order');
   }
 
-  const senderRole = String(currentRole || '').toUpperCase() === 'DELIVERY_PARTNER' ? 'DELIVERY_PARTNER' : 'USER';
+  const normalizedUserId = String(currentUserId || '');
+  const orderUserId = String(order?.userId || conversation?.userId || '');
+  const deliveryPartnerId = conversation?.deliveryPartnerId ? String(conversation.deliveryPartnerId) : null;
+
+  const isUserOwner = orderUserId === normalizedUserId;
+  const isPartnerOwner = (deliveryPartnerId && deliveryPartnerId === normalizedUserId) || (
+    chatSession.partnerDoc && (
+      String(chatSession.partnerDoc._id) === normalizedUserId ||
+      (chatSession.partnerDoc.userId && String(chatSession.partnerDoc.userId) === normalizedUserId)
+    )
+  );
+
+  let senderRole = 'USER';
+  if (isPartnerOwner && !isUserOwner) {
+    senderRole = 'DELIVERY_PARTNER';
+  } else if (isUserOwner && !isPartnerOwner) {
+    senderRole = 'USER';
+  } else {
+    const roleStr = String(currentRole || '').toUpperCase();
+    senderRole = ['DELIVERY_PARTNER', 'DELIVERY', 'DRIVER', 'PARTNER', 'RIDER'].includes(roleStr) ? 'DELIVERY_PARTNER' : 'USER';
+  }
   const message = await OrderMessage.create({
     conversationId: conversation._id,
     orderId: conversation.orderId,
@@ -189,8 +222,31 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
     { new: true }
   ).lean();
 
+  const msgObj = message.toObject();
+
+  // Real-time broadcast via Socket.IO
+  try {
+    const io = getIO();
+    if (io) {
+      const payload = {
+        message: msgObj,
+        conversationId: conversation._id,
+        orderId: conversation.orderId,
+        displayOrderId: conversation.displayOrderId || order?.order_id || order?.orderId,
+      };
+      const roomName = `order-chat:${conversation.orderId}`;
+      io.to(roomName).emit('order_chat_message', payload);
+      io.to(roomName).emit('new_message', payload);
+
+      if (order?.userId) io.to(rooms.user(order.userId)).emit('order_chat_notification', payload);
+      if (conversation?.deliveryPartnerId) io.to(rooms.delivery(conversation.deliveryPartnerId)).emit('order_chat_notification', payload);
+    }
+  } catch (socketErr) {
+    logger.warn(`Failed to broadcast chat message via socket: ${socketErr?.message || socketErr}`);
+  }
+
   return {
-    message: message.toObject(),
+    message: msgObj,
     conversationId: conversation._id,
     orderId: conversation.orderId,
     conversation: updatedConversation,

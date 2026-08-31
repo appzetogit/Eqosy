@@ -421,10 +421,25 @@ const busServiceSchema = new mongoose.Schema(
       type: [busReviewSchema],
       default: [],
     },
+    commissionType: {
+      type: String,
+      enum: ['percentage', 'fixed', 'per_seat'],
+      default: 'percentage',
+    },
+    commissionValue: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    rejectionReason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     status: {
       type: String,
-      enum: ['draft', 'active', 'paused'],
-      default: 'draft',
+      enum: ['draft', 'pending_approval', 'active', 'paused', 'rejected', 'suspended'],
+      default: 'pending_approval',
     },
   },
   { timestamps: true },

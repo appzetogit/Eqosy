@@ -567,6 +567,17 @@ export const adminAPI = {
     apiClient.delete(`/food/admin/orders/${String(orderId)}`, {
       contextModule: "admin",
     }),
+  assignDeliveryPartner: (orderId, deliveryPartnerId) =>
+    apiClient.post(
+      `/food/admin/orders/${String(orderId)}/assign`,
+      { deliveryPartnerId: String(deliveryPartnerId) },
+      { contextModule: "admin" },
+    ),
+  getAvailableDeliveryPartnersForOrder: (orderId, params = {}) =>
+    apiClient.get(
+      `/food/admin/orders/${String(orderId)}/available-partners`,
+      { params, contextModule: "admin" },
+    ),
   /** Dispatch settings – auto vs manual assign (global) */
   /** Create restaurant (admin). Single API: POST /food/admin/restaurants. Body: JSON with image URLs. */
   createRestaurant: (body) =>
@@ -1919,6 +1930,14 @@ export const deliveryAPI = {
   rejectOrder: (orderId, body = {}) =>
     apiClient.patch(
       `/food/delivery/orders/${String(orderId)}/reject`,
+      body ?? {},
+      {
+        contextModule: "delivery",
+      },
+    ),
+  handoverOrder: (orderId, body = {}) =>
+    apiClient.post(
+      `/food/delivery/orders/${String(orderId)}/handover`,
       body ?? {},
       {
         contextModule: "delivery",

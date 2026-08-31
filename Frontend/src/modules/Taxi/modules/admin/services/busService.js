@@ -316,3 +316,13 @@ export const deleteAdminBus = async (busId) => {
   await api.delete(`/admin/bus-services/${busId}`);
   return true;
 };
+
+export const approveAdminBus = async (busId) => {
+  const response = await api.patch(`/admin/bus-services/${busId}/approve`);
+  return normalizeBusCatalog([response?.data || response])[0];
+};
+
+export const rejectAdminBus = async (busId, rejectionReason = '') => {
+  const response = await api.patch(`/admin/bus-services/${busId}/reject`, { rejectionReason });
+  return normalizeBusCatalog([response?.data || response])[0];
+};

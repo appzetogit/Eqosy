@@ -263,6 +263,8 @@ router.patch('/dining/restaurants/:restaurantId', diningAdminController.updateDi
 // ----- Orders -----
 router.get('/orders', requireFoodResourceAccess('orders', 'orders'), orderController.listOrdersAdminController);
 router.get('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.getOrderByIdAdminController);
+router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orders'), orderController.assignDeliveryPartnerController);
+router.get('/orders/:orderId/available-partners', requireFoodResourceAccess('orders', 'orders'), orderController.listAvailableDeliveryPartnersForOrderController);
 router.delete('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.deleteOrderAdminController);
 
 // ----- CMS Pages (About + legal) -----

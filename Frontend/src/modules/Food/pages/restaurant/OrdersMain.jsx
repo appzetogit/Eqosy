@@ -69,41 +69,52 @@ const getAllOrdersTimestamp = (order) =>
   order?.createdAt ||
   new Date().toISOString();
 
-const transformOrderForList = (order) => ({
-  orderId: order.orderId || order._id,
-  mongoId: order._id,
-  status: order.status || "pending",
-  customerName: order.userId?.name || order.customerName || "Customer",
-  type: "Home Delivery",
-  tableOrToken: null,
-  timePlaced: new Date(getAllOrdersTimestamp(order)).toLocaleDateString(
-    "en-US",
-    {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  ),
-  eta: null,
-  itemsSummary:
-    order.items
-      ?.map((item) => {
-        const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
-        return `${item.quantity}x ${item.name}${v ? ` (${v})` : ""}`;
-      })
-      .join(", ") || "No items",
-  photoUrl: order.items?.[0]?.image || null,
-  photoAlt: order.items?.[0]?.name || "Order",
-  paymentMethod: order.paymentMethod || order.payment?.method || null,
-  deliveryPartnerId: order.deliveryPartnerId || null,
-  dispatchStatus: order.dispatch?.status || null,
-  preparingTimestamp: order.tracking?.preparing?.timestamp
-    ? new Date(order.tracking.preparing.timestamp)
-    : new Date(order.createdAt || Date.now()),
-  initialETA: order.estimatedDeliveryTime || 30,
-  sortTimestamp: new Date(getAllOrdersTimestamp(order)).getTime(),
-});
+const transformOrderForList = (order) => {
+  const rawStatus = String(order.status || order.orderStatus || "pending").toLowerCase();
+  const dpId = order.deliveryPartnerId || order.dispatch?.deliveryPartnerId || null;
+
+  // If order is out for delivery or picked up BUT has no delivery partner assigned, map to ready so it doesn't get stuck without a partner
+  let normalizedStatus = rawStatus;
+  if (["out_for_delivery", "picked_up", "reached_drop"].includes(rawStatus) && !dpId) {
+    normalizedStatus = "ready";
+  }
+
+  return {
+    orderId: order.orderId || order._id,
+    mongoId: order._id,
+    status: normalizedStatus,
+    customerName: order.userId?.name || order.customerName || "Customer",
+    type: "Home Delivery",
+    tableOrToken: null,
+    timePlaced: new Date(getAllOrdersTimestamp(order)).toLocaleDateString(
+      "en-US",
+      {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    ),
+    eta: null,
+    itemsSummary:
+      order.items
+        ?.map((item) => {
+          const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+          return `${item.quantity}x ${item.name}${v ? ` (${v})` : ""}`;
+        })
+        .join(", ") || "No items",
+    photoUrl: order.items?.[0]?.image || null,
+    photoAlt: order.items?.[0]?.name || "Order",
+    paymentMethod: order.paymentMethod || order.payment?.method || null,
+    deliveryPartnerId: dpId,
+    dispatchStatus: order.dispatch?.status || null,
+    preparingTimestamp: order.tracking?.preparing?.timestamp
+      ? new Date(order.tracking.preparing.timestamp)
+      : new Date(order.createdAt || Date.now()),
+    initialETA: order.estimatedDeliveryTime || 30,
+    sortTimestamp: new Date(getAllOrdersTimestamp(order)).getTime(),
+  };
+};
 
 // Completed Orders List Component
 function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
@@ -2899,6 +2910,15 @@ function OrderCard({
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">Order #{orderId}</p>
             <p className="text-[11px] text-gray-500 truncate">{customerName}</p>
+            {canCallDeliveryPartner ? (
+              <p className="text-[10px] font-bold text-blue-600 truncate flex items-center gap-1 mt-0.5">
+                <span>🏍️</span> {typeof deliveryPartnerId === 'object' && (deliveryPartnerId.fullName || deliveryPartnerId.name) ? (deliveryPartnerId.fullName || deliveryPartnerId.name) : 'Partner Assigned'}
+              </p>
+            ) : (!isReady && !normalizedStatus.includes('delivered') && !normalizedStatus.includes('cancel')) ? (
+              <p className="text-[10px] font-semibold text-amber-600 truncate flex items-center gap-1 mt-0.5">
+                <span>🚚</span> Finding Partner...
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -3474,16 +3494,20 @@ const OutForDeliveryOrders = ({ onSelectOrder, refreshToken = 0 }) => {
         if (!isMounted) return;
 
         if (response.data?.success && response.data.data?.orders) {
-          // Filter orders with 'out_for_delivery' status
+          // Filter orders with 'out_for_delivery' / 'picked_up' status that actually have an assigned partner
           const outForDeliveryOrders = response.data.data.orders.filter(
-            (order) => order.status === "out_for_delivery",
+            (order) => {
+              const s = String(order.status || order.orderStatus || "").toLowerCase();
+              const hasDp = Boolean(order.deliveryPartnerId || order.dispatch?.deliveryPartnerId);
+              return ["out_for_delivery", "picked_up", "reached_drop"].includes(s) && hasDp;
+            },
           );
 
           const transformedOrders = outForDeliveryOrders.map((order) => ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
-            status: order.status || "out_for_delivery",
-            customerName: order.userId?.name || "Customer",
+            status: order.status || order.orderStatus || "out_for_delivery",
+            customerName: order.userId?.name || order.customerName || "Customer",
             type:
               order.deliveryFleet === "standard"
                 ? "Home Delivery"
@@ -3504,7 +3528,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, refreshToken = 0 }) => {
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
             paymentMethod: order.paymentMethod || order.payment?.method || null,
-            deliveryPartnerId: order.deliveryPartnerId || null,
+            deliveryPartnerId: order.deliveryPartnerId || order.dispatch?.deliveryPartnerId || null,
             dispatchStatus: order.dispatch?.status || null,
           }));
 

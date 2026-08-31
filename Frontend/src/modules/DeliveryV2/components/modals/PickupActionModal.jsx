@@ -3,16 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ChefHat, MapPin, Phone, 
   ChevronDown, ChevronUp, Package, 
-  Navigation, CheckCircle2, Camera, Loader2, Image as ImageIcon
+  Navigation, CheckCircle2, Camera, Loader2, Image as ImageIcon,
+  AlertTriangle, RefreshCw, X
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
-import { uploadAPI } from '@food/api';
+import { uploadAPI, deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
 import { openCamera } from "@food/utils/imageUploadUtils";
 
 /**
  * PickupActionModal - Unified White/Green Theme with Slider Actions.
- * Includes Bill Upload feature prior to pickup.
+ * Includes Bill Upload feature prior to pickup & Emergency Handover flow.
  */
 export const PickupActionModal = ({ 
   order, 
@@ -29,9 +30,55 @@ export const PickupActionModal = ({
   const [isUploadingBill, setIsUploadingBill] = useState(false);
   const [billImageUploaded, setBillImageUploaded] = useState(false);
   const [billImageUrl, setBillImageUrl] = useState(null);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Emergency Handover States
+  const [showHandoverModal, setShowHandoverModal] = useState(false);
+  const [selectedReason, setSelectedReason] = useState("");
+  const [customNote, setCustomNote] = useState("");
+  const [isSubmittingHandover, setIsSubmittingHandover] = useState(false);
   const cameraInputRef = useRef(null);
+
+  const emergencyReasons = [
+    { id: "breakdown", label: "🚗 Vehicle Breakdown / Flat Tire", detail: "गाड़ी ख़राब / पंचर" },
+    { id: "medical", label: "🤒 Health Issue / Medical Emergency", detail: "तबीयत ख़राब / इमरजेंसी" },
+    { id: "accident", label: "🚨 Accident / Road Hazard", detail: "हादसा / आपात स्थिति" },
+    { id: "traffic", label: "🚧 Heavy Traffic / Road Closed", detail: "जाम / रास्ता बंद" },
+    { id: "other", label: "📝 Other Emergency Reason", detail: "अन्य कारण" },
+  ];
+
+  const handleHandoverSubmit = async () => {
+    if (!selectedReason) {
+      toast.error("Please select an emergency reason");
+      return;
+    }
+
+    const orderId = order._id || order.orderId || order.order_id;
+    if (!orderId) {
+      toast.error("Order ID not found");
+      return;
+    }
+
+    setIsSubmittingHandover(true);
+    try {
+      const reasonLabel = emergencyReasons.find(r => r.id === selectedReason)?.label || selectedReason;
+      const res = await deliveryAPI.handoverOrder(orderId, {
+        emergencyReason: reasonLabel,
+        note: customNote
+      });
+
+      if (res.data?.success) {
+        toast.success("Order handed over successfully. Re-searching another driver in this zone...");
+        setShowHandoverModal(false);
+        if (onCancel) await onCancel();
+      } else {
+        toast.error(res.data?.message || "Failed to handover order");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to handover order");
+    } finally {
+      setIsSubmittingHandover(false);
+    }
+  };
 
   if (!order) return null;
 
@@ -386,52 +433,113 @@ export const PickupActionModal = ({
             </div>
           )}
 
-          {/* Cancel Order */}
-          {onCancel && (
-            <div className="pt-2">
-              {!showCancelConfirm ? (
-                <button
-                  onClick={() => setShowCancelConfirm(true)}
-                  className="w-full py-3.5 text-sm font-black text-red-500 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-100 active:scale-95 transition-all uppercase tracking-widest"
-                >
-                  ✕ Cancel Order
-                </button>
-              ) : (
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3">
-                  <p className="text-center text-sm font-black text-red-700">Cancel this order?</p>
-                  <p className="text-center text-xs text-red-500 font-semibold">This will unassign you from the order. This action cannot be undone.</p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowCancelConfirm(false)}
-                      disabled={isCancelling}
-                      className="flex-1 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
-                    >
-                      Go Back
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setIsCancelling(true);
-                        try {
-                          await onCancel();
-                        } finally {
-                          setIsCancelling(false);
-                          setShowCancelConfirm(false);
-                        }
-                      }}
-                      disabled={isCancelling}
-                      className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black text-xs uppercase tracking-widest active:scale-95 transition-all disabled:opacity-60"
-                    >
-                      {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Emergency Handover Order */}
+          <div className="pt-2">
+            <button
+              onClick={() => setShowHandoverModal(true)}
+              className="w-full py-3.5 text-xs font-black text-amber-700 bg-amber-50 rounded-2xl border border-amber-200 hover:bg-amber-100 active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4 text-amber-600 animate-spin-slow" />
+              <span>Handover Order (Emergency)</span>
+            </button>
+          </div>
         </div>
       </motion.div>
-    </div>
 
+      {/* Emergency Handover Modal */}
+      <AnimatePresence>
+        {showHandoverModal && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => !isSubmittingHandover && setShowHandoverModal(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl z-10 space-y-4 border border-gray-100"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-gray-900 leading-tight">Emergency Handover</h3>
+                    <p className="text-xs text-gray-500 font-semibold">Select reason to release order for re-dispatch</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowHandoverModal(false)}
+                  disabled={isSubmittingHandover}
+                  className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+                {emergencyReasons.map((reason) => {
+                  const isSelected = selectedReason === reason.id;
+                  return (
+                    <div
+                      key={reason.id}
+                      onClick={() => setSelectedReason(reason.id)}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                        isSelected
+                          ? "border-amber-500 bg-amber-50/80 shadow-sm"
+                          : "border-gray-100 hover:border-gray-200 bg-gray-50/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-gray-900">{reason.label}</p>
+                        <span className="text-[10px] font-semibold text-gray-400">{reason.detail}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedReason === "other" && (
+                <div>
+                  <textarea
+                    placeholder="Enter additional emergency detail..."
+                    value={customNote}
+                    onChange={(e) => setCustomNote(e.target.value)}
+                    rows={2}
+                    className="w-full p-3 text-xs border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowHandoverModal(false)}
+                  disabled={isSubmittingHandover}
+                  className="flex-1 py-3.5 rounded-2xl border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleHandoverSubmit}
+                  disabled={!selectedReason || isSubmittingHandover}
+                  className="flex-1 py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20"
+                >
+                  {isSubmittingHandover && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Handover Order</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

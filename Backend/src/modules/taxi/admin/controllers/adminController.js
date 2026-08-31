@@ -796,6 +796,12 @@ export const deleteBusService = asyncHandler(async (req, res) => {
   await adminService.deleteBusService(req.params.id);
   ok(res, { deleted: true });
 });
+export const approveBusService = asyncHandler(async (req, res) =>
+  ok(res, await adminService.approveBusService(req.params.id)),
+);
+export const rejectBusService = asyncHandler(async (req, res) =>
+  ok(res, await adminService.rejectBusService(req.params.id, req.body?.rejectionReason)),
+);
 
 export const getAdminBusBookings = asyncHandler(async (req, res) => {
   const busServiceId = toCleanString(req.query?.busServiceId);

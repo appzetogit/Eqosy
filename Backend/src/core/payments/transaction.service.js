@@ -88,14 +88,31 @@ export async function recordTransaction(payload) {
 
     const { Model, filter } = resolveWallet(entityType, entityId);
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    let session = null;
+    let useTransaction = true;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (sessionErr) {
+        useTransaction = false;
+        if (session) {
+            try { session.endSession(); } catch (e) {}
+            session = null;
+        }
+    }
 
     try {
+        const sessionOption = useTransaction && session ? { session } : {};
+        const createSessionOption = useTransaction && session ? { session } : undefined;
+
         // 1. Ensure wallet exists
-        let wallet = await Model.findOne(filter).session(session);
+        let wallet = await Model.findOne(filter, null, sessionOption);
         if (!wallet) {
-            [wallet] = await Model.create([{ ...filter, balance: 0 }], { session });
+            if (useTransaction && session) {
+                [wallet] = await Model.create([{ ...filter, balance: 0 }], createSessionOption);
+            } else {
+                wallet = await Model.create({ ...filter, balance: 0 });
+            }
         }
 
         // 2. Compute new balance
@@ -114,7 +131,7 @@ export async function recordTransaction(payload) {
             ? ADMIN_ENTITY_OID
             : new mongoose.Types.ObjectId(entityId);
 
-        const [txn] = await Transaction.create([{
+        const txnPayload = {
             paymentId: paymentId ? new mongoose.Types.ObjectId(paymentId) : null,
             orderId: orderId ? new mongoose.Types.ObjectId(orderId) : null,
             entityType,
@@ -128,44 +145,55 @@ export async function recordTransaction(payload) {
             category,
             module,
             metadata
-        }], { session });
+        };
+
+        let txn = null;
+        if (useTransaction && session) {
+            const [createdTxn] = await Transaction.create([txnPayload], createSessionOption);
+            txn = createdTxn;
+        } else {
+            txn = await Transaction.create(txnPayload);
+        }
 
         // 4. Update wallet balance atomically
-        const updateFields = { balance: newBalance };
-
-        // Update lifetime totals based on entity + type
         if (type === 'credit') {
             if (entityType === 'restaurant' || entityType === 'deliveryBoy') {
                 await Model.updateOne(filter, {
                     $set: { balance: newBalance },
                     $inc: { totalEarnings: amount }
-                }, { session });
+                }, sessionOption);
             } else if (entityType === 'admin') {
                 await Model.updateOne(filter, {
                     $set: { balance: newBalance },
                     $inc: { totalRevenue: amount }
-                }, { session });
+                }, sessionOption);
             } else {
-                await Model.updateOne(filter, { $set: { balance: newBalance } }, { session });
+                await Model.updateOne(filter, { $set: { balance: newBalance } }, sessionOption);
             }
         } else {
-            await Model.updateOne(filter, { $set: { balance: newBalance } }, { session });
+            await Model.updateOne(filter, { $set: { balance: newBalance } }, sessionOption);
         }
 
-        await session.commitTransaction();
+        if (useTransaction && session) {
+            await session.commitTransaction();
+        }
 
         logger.info(`Transaction recorded: ${type} ${amount} INR for ${entityType}:${entityId} → balance ${newBalance}`);
 
         return {
-            transaction: txn.toObject(),
+            transaction: typeof txn?.toObject === 'function' ? txn.toObject() : txn,
             wallet: { balance: newBalance }
         };
     } catch (err) {
-        await session.abortTransaction();
+        if (useTransaction && session) {
+            try { await session.abortTransaction(); } catch (e) {}
+        }
         logger.error(`recordTransaction failed: ${err.message}`);
         throw err;
     } finally {
-        session.endSession();
+        if (useTransaction && session) {
+            try { session.endSession(); } catch (e) {}
+        }
     }
 }
 

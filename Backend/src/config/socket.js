@@ -102,7 +102,9 @@ export const initSocket = async (server) => {
                     ),
                     hasQueryToken: Boolean(socket?.handshake?.query?.token),
                 });
-                return next(new Error('AUTH_MISSING'));
+                const errMissing = new Error('AUTH_MISSING');
+                errMissing.data = { code: 401, message: 'Authentication token missing' };
+                return next(errMissing);
             }
             logger.info(`[DeliverySocket] Handshake token received`, {
                 socketId: socket.id,
@@ -112,14 +114,15 @@ export const initSocket = async (server) => {
                 tokenPreview: maskToken(token),
             });
             const decoded = verifyAccessToken(token);
-            const entityId = decoded.userId || decoded.sub;
-            const role = decoded.role;
+            const entityId = String(decoded.userId || decoded.id || decoded._id || decoded.sub || decoded.partnerId || '');
+            const rawRole = decoded.role || decoded.userType || decoded.type || (decoded.partnerId || decoded.vehicleNumber || decoded.driverId ? 'DELIVERY_PARTNER' : 'USER');
+            const role = String(rawRole).toUpperCase();
             socket.user = { userId: entityId, role };
             socket.auth = {
-                sub: String(entityId || ''),
-                role: String(role || '').toLowerCase(),
+                sub: entityId,
+                role: role.toLowerCase(),
             };
-            logger.info(`Socket auth success: ${decoded.role}:${decoded.userId} for socket ${socket.id}`);
+            logger.info(`Socket auth success: ${role}:${entityId} for socket ${socket.id}`);
             return next();
         } catch (err) {
             logger.error(`Socket auth failed for socket ${socket.id}: ${err.message}`);
@@ -132,7 +135,9 @@ export const initSocket = async (server) => {
                 errorMessage: err.message,
                 errorName: err.name || null,
             });
-            return next(new Error('AUTH_INVALID'));
+            const errInvalid = new Error('AUTH_INVALID');
+            errInvalid.data = { code: 401, message: err.message || 'Invalid or expired token' };
+            return next(errInvalid);
         }
     });
 

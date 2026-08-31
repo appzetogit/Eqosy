@@ -24,8 +24,8 @@ const isDriverApproved = (driver) => {
         return false;
     }
 
-    const role = String(driver?.onboarding?.role || getStoredDriverRole() || 'driver').toLowerCase();
-    if (role === 'service_center' || role === 'service_center_staff') {
+    const role = String(driver?.onboarding?.role || driver?.role || getStoredDriverRole() || 'driver').toLowerCase();
+    if (role === 'bus_driver' || role === 'service_center' || role === 'service_center_staff') {
         return driver.status !== 'inactive';
     }
 

@@ -14,6 +14,7 @@ import { useZone } from "@food/hooks/useZone"
 import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { searchAPI } from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
+import CategoryDishCardSlider from "@food/components/user/CategoryDishCardSlider"
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -496,7 +497,7 @@ export default function ProfessionalSearch() {
                 <div className="grid gap-4">
                     {results.dishes.map((r) => {
                       const dishImgUrl = getMediaUrl(r.matchedDishImage || extractImageUrl(r)) || DEFAULT_DISH_IMAGE;
-                      const isVeg = r.matchedDishFoodType === 'Veg' || r.pureVegRestaurant;
+                      const isVeg = r.matchedDishFoodType === 'Veg' || (r.matchedDishFoodType !== 'Non-Veg' && r.pureVegRestaurant);
                       const dishPrice = r.matchedDishPrice || r.featuredPrice || 149;
 
                       return (
@@ -572,55 +573,14 @@ export default function ProfessionalSearch() {
                      {isGrocerySearch ? 'Stores' : 'Restaurants'}
                    </h2>
                 </div>
-                <div className="grid gap-6">
-                  {results.restaurants.map((r) => {
-                    const restImgUrl = getMediaUrl(extractImageUrl(r)) || DEFAULT_RESTAURANT_IMAGE;
-                    return (
-                    <Link to={buildStoreLink(r)} key={r._id} className="block group">
-                      <div className="relative rounded-3xl overflow-hidden aspect-[16/9] mb-3 bg-slate-200">
-                         <img 
-                          src={restImgUrl} 
-                          alt={r.restaurantName || "Restaurant"}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = DEFAULT_RESTAURANT_IMAGE;
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                        <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                           <div>
-                              <h3 className="text-xl font-bold text-white mb-1">{r.restaurantName}</h3>
-                              <p className="text-white/80 text-xs line-clamp-1">{r.cuisines?.join(", ")}</p>
-                           </div>
-                           <div className="bg-white/20 backdrop-blur-md border border-white/30 px-2 py-1 rounded-lg flex items-center gap-1">
-                              <Star className="w-3 h-3 text-white fill-white" />
-                              <span className="text-white text-xs font-bold">{r.rating ? Number(r.rating).toFixed(1) : "NEW"}</span>
-                           </div>
-                        </div>
-                        {r.offer && (
-                           <div className="absolute top-4 left-0 bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-r-lg shadow-lg flex items-center gap-1 tracking-tighter">
-                              <BadgePercent className="w-3 h-3" />
-                              {r.offer.toUpperCase()}
-                           </div>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between px-1">
-                         <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                            <div className="flex items-center gap-1">
-                               <Clock className="w-3 h-3" />
-                               {r.estimatedDeliveryTime || "30 mins"}
-                            </div>
-                            <span>•</span>
-                            <span>{r.location?.area || "Nearby"}</span>
-                         </div>
-                         <div className="text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                            Top Pick
-                         </div>
-                      </div>
-                     </Link>
-                    );
-                  })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  {results.restaurants.map((r) => (
+                    <CategoryDishCardSlider
+                      key={r._id || r.id}
+                      restaurant={r}
+                      dishes={r.matchedDishes || []}
+                    />
+                  ))}
                 </div>
               </section>
             )}

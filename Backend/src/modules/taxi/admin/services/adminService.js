@@ -661,6 +661,14 @@ const normalizeBusServicePayload = (payload = {}, existing = {}) => {
       100,
       Math.max(0, sanitizeBusSeatPrice(payload.adminCommissionPercentage, existing.adminCommissionPercentage || 0)),
     ),
+    commissionType: ['percentage', 'fixed', 'per_seat'].includes(String(payload.commissionType || '').toLowerCase())
+      ? String(payload.commissionType).toLowerCase()
+      : existing.commissionType || 'percentage',
+    commissionValue:
+      payload.commissionValue !== undefined
+        ? Math.max(0, Number(payload.commissionValue) || 0)
+        : existing.commissionValue ?? Number(existing.adminCommissionPercentage || 0),
+    rejectionReason: sanitizeBusText(payload.rejectionReason, existing.rejectionReason || ''),
     serviceTaxPercentage: Math.min(
       100,
       Math.max(0, sanitizeBusSeatPrice(payload.serviceTaxPercentage, existing.serviceTaxPercentage || 0)),
@@ -696,7 +704,9 @@ const normalizeBusServicePayload = (payload = {}, existing = {}) => {
     returnRoute,
     schedules,
     capacity,
-    status: ['draft', 'active', 'paused'].includes(payload.status) ? payload.status : existing.status || 'draft',
+    status: ['draft', 'pending_approval', 'active', 'paused', 'rejected', 'suspended'].includes(payload.status)
+      ? payload.status
+      : existing.status || 'pending_approval',
   };
 };
 
@@ -769,7 +779,13 @@ const serializeBusService = (item = {}) => ({
     item.capacity ||
     countSeatsInBlueprintDeck(item.blueprint?.lowerDeck || []) +
       countSeatsInBlueprintDeck(item.blueprint?.upperDeck || []),
-  status: item.status || 'draft',
+  commissionType: item.commissionType || 'percentage',
+  commissionValue:
+    item.commissionValue !== undefined && item.commissionValue !== null
+      ? Number(item.commissionValue)
+      : Number(item.adminCommissionPercentage || 0),
+  rejectionReason: item.rejectionReason || '',
+  status: item.status || 'pending_approval',
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
 });
@@ -7957,6 +7973,52 @@ export const updateBusService = async (id, payload = {}, options = {}) => {
       await BusDriver.findByIdAndDelete(item.busDriverId);
     }
     return true;
+  };
+
+  export const approveBusService = async (id) => {
+    const item = await BusService.findById(id);
+    if (!item) throw new ApiError(404, 'Bus service not found');
+    item.status = 'active';
+    item.rejectionReason = '';
+    await item.save();
+    return serializeBusService(item.toObject());
+  };
+
+  export const rejectBusService = async (id, reason = '') => {
+    const item = await BusService.findById(id);
+    if (!item) throw new ApiError(404, 'Bus service not found');
+    item.status = 'rejected';
+    item.rejectionReason = String(reason || 'Bus registration requires details update').trim();
+    await item.save();
+    return serializeBusService(item.toObject());
+  };
+
+  export const resolveBusCommissionRule = async ({ busService = null } = {}) => {
+    let commissionType = 'percentage';
+    let commissionValue = 0;
+
+    if (busService?.commissionValue !== undefined && Number(busService.commissionValue) > 0) {
+      commissionType = busService.commissionType || 'percentage';
+      commissionValue = Number(busService.commissionValue);
+    } else if (busService?.adminCommissionPercentage !== undefined && Number(busService.adminCommissionPercentage) > 0) {
+      commissionType = 'percentage';
+      commissionValue = Number(busService.adminCommissionPercentage);
+    } else {
+      try {
+        const transportSettings = await getTransportRideSettings();
+        if (transportSettings?.bus_commission_type) {
+          commissionType = String(transportSettings.bus_commission_type).toLowerCase();
+          commissionValue = Number(transportSettings.bus_commission_value || 0);
+        } else if (transportSettings?.bus_admin_commission) {
+          commissionType = 'percentage';
+          commissionValue = Number(transportSettings.bus_admin_commission || 0);
+        }
+      } catch (err) {
+        console.warn('Failed to load global transport commission settings:', err?.message);
+      }
+    }
+
+    return { commissionType, commissionValue };
   };
 
   export const listRentalVehicleTypes = async () => {

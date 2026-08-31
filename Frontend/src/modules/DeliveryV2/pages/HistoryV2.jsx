@@ -86,13 +86,76 @@ export const HistoryV2 = () => {
     return day;
   };
 
-  const recentDates = useMemo(() => {
-    return [...Array(30)].map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return d;
-    });
-  }, []);
+  const getWeekRangeString = (anchorDate) => {
+    const d = new Date(anchorDate);
+    const start = new Date(d);
+    start.setDate(start.getDate() - start.getDay()); // Sunday
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6); // Saturday
+    
+    const today = new Date();
+    const currentWeekStart = new Date(today);
+    currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+
+    const startStr = start.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    const endStr = end.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+
+    if (start.toDateString() === currentWeekStart.toDateString()) {
+      return `This Week (${startStr} - ${endStr})`;
+    }
+    const lastWeekStart = new Date(currentWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    if (start.toDateString() === lastWeekStart.toDateString()) {
+      return `Last Week (${startStr} - ${endStr})`;
+    }
+
+    return `${startStr} - ${endStr}`;
+  };
+
+  const getMonthString = (anchorDate) => {
+    const today = new Date();
+    const isThisMonth = anchorDate.getMonth() === today.getMonth() && anchorDate.getFullYear() === today.getFullYear();
+    const monthStr = anchorDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return isThisMonth ? `This Month (${monthStr})` : monthStr;
+  };
+
+  const dateOptions = useMemo(() => {
+    if (activeTab === 'daily') {
+      return [...Array(30)].map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return { date: d, label: formatDateDisplay(d) };
+      });
+    } else if (activeTab === 'weekly') {
+      return [...Array(8)].map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (i * 7));
+        return { date: d, label: getWeekRangeString(d) };
+      });
+    } else if (activeTab === 'monthly') {
+      return [...Array(12)].map((_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        d.setDate(1);
+        return { date: d, label: getMonthString(d) };
+      });
+    }
+    return [];
+  }, [activeTab]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (activeTab === 'daily') return formatDateDisplay(selectedDate);
+    if (activeTab === 'weekly') return getWeekRangeString(selectedDate);
+    if (activeTab === 'monthly') return getMonthString(selectedDate);
+    return formatDateDisplay(selectedDate);
+  }, [activeTab, selectedDate]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSelectedDate(new Date()); // Auto-reset to current date/week/month when switching tabs
+    setShowDatePicker(false);
+    setShowTripTypePicker(false);
+  };
 
   const metrics = useMemo(() => {
      return trips.reduce((acc, trip) => {
@@ -180,7 +243,7 @@ export const HistoryV2 = () => {
           {['daily', 'weekly', 'monthly'].map((tab) => (
              <button
                key={tab}
-               onClick={() => setActiveTab(tab)}
+               onClick={() => handleTabChange(tab)}
                className={`py-4 text-base font-medium capitalize relative ${activeTab === tab ? 'text-[#10B981]' : 'text-gray-400'}`}
              >
                 {tab}
@@ -195,7 +258,7 @@ export const HistoryV2 = () => {
              onClick={() => { setShowDatePicker(!showDatePicker); setShowTripTypePicker(false); }}
              className="flex-1 px-4 py-3 bg-[#f8f9fa] border border-gray-100 rounded-xl flex items-center justify-between text-gray-800"
           >
-             <span className="text-sm font-medium">{formatDateDisplay(selectedDate)}</span>
+             <span className="text-sm font-medium">{selectedDateLabel}</span>
              <ChevronDown className={`w-4 h-4 text-gray-400 transform transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
           </button>
           <button 
@@ -211,13 +274,13 @@ export const HistoryV2 = () => {
        <AnimatePresence>
           {showDatePicker && (
              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="fixed left-4 right-4 top-[185px] z-[200] bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-[300px] overflow-y-auto p-2">
-                {recentDates.map((date, idx) => (
+                {dateOptions.map((opt, idx) => (
                    <button 
                       key={idx} 
-                      onClick={() => { setSelectedDate(date); setShowDatePicker(false); }}
-                      className={`w-full text-left p-4 rounded-xl text-sm font-medium ${date.toDateString() === selectedDate.toDateString() ? 'bg-green-50 text-[#10B981] font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                      onClick={() => { setSelectedDate(opt.date); setShowDatePicker(false); }}
+                      className={`w-full text-left p-4 rounded-xl text-sm font-medium ${opt.date.toDateString() === selectedDate.toDateString() ? 'bg-green-50 text-[#10B981] font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                    >
-                      {formatDateDisplay(date)}
+                      {opt.label}
                    </button>
                 ))}
              </motion.div>

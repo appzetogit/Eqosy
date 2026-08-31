@@ -7,6 +7,7 @@ import { FoodOrder } from '../../orders/models/order.model.js';
 import { uploadImageBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
+import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
 
 export const registerDeliveryPartner = async (payload, files) => {
     const { 
@@ -106,6 +107,16 @@ export const registerDeliveryPartner = async (payload, files) => {
     await partner.save();
 
     try {
+        emitToAdmins('new_registration_alert', {
+            id: String(partner._id),
+            type: 'delivery_partner',
+            role: 'delivery_partner',
+            title: 'New Food Delivery Partner Registered',
+            name: partner.name || 'Delivery Partner',
+            phone: partner.phone || '',
+            createdAt: new Date().toISOString()
+        });
+
         const { notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
         void notifyAdminsSafely({
             title: 'New Delivery Partner Registration 🚲',
@@ -665,6 +676,7 @@ const getMonthRange = (anchorDate) => {
 
 const computeRange = (period, date) => {
     const p = String(period || 'daily').toLowerCase();
+    if (p === 'all') return { start: new Date(0), end: new Date(2100, 0, 1) };
     const anchor = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
     if (p === 'weekly' || p === 'week') return getWeekRange(anchor);
     if (p === 'monthly' || p === 'month') return getMonthRange(anchor);
@@ -756,27 +768,36 @@ export const getDeliveryPartnerTripHistory = async (deliveryPartnerId, query = {
     const match = { 'dispatch.deliveryPartnerId': partnerId };
 
     const sf = String(statusFilter || '').toLowerCase();
+    const dateFilterClause = {
+        $or: [
+            { 'deliveryState.deliveredAt': { $gte: start, $lte: end } },
+            { deliveredAt: { $gte: start, $lte: end } },
+            { completedAt: { $gte: start, $lte: end } },
+            { updatedAt: { $gte: start, $lte: end } },
+            { createdAt: { $gte: start, $lte: end } }
+        ]
+    };
+
     if (sf === 'completed') {
-        match.orderStatus = 'delivered';
-        match['deliveryState.deliveredAt'] = { $gte: start, $lte: end };
+        match.orderStatus = { $in: ['delivered', 'completed'] };
+        match.$or = dateFilterClause.$or;
     } else if (sf === 'cancelled') {
         match.orderStatus = { $regex: '^cancelled', $options: 'i' };
-        match.createdAt = { $gte: start, $lte: end };
+        match.$or = dateFilterClause.$or;
     } else if (sf === 'pending') {
-        match.createdAt = { $gte: start, $lte: end };
-        // Pending = not delivered and not cancelled
         match.$and = [
-            { orderStatus: { $ne: 'delivered' } },
+            { orderStatus: { $nin: ['delivered', 'completed'] } },
             { orderStatus: { $not: { $regex: '^cancelled', $options: 'i' } } },
+            dateFilterClause
         ];
     } else {
-        // ALL TRIPS: show anything created in range, and compute earnings only for delivered orders.
-        match.createdAt = { $gte: start, $lte: end };
+        // ALL TRIPS
+        match.$or = dateFilterClause.$or;
     }
 
     const orders = await FoodOrder.find(match)
         .populate({ path: 'restaurantId', select: 'restaurantName' })
-        .sort({ 'deliveryState.deliveredAt': -1, createdAt: -1 })
+        .sort({ 'deliveryState.deliveredAt': -1, deliveredAt: -1, createdAt: -1 })
         .limit(limit)
         .lean();
 

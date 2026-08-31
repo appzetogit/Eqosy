@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     getStoredDriverRegistrationSession,
+    normalizeDriverPortalRole,
     saveDriverReferral,
     saveDriverRegistrationSession,
 } from '../../services/registrationService';
@@ -40,11 +41,7 @@ const StepReferral = () => {
                 referralCode: skip ? '' : referral,
             });
             const payload = response?.data?.data || response?.data || response;
-            const syncedRole =
-                String(payload?.session?.role || '').toLowerCase() === 'owner' ||
-                String(session.role || '').toLowerCase() === 'owner'
-                    ? 'owner'
-                    : 'driver';
+            const syncedRole = normalizeDriverPortalRole(payload?.session?.role || session.role || 'driver');
 
             const nextState = saveDriverRegistrationSession({
                 ...session,

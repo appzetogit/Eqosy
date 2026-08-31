@@ -26,6 +26,8 @@ import {
   deleteAdminBus as defaultDeleteBus,
   getAdminBuses as defaultGetBuses,
   upsertAdminBus as defaultUpsertBus,
+  approveAdminBus as defaultApproveBus,
+  rejectAdminBus as defaultRejectBus,
 } from '../../services/busService';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -48,8 +50,11 @@ const labelClassName = 'mb-2 block text-[10px] font-bold uppercase tracking-wide
 
 const statusTone = {
   active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  draft: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending_approval: 'bg-amber-50 text-amber-700 border-amber-200',
+  rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+  draft: 'bg-slate-100 text-slate-600 border-slate-200',
   paused: 'bg-slate-100 text-slate-600 border-slate-200',
+  suspended: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 const DEFAULT_COACH_TYPES = ['AC Sleeper', 'Non AC Sleeper', 'AC Seater', 'Volvo Multi Axle', 'Semi Sleeper'];
@@ -336,11 +341,54 @@ const BusServiceManager = ({
     () => catalog.find((item) => item.id === currentBusId || item.id === detailBusId) || null,
     [catalog, currentBusId, detailBusId],
   );
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
+
+  useEffect(() => {
+    const statusQuery = searchParams.get('status');
+    setStatusFilter(statusQuery || 'all');
+  }, [searchParams]);
+  const [rejectionModalBus, setRejectionModalBus] = useState(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+
+  const handleApproveBus = async (busId) => {
+    try {
+      const updated = await defaultApproveBus(busId);
+      setCatalog((current) => current.map((item) => (item.id === busId ? updated : item)));
+      toast.success('Bus service approved & active');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to approve bus service');
+    }
+  };
+
+  const handleOpenRejectModal = (bus) => {
+    setRejectionModalBus(bus);
+    setRejectionReasonInput(bus.rejectionReason || '');
+  };
+
+  const handleConfirmRejectBus = async () => {
+    if (!rejectionModalBus) return;
+    try {
+      const updated = await defaultRejectBus(rejectionModalBus.id, rejectionReasonInput);
+      setCatalog((current) => current.map((item) => (item.id === rejectionModalBus.id ? updated : item)));
+      toast.success('Bus service rejected');
+      setRejectionModalBus(null);
+      setRejectionReasonInput('');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reject bus service');
+    }
+  };
+
   const filteredCatalog = useMemo(() => {
     const query = catalogSearch.trim().toLowerCase();
-    if (!query) return catalog;
+    let list = catalog;
 
-    return catalog.filter((bus) =>
+    if (statusFilter !== 'all') {
+      list = list.filter((bus) => bus.status === statusFilter);
+    }
+
+    if (!query) return list;
+
+    return list.filter((bus) =>
       [
         bus.busName,
         bus.operatorName,
@@ -355,7 +403,7 @@ const BusServiceManager = ({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query)),
     );
-  }, [catalog, catalogSearch]);
+  }, [catalog, catalogSearch, statusFilter]);
   const selectedOwnerDriver = useMemo(
     () => ownerDrivers.find((driver) => String(driver.id) === String(draft.ownerDriverId || '')) || null,
     [draft.ownerDriverId, ownerDrivers],
@@ -783,6 +831,41 @@ const BusServiceManager = ({
           <div>
             <h2 className="text-xl font-black tracking-tight text-slate-900">Bus Services</h2>
             <p className="mt-1 text-sm font-medium text-slate-500">Manage coaches, routes, assigned drivers, pricing and schedules.</p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { id: 'all', label: 'All Buses' },
+                { id: 'pending_approval', label: 'Pending Approval' },
+                { id: 'active', label: 'Approved & Active' },
+                { id: 'rejected', label: 'Rejected' },
+              ].map((tab) => {
+                const count = tab.id === 'all'
+                  ? catalog.length
+                  : catalog.filter((bus) => bus.status === tab.id).length;
+                const isActive = statusFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setStatusFilter(tab.id)}
+                    className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -945,11 +1028,33 @@ const BusServiceManager = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {bus.status !== 'active' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleApproveBus(bus.id)}
+                          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700"
+                          title="Approve Bus Service"
+                        >
+                          <CheckCircle2 size={14} />
+                          Approve
+                        </button>
+                      ) : null}
+                      {bus.status !== 'rejected' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRejectModal(bus)}
+                          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-xs font-black text-rose-600 transition hover:bg-rose-100"
+                          title="Reject Bus Service"
+                        >
+                          <XCircle size={14} />
+                          Reject
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => openEditView(bus.id)}
-                        className={`inline-flex h-11 items-center justify-center rounded-2xl px-4 text-sm font-black transition ${
+                        className={`inline-flex h-10 items-center justify-center rounded-xl px-3.5 text-xs font-black transition ${
                           active
                             ? 'bg-slate-900 text-white'
                             : 'border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
@@ -960,10 +1065,10 @@ const BusServiceManager = ({
                       <button
                         type="button"
                         onClick={() => openDetailView(bus.id)}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                       >
-                        <Eye size={16} />
-                        View Details
+                        <Eye size={14} />
+                        View
                       </button>
                     </div>
                   </div>
@@ -2048,6 +2153,51 @@ const BusServiceManager = ({
           </section>
         </div>
       </section>
+      ) : null}
+      {rejectionModalBus ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-slate-900">Reject Bus Service</h3>
+              <button
+                type="button"
+                onClick={() => setRejectionModalBus(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-slate-500">
+              Please provide a reason for rejecting <span className="font-bold text-slate-800">{rejectionModalBus.busName}</span> ({rejectionModalBus.operatorName}). The operator will see this feedback.
+            </p>
+            <div>
+              <label className={labelClassName}>Rejection Reason</label>
+              <textarea
+                rows={3}
+                className={fieldClassName}
+                placeholder="e.g. Invalid permit details / Registration document missing"
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectionModalBus(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRejectBus}
+                className="rounded-2xl bg-rose-600 px-5 py-2.5 text-xs font-black text-white hover:bg-rose-700 shadow-sm"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

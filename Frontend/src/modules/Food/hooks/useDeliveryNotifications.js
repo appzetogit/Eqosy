@@ -864,6 +864,15 @@ export const useDeliveryNotifications = () => {
       handleIncomingOrderAlert(orderData);
     });
 
+    socketRef.current.on('order_assigned', (orderData) => {
+      debugLog('Order assigned to partner received via socket', {
+        orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
+        dispatchStatus: orderData?.dispatch?.status,
+      });
+      setNewOrder(orderData);
+      handleIncomingOrderAlert(orderData);
+    });
+
     socketRef.current.on('play_notification_sound', (data) => {
       debugLog('play_notification_sound received', {
         orderId: data?.orderId || data?.orderMongoId || data?.order_id,

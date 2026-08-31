@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     getStoredDriverRegistrationSession,
+    getDriverServiceLocations,
+    normalizeDriverPortalRole,
     saveDriverPersonalDetails,
     saveDriverRegistrationSession,
 } from '../../services/registrationService';
@@ -25,9 +27,7 @@ const StepPersonal = () => {
     const registrationId = session.registrationId || '';
     const role = routePrefix === '/taxi/owner'
         ? 'owner'
-        : (String(session.personalSession?.role || session.otpSession?.role || session.role || 'driver').toLowerCase() === 'owner'
-            ? 'owner'
-            : 'driver');
+        : normalizeDriverPortalRole(session.personalSession?.role || session.otpSession?.role || session.role || 'driver');
     const isOwner = role === 'owner';
 
     const [zones, setZones] = useState([]);
@@ -44,12 +44,11 @@ const StepPersonal = () => {
     useEffect(() => {
         const fetchZones = async () => {
             try {
-                const res = await fetch('/api/v1/taxi/user/service-locations');
-                const data = await res.json();
-                const list = data?.data?.results || data?.results || [];
-                setZones(list);
+                const response = await getDriverServiceLocations();
+                const list = response?.data?.results || response?.data?.data?.results || response?.data || response?.results || [];
+                setZones(Array.isArray(list) ? list : []);
             } catch (err) {
-                // Ignore fetch error
+                console.error('Failed to fetch service locations:', err);
             }
         };
         fetchZones();
@@ -98,9 +97,7 @@ const StepPersonal = () => {
                 });
                 const payload = response?.data?.data || response?.data || response;
                 const serverRole = String(payload?.session?.role || '').toLowerCase();
-                const syncedRole = serverRole === 'owner' || String(role).toLowerCase() === 'owner'
-                    ? 'owner'
-                    : 'driver';
+                const syncedRole = normalizeDriverPortalRole(serverRole || role || 'driver');
 
                 const nextState = saveDriverRegistrationSession({
                     ...session,

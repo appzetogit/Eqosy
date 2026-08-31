@@ -24,6 +24,7 @@ import { useZone } from "@food/hooks/useZone"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
 import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { getMenuFromResponse } from "@food/utils/menuItems"
+import CategoryDishCardSlider from "@food/components/user/CategoryDishCardSlider"
 
 // Filter options
 const filterOptions = [
@@ -1259,50 +1260,66 @@ export default function CategoryPage() {
   }
 
   // Filter restaurants based on active filters and selected category
-  // If category is selected, expand restaurants into dish cards (one card per matching dish)
+  // If category is selected, group dishes per restaurant so each restaurant gets a CategoryDishCardSlider
   const filteredRecommended = useMemo(() => {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    // Filter by category - Dynamic filtering based on menu items
     if (selectedCategory && selectedCategory !== 'all') {
-      const expandedDishes = []
+      const restaurantList = []
 
       filtered.forEach(r => {
+        let categoryDishes = []
         if (r.menu) {
           const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
           if (hasCategoryItem) {
-            // Get ALL matching dishes for this category
-            const categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
-
-            if (categoryDishes.length > 0) {
-              const validDishes = vegMode
-                ? categoryDishes.filter((dish) => dish.foodType === "Veg")
-                : categoryDishes;
-
-              validDishes.forEach((dishForCard) => {
-                expandedDishes.push({
-                  ...r,
-                  id: `${r.id || r.restaurantId}-${dishForCard.itemId}`,
-                  dishId: dishForCard.itemId || `${r.id}-dish`,
-                  categoryDish: dishForCard,
-                  categoryDishName: dishForCard.name,
-                  categoryDishPrice: dishForCard.price,
-                  categoryDishImage: dishForCard.image,
-                })
-              })
-            }
+            categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
           }
+        }
+
+        if (vegMode) {
+          categoryDishes = categoryDishes.filter((dish) => dish.foodType === "Veg")
+        }
+
+        if (categoryDishes.length > 0) {
+          restaurantList.push({
+            ...r,
+            categoryDishes: categoryDishes,
+            categoryDishName: categoryDishes[0].name,
+            categoryDishPrice: categoryDishes[0].price,
+            categoryDishImage: categoryDishes[0].image,
+            categoryDishFoodType: categoryDishes[0].foodType,
+          })
         }
       })
 
-      filtered = expandedDishes
+      filtered = restaurantList
 
       if (filtered.length === 0) {
         const fallbackDishes = getCategoryFallbackDishesFromApprovedFoods(selectedCategory, sourceData)
-        filtered = vegMode
+        const validFallbacks = vegMode
           ? fallbackDishes.filter((dish) => dish.categoryDishFoodType === "Veg")
           : fallbackDishes
+
+        // Group fallback dishes by restaurant
+        const fallbackMap = new Map()
+        validFallbacks.forEach(f => {
+          const rId = f.restaurantId || f.id
+          if (!fallbackMap.has(rId)) {
+            fallbackMap.set(rId, {
+              ...f,
+              categoryDishes: []
+            })
+          }
+          fallbackMap.get(rId).categoryDishes.push({
+            name: f.categoryDishName,
+            price: f.categoryDishPrice,
+            image: f.categoryDishImage,
+            foodType: f.categoryDishFoodType,
+            itemId: f.dishId
+          })
+        })
+        filtered = Array.from(fallbackMap.values())
       }
     }
 
@@ -1313,46 +1330,61 @@ export default function CategoryPage() {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    // Filter by category - Dynamic filtering based on menu items
-    // If category is selected, expand restaurants into dish cards (one card per matching dish)
     if (selectedCategory && selectedCategory !== 'all') {
-      const expandedDishes = []
+      const restaurantList = []
 
       filtered.forEach(r => {
+        let categoryDishes = []
         if (r.menu) {
           const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
           if (hasCategoryItem) {
-            // Get ALL matching dishes for this category
-            const categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
-
-            if (categoryDishes.length > 0) {
-              const validDishes = vegMode
-                ? categoryDishes.filter((dish) => dish.foodType === "Veg")
-                : categoryDishes;
-
-              validDishes.forEach((dishForCard) => {
-                expandedDishes.push({
-                  ...r,
-                  id: `${r.id || r.restaurantId}-${dishForCard.itemId}`,
-                  dishId: dishForCard.itemId || `${r.id}-dish`,
-                  categoryDish: dishForCard,
-                  categoryDishName: dishForCard.name,
-                  categoryDishPrice: dishForCard.price,
-                  categoryDishImage: dishForCard.image,
-                })
-              })
-            }
+            categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
           }
+        }
+
+        if (vegMode) {
+          categoryDishes = categoryDishes.filter((dish) => dish.foodType === "Veg")
+        }
+
+        if (categoryDishes.length > 0) {
+          restaurantList.push({
+            ...r,
+            categoryDishes: categoryDishes,
+            categoryDishName: categoryDishes[0].name,
+            categoryDishPrice: categoryDishes[0].price,
+            categoryDishImage: categoryDishes[0].image,
+            categoryDishFoodType: categoryDishes[0].foodType,
+          })
         }
       })
 
-      filtered = expandedDishes
+      filtered = restaurantList
 
       if (filtered.length === 0) {
         const fallbackDishes = getCategoryFallbackDishesFromApprovedFoods(selectedCategory, sourceData)
-        filtered = vegMode
+        const validFallbacks = vegMode
           ? fallbackDishes.filter((dish) => dish.categoryDishFoodType === "Veg")
           : fallbackDishes
+
+        // Group fallback dishes by restaurant
+        const fallbackMap = new Map()
+        validFallbacks.forEach(f => {
+          const rId = f.restaurantId || f.id
+          if (!fallbackMap.has(rId)) {
+            fallbackMap.set(rId, {
+              ...f,
+              categoryDishes: []
+            })
+          }
+          fallbackMap.get(rId).categoryDishes.push({
+            name: f.categoryDishName,
+            price: f.categoryDishPrice,
+            image: f.categoryDishImage,
+            foodType: f.categoryDishFoodType,
+            itemId: f.dishId
+          })
+        })
+        filtered = Array.from(fallbackMap.values())
       }
     }
 
@@ -1671,189 +1703,24 @@ export default function CategoryPage() {
               </div>
             )}
 
-            {/* Large Restaurant Cards */}
+            {/* Zomato-Style Restaurant Cards with Category Dish Slider */}
             <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${showRestaurantSkeleton ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}>
               {filteredAllRestaurants.map((restaurant) => {
-                const restaurantSlug = restaurant.name.toLowerCase().replace(/\s+/g, "-")
-                const isFavorite = favorites.has(restaurant.id)
+                const isFavorite = favorites.has(restaurant.id || restaurant._id)
 
                 return (
-                  <Link
-                    key={restaurant.id}
-                    to={`/food/user/restaurants/${restaurant.slug || restaurantSlug}`}
-                    onClick={() => {
+                  <CategoryDishCardSlider
+                    key={restaurant.id || restaurant._id || restaurant.slug}
+                    restaurant={restaurant}
+                    dishes={restaurant.categoryDishes || []}
+                    isFavorite={isFavorite}
+                    onFavoriteClick={toggleFavorite}
+                    onCardClick={() => {
                       if (triggerEqosyCartLoader) {
                         triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
                       }
                     }}
-                    className="h-full flex"
-                  >
-                    <Card className={`overflow-hidden cursor-pointer gap-0 border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-md h-full flex flex-col w-full ${shouldShowGrayscale ? 'grayscale opacity-75' : ''
-                      }`}>
-                      {/* Image Section */}
-                      <div className="relative h-44 sm:h-52 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0">
-                        {/* Use category dish image if available, otherwise restaurant image */}
-                        {restaurant.categoryDishImage ? (
-                          <img
-                            src={restaurant.categoryDishImage}
-                            alt={restaurant.categoryDishName || restaurant.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            onError={(e) => {
-                              // Fallback to restaurant image if dish image fails
-                              if (restaurant.image) {
-                                e.target.src = restaurant.image
-                              } else {
-                                // Show emoji placeholder
-                                e.target.style.display = 'none'
-                                const placeholder = document.createElement('div')
-                                placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
-                                placeholder.textContent = '???'
-                                e.target.parentElement.appendChild(placeholder)
-                              }
-                            }}
-                          />
-                        ) : restaurant.image ? (
-                          <img
-                            src={restaurant.image}
-                            alt={restaurant.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            onError={(e) => {
-                              // Show emoji placeholder
-                              e.target.style.display = 'none'
-                              const placeholder = document.createElement('div')
-                              placeholder.className = 'w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl'
-                              placeholder.textContent = '???'
-                              e.target.parentElement.appendChild(placeholder)
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-6xl">
-                            ???
-                          </div>
-                        )}
-
-                        {/* Category Dish Badge - Top Left */}
-                        {(restaurant.categoryDishName || restaurant.featuredDish || restaurant.categoryDishPrice || restaurant.featuredPrice) && (
-                          <div className="absolute top-3 left-3 flex items-center z-10">
-                            <div className="bg-black/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold tracking-tight flex items-center gap-2 shadow-xl border border-white/20">
-                              <span className={`inline-flex items-center justify-center text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant 
-                                  ? 'border-emerald-500 bg-emerald-950/80 text-emerald-400' 
-                                  : 'border-rose-500 bg-rose-950/80 text-rose-400'
-                              }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                                {restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'VEG' : 'NON-VEG'}
-                              </span>
-                              <span className="font-bold truncate max-w-[120px] sm:max-w-[160px]">
-                                {restaurant.categoryDishName || restaurant.featuredDish || "Special"}
-                              </span>
-                              <span className="opacity-50">·</span>
-                              <span className="font-extrabold text-amber-400">
-                                ₹{Math.round(restaurant.categoryDishPrice || restaurant.featuredPrice || 0)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Ad Badge */}
-                        {restaurant.isAd && (
-                          <div className="absolute top-3 right-14 bg-black/50 text-white text-[10px] md:text-xs px-2 py-0.5 rounded">
-                            Ad
-                          </div>
-                        )}
-
-                        {/* Bookmark Icon - Top Right */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute top-3 right-3 h-9 w-9 md:h-10 md:w-10 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            toggleFavorite(restaurant.id)
-                          }}
-                        >
-                          <Bookmark className={`h-5 w-5 md:h-6 md:w-6 ${isFavorite ? "fill-gray-800 dark:fill-gray-200 text-gray-800 dark:text-gray-200" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-                        </Button>
-                      </div>
-
-                      {/* Content Section */}
-                      <CardContent className="p-3 sm:p-4 md:p-5 lg:p-6 gap-0 flex-1 flex flex-col">
-                        {/* Restaurant Name & Rating */}
-                        <div className="flex items-start justify-between gap-2 mb-2 lg:mb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${
-                                restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-                                  : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
-                              }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-rose-600 dark:bg-rose-400'}`} />
-                                {restaurant.categoryDishFoodType === 'Veg' || restaurant.pureVegRestaurant ? 'VEG' : 'NON-VEG'}
-                              </span>
-                              {(restaurant.categoryDishPrice || restaurant.featuredPrice) && (
-                                <span className="text-sm font-extrabold text-[#EB590E]">
-                                  ₹{Math.round(restaurant.categoryDishPrice || restaurant.featuredPrice || 0)}
-                                </span>
-                              )}
-                            </div>
-                            <h3 className="text-md md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white line-clamp-1 lg:line-clamp-2">
-                              {restaurant.categoryDishName || restaurant.featuredDish || restaurant.name}
-                            </h3>
-                            <p className="mt-0.5 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 line-clamp-1">
-                              by {restaurant.name}
-                            </p>
-                          </div>
-                          <div className="flex-shrink-0 bg-green-600 text-white px-2 md:px-3 lg:px-4 py-1 lg:py-1.5 rounded-lg flex items-center gap-1">
-                            <span className="text-sm md:text-base lg:text-lg font-bold">{restaurant.rating}</span>
-                            <Star className="h-3 w-3 md:h-4 md:w-4 lg:h-5 lg:w-5 fill-white text-white" />
-                          </div>
-                        </div>
-
-                        {/* Delivery Time & Distance */}
-                        {(restaurant.deliveryTime || restaurant.distance) && (
-                          <div className="flex items-center gap-1 text-sm md:text-base lg:text-lg text-gray-500 dark:text-gray-400 mb-2 lg:mb-3">
-                            {restaurant.deliveryTime && (
-                              <>
-                                <Clock className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6" strokeWidth={1.5} />
-                                <span className="font-medium">{restaurant.deliveryTime}</span>
-                              </>
-                            )}
-                            {restaurant.deliveryTime && restaurant.distance && <span className="mx-1">|</span>}
-                            {restaurant.distance && (
-                              <span className="font-medium">{restaurant.distance}</span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Pure Veg Tag & Offer Badges beneath delivery time and distance */}
-                        <div className="mt-auto pt-1 space-y-1.5">
-                          {/* Pure Veg Tag */}
-                          {(restaurant.pureVegRestaurant === true || restaurant.pureVeg === true) && (
-                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 px-2 py-0.5 rounded-md w-fit">
-                              <span className="w-2.5 h-2.5 rounded-sm border border-emerald-600 dark:border-emerald-400 flex items-center justify-center p-0.5 flex-shrink-0">
-                                <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-                              </span>
-                              <span>100% PURE VEG</span>
-                            </div>
-                          )}
-
-                          {/* Running Offer Badge */}
-                          {restaurant.offer && (
-                            <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/40 px-2.5 py-1 rounded-lg w-fit">
-                              <BadgePercent
-                                className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0"
-                                strokeWidth={2.2}
-                              />
-                              <span className="truncate max-w-[220px]">
-                                {restaurant.offer}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  />
                 )
               })}
             </div>

@@ -71,22 +71,17 @@ const PhoneRegistration = () => {
     const isLoginPage = location.pathname === `${routePrefix}/login` || location.pathname === `${routePrefix}/login/`;
     const appName = settings.general?.app_name || 'App';
 
-    const roleOptions = isLoginPage
-        ? [
-            { id: 'driver', label: 'Driver', Icon: UserRound },
-            { id: 'owner', label: 'Owner', Icon: Briefcase },
-            { id: 'bus_driver', label: 'Bus', Icon: ShieldCheck },
-            ...(RENTAL_ENABLED
-              ? [
-                  { id: 'service_center', label: 'Center', Icon: Building2 },
-                  { id: 'service_center_staff', label: 'Staff', Icon: UserRound },
-                ]
-              : []),
-        ]
-        : [
-            { id: 'driver', label: 'Driver', Icon: UserRound },
-            { id: 'owner', label: 'Owner', Icon: Briefcase },
-        ];
+    const roleOptions = [
+        { id: 'driver', label: 'Driver', Icon: UserRound },
+        { id: 'owner', label: 'Owner', Icon: Briefcase },
+        { id: 'bus_driver', label: 'Bus', Icon: ShieldCheck },
+        ...(RENTAL_ENABLED
+          ? [
+              { id: 'service_center', label: 'Center', Icon: Building2 },
+              { id: 'service_center_staff', label: 'Staff', Icon: UserRound },
+            ]
+          : []),
+    ];
 
     const modeConfig = useMemo(() => {
         const isOwner = role === 'owner';

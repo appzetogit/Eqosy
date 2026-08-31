@@ -1117,6 +1117,10 @@ export async function updateOrderStatusRestaurant(
     );
   }
 
+  if (['picked_up', 'reached_drop', 'out_for_delivery'].includes(orderStatus) && !order.dispatch?.deliveryPartnerId) {
+    throw new ValidationError('Cannot update status to out for delivery without an assigned delivery partner.');
+  }
+
   order.orderStatus = orderStatus;
   if (note && String(note).trim()) {
     order.note = String(note).trim();
@@ -1166,9 +1170,6 @@ export async function updateOrderStatusRestaurant(
   try {
     const io = getIO();
     if (io) {
-      console.log(
-        `[DEBUG] Emitting status update to restaurant ${restaurantId} and user ${order.userId}: ${orderStatus}`,
-      );
       const payload = {
         orderMongoId: order._id?.toString?.(),
         orderId: order._id.toString(),
@@ -1183,7 +1184,6 @@ export async function updateOrderStatusRestaurant(
       const restRoom = rooms.restaurant(restaurantId);
       const userRoom = rooms.user(order.userId);
 
-      console.log(`[DEBUG] Emitting order_status_update to rooms: ${restRoom}, ${userRoom}`);
       io.to(restRoom).emit("order_status_update", payload);
       io.to(userRoom).emit("order_status_update", payload);
 
@@ -1191,7 +1191,6 @@ export async function updateOrderStatusRestaurant(
       const assignedRiderId = order.dispatch?.deliveryPartnerId;
       if (assignedRiderId) {
         const riderRoom = rooms.delivery(assignedRiderId);
-        console.log(`[DEBUG] Emitting order_status_update to rider room: ${riderRoom}`);
         io.to(riderRoom).emit("order_status_update", payload);
       }
     }
@@ -1210,7 +1209,7 @@ export async function updateOrderStatusRestaurant(
     let riderBody = `The order status is now ${String(orderStatus).replace(/_/g, " ")}.`;
 
     if (String(orderStatus).includes("cancel")) {
-      riderTitle = "Order Cancelled âŒ";
+      riderTitle = "Order Cancelled ❌";
       riderBody = `Order #${order.order_id || order._id} has been cancelled. Please stop your current task.`;
 
       // Sync transaction status
@@ -1243,7 +1242,7 @@ export async function updateOrderStatusRestaurant(
       },
     );
   } catch (err) {
-    console.error("[DEBUG] Error emitting status update to restaurant:", err);
+    logger.warn(`Error emitting status update to restaurant: ${err?.message || err}`);
   }
 
   // Real-time: delivery request / ready notifications.
@@ -1255,27 +1254,21 @@ export async function updateOrderStatusRestaurant(
         (String(orderStatus) === "preparing" || String(orderStatus) === "confirmed") &&
         (String(from) !== "preparing" && String(from) !== "confirmed")
       ) {
-        console.log(
-          `[DEBUG] Order ${order._id.toString()} status changed to '${orderStatus}'. Triggering central delivery dispatch.`,
-        );
-
         try {
           await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
           await tryAutoAssign(order._id);
           // Refresh local order state after assignment search
           order = await FoodOrder.findById(order._id);
         } catch (err) {
-          console.error(`[DEBUG] Auto-assign in updateOrderStatusRestaurant failed:`, err);
+          logger.warn(`Auto-assign in updateOrderStatusRestaurant failed: ${err?.message || err}`);
         }
       }
 
       // When ready for pickup -> ping assigned delivery partner OR trigger auto-assign dispatch immediately.
       if (String(orderStatus) === 'ready_for_pickup' && String(from) !== 'ready_for_pickup') {
-        console.log(`[DEBUG] Order ${order._id.toString()} changed to 'ready_for_pickup'.`);
         const assignedId = order.dispatch?.deliveryPartnerId?.toString?.() || order.dispatch?.deliveryPartnerId;
         const isAccepted = order.dispatch?.status === 'accepted';
         if (assignedId && isAccepted) {
-          console.log(`[DEBUG] Notifying assigned partner ${assignedId} that order is ready.`);
           const restaurant = await FoodRestaurant.findById(order.restaurantId).select('restaurantName location addressLine1 area city state').lean();
           const payload = buildDeliverySocketPayload(order, restaurant);
           logger.info(
@@ -1283,18 +1276,17 @@ export async function updateOrderStatusRestaurant(
           );
           io.to(rooms.delivery(assignedId)).emit('order_ready', payload);
         } else {
-          console.log(`[DEBUG] Order ${order._id.toString()} is ready but no partner accepted yet. Triggering auto-assign dispatch immediately.`);
           try {
             await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
             await tryAutoAssign(order._id);
           } catch (err) {
-            console.error(`[DEBUG] Auto-assign on ready_for_pickup failed:`, err);
+            logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
           }
         }
       }
     }
   } catch (err) {
-    console.error('[DEBUG] Error in delivery notification logic:', err);
+    logger.warn(`Error in delivery notification logic: ${err?.message || err}`);
   }
 
   enqueueOrderEvent('restaurant_order_status_updated', {
@@ -1581,13 +1573,13 @@ export async function assignDeliveryPartnerAdmin(
   deliveryPartnerId,
   adminId,
 ) {
-  const order = await FoodOrder.findById(orderId);
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+  const order = await FoodOrder.findOne(identity);
   if (!order) throw new NotFoundError("Order not found");
-  if (order.dispatch.status === "accepted")
-    throw new ValidationError("Order already accepted by partner");
 
   const partner = await FoodDeliveryPartner.findById(deliveryPartnerId)
-    .select("status")
+    .select("status name phone")
     .lean();
   if (!partner || partner.status !== "approved")
     throw new ValidationError("Delivery partner not available");
@@ -1595,14 +1587,205 @@ export async function assignDeliveryPartnerAdmin(
   order.dispatch.status = 'assigned';
   order.dispatch.deliveryPartnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
   order.dispatch.assignedAt = new Date();
-  pushStatusHistory(order, { byRole: 'ADMIN', byId: adminId, from: order.dispatch.status, to: 'assigned' });
+  order.markModified('dispatch');
+  pushStatusHistory(order, { byRole: 'ADMIN', byId: adminId, from: order.dispatch?.status, to: 'assigned', note: `Assigned manually by Admin to ${partner.name || 'partner'}` });
   await order.save();
+
+  // Explicit update to guarantee MongoDB persistence for nested dispatch fields
+  await FoodOrder.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        'dispatch.status': 'assigned',
+        'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(deliveryPartnerId),
+        'dispatch.assignedAt': new Date(),
+      }
+    }
+  );
+
+  // Socket & Push notifications to driver, restaurant, user
+  try {
+    const io = getIO();
+    if (io) {
+      const fullOrderDoc = await FoodOrder.findById(order._id)
+        .populate("restaurantId", "name phone location logo address zoneId")
+        .populate("userId", "name phone profileImage")
+        .lean();
+
+      const sanitizedPayload = sanitizeOrderForExternal(fullOrderDoc || order);
+      const deliveryRoom = rooms.delivery(deliveryPartnerId);
+
+      io.to(deliveryRoom).emit("new_order", sanitizedPayload);
+      io.to(deliveryRoom).emit("new_order_available", sanitizedPayload);
+      io.to(deliveryRoom).emit("order_assigned", sanitizedPayload);
+      io.to(deliveryRoom).emit("play_notification_sound", sanitizedPayload);
+      io.to(rooms.user(order.userId)).emit("order_status_update", sanitizedPayload);
+      io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", sanitizedPayload);
+    }
+
+    await notifyOwnersSafely([{ ownerType: "DELIVERY_PARTNER", ownerId: deliveryPartnerId }], {
+      title: "New Order Assigned! 📦",
+      body: `You have been assigned order #${order.order_id || order._id} by Admin. Click to accept trip!`,
+      data: {
+        type: "new_order",
+        orderId: String(order._id),
+        orderMongoId: order._id.toString(),
+      }
+    });
+  } catch (err) {
+    logger.warn(`Admin assignment socket/notification error: ${err.message}`);
+  }
+
   enqueueOrderEvent('delivery_partner_assigned', {
     orderMongoId: order._id?.toString?.(),
     orderId: order._id.toString(),
     deliveryPartnerId,
     adminId
   });
+  return normalizeOrderForClient(order);
+}
+
+export async function listAvailableDeliveryPartnersForOrder(orderId, options = {}) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne(identity).populate("restaurantId", "zoneId location").lean();
+  if (!order) throw new NotFoundError("Order not found");
+
+  const resolvedZoneId = order.zoneId || order.restaurantId?.zoneId || (await resolveOrderZoneId(order, order.restaurantId));
+
+  const filter = { status: "approved" };
+
+  if (options.onlineOnly !== false) {
+    filter.availabilityStatus = "online";
+  }
+
+  if (resolvedZoneId) {
+    const zoneIdStr = String(resolvedZoneId);
+    const validObjectIds = [zoneIdStr];
+    if (mongoose.Types.ObjectId.isValid(zoneIdStr)) {
+      validObjectIds.push(new mongoose.Types.ObjectId(zoneIdStr));
+    }
+    filter.$or = [
+      { zoneId: { $in: validObjectIds } },
+      { zoneId: null },
+      { zoneId: { $exists: false } }
+    ];
+  }
+
+  const partners = await FoodDeliveryPartner.find(filter)
+    .select("name phone vehicleType vehicleNumber availabilityStatus rating totalRatings zoneId profilePhoto")
+    .sort({ availabilityStatus: -1, createdAt: -1 })
+    .lean();
+
+  const partnerIds = partners.map(p => p._id);
+  const activeCounts = await FoodOrder.aggregate([
+    {
+      $match: {
+        "dispatch.deliveryPartnerId": { $in: partnerIds },
+        orderStatus: { $in: ["confirmed", "preparing", "ready_for_pickup", "picked_up", "reached_drop"] }
+      }
+    },
+    {
+      $group: {
+        _id: "$dispatch.deliveryPartnerId",
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const countMap = {};
+  for (const item of activeCounts) {
+    countMap[item._id.toString()] = item.count;
+  }
+
+  // Sort partners so exact zone matches appear first
+  if (resolvedZoneId) {
+    const targetStr = String(resolvedZoneId);
+    partners.sort((a, b) => {
+      const aMatch = a.zoneId && String(a.zoneId) === targetStr ? 1 : 0;
+      const bMatch = b.zoneId && String(b.zoneId) === targetStr ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }
+
+  return partners.map(p => ({
+    _id: p._id.toString(),
+    name: p.name || "Delivery Partner",
+    phone: p.phone || "",
+    vehicleType: p.vehicleType || "Bike",
+    vehicleNumber: p.vehicleNumber || "N/A",
+    availabilityStatus: p.availabilityStatus || "offline",
+    isOnline: p.availabilityStatus === "online",
+    rating: p.rating || 0,
+    totalRatings: p.totalRatings || 0,
+    activeOrdersCount: countMap[p._id.toString()] || 0,
+    profilePhoto: p.profilePhoto || null,
+  }));
+}
+
+export async function handoverDeliveryOrder(orderId, partnerId, payload = {}) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne({
+    ...identity,
+    "dispatch.deliveryPartnerId": new mongoose.Types.ObjectId(partnerId)
+  });
+
+  if (!order) throw new NotFoundError("Order not found or not assigned to you");
+
+  const emergencyReason = payload.emergencyReason || payload.reason || "Emergency situation";
+  const note = payload.note || "";
+  const displayNote = `Emergency Handover by driver: ${emergencyReason}${note ? ` (${note})` : ""}`;
+
+  const fromStatus = order.orderStatus;
+  const fromDispatchStatus = order.dispatch?.status;
+
+  // Unassign partner
+  order.dispatch.status = "unassigned";
+  order.dispatch.deliveryPartnerId = null;
+
+  // If order was picked up or ready, reset status back to ready_for_pickup so next rider can pick up
+  if (fromStatus === "picked_up" || fromStatus === "reached_drop") {
+    order.orderStatus = "ready_for_pickup";
+  }
+
+  pushStatusHistory(order, {
+    byRole: "DELIVERY_PARTNER",
+    byId: partnerId,
+    from: fromDispatchStatus || fromStatus,
+    to: "unassigned",
+    note: displayNote
+  });
+
+  await order.save();
+
+  // Notify driver, user, restaurant, admin via Socket & Push
+  try {
+    const io = getIO();
+    if (io) {
+      const socketPayload = {
+        orderMongoId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        orderStatus: order.orderStatus,
+        message: `Order released due to emergency handover: ${emergencyReason}`
+      };
+      io.to(rooms.delivery(partnerId)).emit("order_handover_success", socketPayload);
+      io.to(rooms.user(order.userId)).emit("order_status_update", socketPayload);
+      io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", socketPayload);
+    }
+  } catch (err) {
+    logger.warn(`Handover socket notification error: ${err.message}`);
+  }
+
+  // Instantly re-trigger auto-assign search for other drivers in the zone!
+  try {
+    void dispatchService.tryAutoAssign(order._id);
+  } catch (err) {
+    logger.error(`Failed to restart auto-assign after handover for order ${order._id}: ${err.message}`);
+  }
+
   return normalizeOrderForClient(order);
 }
 
