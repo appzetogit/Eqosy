@@ -253,10 +253,12 @@ export default function CategoryDishCardSlider({
               )}
             </div>
 
-            {restaurant.offer ? (
-              <div className="flex items-center gap-1 text-rose-600 font-extrabold text-[11px] bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md">
-                <Tag className="w-3 h-3" />
-                <span>{restaurant.offer}</span>
+            {(restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText) ? (
+              <div className="flex items-center gap-1.5 text-[#2563EB] dark:text-blue-300 font-bold text-[11px] bg-[#F4F7FE] dark:bg-blue-950/40 border border-[#DCE4F7] dark:border-blue-900/50 px-2 py-0.5 rounded-lg">
+                <span className="w-3.5 h-3.5 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-[9px] font-black shrink-0">
+                  %
+                </span>
+                <span className="truncate max-w-[140px]">{restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText}</span>
               </div>
             ) : null}
           </div>

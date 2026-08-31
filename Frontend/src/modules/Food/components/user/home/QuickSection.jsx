@@ -179,17 +179,181 @@ function StoreCardSkeleton() {
   );
 }
 
-function StoreCard({ store, index }) {
-  const [imgError, setImgError] = useState(false);
-  const closesIn = getClosesIn(store._raw);
+const GroceryStoreImageSlider = ({ store, index }) => {
+  const raw = store._raw || {};
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const touchStartX = useRef(0);
+  const isSwiping = useRef(false);
 
-  const fallbackGradients = [
-    'from-green-100 to-emerald-200',
-    'from-teal-100 to-cyan-200',
-    'from-lime-100 to-green-200',
-    'from-emerald-100 to-teal-200',
-  ];
-  const fallback = fallbackGradients[index % fallbackGradients.length];
+  const productSlides = useMemo(() => {
+    const slides = [];
+
+    // 1. Recommended images / items with price & name
+    if (Array.isArray(raw.recommendedImages) && raw.recommendedImages.length > 0) {
+      raw.recommendedImages.forEach((item, idx) => {
+        const img = normalizeImageUrl(item?.image || item?.url || item?.src || (typeof item === 'string' ? item : ''));
+        if (img) {
+          slides.push({
+            id: item?.id || item?._id || `rec-${idx}`,
+            image: img,
+            name: item?.name || item?.itemName || store.name || 'Product',
+            price: Number(item?.price || item?.originalPrice || 0),
+          });
+        }
+      });
+    }
+
+    // 2. Cover / Menu images fallback
+    const extraImgs = [
+      ...(Array.isArray(raw.coverImages) ? raw.coverImages.map(i => i?.url || i) : []),
+      ...(Array.isArray(raw.menuImages) ? raw.menuImages.map(i => i?.url || i) : []),
+      ...(Array.isArray(raw.images) ? raw.images.map(i => i?.url || i) : []),
+    ];
+    extraImgs.forEach((rawImg, idx) => {
+      const img = normalizeImageUrl(typeof rawImg === 'string' ? rawImg : '');
+      if (img && !slides.find(s => s.image === img)) {
+        slides.push({
+          id: `extra-${idx}`,
+          image: img,
+          name: store.name,
+          price: 0,
+        });
+      }
+    });
+
+    // 3. Store main image fallback
+    if (slides.length === 0 && store.image) {
+      slides.push({
+        id: `main-${store.id}`,
+        image: store.image,
+        name: store.name,
+        price: 0,
+      });
+    }
+
+    return slides;
+  }, [raw, store.image, store.name, store.id]);
+
+  // Auto-slide every 3.5 seconds
+  useEffect(() => {
+    if (productSlides.length <= 1) return;
+    const interval = setInterval(() => {
+      if (!isSwiping.current) {
+        setCurrentIndex((prev) => (prev + 1) % productSlides.length);
+      }
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [productSlides.length]);
+
+  const safeIndex = productSlides.length > 0 ? (currentIndex % productSlides.length + productSlides.length) % productSlides.length : 0;
+  const activeSlide = productSlides[safeIndex] || productSlides[0];
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    isSwiping.current = true;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!isSwiping.current || productSlides.length <= 1) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) {
+        setCurrentIndex((prev) => (prev + 1) % productSlides.length);
+      } else {
+        setCurrentIndex((prev) => (prev - 1 + productSlides.length) % productSlides.length);
+      }
+    }
+    setTimeout(() => { isSwiping.current = false; }, 200);
+  };
+
+  if (!activeSlide?.image) {
+    const fallbackGradients = [
+      'from-green-100 to-emerald-200',
+      'from-teal-100 to-cyan-200',
+      'from-lime-100 to-green-200',
+      'from-emerald-100 to-teal-200',
+    ];
+    return (
+      <div className={`w-full h-52 bg-gradient-to-br ${fallbackGradients[index % fallbackGradients.length]} flex items-center justify-center`}>
+        <ShoppingBasket className="w-14 h-14 text-green-300" />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="relative h-52 overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer group"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Product Images Slide Container */}
+      <div className="absolute inset-0 z-0">
+        {productSlides.map((slide, idx) => (
+          <div
+            key={slide.id || idx}
+            className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+            style={{
+              opacity: safeIndex === idx ? 1 : 0,
+              zIndex: safeIndex === idx ? 2 : 1,
+            }}
+          >
+            <img
+              src={slide.image}
+              alt={slide.name}
+              className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+          </div>
+        ))}
+      </div>
+
+      {/* Product Name & Price Badge (Top Left Overlay - matching food section) */}
+      {activeSlide && activeSlide.name && activeSlide.name !== store.name && (
+        <div className="absolute top-3 left-3 z-10 flex items-center pointer-events-none">
+          <div className="bg-black/75 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold tracking-tight flex items-center gap-1.5 shadow-2xl border border-white/20">
+            <span className="truncate max-w-[150px] sm:max-w-[200px]">{activeSlide.name}</span>
+            {activeSlide.price > 0 && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="font-extrabold text-amber-400">₹{Math.round(activeSlide.price)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OPEN NOW badge — bottom left */}
+      <div className="absolute bottom-3 left-3 z-10">
+        <span className="bg-[#1A9E5C] text-white text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-md">
+          Open Now
+        </span>
+      </div>
+
+      {/* Slide Dots Indicator */}
+      {productSlides.length > 1 && (
+        <div className="absolute bottom-3 right-3 flex gap-1 z-10">
+          {productSlides.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setCurrentIndex(idx);
+              }}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                safeIndex === idx ? 'w-4 bg-white shadow-md' : 'w-1.5 bg-white/60'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function StoreCard({ store, index }) {
+  const closesIn = getClosesIn(store._raw);
 
   return (
     <motion.div
@@ -201,35 +365,8 @@ function StoreCard({ store, index }) {
       <Link to={`/food/user/restaurants/${store.slug}`} className="block">
         <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.08)] active:scale-[0.99] transition-transform duration-150">
 
-          {/* Image */}
-          <div className="relative h-52 overflow-hidden">
-            {store.image && !imgError ? (
-              <img
-                src={store.image}
-                alt={store.name}
-                className="w-full h-full object-cover"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <div className={`w-full h-full bg-gradient-to-br ${fallback} flex items-center justify-center`}>
-                <ShoppingBasket className="w-14 h-14 text-green-300" />
-              </div>
-            )}
-
-            {/* OPEN NOW badge — bottom left */}
-            <div className="absolute bottom-4 left-4">
-              <span className="bg-[#1A9E5C] text-white text-[11px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-full shadow-md">
-                Open Now
-              </span>
-            </div>
-
-            {/* Save badge — top right */}
-            <div className="absolute top-4 right-4">
-              <span className="bg-white/90 backdrop-blur-sm text-gray-800 text-[13px] font-semibold px-3.5 py-1.5 rounded-full shadow-sm">
-                Save
-              </span>
-            </div>
-          </div>
+          {/* Product/Store Image Slider */}
+          <GroceryStoreImageSlider store={store} index={index} />
 
           {/* Info */}
           <div className="px-4 pt-4 pb-4">

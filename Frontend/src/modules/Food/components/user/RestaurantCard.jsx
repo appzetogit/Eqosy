@@ -273,9 +273,21 @@ const RestaurantCard = ({
           </div>
         </div>
 
-        <p className="text-[11px] sm:text-[13px] text-gray-500 mb-2.5 line-clamp-1 font-medium">
+        <p className="text-[11px] sm:text-[13px] text-gray-500 mb-2 line-clamp-1 font-medium">
           {restaurant.cuisine || "North Indian, Chinese"}
         </p>
+
+        {/* Offer Badge (Matched to User Screenshot) */}
+        {(restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText) && (
+          <div className="flex items-center gap-1.5 my-2 px-2.5 py-1 bg-[#F4F7FE] dark:bg-blue-950/40 border border-[#DCE4F7] dark:border-blue-900/50 rounded-lg w-fit text-[#2563EB] dark:text-blue-300">
+            <span className="w-4 h-4 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-[10px] font-black shrink-0 shadow-2xs">
+              %
+            </span>
+            <span className="text-[11px] sm:text-xs font-bold truncate max-w-[210px] sm:max-w-[250px]">
+              {restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2.5 border-t border-gray-100/80">
           <div className="flex items-center gap-1.5 text-gray-600 bg-gray-50 px-2 py-1 rounded-md">

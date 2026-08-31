@@ -2486,8 +2486,10 @@ function RestaurantDetailsContent() {
                     <div className="space-y-0">
                       {sectionItems.map((item) => {
                         const quantity = getDishQuantity(item)
-                        // Determine veg/non-veg based on foodType
-                        const isVeg = item.foodType === "Veg"
+                        const typeStr = String(item.foodType || item.foodTypeScope || item.type || '').trim().toLowerCase();
+                        const isPureVegRest = Boolean(restaurant?.pureVegRestaurant || restaurant?.pureVeg || restaurant?.isPureVeg);
+                        const isVeg = item.isVeg === true || item.pureVeg === true || typeStr === 'veg' || typeStr === 'pure veg' || (isPureVegRest && typeStr !== 'non-veg' && typeStr !== 'nonveg' && typeStr !== 'egg') || (!['non-veg', 'nonveg', 'egg'].includes(typeStr) && !['chicken', 'mutton', 'fish', 'prawn', 'meat', 'beef', 'pork', 'egg'].some(kw => String(item.name || '').toLowerCase().includes(kw)));
+                        const isEgg = typeStr === 'egg' || String(item.name || '').toLowerCase().includes('egg');
 
                         // Debug: Log preparationTime for troubleshooting
                         if (item.preparationTime) {
@@ -2506,12 +2508,16 @@ function RestaurantDetailsContent() {
                               {/* Veg Icon & Spicy Indicator */}
                               <div className="flex items-center gap-2 mb-1">
                                 {isVeg ? (
-                                  <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
-                                    <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                                  <div className="w-4 h-4 border-2 border-emerald-600 flex items-center justify-center rounded-sm flex-shrink-0 bg-emerald-50">
+                                    <div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+                                  </div>
+                                ) : isEgg ? (
+                                  <div className="w-4 h-4 border-2 border-amber-600 flex items-center justify-center rounded-sm flex-shrink-0 bg-amber-50">
+                                    <div className="w-2 h-2 bg-amber-600 rounded-full"></div>
                                   </div>
                                 ) : (
-                                  <div className="w-4 h-4 border-2 border-red-600 flex items-center justify-center rounded-sm flex-shrink-0">
-                                    <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                                  <div className="w-4 h-4 border-2 border-rose-700 flex items-center justify-center rounded-sm flex-shrink-0 bg-rose-50">
+                                    <div className="w-2 h-2 bg-rose-700 rounded-full"></div>
                                   </div>
                                 )}
                                 {item.isSpicy && <span className="text-xs font-semibold text-red-500">Spicy</span>}
@@ -3513,16 +3519,35 @@ function RestaurantDetailsContent() {
                   {/* Content Section */}
                   <div className="flex-1 overflow-y-auto px-4 py-4">
                     {/* Item Name and Indicator */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2 flex-1">
-                        <div className="h-5 w-5 rounded border-2 border-amber-700 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                          <div className="h-2.5 w-2.5 rounded-full bg-amber-700 dark:bg-amber-600" />
+                    {(() => {
+                      const typeStr = String(selectedItem.foodType || selectedItem.foodTypeScope || selectedItem.type || '').trim().toLowerCase();
+                      const isPureVegRest = Boolean(restaurant?.pureVegRestaurant || restaurant?.pureVeg || restaurant?.isPureVeg);
+                      const isVeg = selectedItem.isVeg === true || selectedItem.pureVeg === true || typeStr === 'veg' || typeStr === 'pure veg' || (isPureVegRest && typeStr !== 'non-veg' && typeStr !== 'nonveg' && typeStr !== 'egg') || (!['non-veg', 'nonveg', 'egg'].includes(typeStr) && !['chicken', 'mutton', 'fish', 'prawn', 'meat', 'beef', 'pork', 'egg'].some(kw => String(selectedItem.name || '').toLowerCase().includes(kw)));
+                      const isEgg = typeStr === 'egg' || String(selectedItem.name || '').toLowerCase().includes('egg');
+
+                      return (
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            {isVeg ? (
+                              <div className="h-5 w-5 rounded border-2 border-emerald-600 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center flex-shrink-0">
+                                <div className="h-2.5 w-2.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+                              </div>
+                            ) : isEgg ? (
+                              <div className="h-5 w-5 rounded border-2 border-amber-600 dark:border-amber-500 bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center flex-shrink-0">
+                                <div className="h-2.5 w-2.5 rounded-full bg-amber-600 dark:bg-amber-400" />
+                              </div>
+                            ) : (
+                              <div className="h-5 w-5 rounded border-2 border-rose-700 dark:border-rose-600 bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center flex-shrink-0">
+                                <div className="h-2.5 w-2.5 rounded-full bg-rose-700 dark:bg-rose-500" />
+                              </div>
+                            )}
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                              {selectedItem.name}
+                            </h2>
+                          </div>
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                          {selectedItem.name}
-                        </h2>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     {/* Description */}
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">

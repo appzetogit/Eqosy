@@ -3600,18 +3600,17 @@ export default function Home() {
                                      </div>
                                    )}
 
-                                   {/* Running Offer Badge */}
-                                   {restaurant.offer && (
-                                     <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/40 px-2.5 py-1 rounded-lg w-fit transform transition-transform duration-300 group-hover:translate-x-1">
-                                       <BadgePercent
-                                         className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0"
-                                         strokeWidth={2.2}
-                                       />
-                                       <span className="truncate max-w-[220px]">
-                                         {restaurant.offer}
-                                       </span>
-                                     </div>
-                                   )}
+                                   {/* Running Offer Badge (Matched to User Screenshot) */}
+                                    {(restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText) && (
+                                      <div className="flex items-center gap-1.5 text-xs lg:text-sm font-bold text-[#2563EB] dark:text-blue-300 bg-[#F4F7FE] dark:bg-blue-950/40 border border-[#DCE4F7] dark:border-blue-900/50 px-2.5 py-1 rounded-lg w-fit transform transition-transform duration-300 group-hover:translate-x-1 shadow-2xs">
+                                        <span className="w-4 h-4 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-[10px] font-black shrink-0">
+                                          %
+                                        </span>
+                                        <span className="truncate max-w-[240px] lg:max-w-[280px]">
+                                          {restaurant.offer || restaurant.discount || restaurant.offerText || restaurant.discountText}
+                                        </span>
+                                      </div>
+                                    )}
                                  </div>
                               </CardContent>
                             </div>
