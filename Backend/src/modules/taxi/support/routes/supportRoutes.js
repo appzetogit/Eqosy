@@ -22,27 +22,27 @@ export const supportRouter = Router();
 
 supportRouter.get(
   '/support/titles',
-  authenticate(['admin', 'user', 'driver', 'owner']),
+  authenticate(['admin', 'user', 'driver', 'owner', 'bus_driver', 'service_center']),
   asyncHandler(getSupportTitlesForRequester),
 );
 supportRouter.post(
   '/support/tickets',
-  authenticate(['user', 'driver', 'owner']),
+  authenticate(['user', 'driver', 'owner', 'bus_driver', 'service_center']),
   asyncHandler(createSupportTicket),
 );
 supportRouter.get(
   '/support/tickets/my',
-  authenticate(['user', 'driver', 'owner']),
+  authenticate(['user', 'driver', 'owner', 'bus_driver', 'service_center']),
   asyncHandler(listMySupportTickets),
 );
 supportRouter.get(
   '/support/tickets/:ticketCode',
-  authenticate(['user', 'driver', 'owner']),
+  authenticate(['user', 'driver', 'owner', 'bus_driver', 'service_center']),
   asyncHandler(getMySupportTicketDetail),
 );
 supportRouter.post(
   '/support/tickets/:ticketCode/reply',
-  authenticate(['user', 'driver', 'owner']),
+  authenticate(['user', 'driver', 'owner', 'bus_driver', 'service_center']),
   asyncHandler(replyMySupportTicket),
 );
 

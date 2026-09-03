@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { clearDriverAuthState } from '../services/registrationService';
+import eqosyLogo from '@food/assets/eqosy-logo.png';
 
 const OwnerHeaderNav = () => {
   const location = useLocation();
@@ -51,12 +52,12 @@ const OwnerHeaderNav = () => {
         {/* Brand & Badge */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/taxi/owner/dashboard')}>
           <img
-            src={settings.general?.logo || settings.customization?.logo || '/eqosy-logo.png'}
+            src={settings.general?.logo || settings.customization?.logo || eqosyLogo}
             alt={appName}
             className="h-10 w-10 object-contain rounded-xl shrink-0"
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = '/eqosy-logo.png';
+              e.target.src = eqosyLogo;
             }}
           />
           <div>

@@ -405,3 +405,6 @@ export const getDriverIncentives = () =>
 
 export const claimDriverIncentiveReward = (payload) =>
   api.post("/drivers/incentives/claim", payload, withDriverAuth());
+
+export const createDriverSupportTicket = (payload) =>
+  api.post("/drivers/support/tickets", payload, withDriverAuth());

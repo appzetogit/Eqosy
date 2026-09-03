@@ -2,6 +2,7 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { Admin } from '../../admin/models/Admin.js';
 import { Owner } from '../../admin/models/Owner.js';
 import { Driver } from '../../driver/models/Driver.js';
+import { BusDriver } from '../../driver/models/BusDriver.js';
 import { User } from '../../user/models/User.js';
 import {
   SUPPORT_TICKET_STATUS,
@@ -13,7 +14,7 @@ import {
   SupportTicketTitle,
 } from '../models/SupportTicketTitle.js';
 
-const REQUESTER_ROLES = new Set(['user', 'driver', 'owner']);
+const REQUESTER_ROLES = new Set(['user', 'driver', 'owner', 'bus_driver', 'service_center', 'service_center_staff']);
 const STATUS_SET = new Set(SUPPORT_TICKET_STATUS);
 const TYPE_SET = new Set(SUPPORT_TICKET_TYPES);
 const USER_TYPE_SET = new Set(SUPPORT_TICKET_USER_TYPES);
@@ -60,15 +61,17 @@ const buildRequesterSummary = async ({ role, id }) => {
     };
   }
 
-  if (normalizedRole === 'driver') {
-    const driver = await Driver.findById(requesterId).select('name phone city');
-    if (!driver) throw new ApiError(404, 'Driver not found');
+  if (normalizedRole === 'driver' || normalizedRole === 'bus_driver') {
+    let driver = await Driver.findById(requesterId).select('name phone city');
+    if (!driver) {
+      driver = await BusDriver.findById(requesterId).select('name phone city');
+    }
     return {
-      requesterRole: 'driver',
-      requesterId: driver._id,
-      requesterName: driver.name || 'Driver',
-      requesterPhone: driver.phone || '',
-      serviceLocation: driver.city || '',
+      requesterRole: normalizedRole,
+      requesterId: driver?._id || requesterId,
+      requesterName: driver?.name || 'Bus Captain / Driver',
+      requesterPhone: driver?.phone || '',
+      serviceLocation: driver?.city || '',
     };
   }
 

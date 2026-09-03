@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Filter, Send } from 'lucide-react';
+import { ChevronRight, Filter, Send, X } from 'lucide-react';
 import { adminSupportService } from '../../../shared/services/supportTicketService';
 
 const statusBadgeClass = (status) => {
@@ -252,15 +252,28 @@ const SupportTickets = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  {selectedTicket.ticketCode}
-                </p>
-                <h3 className="mt-1 text-lg font-semibold text-gray-900">{selectedTicket.title}</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {selectedTicket.requesterName} • {selectedTicket.requesterPhone || 'N/A'} •{' '}
-                  {selectedTicket.userType}
-                </p>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {selectedTicket.ticketCode}
+                  </p>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">{selectedTicket.title}</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {selectedTicket.requesterName} • {selectedTicket.requesterPhone || 'N/A'} •{' '}
+                    {selectedTicket.userType}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTicketCode('');
+                    setSelectedTicket(null);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer"
+                  title="Close Detail View"
+                >
+                  <X size={16} />
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -162,7 +162,6 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
     });
   } catch (fcmErr) {
     lastFcmTokenErrorTime = Date.now();
-    console.warn('[FCM Web Push] Token retrieval skipped/failed (VAPID key mismatch or 403 Forbidden):', fcmErr?.message || fcmErr);
     return { ok: false, reason: 'fcm-token-error', error: fcmErr };
   }
 

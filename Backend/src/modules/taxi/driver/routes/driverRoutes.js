@@ -85,8 +85,15 @@ import {
   updateCurrentDriverDocument,
 } from "../controllers/driverController.js";
 import { triggerDriverSosAlert } from '../../safety/controllers/safetyController.js';
+import { createSupportTicket } from '../../support/controllers/supportController.js';
 
 export const driverRouter = Router();
+
+driverRouter.post(
+  "/support/tickets",
+  authenticate(["driver", "owner", "bus_driver", "service_center"]),
+  asyncHandler(createSupportTicket),
+);
 
 driverRouter.post("/register", asyncHandler(registerDriver));
 driverRouter.post("/login", asyncHandler(loginDriver));

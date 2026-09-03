@@ -3,6 +3,10 @@ import dns from 'node:dns';
 import { config } from './env.js';
 import { logger } from '../utils/logger.js';
 
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
+
 export const connectDB = async () => {
     try {
         const dnsServers = String(config.mongodbDnsServers || '8.8.8.8,1.1.1.1')

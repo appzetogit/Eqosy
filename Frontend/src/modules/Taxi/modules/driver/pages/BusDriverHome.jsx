@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Star,
@@ -36,8 +37,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { clearDriverAuthState, getCurrentDriver } from '../services/registrationService';
+import { clearDriverAuthState, getCurrentDriver, createDriverSupportTicket } from '../services/registrationService';
 import BusDriverBottomNav from '../components/BusDriverBottomNav';
+import eqosyLogo from '@food/assets/eqosy-logo.png';
 import {
   createBusDriverReservation,
   getBusDriverBookings,
@@ -336,6 +338,9 @@ const BusDriverHome = () => {
   const [isSavingSchedules, setIsSavingSchedules] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [supportNote, setSupportNote] = useState('');
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
 
   const confirmLogout = useCallback(() => {
     setIsLogoutConfirmOpen(true);
@@ -355,13 +360,31 @@ const BusDriverHome = () => {
 
   const currentGreeting = useMemo(() => getGreetingByTimezone(), []);
 
-  // Driver Display Name
+  // Driver Display Name (cleaned of inline parenthetical route names)
   const driverDisplayName = useMemo(() => {
     const raw = busService?.driverName || profile?.name || 'Ramesh Kumar';
-    return raw
-      .trim()
+    const cleanName = raw.replace(/\s*\([^)]*\)/g, '').trim();
+    return cleanName
       .split(' ')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }, [busService, profile]);
+
+  // Clean Route Text
+  const driverRouteText = useMemo(() => {
+    const rawName = busService?.driverName || profile?.name || '';
+    const match = rawName.match(/\(([^)]+)\)/);
+    const inNameRoute = match ? match[1] : '';
+    const mainRoute = busService?.route?.routeName || profile?.assignedRoute || 'Bhopal Intercity Corridor';
+    const combined = inNameRoute ? `${mainRoute} (${inNameRoute})` : mainRoute;
+    return combined
+      .split(' ')
+      .map((w) => {
+        if (w.startsWith('(')) {
+          return '(' + w.slice(1, 2).toUpperCase() + w.slice(2).toLowerCase();
+        }
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
       .join(' ');
   }, [busService, profile]);
 
@@ -401,6 +424,8 @@ const BusDriverHome = () => {
     };
   }, []);
 
+  const schedulesKey = useMemo(() => JSON.stringify(schedules || []), [schedules]);
+
   useEffect(() => {
     setScheduleDrafts(
       Array.isArray(schedules) && schedules.length
@@ -414,7 +439,7 @@ const BusDriverHome = () => {
           }))
         : [createScheduleDraft()],
     );
-  }, [schedules]);
+  }, [schedulesKey]);
 
   useEffect(() => {
     if (!selectedScheduleId || !travelDate) return;
@@ -618,8 +643,8 @@ const BusDriverHome = () => {
           <div className="mx-auto max-w-5xl flex items-center justify-between gap-3">
             {/* Left Identity Logo & Operator */}
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-900/90 to-slate-900 text-[#FF6B00] border border-indigo-500/30 shadow-lg shadow-indigo-950/50">
-                <Zap size={20} className="fill-[#FF6B00]" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 border border-[#FF6B00]/40 p-0.5 shadow-md shrink-0 overflow-hidden">
+                <img src={eqosyLogo} alt="Eqosy" className="h-full w-full object-cover rounded-full" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
@@ -663,109 +688,108 @@ const BusDriverHome = () => {
           </div>
         </header>
 
-        {/* HERO COCKPIT CONTENT */}
-        <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-3.5 py-1 text-[11px] font-bold uppercase tracking-widest text-indigo-200 backdrop-blur-md">
-                <Sparkles size={12} className="text-[#FF6B00]" />
-                <span>Verified Driver Cockpit</span>
-              </div>
-
-              <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
-                👋 {currentGreeting}
-              </h1>
-
-              <p className="mt-1 text-2xl sm:text-3xl font-black text-white">
-                {driverDisplayName}
-              </p>
-
-              <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-semibold text-[#CBD5E1]">
-                <span className="rounded-lg bg-indigo-950/80 px-3 py-1 text-white border border-indigo-500/30 shadow-xs">
-                  Bus Captain
-                </span>
-                <span className="text-indigo-400">•</span>
-                <span className="text-[#CBD5E1]">
-                  {busService?.route?.routeName || 'Bhopal Intercity Corridor'}
-                </span>
-              </div>
-            </div>
-
-            {/* FLOATING BUS ILLUSTRATION BADGE */}
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
-              className="flex items-center gap-3.5 rounded-[24px] border border-indigo-500/30 bg-slate-900/70 p-4 shadow-2xl backdrop-blur-xl shrink-0 sm:max-w-xs"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-[#FF8533] text-white shadow-lg shadow-orange-500/30">
-                <Bus size={28} />
-              </div>
+        {/* HERO COCKPIT CONTENT (ONLY VISIBLE ON HOME / OVERVIEW TAB) */}
+        {activeTab === 'overview' && (
+          <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#FF6B00]">
-                  {busService?.registrationNumber || 'Coach Reg: BD-2026'}
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-3.5 py-1 text-[11px] font-bold uppercase tracking-widest text-indigo-200 backdrop-blur-md">
+                  <Sparkles size={12} className="text-[#FF6B00]" />
+                  <span>Verified Driver Cockpit</span>
+                </div>
+
+                <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-indigo-200 leading-none">
+                  👋 {currentGreeting}
+                </h1>
+
+                <p className="mt-1.5 text-3xl sm:text-4xl font-black text-white tracking-tight drop-shadow-sm">
+                  {driverDisplayName}
                 </p>
-                <h4 className="text-sm font-black text-white truncate max-w-[150px]">
-                  {busService?.busName || 'Express Coach'}
-                </h4>
-                <p className="text-[11px] font-medium text-[#CBD5E1]">
-                  {busService?.coachType || 'AC Sleeper / Seater'}
-                </p>
-              </div>
-            </motion.div>
-          </div>
 
-          {/* HERO ASSIGNED BUS DETAILS */}
-          {busService ? (
-            <div className="pt-4 border-t border-indigo-500/20 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
-                    Next Departure
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                  <span className="rounded-lg bg-[#FF6B00]/20 px-3 py-1 text-[#FF6B00] border border-[#FF6B00]/40 font-black shadow-xs uppercase tracking-wider text-[11px]">
+                    Bus Captain
                   </span>
-                  <p className="text-sm font-black text-white mt-0.5">
-                    {selectedSchedule?.departureTime || '06:30 AM'}
-                  </p>
-                  <p className="text-[10px] font-semibold text-[#FF6B00] mt-0.5">
-                    {selectedSchedule?.label || 'Primary Schedule'}
-                  </p>
-                </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-[#FF6B00]">
-                  <Clock size={18} />
+                  <span className="text-indigo-400">•</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1 text-white border border-white/15 font-extrabold backdrop-blur-md">
+                    <MapPin size={13} className="text-[#FF6B00]" />
+                    {driverRouteText}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
+              {/* BUS DETAILS CARD (STATIC, STABLE DESIGN) */}
+              <div className="flex items-center gap-3.5 rounded-[24px] border border-indigo-500/30 bg-slate-900/75 p-4 shadow-2xl backdrop-blur-xl shrink-0 sm:max-w-xs">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-[#FF8533] text-white shadow-lg shadow-orange-500/30">
+                  <Bus size={28} />
+                </div>
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
-                    Seat Fare Rate
-                  </span>
-                  <p className="text-sm font-black text-white mt-0.5">
-                    {formatCurrency(busService.seatPrice, busService.fareCurrency)}
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#FF6B00]">
+                    {busService?.registrationNumber || 'Coach Reg: BD-2026'}
                   </p>
-                  <p className="text-[10px] font-semibold text-emerald-400 mt-0.5">Standard Fare</p>
-                </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
-                  <IndianRupee size={18} />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
-                    Travel Date
-                  </span>
-                  <p className="text-sm font-black text-white mt-0.5">
-                    {formatDisplayDate(travelDate)}
+                  <h4 className="text-sm font-black text-white truncate max-w-[150px]">
+                    {busService?.busName || 'Express Coach'}
+                  </h4>
+                  <p className="text-[11px] font-medium text-[#CBD5E1]">
+                    {busService?.coachType || 'AC Sleeper / Seater'}
                   </p>
-                  <p className="text-[10px] font-semibold text-blue-400 mt-0.5">Live Bus Manifest</p>
-                </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/15 text-blue-400">
-                  <Calendar size={18} />
                 </div>
               </div>
             </div>
-          ) : null}
-        </div>
+
+            {/* HERO ASSIGNED BUS DETAILS */}
+            {busService ? (
+              <div className="pt-4 border-t border-indigo-500/20 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
+                      Next Departure
+                    </span>
+                    <p className="text-sm font-black text-white mt-0.5">
+                      {selectedSchedule?.departureTime || '06:30 AM'}
+                    </p>
+                    <p className="text-[10px] font-semibold text-[#FF6B00] mt-0.5">
+                      {selectedSchedule?.label || 'Primary Schedule'}
+                    </p>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-[#FF6B00]">
+                    <Clock size={18} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
+                      Seat Fare Rate
+                    </span>
+                    <p className="text-sm font-black text-white mt-0.5">
+                      {formatCurrency(busService.seatPrice, busService.fareCurrency)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-emerald-400 mt-0.5">Standard Fare</p>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                    <IndianRupee size={18} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-2xl border border-indigo-500/20 bg-slate-900/60 p-3.5 backdrop-blur-xl">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#CBD5E1]">
+                      Travel Date
+                    </span>
+                    <p className="text-sm font-black text-white mt-0.5">
+                      {formatDisplayDate(travelDate)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-blue-400 mt-0.5">Live Bus Manifest</p>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/15 text-blue-400">
+                    <Calendar size={18} />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
       </section>
 
       {/* MAIN CONTENT WRAPPER BASED ON ACTIVE TAB */}
@@ -804,7 +828,7 @@ const BusDriverHome = () => {
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         type="button"
-                        onClick={() => toast.success('Support request sent to Fleet Admin!')}
+                        onClick={() => setIsContactModalOpen(true)}
                         className="inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#E53935] px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-xl hover:shadow-orange-500/35 cursor-pointer"
                       >
                         <ShieldCheck size={18} />
@@ -814,10 +838,8 @@ const BusDriverHome = () => {
                     </div>
                   </div>
 
-                  {/* Floating Illustration Container */}
-                  <motion.div
-                    animate={{ y: [0, -10, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  {/* Illustration Container */}
+                  <div
                     className="flex flex-col items-center justify-center p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl shadow-slate-900/10 w-full md:w-64 shrink-0 border border-slate-700"
                   >
                     <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-[#FF6B00] to-[#E53935] flex items-center justify-center text-white shadow-lg shadow-orange-500/30 mb-3">
@@ -825,7 +847,7 @@ const BusDriverHome = () => {
                     </div>
                     <p className="text-xs font-black text-[#FF6B00] uppercase tracking-wider">Awaiting Fleet Admin</p>
                     <p className="text-[11px] font-medium text-slate-400 text-center mt-1">Bus route status will update live once linked.</p>
-                  </motion.div>
+                  </div>
                 </div>
               </motion.section>
             )}
@@ -1352,6 +1374,109 @@ const BusDriverHome = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Contact Fleet Admin Modal ── */}
+      <AnimatePresence>
+        {isContactModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-orange-500/30 bg-[#0F172A] text-white shadow-2xl p-6 space-y-5"
+            >
+              <button
+                type="button"
+                onClick={() => setIsContactModalOpen(false)}
+                className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer"
+              >
+                <XCircle size={18} />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-orange-500 text-white shadow-lg shadow-orange-500/30">
+                  <ShieldCheck size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">Contact Fleet Admin</h3>
+                  <p className="text-xs font-semibold text-slate-400">
+                    {busService?.operatorName || 'EQOSY Fleet Management'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-900/80 p-4 border border-indigo-500/20 text-xs space-y-3">
+                <p className="text-slate-300 font-medium leading-relaxed">
+                  Send a direct request to your Fleet Owner or Super Admin to assign a bus, update route schedules, or get support.
+                </p>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Request Note / Message</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Please assign me to Bhopal-Ujjain Bus Route 101."
+                    value={supportNote}
+                    onChange={(e) => setSupportNote(e.target.value)}
+                    className="w-full mt-1 rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs font-semibold text-white outline-none focus:border-[#FF6B00]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  disabled={isSendingSupport}
+                  onClick={async () => {
+                    const messageText = supportNote.trim() || 'Request to assign bus & route for driver';
+                    setIsSendingSupport(true);
+                    try {
+                      await createDriverSupportTicket({
+                        title: 'Bus Assignment Request',
+                        message: messageText,
+                      });
+                      toast.success('Support Request created! Sent directly to Admin Panel.');
+                      setIsContactModalOpen(false);
+                      setSupportNote('');
+                    } catch (err) {
+                      const displayMsg = typeof err === 'string'
+                        ? err
+                        : (err?.response?.data?.message || err?.error || err?.message || 'Unable to submit support ticket');
+                      toast.error(String(displayMsg).slice(0, 100));
+                    } finally {
+                      setIsSendingSupport(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#E53935] py-3.5 text-xs font-black text-white shadow-lg shadow-orange-500/30 cursor-pointer disabled:opacity-50"
+                >
+                  <Send size={16} />
+                  <span>{isSendingSupport ? 'Sending Request...' : 'Send Request to Admin Panel'}</span>
+                </motion.button>
+
+                <div className="flex gap-2">
+                  <a
+                    href="tel:18001234567"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                  >
+                    <Phone size={14} className="text-emerald-400" />
+                    <span>Call Admin</span>
+                  </a>
+                  <a
+                    href="https://wa.me/919876543210"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                  >
+                    <MessageSquare size={14} className="text-emerald-400" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

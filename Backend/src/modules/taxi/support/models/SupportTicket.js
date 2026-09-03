@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const SUPPORT_ROLES = ['admin', 'user', 'driver', 'owner'];
+const SUPPORT_ROLES = ['admin', 'user', 'driver', 'owner', 'bus_driver', 'service_center', 'service_center_staff'];
 const SUPPORT_STATUS = ['pending', 'assigned', 'closed'];
 
 const supportMessageSchema = new mongoose.Schema(
@@ -45,7 +45,8 @@ const supportTicketSchema = new mongoose.Schema(
     titleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiSupportTicketTitle',
-      required: true,
+      required: false,
+      default: null,
     },
     title: {
       type: String,
@@ -55,7 +56,7 @@ const supportTicketSchema = new mongoose.Schema(
     },
     userType: {
       type: String,
-      enum: ['user', 'driver', 'owner'],
+      enum: ['user', 'driver', 'owner', 'bus_driver', 'service_center'],
       required: true,
       index: true,
     },
@@ -67,7 +68,7 @@ const supportTicketSchema = new mongoose.Schema(
     },
     requesterRole: {
       type: String,
-      enum: ['user', 'driver', 'owner'],
+      enum: ['user', 'driver', 'owner', 'bus_driver', 'service_center'],
       required: true,
       index: true,
     },

@@ -22,7 +22,14 @@ const roleModelMap = {
 
 const normalizeRole = (role = '') => {
   const value = String(role || '').toLowerCase();
-  if (value === 'super-admin') {
+  if (
+    value === 'super-admin' ||
+    value === 'superadmin' ||
+    value === 'system-admin' ||
+    value === 'system_admin' ||
+    value === 'platform_superadmin' ||
+    value === 'taxi_superadmin'
+  ) {
     return 'admin';
   }
   return value;

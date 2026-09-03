@@ -10,6 +10,7 @@ import { socketService } from '../../../shared/api/socket';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
 import { adminService } from '../services/adminService';
+import { adminSupportService } from '../../shared/services/supportTicketService';
 import { hasAdminPermission } from '../constants/adminAccess';
 import {
   clearUnifiedAdminSession,
@@ -602,6 +603,7 @@ const AdminLayout = () => {
   const [chatNotifications, setChatNotifications] = useState([]);
   const [registrationNotifications, setRegistrationNotifications] = useState([]);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [supportPendingCount, setSupportPendingCount] = useState(0);
   const [rideRequestPage, setRideRequestPage] = useState(1);
   const [bookingPage, setBookingPage] = useState(1);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -1003,9 +1005,27 @@ const AdminLayout = () => {
     () => filterSidebarSectionsByAccess(mode === OWNER_MODE ? ownerSections : adminSections, adminProfile),
     [adminProfile, adminSections, mode, ownerSections],
   );
+  useEffect(() => {
+    let active = true;
+    const fetchSupportStats = async () => {
+      try {
+        const response = await adminSupportService.getTicketStats();
+        if (!active) return;
+        setSupportPendingCount(Number(response?.data?.pendingTickets || 0));
+      } catch (_) {}
+    };
+    fetchSupportStats();
+    const interval = setInterval(fetchSupportStats, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const unreadCountsByPath = useMemo(() => {
     const counts = {
       '/taxi/admin/chat': chatUnreadCount,
+      '/taxi/admin/support/tickets': supportPendingCount,
     };
 
     for (const item of registrationNotifications) {
@@ -1025,7 +1045,7 @@ const AdminLayout = () => {
     }
 
     return counts;
-  }, [chatUnreadCount, registrationNotifications]);
+  }, [chatUnreadCount, registrationNotifications, supportPendingCount]);
   useEffect(() => {
     const activeKeys = [];
     const traverse = (items, parentKey) => {
