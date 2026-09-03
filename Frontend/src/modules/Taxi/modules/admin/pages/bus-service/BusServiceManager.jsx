@@ -633,7 +633,56 @@ const BusServiceManager = ({
     }));
   };
 
+  const validateAndScroll = () => {
+    const requiredFields = [
+      {
+        value: draft.operatorName?.trim(),
+        id: 'input-operatorName',
+        name: 'Operator Name',
+      },
+      {
+        value: draft.busName?.trim(),
+        id: 'input-busName',
+        name: 'Bus Name',
+      },
+      {
+        value: draft.registrationNumber?.trim(),
+        id: 'input-registrationNumber',
+        name: 'Registration Number',
+      },
+      {
+        value: draft.route?.originCity?.trim(),
+        id: 'input-originCity',
+        name: 'Origin City',
+      },
+      {
+        value: draft.route?.destinationCity?.trim(),
+        id: 'input-destinationCity',
+        name: 'Destination City',
+      },
+    ];
+
+    for (const field of requiredFields) {
+      if (!field.value) {
+        toast.error(`Please add ${field.name.toLowerCase()} first.`);
+        const el = document.getElementById(field.id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+          el.classList.add('ring-2', 'ring-rose-500', 'border-rose-500');
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-rose-500', 'border-rose-500');
+          }, 2500);
+        }
+        return false;
+      }
+    }
+    return true;
+  };
+
   const addSchedule = () => {
+    if (!validateAndScroll()) return;
+
     setDraft((current) => ({
       ...current,
       schedules: [...current.schedules, blankSchedule()],
@@ -701,8 +750,7 @@ const BusServiceManager = ({
   };
 
   const handleSave = async () => {
-    if (!draft.operatorName.trim() || !draft.busName.trim() || !draft.route.originCity.trim() || !draft.route.destinationCity.trim()) {
-      toast.error('Add operator, bus name, origin and destination first.');
+    if (!validateAndScroll()) {
       return;
     }
 
@@ -1502,13 +1550,34 @@ const BusServiceManager = ({
                   <div className="space-y-3">
                     <input
                       className={fieldClassName}
-                      value={driverSearch}
-                      onChange={(event) => setDriverSearch(event.target.value)}
-                      placeholder="Search owner drivers by name or phone"
+                      value={driverSearch || draft.driverName || ''}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        setDriverSearch(val);
+                        updateDraft('driverName', val);
+                      }}
+                      placeholder="Search driver by name/phone or type new driver name"
                     />
                     <div className="max-h-52 space-y-2 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-2">
                       {filteredOwnerDrivers.length === 0 ? (
-                        <p className="px-3 py-4 text-xs font-semibold text-slate-500">No matching fleet drivers found.</p>
+                        <div className="p-3 text-center">
+                          <p className="text-xs font-semibold text-slate-500 mb-2">No matching fleet drivers found.</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const name = (driverSearch || '').trim() || 'New Driver';
+                              setDraft((current) => ({
+                                ...current,
+                                driverName: name,
+                                ownerDriverId: '',
+                              }));
+                              toast.success(`Driver set to "${name}". Enter phone number in the next box.`);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition-all"
+                          >
+                            + Use Custom Driver "{(driverSearch || '').trim() || 'New Driver'}"
+                          </button>
+                        </div>
                       ) : (
                         filteredOwnerDrivers.map((driver) => {
                           const isActive = String(draft.ownerDriverId || '') === String(driver.id);
@@ -1516,14 +1585,15 @@ const BusServiceManager = ({
                             <button
                               key={driver.id}
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                setDriverSearch(driver.name || '');
                                 setDraft((current) => ({
                                   ...current,
                                   ownerDriverId: driver.id,
                                   driverName: driver.name || '',
                                   driverPhone: driver.phone || '',
-                                }))
-                              }
+                                }));
+                              }}
                               className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                                 isActive
                                   ? 'border-slate-900 bg-slate-900 text-white'
@@ -1539,17 +1609,18 @@ const BusServiceManager = ({
                         })
                       )}
                     </div>
-                    {selectedOwnerDriver ? (
+                    {selectedOwnerDriver || draft.driverName ? (
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          setDriverSearch('');
                           setDraft((current) => ({
                             ...current,
                             ownerDriverId: '',
                             driverName: '',
                             driverPhone: '',
-                          }))
-                        }
+                          }));
+                        }}
                         className="text-xs font-bold text-rose-600"
                       >
                         Clear assigned driver
@@ -1566,25 +1637,24 @@ const BusServiceManager = ({
                   className={fieldClassName}
                   value={draft.driverPhone || ''}
                   onChange={(event) => updateDraft('driverPhone', event.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="9876543210"
-                  readOnly={typeof api.getDrivers === 'function'}
+                  placeholder="Enter 10-digit driver mobile number"
                 />
               </div>
               <div>
                 <label className={labelClassName}>Operator Name</label>
-                <input className={fieldClassName} value={draft.operatorName} onChange={(event) => updateDraft('operatorName', event.target.value)} placeholder="Intercity Operator" />
+                <input id="input-operatorName" className={fieldClassName} value={draft.operatorName} onChange={(event) => updateDraft('operatorName', event.target.value)} placeholder="Intercity Operator" />
               </div>
               <div>
                 <label className={labelClassName}>Bus Name</label>
-                <input className={fieldClassName} value={draft.busName} onChange={(event) => updateDraft('busName', event.target.value)} placeholder="Sleeper Express" />
+                <input id="input-busName" className={fieldClassName} value={draft.busName} onChange={(event) => updateDraft('busName', event.target.value)} placeholder="Sleeper Express" />
               </div>
               <div>
                 <label className={labelClassName}>Service Number</label>
-                <input className={fieldClassName} value={draft.serviceNumber} onChange={(event) => updateDraft('serviceNumber', event.target.value)} placeholder="RYD-2401" />
+                <input id="input-serviceNumber" className={fieldClassName} value={draft.serviceNumber} onChange={(event) => updateDraft('serviceNumber', event.target.value)} placeholder="RYD-2401" />
               </div>
               <div>
                 <label className={labelClassName}>Registration Number</label>
-                <input className={fieldClassName} value={draft.registrationNumber} onChange={(event) => updateDraft('registrationNumber', event.target.value.toUpperCase())} placeholder="MP09-AB-2401" />
+                <input id="input-registrationNumber" className={fieldClassName} value={draft.registrationNumber} onChange={(event) => updateDraft('registrationNumber', event.target.value.toUpperCase())} placeholder="MP09-AB-2401" />
               </div>
               <div>
                 <label className={labelClassName}>Coach Type</label>
@@ -1969,11 +2039,11 @@ const BusServiceManager = ({
               </div>
               <div>
                 <label className={labelClassName}>Origin City</label>
-                <input className={fieldClassName} value={draft.route.originCity} onChange={(event) => updateRouteField('originCity', event.target.value)} placeholder="Indore" />
+                <input id="input-originCity" className={fieldClassName} value={draft.route.originCity} onChange={(event) => updateRouteField('originCity', event.target.value)} placeholder="Indore" />
               </div>
               <div>
                 <label className={labelClassName}>Destination City</label>
-                <input className={fieldClassName} value={draft.route.destinationCity} onChange={(event) => updateRouteField('destinationCity', event.target.value)} placeholder="Bhopal" />
+                <input id="input-destinationCity" className={fieldClassName} value={draft.route.destinationCity} onChange={(event) => updateRouteField('destinationCity', event.target.value)} placeholder="Bhopal" />
               </div>
             </div>
 

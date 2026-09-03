@@ -48,6 +48,7 @@ import { useProfile } from "@food/context/ProfileContext"
 import AddToCartAnimation from "@food/components/user/AddToCartAnimation"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { isModuleAuthenticated } from "@food/utils/auth"
+import { determineIsVeg } from "@food/utils/menuItems"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import {
@@ -813,16 +814,13 @@ function RestaurantDetailsContent() {
                 const normalizeItem = (item = {}) => {
                    const isRecommended = item.isRecommended === true || item.isRecommended === 1 || String(item.isRecommended) === "true"
                    const isSpicy = item.isSpicy === true || item.isSpicy === 1 || String(item.isSpicy) === "true"
-                   let foodType = item.foodType || "Non-Veg"
-                   if (typeof foodType === 'string') {
-                     if (foodType.toLowerCase() === 'veg') foodType = 'Veg'
-                     else if (foodType.toLowerCase() === 'non-veg' || foodType.toLowerCase() === 'nonveg') foodType = 'Non-Veg'
-                   }
+                   const isVeg = determineIsVeg(item)
                    return {
                      ...item,
                       id: String(item.id || item._id || `${Date.now()}-${Math.random()}`),
                       name: item.name || "Unnamed Item",
-                      foodType,
+                      isVeg,
+                      foodType: isVeg ? "Veg" : "Non-Veg",
                       price: getFoodDisplayPrice(item),
                       variants: getFoodVariants(item),
                       variations: getFoodVariants(item),
@@ -1235,7 +1233,7 @@ function RestaurantDetailsContent() {
       restaurantId: validRestaurantId, // Use validated restaurantId
       description: item.description,
       originalPrice: item.originalPrice,
-      isVeg: item.isVeg !== false, // Add isVeg property
+      isVeg: determineIsVeg(item),
       preparationTime: item.preparationTime // Add preparationTime property
     }
 

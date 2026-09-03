@@ -31,10 +31,14 @@ const HeaderGreeting = () => {
     syncLocationLabel();
     window.addEventListener('storage', syncLocationLabel);
     window.addEventListener(LOCATION_UPDATED_EVENT, syncLocationLabel);
+    window.addEventListener('userLocationUpdated', syncLocationLabel);
+    window.addEventListener('locationChanged', syncLocationLabel);
 
     return () => {
       window.removeEventListener('storage', syncLocationLabel);
       window.removeEventListener(LOCATION_UPDATED_EVENT, syncLocationLabel);
+      window.removeEventListener('userLocationUpdated', syncLocationLabel);
+      window.removeEventListener('locationChanged', syncLocationLabel);
     };
   }, []);
 

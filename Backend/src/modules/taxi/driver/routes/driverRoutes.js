@@ -177,7 +177,7 @@ driverRouter.post(
 );
 driverRouter.get(
   "/wallet",
-  authenticate(["driver"]),
+  authenticate(["driver", "owner"]),
   asyncHandler(getMyWallet),
 );
 driverRouter.get(
@@ -439,7 +439,7 @@ driverRouter.patch(
 );
 driverRouter.get(
   "/earnings",
-  authenticate(["driver"]),
+  authenticate(["driver", "owner"]),
   asyncHandler(getDriverEarningsFilter),
 );
 driverRouter.get(

@@ -142,11 +142,45 @@ const BusDetails = () => {
     return null;
   }
 
+  const focusAndHighlightField = (elementId, errorMsg) => {
+    setError(errorMsg);
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+      const targetBox = el.closest('.flex') || el;
+      targetBox.classList.add('ring-2', 'ring-rose-500', 'border-rose-500');
+      setTimeout(() => {
+        targetBox.classList.remove('ring-2', 'ring-rose-500', 'border-rose-500');
+      }, 3000);
+    }
+  };
+
   const handleContinue = async () => {
     if (isPaying) return;
 
-    if (!name || !age || !phone || !email) {
-      setError('Please fill in all passenger details.');
+    const trimmedName = String(name || '').trim();
+    const parsedAge = Number(age);
+    const cleanedPhone = String(phone || '').replace(/\D/g, '');
+    const trimmedEmail = String(email || '').trim().toLowerCase();
+
+    if (!trimmedName || trimmedName.length < 2 || trimmedName.length > 80) {
+      focusAndHighlightField('input-passenger-name', 'Please enter a valid passenger full name (2 - 80 characters).');
+      return;
+    }
+
+    if (!Number.isFinite(parsedAge) || parsedAge < 1 || parsedAge > 120) {
+      focusAndHighlightField('input-passenger-age', 'Please enter a valid passenger age between 1 and 120.');
+      return;
+    }
+
+    if (!/^\d{10}$/.test(cleanedPhone)) {
+      focusAndHighlightField('input-passenger-phone', 'A valid 10-digit mobile number is required (e.g. 9876543210).');
+      return;
+    }
+
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      focusAndHighlightField('input-passenger-email', 'A valid email address is required (e.g. name@example.com).');
       return;
     }
 
@@ -159,7 +193,14 @@ const BusDetails = () => {
         throw new Error('Razorpay SDK failed to load');
       }
 
-      const passenger = { name, age, gender, phone, email };
+      const passenger = {
+        name: trimmedName,
+        age: parsedAge,
+        gender,
+        phone: cleanedPhone,
+        email: trimmedEmail,
+      };
+
       const orderResponse = await userBusService.createBookingOrder({
         busServiceId: bus.busServiceId,
         scheduleId: bus.scheduleId,
@@ -181,9 +222,9 @@ const BusDetails = () => {
         description: `${fromCity} to ${toCity}`,
         order_id: order.orderId,
         prefill: {
-          name,
-          email,
-          contact: phone,
+          name: trimmedName,
+          email: trimmedEmail,
+          contact: cleanedPhone,
         },
         modal: {
           ondismiss: () => {
@@ -221,13 +262,25 @@ const BusDetails = () => {
 
       rzp.open();
     } catch (err) {
-      setError(err?.message || 'Unable to continue with payment');
+      const serverMsg = err?.response?.data?.message || err?.message || 'Unable to continue with payment';
+      setError(serverMsg);
+
+      if (/phone/i.test(serverMsg)) {
+        focusAndHighlightField('input-passenger-phone', serverMsg);
+      } else if (/email/i.test(serverMsg)) {
+        focusAndHighlightField('input-passenger-email', serverMsg);
+      } else if (/name/i.test(serverMsg)) {
+        focusAndHighlightField('input-passenger-name', serverMsg);
+      } else if (/age/i.test(serverMsg)) {
+        focusAndHighlightField('input-passenger-age', serverMsg);
+      }
+
       setIsPaying(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto font-sans pb-32">
+    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto font-sans pb-56">
       <div className="bg-white px-5 pt-10 pb-4 sticky top-0 z-20 border-b border-slate-100 shadow-sm">
         <div className="flex items-center gap-3">
           <button
@@ -324,10 +377,12 @@ const BusDetails = () => {
               <div className="flex min-w-0 items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
                 <User size={16} className="shrink-0 text-slate-400" />
                 <input
+                  id="input-passenger-name"
                   type="text"
                   placeholder="Enter full name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
+                  onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
               </div>
@@ -337,10 +392,12 @@ const BusDetails = () => {
               <div className="flex-1 space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Age</label>
                 <input
+                  id="input-passenger-age"
                   type="number"
                   placeholder="Age"
                   value={age}
                   onChange={(event) => setAge(event.target.value)}
+                  onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
               </div>
@@ -375,10 +432,12 @@ const BusDetails = () => {
               <div className="flex min-w-0 items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
                 <Phone size={16} className="shrink-0 text-slate-400" />
                 <input
+                  id="input-passenger-phone"
                   type="tel"
-                  placeholder="Mobile number"
+                  placeholder="10-digit mobile number"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
+                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
               </div>
@@ -389,10 +448,12 @@ const BusDetails = () => {
               <div className="flex min-w-0 items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3">
                 <Mail size={16} className="shrink-0 text-slate-400" />
                 <input
+                  id="input-passenger-email"
                   type="email"
                   placeholder="Email address"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className="min-w-0 flex-1 bg-transparent text-sm font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
               </div>

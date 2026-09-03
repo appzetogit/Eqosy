@@ -35,8 +35,6 @@ const initialFormData = {
   transport_type: '',
 };
 
-th
-
 const defaultTransportTypes = [
   { transport_type: 'all' },
   { transport_type: 'taxi' },

@@ -5,6 +5,7 @@ import { orderAPI } from "@food/api"
 import { useCart } from "@food/context/CartContext"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
+import { determineIsVeg } from "@food/utils/menuItems"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -301,7 +302,7 @@ export default function Orders() {
                 price: item.price || 0,
                 image: item.image || null,
                 description: item.description || null,
-                isVeg: item.isVeg !== undefined ? item.isVeg : (item.category === 'veg' || item.type === 'veg'),
+                isVeg: determineIsVeg(item),
                 _id: item._id || item.id,
                 id: item.id || item._id
               })),
@@ -442,7 +443,7 @@ export default function Orders() {
           restaurant: order.restaurant || "Restaurant",
           restaurantId: order.restaurantId,
           description: item.description || "",
-          isVeg: item.isVeg !== false,
+          isVeg: determineIsVeg(item),
           quantity: Math.max(1, Number(item.quantity) || 1),
           reorderIndex: index,
         }
@@ -845,7 +846,7 @@ Order again from this restaurant in the ${companyName} app.`
                 <div className="px-4 py-2 space-y-2">
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item, idx) => {
-                      const isVeg = item.isVeg !== undefined ? item.isVeg : (item.category === 'veg' || item.type === 'veg')
+                      const isVeg = determineIsVeg(item)
                       const itemName = item.name || item.foodName || 'Item'
                       const itemQuantity = item.quantity || 1
                       const itemPrice = item.price || 0

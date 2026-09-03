@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS_CONTEXT = {
       currency_symbol: '',
     },
     transportRide: {
-      enable_bus_service: '0',
+      enable_bus_service: '1',
     },
     bidRide: {
       bidding_low_percentage: '10',
@@ -152,7 +152,7 @@ export const SettingsProvider = ({ children }) => {
       setSettings({
         general: bootstrapData.general || {},
         customization: bootstrapData.customization || {},
-        transportRide: bootstrapData.transportRide || { enable_bus_service: '0' },
+        transportRide: bootstrapData.transportRide || { enable_bus_service: '1' },
         bidRide: bootstrapData.bidRide || DEFAULT_SETTINGS_CONTEXT.settings.bidRide,
         paymentGateway: bootstrapData.paymentGateway || null,
       });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -31,6 +31,8 @@ const formatDateDisplay = (dateStr) => {
 
 const DriverEarnings = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOwnerPortal = location.pathname.startsWith('/taxi/owner');
   const [period, setPeriod] = useState('today');
   const [tipFilter, setTipFilter] = useState('all'); // 'all', 'online', 'cash'
   const [customDate, setCustomDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -137,8 +139,12 @@ const DriverEarnings = () => {
             <ArrowLeft size={18} />
           </button>
           <div className="text-center">
-            <h1 className="text-base font-black uppercase tracking-wider text-white">My Earnings</h1>
-            <p className="text-[11px] font-bold text-slate-400">Filter & track ride income</p>
+            <h1 className="text-base font-black uppercase tracking-wider text-white">
+              {isOwnerPortal ? 'Fleet Earnings' : 'My Earnings'}
+            </h1>
+            <p className="text-[11px] font-bold text-slate-400">
+              {isOwnerPortal ? 'Filter & track fleet ride income' : 'Filter & track ride income'}
+            </p>
           </div>
           <button
             type="button"
@@ -440,7 +446,7 @@ const DriverEarnings = () => {
         )}
       </main>
 
-      <DriverBottomNav activeTab="home" />
+      {!isOwnerPortal && <DriverBottomNav activeTab="home" />}
     </div>
   );
 };

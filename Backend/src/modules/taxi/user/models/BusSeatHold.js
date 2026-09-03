@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const busSeatHoldSchema = new mongoose.Schema(
   {
+    tripId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiTripInstance',
+      required: true,
+      index: true,
+    },
     busServiceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiBusService',
@@ -17,7 +23,13 @@ const busSeatHoldSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiUser',
-      required: true,
+      default: null,
+      index: true,
+    },
+    driverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiBusDriver',
+      default: null,
       index: true,
     },
     scheduleId: {
@@ -35,6 +47,10 @@ const busSeatHoldSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    seatIds: {
+      type: [String],
+      default: [],
+    },
     holdToken: {
       type: String,
       default: '',
@@ -43,7 +59,7 @@ const busSeatHoldSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['held', 'booked', 'released'],
+      enum: ['held', 'converted', 'expired', 'released'],
       default: 'held',
       index: true,
     },
@@ -56,10 +72,9 @@ const busSeatHoldSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-busSeatHoldSchema.index(
-  { busServiceId: 1, scheduleId: 1, travelDate: 1, seatId: 1 },
-  { unique: true, name: 'unique_bus_travel_seat' },
-);
+busSeatHoldSchema.index({ tripId: 1, holdToken: 1 });
+busSeatHoldSchema.index({ tripId: 1, seatId: 1, status: 1 });
 
 export const BusSeatHold =
   mongoose.models.TaxiBusSeatHold || mongoose.model('TaxiBusSeatHold', busSeatHoldSchema);
+

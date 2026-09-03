@@ -22,6 +22,7 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { calculateDistance } from "@food/utils/common"
+import { determineIsVeg } from "@food/utils/menuItems"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -357,7 +358,7 @@ export default function UserOrderDetails() {
           restaurant: restaurantName,
           restaurantId: restaurantObj._id || restaurantObj.restaurantId || currentOrder?.restaurantId,
           description: item.description || "",
-          isVeg: item.isVeg !== false,
+          isVeg: determineIsVeg(item),
           quantity: Math.max(1, Number(item.quantity || item.qty) || 1),
           reorderIndex: index,
         }
@@ -463,16 +464,17 @@ export default function UserOrderDetails() {
 
           <div className="border-t border-dashed border-gray-200 dark:border-zinc-800 my-3" />
 
-          {/* Items */}
-          {items.map((item, idx) => (
+          {items.map((item, idx) => {
+            const isVeg = determineIsVeg(item);
+            return (
             <div key={idx} className="flex justify-between items-start mt-2">
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-3 h-3 border ${item.isVeg ? "border-green-600" : "border-red-600"
+                  className={`w-3 h-3 border ${isVeg ? "border-green-600" : "border-red-600"
                     } flex items-center justify-center p-[1px]`}
                 >
                   <div
-                    className={`w-full h-full rounded-full ${item.isVeg ? "bg-green-600" : "bg-red-600"
+                    className={`w-full h-full rounded-full ${isVeg ? "bg-green-600" : "bg-red-600"
                       }`}
                   />
                 </div>

@@ -188,7 +188,8 @@ const isOwnerManagedDriverProfile = (driver = {}) =>
 const DriverWallet = () => {
     const navigate = useNavigate();
     const { settings: appSettings } = useSettings();
-    const appName = appSettings.general?.app_name || 'App';
+    const isOwnerPortal = location.pathname.startsWith('/taxi/owner');
+    const appName = appSettings.general?.app_name || 'Eqosy';
     const activePaymentGateway = appSettings.paymentGateway || null;
     const [wallet, setWallet] = useState(emptyWallet);
     const [transactions, setTransactions] = useState([]);
@@ -443,7 +444,7 @@ const DriverWallet = () => {
             }
 
             if (!supportsWalletTopUp || !canTopUpWallet) {
-                throw new Error(`${walletTopUpGatewayLabel} is enabled by admin, but driver wallet top-up is not implemented for it yet.`);
+                throw new Error(`${walletTopUpGatewayLabel} is enabled by admin, but wallet top-up is not implemented for it yet.`);
             }
 
             if (walletTopUpMode === 'phonepe_redirect') {
@@ -594,13 +595,17 @@ const DriverWallet = () => {
 
     const statusCopy = rules.walletEnabled
         ? rules.canReceiveOrders
-            ? 'Ready for orders'
-            : 'Top up to receive orders'
+            ? (isOwnerPortal ? 'Fleet wallet active' : 'Ready for orders')
+            : (isOwnerPortal ? 'Top up fleet wallet' : 'Top up to receive orders')
         : 'Wallet disabled';
 
-    const walletIntro = driverProfile.isOwnerManagedDriver
-        ? 'Monthly salary and wallet activity'
-        : 'Cash commission and online earnings';
+    const headerTitle = isOwnerPortal ? 'Owner wallet' : 'Driver wallet';
+
+    const walletIntro = isOwnerPortal
+        ? 'Fleet commission and online earnings'
+        : driverProfile.isOwnerManagedDriver
+            ? 'Monthly salary and wallet activity'
+            : 'Cash commission and online earnings';
 
     return (
         <div className="min-h-screen bg-[#f5f1e8] px-4 pb-28 pt-4 text-slate-950">
@@ -615,7 +620,7 @@ const DriverWallet = () => {
                         <ArrowLeft size={18} />
                     </button>
                     <div className="text-center">
-                        <h1 className="text-lg font-black tracking-tight">Driver wallet</h1>
+                        <h1 className="text-lg font-black tracking-tight">{headerTitle}</h1>
                         <p className="text-xs font-bold text-slate-500">{walletIntro}</p>
                     </div>
                     <button
@@ -716,7 +721,7 @@ const DriverWallet = () => {
                             </div>
                             <button
                                 type="button"
-                                onClick={() => navigate('/taxi/driver/earnings')}
+                                onClick={() => navigate(`${window.location.pathname.startsWith('/taxi/owner') ? '/taxi/owner' : '/taxi/driver'}/earnings`)}
                                 className="mt-3.5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs font-black uppercase tracking-[0.08em] text-emerald-800 shadow-sm hover:bg-emerald-100 transition-all"
                             >
                                 Filter Earnings (Today, Week, Custom Date) <TrendingUp size={16} />
@@ -752,26 +757,30 @@ const DriverWallet = () => {
                             <div className="mb-3 flex items-center gap-2">
                                 <IndianRupee size={18} className="text-emerald-700" />
                                 <h3 className="text-sm font-black text-slate-950">
-                                    {driverProfile.isOwnerManagedDriver ? 'Wallet activity guide' : 'How it reflects'}
+                                    {isOwnerPortal ? 'Fleet wallet guide' : driverProfile.isOwnerManagedDriver ? 'Wallet activity guide' : 'How it reflects'}
                                 </h3>
                             </div>
                             <div className="grid gap-2">
                                 <div className="rounded-2xl bg-slate-50 p-3">
                                     <p className="text-sm font-black text-slate-900">
-                                        {driverProfile.isOwnerManagedDriver ? 'Monthly salary' : 'Cash / COD ride'}
+                                        {isOwnerPortal ? 'Fleet Cash / COD rides' : driverProfile.isOwnerManagedDriver ? 'Monthly salary' : 'Cash / COD ride'}
                                     </p>
                                     <p className="mt-1 text-xs font-bold leading-relaxed text-slate-500">
-                                        {driverProfile.isOwnerManagedDriver
+                                        {isOwnerPortal
+                                            ? 'Fleet drivers collect full cash fare. Wallet deducts platform commission.'
+                                            : driverProfile.isOwnerManagedDriver
                                             ? 'This fixed amount is the monthly salary configured by the fleet owner for this driver.'
                                             : 'Driver collects the full cash fare. Wallet deducts only admin commission.'}
                                     </p>
                                 </div>
                                 <div className="rounded-2xl bg-slate-50 p-3">
                                     <p className="text-sm font-black text-slate-900">
-                                        {driverProfile.isOwnerManagedDriver ? 'Wallet balance' : 'Online ride'}
+                                        {isOwnerPortal ? 'Fleet Online rides' : driverProfile.isOwnerManagedDriver ? 'Wallet balance' : 'Online ride'}
                                     </p>
                                     <p className="mt-1 text-xs font-bold leading-relaxed text-slate-500">
-                                        {driverProfile.isOwnerManagedDriver
+                                        {isOwnerPortal
+                                            ? 'Online ride earnings for fleet trips are credited to owner wallet after commission.'
+                                            : driverProfile.isOwnerManagedDriver
                                             ? 'Wallet entries here still show live collections, transfers, top-ups, and deductions separately from salary.'
                                             : 'Platform receives the fare. Wallet credits driver earning after commission.'}
                                     </p>

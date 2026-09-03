@@ -1,26 +1,47 @@
-import { getFoodDisplayPrice, getFoodVariants } from "./foodVariants"
+export const determineIsVeg = (item) => {
+  if (!item) return true;
 
-export const getMenuFromResponse = (response) =>
-  response?.data?.data?.menu || response?.data?.menu || null
+  // Explicit boolean checks first
+  if (item.isVeg === true || item.veg === true || item.is_veg === true || item.is_veg === 1) return true;
+  if (item.isVeg === false || item.veg === false || item.is_veg === false || item.is_veg === 0) return false;
 
-const normalizeItem = (item = {}, sectionName = "", subsectionName = "") => ({
-  ...item,
-  id: String(item?.id || item?._id || ""),
-  sectionName,
-  subsectionName,
-  image: item?.image || item?.images?.[0] || "",
-  name: item?.name || "Unnamed Item",
-  category: item?.category || sectionName || "Varieties",
-  foodType: item?.foodType || "Non-Veg",
-  price: getFoodDisplayPrice(item),
-  rating: Number(item?.rating || 0),
-  reviews: Number(item?.reviews || 0),
-  stock: item?.stock || "Unlimited",
-  approvalStatus: item?.approvalStatus || "pending",
-  isAvailable: item?.isAvailable !== false,
-  variants: getFoodVariants(item),
-  variations: getFoodVariants(item),
-})
+  // Check foodType string
+  const foodType = String(item.foodType || item.food_type || item.type || item.category || '').toLowerCase().trim();
+  if (foodType === 'veg' || foodType === 'vegetarian') return true;
+  if (foodType === 'non-veg' || foodType === 'nonveg' || foodType === 'non-vegetarian' || foodType === 'egg') return false;
+
+  // Fallback to name inspection for non-veg keywords
+  const name = String(item.name || item.foodName || '').toLowerCase();
+  const nonVegKeywords = ['chicken', 'mutton', 'fish', 'prawn', 'egg', 'lamb', 'beef', 'pork', 'keema', 'biryani', 'kabab', 'kebab', 'tandoori', 'tikka', 'shorma', 'shawarma', 'meat', 'wings', 'lollipop'];
+  if (nonVegKeywords.some((kw) => name.includes(kw))) {
+    return false;
+  }
+
+  return true;
+};
+
+const normalizeItem = (item = {}, sectionName = "", subsectionName = "") => {
+  const isVeg = determineIsVeg(item);
+  return {
+    ...item,
+    id: String(item?.id || item?._id || ""),
+    sectionName,
+    subsectionName,
+    image: item?.image || item?.images?.[0] || "",
+    name: item?.name || "Unnamed Item",
+    category: item?.category || sectionName || "Varieties",
+    isVeg,
+    foodType: item?.foodType || (isVeg ? "Veg" : "Non-Veg"),
+    price: getFoodDisplayPrice(item),
+    rating: Number(item?.rating || 0),
+    reviews: Number(item?.reviews || 0),
+    stock: item?.stock || "Unlimited",
+    approvalStatus: item?.approvalStatus || "pending",
+    isAvailable: item?.isAvailable !== false,
+    variants: getFoodVariants(item),
+    variations: getFoodVariants(item),
+  };
+};
 
 export const flattenMenuItems = (menu) => {
   if (!menu || !Array.isArray(menu.sections)) return []

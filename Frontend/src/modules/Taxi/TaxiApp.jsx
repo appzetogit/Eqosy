@@ -367,11 +367,15 @@ const MainLayout = ({ children }) => {
   const isStaticPath = staticPages.includes(location.pathname);
   const isAdminPath =
     location.pathname.startsWith('/taxi/admin') ||
+    location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/taxi/user-import') ||
     location.pathname.startsWith('/taxi/driver-import');
+  const isOwnerPath =
+    location.pathname.startsWith('/taxi/owner') ||
+    location.pathname.startsWith('/owner');
 
-  if (isAdminPath) {
-    return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
+  if (isAdminPath || isOwnerPath) {
+    return <div className="redigo-admin-root min-h-screen bg-gray-50 overflow-x-hidden">{children}</div>;
   }
 
   if (isStaticPath) {
@@ -436,9 +440,12 @@ const UserAccountInvalidationListener = () => {
   useEffect(() => {
     const isUserRoute =
       !location.pathname.startsWith('/admin') &&
+      !location.pathname.startsWith('/taxi/admin') &&
       !location.pathname.startsWith('/user-import') &&
       !location.pathname.startsWith('/driver-import') &&
       !location.pathname.startsWith('/owner') &&
+      !location.pathname.startsWith('/taxi/owner') &&
+      !location.pathname.startsWith('/driver') &&
       !location.pathname.startsWith('/taxi/driver');
 
     if (!isUserRoute) {
@@ -1103,6 +1110,7 @@ function TaxiApp() {
                 <Route path="bus-bookings" element={<OwnerBusBookingsPage />} />
                 <Route path="profile" element={<DriverProfile />} />
                 <Route path="wallet" element={<DriverWallet />} />
+                <Route path="earnings" element={<DriverEarnings />} />
                 <Route path="history" element={<RideRequests />} />
                 <Route path="edit-profile" element={<EditProfile />} />
                 <Route path="documents" element={<DriverDocuments />} />

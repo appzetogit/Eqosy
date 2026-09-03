@@ -42,7 +42,7 @@ const OwnerBusServicePage = () => {
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] pb-32">
-      <div className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-5">
+      <div className="mx-auto max-w-7xl px-4 pb-8 pt-6 sm:px-6 lg:px-8">
         <div className="mb-5 flex items-center justify-between gap-3">
           <button
             type="button"

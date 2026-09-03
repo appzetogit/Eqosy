@@ -331,7 +331,7 @@ const OwnerDashboard = () => {
   const recentVehicles = dashboard?.recentVehicles || [];
   const recentRides = dashboard?.recentRides || [];
   const busOverview = dashboard?.busOverview || {};
-  const busEnabled = String(settings.transportRide?.enable_bus_service || '0') === '1';
+  const busEnabled = String(settings.transportRide?.enable_bus_service ?? '1') !== '0';
 
   // Dynamic Timezone Aware Greeting Wish
   const timeZoneName = serviceLocation?.timezone || 'Asia/Kolkata';
@@ -475,13 +475,19 @@ const OwnerDashboard = () => {
         <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-blue-400/20 blur-3xl" />
         <div className="pointer-events-none absolute -left-20 -bottom-20 h-56 w-56 rounded-full bg-indigo-400/15 blur-3xl" />
 
-        <div className="relative z-10 w-full space-y-4">
+        <div className="relative z-10 mx-auto max-w-7xl w-full space-y-4">
           {/* HEADER TOOLBAR INSIDE HERO (DYNAMIC COMPANY NAME) */}
           <div className="flex items-center justify-between pb-3 border-b border-blue-300/70">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F172A] text-[#FF6B00] shadow-sm">
-                <Zap size={20} className="fill-[#FF6B00]" />
-              </div>
+              <img
+                src={settings.general?.logo || settings.customization?.logo || '/eqosy-logo.png'}
+                alt="Eqosy"
+                className="h-10 w-10 object-contain rounded-xl shrink-0"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = '/eqosy-logo.png';
+                }}
+              />
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-black uppercase tracking-widest text-blue-900">
@@ -598,7 +604,7 @@ const OwnerDashboard = () => {
       </motion.section>
 
       {/* LOWER CONTENT CONTAINER */}
-      <div className="w-full px-2 sm:px-4 py-4 space-y-4">
+      <div className="mx-auto max-w-7xl w-full px-3 sm:px-6 py-4 space-y-4">
         {error ? (
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-extrabold text-rose-600 shadow-sm">
             {error}
@@ -607,7 +613,7 @@ const OwnerDashboard = () => {
 
         {/* QUICK FLEET ACTIONS BAR */}
         <section>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <motion.button
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.97 }}
@@ -632,6 +638,19 @@ const OwnerDashboard = () => {
                 <Car size={15} />
               </div>
               <span className="text-xs font-black text-slate-900">Add Vehicle</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={() => navigate('/taxi/owner/bus-service')}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-blue-200/60 bg-gradient-to-br from-white via-[#F2F7FE] to-[#E8F2FC] p-3 shadow-md shadow-blue-900/5 transition-all hover:border-blue-400"
+            >
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+                <Bus size={15} />
+              </div>
+              <span className="text-xs font-black text-slate-900">Add Bus</span>
             </motion.button>
 
             <motion.button

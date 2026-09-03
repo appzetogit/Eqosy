@@ -942,6 +942,23 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         if (locationData) {
           const currentLocData = { ...locationData, isManual: false };
           localStorage.setItem("userLocation", JSON.stringify(currentLocData));
+          try {
+            const lat = currentLocData.latitude || currentLocData.lat;
+            const lon = currentLocData.longitude || currentLocData.lng || currentLocData.lon;
+            const address = currentLocData.formattedAddress || currentLocData.address || currentLocData.city || '';
+            if (lat && lon) {
+              localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+                address,
+                lat: Number(lat),
+                lon: Number(lon),
+                updatedAt: Date.now()
+              }));
+            }
+            window.dispatchEvent(new Event("storage"));
+            window.dispatchEvent(new Event("eqosy:location-updated"));
+            window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: currentLocData }));
+            window.dispatchEvent(new CustomEvent("locationChanged", { detail: currentLocData }));
+          } catch {}
         }
       } catch {}
       setShowAddressForm(false)
@@ -1994,6 +2011,23 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             isManual: true,
           }
           localStorage.setItem("userLocation", JSON.stringify(activeLocData))
+          try {
+            const lat = activeLocData.latitude || activeLocData.lat;
+            const lon = activeLocData.longitude || activeLocData.lng || activeLocData.lon;
+            const address = activeLocData.formattedAddress || activeLocData.address || activeLocData.city || '';
+            if (lat && lon) {
+              localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+                address,
+                lat: Number(lat),
+                lon: Number(lon),
+                updatedAt: Date.now()
+              }));
+            }
+            window.dispatchEvent(new Event("storage"));
+            window.dispatchEvent(new Event("eqosy:location-updated"));
+            window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: activeLocData }));
+            window.dispatchEvent(new CustomEvent("locationChanged", { detail: activeLocData }));
+          } catch {}
         } catch {}
       }
 
@@ -2087,6 +2121,23 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         isManual: true
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
+      try {
+        const lat = locationData.latitude || locationData.lat;
+        const lon = locationData.longitude || locationData.lng || locationData.lon;
+        const addressStr = locationData.formattedAddress || locationData.address || locationData.city || '';
+        if (lat && lon) {
+          localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+            address: addressStr,
+            lat: Number(lat),
+            lon: Number(lon),
+            updatedAt: Date.now()
+          }));
+        }
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("eqosy:location-updated"));
+        window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }));
+        window.dispatchEvent(new CustomEvent("locationChanged", { detail: locationData }));
+      } catch {}
 
       // Update map position to show selected address
       setMapPosition([latitude, longitude])

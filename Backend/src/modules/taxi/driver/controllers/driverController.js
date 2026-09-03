@@ -12,6 +12,9 @@ import { WithdrawalRequest } from "../../admin/models/WithdrawalRequest.js";
 import { Ride } from "../../user/models/Ride.js";
 import { BusBooking } from "../../user/models/BusBooking.js";
 import { BusSeatHold } from "../../user/models/BusSeatHold.js";
+import { TripInstance } from "../../user/models/TripInstance.js";
+import { TripSeatInventory } from "../../user/models/TripSeatInventory.js";
+import { ensureTripInstance, normalizeTravelDateString } from "../../services/tripGeneratorService.js";
 import { Owner } from "../../admin/models/Owner.js";
 import { BusService } from "../../admin/models/BusService.js";
 import { ServiceLocation } from "../../admin/models/ServiceLocation.js";
@@ -2241,7 +2244,16 @@ export const loginDriver = async (req, res) => {
 };
 
 export const getDriverEarningsFilter = async (req, res) => {
-  const driverId = req.auth.sub;
+  let driverIds = [req.auth.sub];
+
+  if (String(req.auth?.role || "").toLowerCase() === "owner") {
+    const owner = await Owner.findById(req.auth.sub).lean();
+    if (owner) {
+      const fleetDrivers = await Driver.find({ owner_id: owner._id, deletedAt: null }).select("_id").lean();
+      driverIds = [owner._id, ...fleetDrivers.map((d) => d._id)];
+    }
+  }
+
   const { period = 'today', date, startDate, endDate } = req.query;
 
   const now = new Date();
@@ -2288,7 +2300,7 @@ export const getDriverEarningsFilter = async (req, res) => {
   const dateQueryField = normPeriod === 'tomorrow' ? { $or: [{ scheduledAt: { $gte: fromDate, $lte: toDate } }, { createdAt: { $gte: fromDate, $lte: toDate } }] } : { createdAt: { $gte: fromDate, $lte: toDate } };
 
   const rides = await Ride.find({
-    driverId,
+    driverId: { $in: driverIds },
     status: normPeriod === 'tomorrow' ? { $in: ['accepted', 'searching', 'scheduled', 'completed'] } : 'completed',
     ...dateQueryField,
   })
@@ -4442,7 +4454,7 @@ export const createBusDriverReservation = async (req, res) => {
   }
 
   const scheduleId = toCleanString(req.body?.scheduleId);
-  const travelDate = normalizeBusTravelDate(req.body?.travelDate || req.body?.date);
+  const travelDate = normalizeTravelDateString(req.body?.travelDate || req.body?.date);
   const seatIds = Array.isArray(req.body?.seatIds)
     ? [...new Set(req.body.seatIds.map((item) => toCleanString(item)).filter(Boolean))]
     : [];
@@ -4472,27 +4484,35 @@ export const createBusDriverReservation = async (req, res) => {
     throw new ApiError(404, "Bus schedule not found for the selected date");
   }
 
-  const seatLayout = await buildBusDriverSeatLayout({ busService, scheduleId, travelDate });
-  const availableSeatMap = new Map(
-    flattenBusBlueprintSeats(seatLayout.blueprint)
-      .filter((seat) => String(seat.status || "available") === "available")
-      .map((seat) => [String(seat.id || ""), seat]),
-  );
-
-  const invalidSeat = seatIds.find((seatId) => !availableSeatMap.has(seatId));
-  if (invalidSeat) {
-    throw new ApiError(409, `Seat ${invalidSeat} is not available`);
+  const trip = await ensureTripInstance({ busService, scheduleId, travelDate });
+  if (trip.status === "cancelled") {
+    throw new ApiError(409, "This trip has been cancelled by the operator");
   }
 
-  const amount = Math.round(Number(busService.seatPrice || 0) * seatIds.length * 100) / 100;
+  const availableSeatDocs = await TripSeatInventory.find({
+    tripId: trip._id,
+    seatId: { $in: seatIds },
+    status: "available",
+  });
+
+  if (availableSeatDocs.length !== seatIds.length) {
+    throw new ApiError(409, "One or more selected seats are no longer available");
+  }
+
+  const seatCellMap = new Map(availableSeatDocs.map((doc) => [doc.seatId, doc]));
+  const amount = Math.round(
+    seatIds.reduce((sum, seatId) => sum + Number(seatCellMap.get(seatId)?.price || resolveBusSeatPrice(busService, { id: seatId })), 0) * 100,
+  ) / 100;
+
   const booking = await BusBooking.create({
     userId: busDriver._id,
+    tripId: trip._id,
     busServiceId: busService._id,
     bookingCode: `BDR${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
     scheduleId,
     travelDate,
     seatIds,
-    seatLabels: seatIds.map((seatId) => availableSeatMap.get(seatId)?.label || seatId),
+    seatLabels: seatIds.map((seatId) => seatCellMap.get(seatId)?.seatLabel || seatId),
     passenger,
     amount,
     bookingSource: "bus_driver",
@@ -4511,6 +4531,8 @@ export const createBusDriverReservation = async (req, res) => {
       coachType: busService.coachType || "",
       busCategory: busService.busCategory || "",
     },
+    busSnapshot: trip.busSnapshot || {},
+    blueprintSnapshot: trip.blueprintSnapshot || {},
     payment: {
       provider: "manual",
       orderId: "",
@@ -4522,28 +4544,34 @@ export const createBusDriverReservation = async (req, res) => {
     notes,
   });
 
-  try {
-    await BusSeatHold.insertMany(
-      seatIds.map((seatId) => ({
-        busServiceId: busService._id,
-        bookingId: booking._id,
-        userId: busDriver._id,
-        scheduleId,
-        travelDate,
-        seatId,
-        holdToken: booking.bookingCode,
+  await TripSeatInventory.updateMany(
+    { tripId: trip._id, seatId: { $in: seatIds } },
+    {
+      $set: {
         status: "booked",
-        expiresAt: null,
-      })),
-      { ordered: true },
-    );
-  } catch (error) {
-    await BusBooking.deleteOne({ _id: booking._id });
-    if (error?.code === 11000) {
-      throw new ApiError(409, "One or more selected seats were just booked");
-    }
-    throw error;
-  }
+        bookingId: booking._id,
+        holdExpiresAt: null,
+        bookedBy: {
+          driverId: busDriver._id,
+          bookingSource: "bus_driver",
+        },
+      },
+    },
+  );
+
+  await BusSeatHold.create({
+    tripId: trip._id,
+    busServiceId: busService._id,
+    bookingId: booking._id,
+    driverId: busDriver._id,
+    scheduleId,
+    travelDate,
+    seatId: seatIds[0],
+    seatIds,
+    holdToken: booking.bookingCode,
+    status: "converted",
+    expiresAt: null,
+  });
 
   res.status(201).json({
     success: true,
@@ -5891,7 +5919,20 @@ export const getOwnerFleetDrivers = async (req, res) => {
     );
   }
 
-  const drivers = await Driver.find({ owner_id: owner._id, deletedAt: null })
+  const ownerCity = owner.city || owner.serviceLocation || "";
+  const query = { deletedAt: null };
+
+  if (ownerCity) {
+    query.$or = [
+      { owner_id: owner._id },
+      { city: new RegExp(`^${ownerCity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      ...(owner.service_location_id ? [{ service_location_id: owner.service_location_id }] : []),
+    ];
+  } else {
+    query.owner_id = owner._id;
+  }
+
+  const drivers = await Driver.find(query)
     .sort({ createdAt: -1 })
     .select("name phone email city salary approve status isOnline isOnRide createdAt")
     .lean();

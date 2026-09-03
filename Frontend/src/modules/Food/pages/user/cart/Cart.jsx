@@ -19,6 +19,7 @@ import { initRazorpayPayment } from "@food/utils/razorpay"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { useCompanyName } from "@food/hooks/useCompanyName"
+import { determineIsVeg } from "@food/utils/menuItems"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
@@ -179,6 +180,61 @@ export default function Cart() {
   const [isScheduled, setIsScheduled] = useState(false)
   const [scheduledDate, setScheduledDate] = useState("")
   const [scheduledTime, setScheduledTime] = useState("")
+  const [showTimeSlotModal, setShowTimeSlotModal] = useState(false)
+  const [pickerMode, setPickerMode] = useState('custom')
+  const [customHour, setCustomHour] = useState('03')
+  const [customMinute, setCustomMinute] = useState('00')
+  const [customPeriod, setCustomPeriod] = useState('PM')
+  const hourContainerRef = useRef(null)
+  const minuteContainerRef = useRef(null)
+  const activeHourRef = useRef(null)
+  const activeMinuteRef = useRef(null)
+  const activePeriodRef = useRef(null)
+
+  useEffect(() => {
+    if (showTimeSlotModal) {
+      if (scheduledTime) {
+        // Sync tumbler wheel with active scheduledTime
+        const [hStr, mStr] = scheduledTime.split(':');
+        let h = parseInt(hStr, 10);
+        if (!isNaN(h)) {
+          const p = h >= 12 ? 'PM' : 'AM';
+          const display12 = h % 12 || 12;
+          setCustomHour(String(display12).padStart(2, '0'));
+          setCustomMinute(String(mStr || '00').padStart(2, '0'));
+          setCustomPeriod(p);
+        }
+      } else {
+        // Auto-set default time to +30 minutes from now if no time is set
+        const target = new Date(Date.now() + 30 * 60000);
+        let h = target.getHours();
+        const m = target.getMinutes();
+        const p = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        setCustomHour(String(h).padStart(2, '0'));
+        setCustomMinute(String(m).padStart(2, '0'));
+        setCustomPeriod(p);
+      }
+    }
+  }, [showTimeSlotModal, scheduledTime]);
+
+  useEffect(() => {
+    if (showTimeSlotModal && pickerMode === 'custom') {
+      const hIdx = Math.max(0, Math.min(11, (parseInt(customHour, 10) || 1) - 1));
+      const mIdx = Math.max(0, Math.min(59, parseInt(customMinute, 10) || 0));
+
+      const timer = setTimeout(() => {
+        if (hourContainerRef.current) {
+          hourContainerRef.current.scrollTo({ top: hIdx * 40, behavior: 'smooth' });
+        }
+        if (minuteContainerRef.current) {
+          minuteContainerRef.current.scrollTo({ top: mIdx * 40, behavior: 'smooth' });
+        }
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [showTimeSlotModal, pickerMode]);
   const [orderProgress, setOrderProgress] = useState(0)
   const [showOrderSuccess, setShowOrderSuccess] = useState(false)
   const [placedOrderId, setPlacedOrderId] = useState(null)
@@ -247,42 +303,53 @@ export default function Cart() {
       const targetDate = new Date(scheduledDate)
       const status = getRestaurantAvailabilityStatus(restaurantData, targetDate)
 
-      let openingHour = 9
-      let closingHour = 22
+      const parseTimeTo24Hour = (timeStr, defaultHour) => {
+        if (!timeStr || typeof timeStr !== 'string') return defaultHour;
+        const str = timeStr.trim().toUpperCase();
+        const isPM = str.includes('PM');
+        const isAM = str.includes('AM');
+        const clean = str.replace(/[^\d:]/g, '');
+        const parts = clean.split(':');
+        let hour = parseInt(parts[0], 10);
+        if (isNaN(hour)) return defaultHour;
+        if (isPM && hour < 12) hour += 12;
+        if (isAM && hour === 12) hour = 0;
+        return hour;
+      };
 
-      if (status.openingTime) {
-        const [h] = status.openingTime.split(':')
-        openingHour = parseInt(h, 10)
-      }
+      let openingHour = parseTimeTo24Hour(status.openingTime, 8);
+      let closingHour = parseTimeTo24Hour(status.closingTime, 23);
 
-      if (status.closingTime) {
-        const [h] = status.closingTime.split(':')
-        closingHour = parseInt(h, 10)
-      }
-
-      if (closingHour < openingHour) {
-        closingHour += 24 // Handle overnight slots
+      if (closingHour <= openingHour) {
+        closingHour += 24 // Handle overnight or late night slots
       }
 
       const slots = []
       const now = new Date()
-      // Fix timezone date comparison by comparing date strings YYYY-MM-DD
       const nowStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0]
       const targetStr = scheduledDate
       const isToday = targetStr === nowStr
       const currentHour = now.getHours()
+      const currentMin = now.getMinutes()
+      const currentTotalMin = currentHour * 60 + currentMin
 
       for (let h = openingHour; h <= closingHour; h++) {
         const actualHour = h % 24
-        // Skip past hours if today. Add 1 hour buffer so they can't order right at the boundary
-        if (isToday && h <= currentHour) continue
 
-        const period = actualHour >= 12 ? 'PM' : 'AM'
-        const display12 = actualHour % 12 || 12
-        const timeString = `${String(actualHour).padStart(2, '0')}:00`
-        const displayString = `${display12}:00 ${period}`
+        for (const m of [0, 30]) {
+          const totalSlotMin = h * 60 + m
 
-        slots.push({ value: timeString, label: displayString })
+          // Skip past time slots if today (add 30 min buffer from current time)
+          if (isToday && totalSlotMin <= currentTotalMin + 30) continue
+
+          const period = actualHour >= 12 ? 'PM' : 'AM'
+          const display12 = actualHour % 12 || 12
+          const minuteStr = m === 0 ? '00' : '30'
+          const timeString = `${String(actualHour).padStart(2, '0')}:${minuteStr}`
+          const displayString = `${display12}:${minuteStr} ${period}`
+
+          slots.push({ value: timeString, label: displayString })
+        }
       }
 
       return slots
@@ -291,14 +358,137 @@ export default function Cart() {
     }
   }, [isScheduled, scheduledDate, restaurantData])
 
-  // Reset scheduledTime if it's no longer valid in the new slots
+  const getDeliveryTimeValidation = (dateStr, hourStr, minStr, periodStr, restaurantObj) => {
+    const now = new Date();
+    const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    const targetDateStr = dateStr || todayStr;
+
+    let h = parseInt(hourStr, 10);
+    if (isNaN(h)) h = 12;
+    if (periodStr === 'PM' && h < 12) h += 12;
+    if (periodStr === 'AM' && h === 12) h = 0;
+    const m = parseInt(minStr, 10) || 0;
+
+    // 1. Absolute Past Timestamp Check: Is selected date & time <= current time + 15 minutes?
+    const [y, mon, d] = targetDateStr.split('-').map(Number);
+    const selectedDateTime = (y && mon && d) ? new Date(y, mon - 1, d, h, m, 0, 0) : new Date();
+    selectedDateTime.setHours(h, m, 0, 0);
+
+    const minAllowedTime = new Date(now.getTime() + 15 * 60000);
+    if (selectedDateTime <= minAllowedTime) {
+      const isToday = targetDateStr === todayStr;
+      return {
+        isValid: false,
+        isClosed: true,
+        reason: 'past',
+        message: isToday
+          ? 'Selected time is in the past! Choose a time at least 15 mins in future.'
+          : 'Selected date and time is in the past! Pick a future time slot.'
+      };
+    }
+
+    // 2. Restaurant Opening Window Check
+    const openingTimeStr = restaurantObj?.openingTime || restaurantObj?.deliveryTimings?.openingTime || '09:00';
+    const closingTimeStr = restaurantObj?.closingTime || restaurantObj?.deliveryTimings?.closingTime || '23:00';
+
+    if (restaurantObj) {
+      try {
+        const status = getRestaurantAvailabilityStatus(restaurantObj, selectedDateTime, { ignoreOperationalStatus: true });
+
+        const formatLabel = (tStr) => {
+          if (!tStr) return '';
+          const parts = tStr.trim().split(':');
+          if (parts.length < 2) return tStr;
+          let hr = parseInt(parts[0], 10);
+          if (isNaN(hr)) return tStr;
+          const p = hr >= 12 ? 'PM' : 'AM';
+          const h12 = hr % 12 || 12;
+          const min = parts[1].replace(/[^\d]/g, '').slice(0, 2) || '00';
+          return `${h12}:${min} ${p}`;
+        };
+
+        const openTimeLabel = formatLabel(status.openingTime || openingTimeStr) || '09:00 AM';
+        const closeTimeLabel = formatLabel(status.closingTime || closingTimeStr) || '11:00 PM';
+        const hoursText = `${openTimeLabel} - ${closeTimeLabel}`;
+
+        if (status.hasWindow && !status.isWithinTimings) {
+          return {
+            isValid: false,
+            isClosed: true,
+            reason: 'closed',
+            openingTime: openTimeLabel,
+            closingTime: closeTimeLabel,
+            hoursText,
+            message: `Restaurant is CLOSED at this time (Open: ${hoursText})`
+          };
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    // Explicit check against 09:00 AM - 11:00 PM standard operating bounds
+    const selectedMinFromMidnight = h * 60 + m;
+    const parseMin = (tStr, defaultMin) => {
+      if (!tStr) return defaultMin;
+      const parts = tStr.split(':');
+      let hr = parseInt(parts[0], 10);
+      let mn = parseInt(parts[1], 10) || 0;
+      if (tStr.toUpperCase().includes('PM') && hr < 12) hr += 12;
+      if (tStr.toUpperCase().includes('AM') && hr === 12) hr = 0;
+      return isNaN(hr) ? defaultMin : hr * 60 + mn;
+    };
+    const openMin = parseMin(openingTimeStr, 9 * 60);
+    const closeMin = parseMin(closingTimeStr, 23 * 60);
+
+    if (openMin < closeMin) {
+      if (selectedMinFromMidnight < openMin || selectedMinFromMidnight > closeMin) {
+        const openH = Math.floor(openMin / 60);
+        const openM = String(openMin % 60).padStart(2, '0');
+        const openP = openH >= 12 ? 'PM' : 'AM';
+        const openDisplay = `${openH % 12 || 12}:${openM} ${openP}`;
+
+        const closeH = Math.floor(closeMin / 60);
+        const closeM = String(closeMin % 60).padStart(2, '0');
+        const closeP = closeH >= 12 ? 'PM' : 'AM';
+        const closeDisplay = `${closeH % 12 || 12}:${closeM} ${closeP}`;
+
+        const hoursText = `${openDisplay} - ${closeDisplay}`;
+        return {
+          isValid: false,
+          isClosed: true,
+          reason: 'closed',
+          hoursText,
+          message: `Restaurant is CLOSED at this time (Open: ${hoursText})`
+        };
+      }
+    }
+
+    return { isValid: true, isClosed: false, message: '' };
+  };
+
+  // Availability check for current custom time selection in modal
+  const customTimeAvailability = useMemo(() => {
+    return getDeliveryTimeValidation(scheduledDate, customHour, customMinute, customPeriod, restaurantData);
+  }, [restaurantData, scheduledDate, customHour, customMinute, customPeriod]);
+
+  // Availability check for currently active scheduled delivery time (outside modal)
+  const scheduledTimeAvailability = useMemo(() => {
+    if (!isScheduled || !scheduledTime) return { isValid: true, isClosed: false, message: '' };
+    const [hStr, mStr] = scheduledTime.split(':');
+    let h = parseInt(hStr, 10) || 0;
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return getDeliveryTimeValidation(scheduledDate, String(h12), mStr || '00', period, restaurantData);
+  }, [isScheduled, scheduledTime, scheduledDate, restaurantData])
+
+  // Set default scheduledTime if empty when scheduling is toggled ON
   useEffect(() => {
-    if (isScheduled && availableTimeSlots.length > 0) {
-      const isValid = availableTimeSlots.some(slot => slot.value === scheduledTime)
-      if (!isValid) {
+    if (isScheduled) {
+      if (!scheduledTime && availableTimeSlots.length > 0) {
         setScheduledTime(availableTimeSlots[0].value)
       }
-    } else if (!isScheduled) {
+    } else {
       setScheduledDate("")
       setScheduledTime("")
     }
@@ -1561,6 +1751,11 @@ export default function Cart() {
         toast.error("Scheduled time must be in the future")
         return
       }
+      if (!scheduledTimeAvailability.isValid) {
+        toast.error(scheduledTimeAvailability.message || "Invalid delivery time selected.");
+        setShowTimeSlotModal(true);
+        return;
+      }
     }
 
     if (cart.length === 0) {
@@ -2157,46 +2352,49 @@ export default function Cart() {
               {/* Cart Items */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-4 md:py-5 rounded-2xl md:rounded-3xl shadow-sm border border-slate-100 dark:border-gray-800">
                 <div className="space-y-3 md:space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex items-start gap-3 md:gap-4">
-                      {/* Veg/Non-veg indicator */}
-                      <div className={`w-4 h-4 md:w-5 md:h-5 border-2 ${item.isVeg !== false ? 'border-green-600' : 'border-red-600'} flex items-center justify-center mt-1 flex-shrink-0`}>
-                        <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${item.isVeg !== false ? 'bg-green-600' : 'bg-red-600'}`} />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200 leading-tight">{item.name}</p>
-                        {item.variantName ? (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.variantName}</p>
-                        ) : null}
-                      </div>
-
-                      <div className="flex items-center gap-3 md:gap-4">
-                        {/* Quantity controls */}
-                        <div className="flex items-center border border-[#EB590E] dark:border-[#EB590E]/50 rounded">
-                          <button
-                            className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          >
-                            <Minus className="h-3 w-3 md:h-4 md:w-4" />
-                          </button>
-                          <span className="px-2 md:px-3 text-sm md:text-base font-semibold text-[#EB590E] dark:text-[#EB590E] min-w-[20px] md:min-w-[24px] text-center">
-                            {item.quantity}
-                          </span>
-                          <button
-                            className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          >
-                            <Plus className="h-3 w-3 md:h-4 md:w-4" />
-                          </button>
+                  {cart.map((item) => {
+                    const isVeg = determineIsVeg(item);
+                    return (
+                      <div key={item.id} className="flex items-start gap-3 md:gap-4">
+                        {/* Veg/Non-veg indicator */}
+                        <div className={`w-4 h-4 md:w-5 md:h-5 border-2 ${isVeg ? 'border-green-600' : 'border-red-600'} flex items-center justify-center mt-1 flex-shrink-0`}>
+                          <div className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full ${isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
                         </div>
 
-                        <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200 min-w-[50px] md:min-w-[70px] text-right">
-                          {RUPEE_SYMBOL}{((item.price || 0) * (item.quantity || 1)).toFixed(0)}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200 leading-tight">{item.name}</p>
+                          {item.variantName ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.variantName}</p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex items-center gap-3 md:gap-4">
+                          {/* Quantity controls */}
+                          <div className="flex items-center border border-[#EB590E] dark:border-[#EB590E]/50 rounded">
+                            <button
+                              className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            >
+                              <Minus className="h-3 w-3 md:h-4 md:w-4" />
+                            </button>
+                            <span className="px-2 md:px-3 text-sm md:text-base font-semibold text-[#EB590E] dark:text-[#EB590E] min-w-[20px] md:min-w-[24px] text-center">
+                              {item.quantity}
+                            </span>
+                            <button
+                              className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            >
+                              <Plus className="h-3 w-3 md:h-4 md:w-4" />
+                            </button>
+                          </div>
+
+                          <p className="text-sm md:text-base font-medium text-gray-800 dark:text-gray-200 min-w-[50px] md:min-w-[70px] text-right">
+                            {RUPEE_SYMBOL}{((item.price || 0) * (item.quantity || 1)).toFixed(0)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {isRestaurantOffline && (
@@ -2459,7 +2657,20 @@ export default function Cart() {
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1">
                       Want this later?
-                      <button onClick={() => setIsScheduled(!isScheduled)} className="border-b border-dashed border-gray-500 font-medium outline-none">
+                      <button
+                        onClick={() => {
+                          if (!isScheduled) {
+                            const today = new Date();
+                            const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                            setScheduledDate(todayStr);
+                          } else {
+                            setScheduledDate("");
+                            setScheduledTime("");
+                          }
+                          setIsScheduled(!isScheduled);
+                        }}
+                        className="border-b border-dashed border-gray-500 font-medium outline-none text-[#EB590E]"
+                      >
                         Schedule it
                       </button>
                     </p>
@@ -2467,38 +2678,53 @@ export default function Cart() {
                 </div>
 
                 {isScheduled && (
-                  <div className="mt-5 flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Date (Up to Tomorrow)</label>
-                      <input
-                        type="date"
-                        min={new Date().toLocaleDateString('en-CA')}
-                        max={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
-                        value={scheduledDate}
-                        onChange={(e) => setScheduledDate(e.target.value)}
-                        className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#EB590E]"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Time</label>
-                      {availableTimeSlots.length > 0 ? (
-                        <div className="relative">
-                          <select
-                            value={scheduledTime}
-                            onChange={(e) => setScheduledTime(e.target.value)}
-                            className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#EB590E] appearance-none pr-8"
-                          >
-                            {availableTimeSlots.map(slot => (
-                              <option key={slot.value} value={slot.value}>{slot.label}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
-                        </div>
-                      ) : (
-                        <div className="w-full text-sm p-2 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-md text-center border border-gray-200 dark:border-gray-700">
-                          {scheduledDate ? "No slots available" : "Select date first"}
-                        </div>
-                      )}
+                  <div className="mt-5 space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Select Date</label>
+                        <input
+                          type="date"
+                          min={new Date().toLocaleDateString('en-CA')}
+                          max={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className="w-full text-sm font-semibold p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-slate-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#EB590E]"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Scheduled Delivery Time</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowTimeSlotModal(true)}
+                          className={`w-full flex items-center justify-between text-sm font-bold p-3 rounded-xl transition-all shadow-sm ${
+                            !scheduledTimeAvailability.isValid
+                              ? 'border-2 border-red-500 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
+                              : 'border border-[#EB590E] bg-orange-50/50 dark:bg-orange-950/20 text-[#EB590E] hover:bg-orange-100/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className={`w-4 h-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[#EB590E]'}`} />
+                            <span>
+                              {(() => {
+                                if (!scheduledTime) return "Choose delivery time";
+                                const [hStr, mStr] = scheduledTime.split(':');
+                                let h = parseInt(hStr, 10);
+                                if (isNaN(h)) return scheduledTime;
+                                const period = h >= 12 ? 'PM' : 'AM';
+                                const display12 = h % 12 || 12;
+                                return `${display12}:${mStr || '00'} ${period}`;
+                              })()}
+                            </span>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[#EB590E]'}`} />
+                        </button>
+                        {!scheduledTimeAvailability.isValid && (
+                          <div className="mt-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs font-bold text-red-700 dark:text-red-300 flex items-center gap-1.5 shadow-xs">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                            <span>{scheduledTimeAvailability.message || 'Invalid delivery time selected.'} Tap to change.</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3621,6 +3847,217 @@ export default function Cart() {
                       <span>Total</span>
                       <span>{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
                     </div>
+                  </div>                  <div className="border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowGstModal(false)}
+                      className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Delivery Fee Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showDeliveryFeeModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowDeliveryFeeModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-6 space-y-4">
+                    <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
+                      <div>
+                        <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
+                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                          Goes to them for their time and effort
+                        </p>
+                      </div>
+                      <span className="text-base font-black text-gray-900 dark:text-white shrink-0 ml-3">
+                        {deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                    </p>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-gray-800 p-3">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
+                      className="w-full py-3 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] bg-emerald-50 dark:bg-emerald-950/30 rounded-xl hover:bg-emerald-100 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Coupon Savings Popup */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showSavingsPopup && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/20 z-[10030]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowSavingsPopup(null)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10031] w-[75vw] max-w-[280px]"
+                  initial={{ opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ type: "spring", bounce: 0.35, duration: 0.5 }}
+                >
+                  <div className="bg-white dark:bg-[#1e1e1e] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] p-6 text-center">
+                    <div className="w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Tag className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Coupon Applied</p>
+                    <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">'{showSavingsPopup.code}'</p>
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                      <p className="text-2xl font-black text-green-600 dark:text-green-400">
+                        {RUPEE_SYMBOL}{showSavingsPopup.amount} OFF
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Savings applied to your order</p>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Distance Warning Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showDistanceWarning && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <div className="px-5 py-6 text-center space-y-4">
+                    <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <MapPin className="h-8 w-8 text-orange-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Far Away Restaurant</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                      This restaurant is <strong>{pricing?.deliveryFeeBreakdown?.distanceKm} km</strong> away from your location. Delivery might take longer than usual.
+                    </p>
+                  </div>
+
+                  <div className="flex border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowDistanceWarning(false)}
+                      className="flex-1 py-3.5 text-center text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-r border-gray-100 dark:border-gray-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDistanceWarning(false);
+                        setDistanceWarningResolved(true);
+                        setTimeout(() => handlePlaceOrder(), 0);
+                      }}
+                      className="flex-1 py-3.5 text-center text-sm font-bold text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                    >
+                      Continue Anyway
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* GST Breakdown Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showGstModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowGstModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-5 py-5 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed border-b border-gray-100 dark:border-gray-800 pb-4">
+                      {companyName || "Eqosy"} has no role to play in taxes levied by the govt.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on item total</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstBreakdown.item.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300 pr-4">GST on platform fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">{RUPEE_SYMBOL}{gstBreakdown.platform.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on delivery fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(gstBreakdown.delivery || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white border-t border-gray-100 dark:border-gray-800 pt-3">
+                      <span>Total</span>
+                      <span>{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
+                    </div>
                   </div>
 
                   <div className="border-t border-gray-100 dark:border-gray-800">
@@ -3827,7 +4264,509 @@ export default function Cart() {
           </AnimatePresence>,
           document.body
         )}
+
+      {/* GST Breakdown Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showGstModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowGstModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-5 py-5 space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed border-b border-gray-100 dark:border-gray-800 pb-4">
+                      {companyName || "Eqosy"} has no role to play in taxes levied by the govt.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on item total</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstBreakdown.item.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300 pr-4">GST on platform fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">{RUPEE_SYMBOL}{gstBreakdown.platform.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">GST on delivery fee</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{(gstBreakdown.delivery || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white border-t border-gray-100 dark:border-gray-800 pt-3">
+                      <span>Total</span>
+                      <span>{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-gray-800">
+                    <button
+                      onClick={() => setShowGstModal(false)}
+                      className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Delivery Fee Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showDeliveryFeeModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowDeliveryFeeModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-800"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-6 space-y-4">
+                    <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
+                      <div>
+                        <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
+                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
+                          Goes to them for their time and effort
+                        </p>
+                      </div>
+                      <span className="text-base font-black text-gray-900 dark:text-white shrink-0 ml-3">
+                        {deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                    </p>
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-gray-800 p-3">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
+                      className="w-full py-3 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] bg-emerald-50 dark:bg-emerald-950/30 rounded-xl hover:bg-emerald-100 transition-colors"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Platform Fee Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showPlatformFeeModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowPlatformFeeModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-sm bg-white dark:bg-[#18181b] rounded-3xl shadow-2xl overflow-hidden p-6"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="relative flex items-center justify-center pb-4 border-b border-gray-100 dark:border-zinc-800">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Platform Fee
+                    </h3>
+                    <button
+                      onClick={() => setShowPlatformFeeModal(false)}
+                      className="absolute right-0 top-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="py-6 text-center">
+                    <p className="text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                      This small fee helps us pay the bills so that we can keep {companyName || "Eqosy"} running
+                    </p>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
+                      className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
+                    >
+                      OKAY
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* Ultra-Modern iOS Tumbler & Slot Time Selector Modal */}
+      {showTimeSlotModal && (
+        <div
+          className="fixed inset-0 bg-black/60 z-[10050] flex items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setShowTimeSlotModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#18181b] rounded-3xl max-w-sm w-full shadow-2xl border border-gray-100 dark:border-zinc-800/80 overflow-hidden text-left animate-slideUpFull"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 dark:border-zinc-800/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-[#EB590E]">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Schedule Delivery</h3>
+                  <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">Pick your preferred time</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTimeSlotModal(false)}
+                className="w-7 h-7 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-center transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Live Time Display Banner */}
+            <div className={`mx-4 mt-3 p-3.5 rounded-2xl text-white shadow-md flex items-center justify-between transition-all ${
+              pickerMode === 'custom' && !customTimeAvailability.isValid
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600'
+                : 'bg-gradient-to-r from-[#EB590E] via-[#f76419] to-[#EB590E]'
+            }`}>
+              <div>
+                <span className="text-[10px] font-extrabold text-white/80 uppercase tracking-wider block">DELIVERY TIME</span>
+                <span className="text-2xl font-black text-white tracking-tight drop-shadow-xs">
+                  {pickerMode === 'custom'
+                    ? `${customHour.padStart(2, '0')}:${customMinute.padStart(2, '0')} ${customPeriod}`
+                    : (availableTimeSlots.find(s => s.value === scheduledTime)?.label || scheduledTime || "Select slot")}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-white bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/30 shadow-xs">
+                {(() => {
+                  const now = new Date();
+                  const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                  const targetStr = scheduledDate || todayStr;
+                  if (targetStr === todayStr) return "Today";
+                  const tom = new Date(now.getTime() + 86400000);
+                  const tomStr = new Date(tom.getTime() - (tom.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                  if (targetStr === tomStr) return "Tomorrow";
+                  const parts = targetStr.split('-');
+                  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                  return targetStr;
+                })()}
+              </span>
+            </div>
+
+            {/* Validation Warning Banner */}
+            {pickerMode === 'custom' && !customTimeAvailability.isValid && (
+              <div className="mx-4 mt-2.5 p-3 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-red-700 dark:text-red-300 shadow-sm animate-pulse">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                <div className="text-xs font-semibold leading-snug">
+                  <span className="font-extrabold block text-red-800 dark:text-red-200 text-xs">
+                    Invalid Delivery Time ({customHour}:{customMinute} {customPeriod})
+                  </span>
+                  <span className="text-[11px] font-medium text-red-600 dark:text-red-300">
+                    {customTimeAvailability.message}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Presets Carousel */}
+            <div className="px-4 mt-3">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1.5">QUICK PRESETS</span>
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                {[
+                  { label: '⚡ In 30m', mins: 30 },
+                  { label: '⏱️ In 45m', mins: 45 },
+                  { label: '🍕 In 1 hour', mins: 60 },
+                  { label: '🌙 In 2 hours', mins: 120 },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      const target = new Date(Date.now() + preset.mins * 60000);
+                      let h = target.getHours();
+                      const m = target.getMinutes();
+                      const p = h >= 12 ? 'PM' : 'AM';
+                      h = h % 12;
+                      if (h === 0) h = 12;
+                      setCustomHour(String(h).padStart(2, '0'));
+                      setCustomMinute(String(m).padStart(2, '0'));
+                      setCustomPeriod(p);
+                      setPickerMode('custom');
+                    }}
+                    className="whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold bg-orange-50 dark:bg-orange-950/30 text-[#EB590E] dark:text-orange-400 hover:bg-[#EB590E] hover:text-white dark:hover:text-white border border-orange-200/80 dark:border-orange-900/50 transition-all active:scale-95 shrink-0 shadow-2xs"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="p-1 bg-gray-100 dark:bg-zinc-900 mx-4 mt-3 rounded-xl flex gap-1 border border-gray-200/50 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setPickerMode('custom')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  pickerMode === 'custom'
+                    ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                }`}
+              >
+                Exact Tumbler
+              </button>
+              <button
+                type="button"
+                onClick={() => setPickerMode('slots')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  pickerMode === 'slots'
+                    ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                }`}
+              >
+                30-Min Slots
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-4">
+              {pickerMode === 'custom' ? (
+                <div>
+                  {/* Column Labels */}
+                  <div className="grid grid-cols-3 text-center mb-2 px-2">
+                    <span className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-widest">HOUR</span>
+                    <span className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-widest">MINUTE</span>
+                    <span className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-widest">PERIOD</span>
+                  </div>
+
+                  {/* 3-Column Tumbler Wheels Box */}
+                  <div className="relative h-36 bg-gray-100/90 dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-700/80 overflow-hidden shadow-inner">
+                    {/* Active Selection Window Band */}
+                    <div className="absolute top-1/2 -translate-y-1/2 left-2 right-2 h-10 pointer-events-none rounded-xl border-2 border-[#EB590E] bg-white dark:bg-zinc-800 shadow-sm z-0" />
+
+                    {/* Wheels */}
+                    <div className="flex items-center justify-center h-36 relative z-10">
+                      {/* Hour Tumbler Column */}
+                      <div className="flex-1 text-center">
+                        <div
+                          ref={hourContainerRef}
+                          onScroll={(e) => {
+                            const scrollTop = e.target.scrollTop;
+                            const idx = Math.round(scrollTop / 40);
+                            const hourVal = String(Math.max(1, Math.min(12, idx + 1))).padStart(2, '0');
+                            if (hourVal !== customHour) {
+                              setCustomHour(hourVal);
+                            }
+                          }}
+                          className="h-36 overflow-y-auto snap-y snap-mandatory scrollbar-none py-[52px]"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((h) => {
+                            const isSelected = customHour === h;
+                            return (
+                              <div
+                                key={h}
+                                onClick={() => {
+                                  setCustomHour(h);
+                                  const hIdx = (parseInt(h, 10) || 1) - 1;
+                                  hourContainerRef.current?.scrollTo({ top: hIdx * 40, behavior: 'smooth' });
+                                }}
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${
+                                  isSelected
+                                    ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
+                                    : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                              >
+                                {h}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <span className="text-2xl font-black text-[#EB590E] select-none px-1">:</span>
+
+                      {/* Minute Tumbler Column */}
+                      <div className="flex-1 text-center">
+                        <div
+                          ref={minuteContainerRef}
+                          onScroll={(e) => {
+                            const scrollTop = e.target.scrollTop;
+                            const idx = Math.round(scrollTop / 40);
+                            const minuteVal = String(Math.max(0, Math.min(59, idx))).padStart(2, '0');
+                            if (minuteVal !== customMinute) {
+                              setCustomMinute(minuteVal);
+                            }
+                          }}
+                          className="h-36 overflow-y-auto snap-y snap-mandatory scrollbar-none py-[52px]"
+                        >
+                          {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map((m) => {
+                            const isSelected = customMinute === m;
+                            return (
+                              <div
+                                key={m}
+                                onClick={() => {
+                                  setCustomMinute(m);
+                                  const mIdx = parseInt(m, 10) || 0;
+                                  minuteContainerRef.current?.scrollTo({ top: mIdx * 40, behavior: 'smooth' });
+                                }}
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${
+                                  isSelected
+                                    ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
+                                    : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                              >
+                                {m}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* AM/PM Toggle Pill Column */}
+                      <div className="flex-1 flex justify-center items-center">
+                        <div className="flex bg-gray-200 dark:bg-zinc-800 p-1 rounded-xl border border-gray-300 dark:border-zinc-700 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setCustomPeriod('AM')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                              customPeriod === 'AM'
+                                ? 'bg-[#EB590E] text-white shadow-md scale-105'
+                                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                          >
+                            AM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCustomPeriod('PM')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                              customPeriod === 'PM'
+                                ? 'bg-[#EB590E] text-white shadow-md scale-105'
+                                : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                            }`}
+                          >
+                            PM
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-1 scrollbar-none">
+                  {availableTimeSlots.length === 0 ? (
+                    <div className="py-8 text-center text-xs font-semibold text-gray-400">
+                      No slots available for this date.
+                    </div>
+                  ) : (
+                    availableTimeSlots.map((slot) => {
+                      const isSelected = scheduledTime === slot.value;
+                      return (
+                        <button
+                          key={slot.value}
+                          type="button"
+                          onClick={() => {
+                            setScheduledTime(slot.value);
+                            setShowTimeSlotModal(false);
+                          }}
+                          className={`w-full flex items-center justify-between py-2.5 px-3.5 text-left rounded-2xl text-xs transition-all border ${
+                            isSelected
+                              ? 'border-[#EB590E] bg-orange-50 dark:bg-orange-950/40 text-gray-900 dark:text-white font-bold shadow-xs'
+                              : 'border-gray-100 dark:border-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-800/50 text-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          <span className="font-semibold">{slot.label}</span>
+                          <div
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              isSelected ? 'border-[#EB590E] bg-[#EB590E]' : 'border-gray-300 dark:border-gray-600'
+                            }`}
+                          >
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 dark:border-zinc-800/60 bg-gray-50/50 dark:bg-zinc-900/50">
+              <button
+                type="button"
+                onClick={() => {
+                  if (pickerMode === 'custom') {
+                    if (!customTimeAvailability.isValid) {
+                      toast.error(customTimeAvailability.message);
+                      return;
+                    }
+                    let h = parseInt(customHour, 10);
+                    if (customPeriod === 'PM' && h < 12) h += 12;
+                    if (customPeriod === 'AM' && h === 12) h = 0;
+                    const formattedTime = `${String(h).padStart(2, '0')}:${customMinute.padStart(2, '0')}`;
+
+                    setScheduledTime(formattedTime);
+                  }
+                  setShowTimeSlotModal(false);
+                }}
+                className={`w-full py-3 font-extrabold rounded-2xl text-xs tracking-wider uppercase shadow-md transition-all ${
+                  pickerMode === 'custom' && !customTimeAvailability.isValid
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700'
+                    : 'bg-gradient-to-r from-[#EB590E] to-[#ff7324] hover:from-[#d94f0c] hover:to-[#eb590e] text-white active:scale-[0.98]'
+                }`}
+              >
+                {pickerMode === 'custom' && !customTimeAvailability.isValid ? 'Invalid Delivery Time' : 'Set Delivery Time'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

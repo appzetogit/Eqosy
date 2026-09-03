@@ -279,12 +279,15 @@ api.interceptors.response.use(
         const tokenRole = normalizeAuthRole(getTokenPayload(token)?.role || '') || 'user';
 
         const hasAuthToken = Boolean(token && token.length > 10);
-        const isExplicitTokenExpired = isAuthTokenFailure(serverMessage) ||
+        const isPendingApprovalError = error.response.status === 403 && serverMessage.toLowerCase().includes('pending approval');
+        const isExplicitTokenExpired = !isPendingApprovalError && (
+          isAuthTokenFailure(serverMessage) ||
           error.response.status === 401 ||
           serverMessage === 'Authenticated account no longer exists' ||
-          (tokenRole === 'user' && serverMessage === 'User account is not active');
+          (tokenRole === 'user' && serverMessage === 'User account is not active')
+        );
 
-        const shouldClearAuth = hasAuthToken || isExplicitTokenExpired;
+        const shouldClearAuth = !isPendingApprovalError && (hasAuthToken && isExplicitTokenExpired);
         if (shouldClearAuth) {
           clearStaleAuthState(tokenRole, token);
           window.dispatchEvent(new CustomEvent('app:auth-stale', {

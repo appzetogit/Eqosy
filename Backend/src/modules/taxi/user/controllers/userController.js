@@ -21,6 +21,15 @@ import {
 } from '../services/userOtpService.js';
 import { BusSeatHold } from '../models/BusSeatHold.js';
 import { BusBooking } from '../models/BusBooking.js';
+import { TripInstance } from '../models/TripInstance.js';
+import { TripSeatInventory } from '../models/TripSeatInventory.js';
+import { RazorpayWebhookEvent } from '../models/RazorpayWebhookEvent.js';
+import {
+  ensureTripInstance,
+  normalizeTravelDateString,
+  getTravelDayLabel,
+  parseTripDateTime,
+} from '../../services/tripGeneratorService.js';
 import { RentalBookingRequest } from '../../admin/models/RentalBookingRequest.js';
 import { RentalQuoteRequest } from '../../admin/models/RentalQuoteRequest.js';
 import { RentalVehicleType } from '../../admin/models/RentalVehicleType.js';
@@ -2298,13 +2307,180 @@ export const verifyRentalAdvancePayment = async (req, res) => {
   });
 };
 
+export const processBusPaymentConfirmation = async ({ bookingId, paymentId = '', signature = '', eventId = '' }) => {
+  const booking = await BusBooking.findById(bookingId);
+  if (!booking) {
+    throw new ApiError(404, 'Bus booking not found');
+  }
+
+  if (booking.status === 'confirmed') {
+    return booking;
+  }
+
+  const busService = booking.busServiceId
+    ? await BusService.findById(booking.busServiceId).lean()
+    : null;
+
+  if (booking.status !== 'pending') {
+    return booking;
+  }
+
+  const now = new Date();
+  const trip = booking.tripId ? await TripInstance.findById(booking.tripId) : null;
+  const seatInventories = booking.tripId
+    ? await TripSeatInventory.find({ tripId: booking.tripId, seatId: { $in: booking.seatIds } })
+    : [];
+
+  const heldOrBookedByUs = seatInventories.filter(
+    (inv) =>
+      inv.status === 'held' && String(inv.bookingId || '') === String(booking._id),
+  );
+
+  const holdValid = booking.expiresAt && booking.expiresAt > now && heldOrBookedByUs.length === booking.seatIds.length;
+
+  if (!holdValid) {
+    booking.status = 'failed';
+    booking.failureReason = 'seat_conflict_after_payment';
+    booking.failureMetadata = {
+      event: 'payment_received_after_expiry_or_conflict',
+      eventId,
+      expiredAt: booking.expiresAt,
+      receivedAt: now,
+    };
+    booking.payment.status = 'seat_conflict';
+    if (paymentId) booking.payment.paymentId = paymentId;
+    if (signature) booking.payment.signature = signature;
+    await booking.save();
+
+    if (booking.tripId) {
+      await TripSeatInventory.updateMany(
+        { tripId: booking.tripId, bookingId: booking._id, status: 'held' },
+        { $set: { status: 'available', bookingId: null, holdId: null, holdExpiresAt: null, bookedBy: {} } },
+      );
+    }
+    await BusSeatHold.updateMany({ bookingId: booking._id, status: 'held' }, { $set: { status: 'expired' } });
+
+    if (paymentId && booking.amount > 0) {
+      try {
+        const { keyId, keySecret } = await resolveRazorpayCredentials();
+        const credentials = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+        const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}/refund`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: Math.round(booking.amount * 100),
+            notes: {
+              bookingId: String(booking._id),
+              bookingCode: booking.bookingCode,
+              reason: 'Automatic refund: Seat hold expired before payment confirmation',
+            },
+          }),
+        });
+
+        const refundPayload = await refundResponse.json().catch(() => null);
+        if (refundResponse.ok) {
+          booking.cancellation.refundStatus = 'completed';
+          booking.cancellation.refundId = refundPayload?.id || '';
+          booking.cancellation.refundAmount = booking.amount;
+          booking.cancellation.refundProcessedAt = new Date();
+          booking.financialSnapshot.refundedAmount = booking.amount;
+          await booking.save();
+        }
+      } catch (refundErr) {
+        console.error('Failed to trigger automatic refund for expired hold:', refundErr);
+      }
+    }
+
+    throw new ApiError(409, 'Seat hold expired before payment verification. Automatic refund has been initiated.');
+  }
+
+  booking.status = 'confirmed';
+  booking.payment.status = 'paid';
+  if (paymentId) booking.payment.paymentId = paymentId;
+  if (signature) booking.payment.signature = signature;
+  booking.payment.paidAt = now;
+  await booking.save();
+
+  if (booking.tripId) {
+    await TripSeatInventory.updateMany(
+      { tripId: booking.tripId, seatId: { $in: booking.seatIds } },
+      {
+        $set: {
+          status: 'booked',
+          bookingId: booking._id,
+          holdExpiresAt: null,
+          bookedBy: {
+            userId: booking.userId,
+            bookingSource: booking.bookingSource || 'user',
+          },
+        },
+      },
+    );
+  }
+
+  await BusSeatHold.updateMany({ bookingId: booking._id, status: 'held' }, { $set: { status: 'converted' } });
+
+  return booking;
+};
+
+export const handleRazorpayBusWebhook = async (req, res) => {
+  const signature = req.headers['x-razorpay-signature'];
+  const eventId = String(req.body?.event_id || req.headers['x-razorpay-event-id'] || `evt_${Date.now()}`);
+  const eventType = String(req.body?.event || '');
+
+  if (!signature || !eventType) {
+    return res.status(400).json({ success: false, message: 'Missing webhook headers or event' });
+  }
+
+  const existingEvent = await RazorpayWebhookEvent.findOne({ eventId });
+  if (existingEvent) {
+    return res.status(200).json({ success: true, message: 'Event already processed', eventId });
+  }
+
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || (await resolveRazorpayCredentials()).keySecret;
+  const bodyString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  const expectedSignature = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(bodyString)
+    .digest('hex');
+
+  if (expectedSignature !== signature) {
+    await RazorpayWebhookEvent.create({ eventId, eventType, status: 'failed', error: 'Signature mismatch' });
+    return res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+  }
+
+  await RazorpayWebhookEvent.create({ eventId, eventType, status: 'processed' });
+
+  if (eventType === 'payment.captured' || eventType === 'order.paid') {
+    const paymentEntity = req.body?.payload?.payment?.entity || {};
+    const orderId = paymentEntity.order_id || req.body?.payload?.order?.entity?.id;
+    const paymentId = paymentEntity.id;
+
+    if (orderId) {
+      const booking = await BusBooking.findOne({ 'payment.orderId': orderId });
+      if (booking && booking.status === 'pending') {
+        try {
+          await processBusPaymentConfirmation({ bookingId: booking._id, paymentId, eventId });
+        } catch (err) {
+          console.error(`Webhook processing failed for order ${orderId}:`, err);
+        }
+      }
+    }
+  }
+
+  res.status(200).json({ success: true, message: 'Webhook event processed', eventId });
+};
+
 export const searchBuses = async (req, res) => {
   await ensureBusServiceEnabled();
   await cleanupExpiredBusSeatHolds();
 
   const fromCity = toCleanString(req.query?.fromCity);
   const toCity = toCleanString(req.query?.toCity);
-  const travelDate = normalizeBusTravelDate(req.query?.date || req.query?.travelDate);
+  const travelDate = normalizeTravelDateString(req.query?.date || req.query?.travelDate);
 
   if (!fromCity || !toCity) {
     throw new ApiError(400, 'fromCity and toCity are required');
@@ -2326,39 +2502,44 @@ export const searchBuses = async (req, res) => {
     });
   }
 
-  const busIds = items.map((item) => item._id);
-  const holds = await BusSeatHold.find({
-    busServiceId: { $in: busIds },
-    travelDate,
-    status: { $in: ['held', 'booked'] },
-  })
-    .select('busServiceId scheduleId seatId')
-    .lean();
+  const results = [];
+  const now = new Date();
 
-  const reservedCountMap = new Map();
-  holds.forEach((hold) => {
-    const key = `${String(hold.busServiceId)}:${String(hold.scheduleId)}`;
-    reservedCountMap.set(key, (reservedCountMap.get(key) || 0) + 1);
-  });
-
-  const results = items.flatMap((busService) => {
+  for (const busService of items) {
     const schedules = Array.isArray(busService.schedules) ? busService.schedules : [];
-    const totalSeats = flattenBusBlueprintSeats(busService.blueprint).filter(
-      (seat) => String(seat.status || 'available') !== 'blocked',
-    ).length;
+    for (const schedule of schedules) {
+      if (!isScheduleAvailableOnDate(schedule, travelDate)) {
+        continue;
+      }
 
-    return schedules
-      .filter((schedule) => isScheduleAvailableOnDate(schedule, travelDate))
-      .map((schedule) => {
-        const reservedSeats = reservedCountMap.get(`${String(busService._id)}:${String(schedule.id)}`) || 0;
-        return serializeBusSearchResult({
-          busService,
-          schedule,
-          travelDate,
-          availableSeats: totalSeats - reservedSeats,
+      try {
+        const trip = await ensureTripInstance({ busService, scheduleId: schedule.id, travelDate });
+        if (trip.status === 'cancelled' || trip.generationStatus !== 'ready') {
+          continue;
+        }
+
+        if (trip.departureDateTime.getTime() - now.getTime() < 15 * 60 * 1000) {
+          continue;
+        }
+
+        const availableSeatsCount = await TripSeatInventory.countDocuments({
+          tripId: trip._id,
+          status: 'available',
         });
-      });
-  });
+
+        results.push(
+          serializeBusSearchResult({
+            busService,
+            schedule,
+            travelDate,
+            availableSeats: availableSeatsCount,
+          }),
+        );
+      } catch (err) {
+        console.error(`Failed to build trip instance for bus ${busService._id}:`, err);
+      }
+    }
+  }
 
   res.status(200).json({
     success: true,
@@ -2411,7 +2592,7 @@ export const getBusSeatLayout = async (req, res) => {
 
   const busServiceId = String(req.params?.id || '');
   const scheduleId = toCleanString(req.query?.scheduleId);
-  const travelDate = normalizeBusTravelDate(req.query?.date || req.query?.travelDate);
+  const travelDate = normalizeTravelDateString(req.query?.date || req.query?.travelDate);
 
   if (!scheduleId) {
     throw new ApiError(400, 'scheduleId is required');
@@ -2427,16 +2608,10 @@ export const getBusSeatLayout = async (req, res) => {
     throw new ApiError(404, 'Bus schedule not found for the selected date');
   }
 
-  const holds = await BusSeatHold.find({
-    busServiceId,
-    scheduleId,
-    travelDate,
-    status: { $in: ['held', 'booked'] },
-  })
-    .select('seatId')
-    .lean();
+  const trip = await ensureTripInstance({ busService, scheduleId, travelDate });
+  const inventories = await TripSeatInventory.find({ tripId: trip._id }).lean();
+  const inventoryMap = new Map(inventories.map((item) => [String(item.seatId), item]));
 
-  const reservedSeatIds = new Set(holds.map((item) => String(item.seatId)));
   const normalizeDeck = (deckRows = []) =>
     deckRows.map((row) =>
       (Array.isArray(row) ? row : []).map((cell) => {
@@ -2445,12 +2620,13 @@ export const getBusSeatLayout = async (req, res) => {
         }
 
         const seatId = String(cell.id || '');
-        const isBlocked = String(cell.status || 'available') === 'blocked';
-        const isReserved = reservedSeatIds.has(seatId);
+        const inv = inventoryMap.get(seatId);
+        const isAvailable = inv ? inv.status === 'available' : String(cell.status || 'available') === 'available';
 
         return {
           ...cell,
-          status: isBlocked || isReserved ? 'booked' : 'available',
+          status: isAvailable ? 'available' : 'booked',
+          price: inv?.price || resolveBusSeatPrice(busService, cell),
         };
       }),
     );
@@ -2461,14 +2637,13 @@ export const getBusSeatLayout = async (req, res) => {
     upperDeck: normalizeDeck(busService.blueprint?.upperDeck || []),
   };
 
-  const availableSeats = flattenBusBlueprintSeats(blueprint).filter(
-    (seat) => String(seat.status || 'available') === 'available',
-  ).length;
+  const availableSeats = inventories.filter((item) => item.status === 'available').length;
 
   res.status(200).json({
     success: true,
     data: {
       busServiceId: String(busService._id),
+      tripId: String(trip._id),
       scheduleId,
       travelDate,
       availableSeats,
@@ -2490,7 +2665,7 @@ export const createBusBookingOrder = async (req, res) => {
   const userId = req.auth?.sub;
   const busServiceId = String(req.body?.busServiceId || '');
   const scheduleId = toCleanString(req.body?.scheduleId);
-  const travelDate = normalizeBusTravelDate(req.body?.travelDate || req.body?.date);
+  const travelDate = normalizeTravelDateString(req.body?.travelDate || req.body?.date);
   const passenger = {
     name: toCleanString(req.body?.passenger?.name),
     age: Number(req.body?.passenger?.age || 0),
@@ -2524,18 +2699,36 @@ export const createBusBookingOrder = async (req, res) => {
     throw new ApiError(404, 'Bus schedule not found for the selected date');
   }
 
-  const availableSeatCells = flattenBusBlueprintSeats(busService.blueprint).filter(
-    (seat) => String(seat.status || 'available') !== 'blocked',
-  );
-  const seatCellMap = new Map(availableSeatCells.map((seat) => [String(seat.id), seat]));
-  const invalidSeat = seatIds.find((seatId) => !seatCellMap.has(seatId));
-  if (invalidSeat) {
-    throw new ApiError(400, `Seat ${invalidSeat} is not available for booking`);
+  const trip = await ensureTripInstance({ busService, scheduleId, travelDate });
+  if (trip.status === 'cancelled') {
+    throw new ApiError(409, 'This trip has been cancelled by the operator');
   }
 
+  const now = new Date();
+  if (trip.departureDateTime.getTime() - now.getTime() < 15 * 60 * 1000) {
+    throw new ApiError(400, 'Booking is closed (less than 15 minutes remaining before departure)');
+  }
+
+  await TripSeatInventory.updateMany(
+    { tripId: trip._id, 'bookedBy.userId': userId, status: 'held' },
+    { $set: { status: 'available', bookingId: null, holdId: null, holdExpiresAt: null, bookedBy: {} } },
+  );
+
+  const availableSeatDocs = await TripSeatInventory.find({
+    tripId: trip._id,
+    seatId: { $in: seatIds },
+    status: 'available',
+  });
+
+  if (availableSeatDocs.length !== seatIds.length) {
+    throw new ApiError(409, 'One or more selected seats are no longer available (Hold None rule enforced)');
+  }
+
+  const seatCellMap = new Map(availableSeatDocs.map((doc) => [doc.seatId, doc]));
   const amount = Math.round(
-    seatIds.reduce((sum, seatId) => sum + resolveBusSeatPrice(busService, seatCellMap.get(seatId)), 0) * 100,
+    seatIds.reduce((sum, seatId) => sum + Number(seatCellMap.get(seatId)?.price || resolveBusSeatPrice(busService, { id: seatId })), 0) * 100,
   ) / 100;
+
   if (amount <= 0) {
     throw new ApiError(400, 'Bus fare is not configured');
   }
@@ -2554,6 +2747,7 @@ export const createBusBookingOrder = async (req, res) => {
       receipt,
       notes: {
         userId: String(userId || ''),
+        tripId: String(trip._id),
         busServiceId,
         scheduleId,
         travelDate,
@@ -2564,7 +2758,7 @@ export const createBusBookingOrder = async (req, res) => {
     keySecret,
   });
 
-  const expiresAt = new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + BUS_HOLD_MINUTES * 60 * 1000);
   const commissionRule = await resolveBusCommissionRule({ busService });
   let calculatedPlatformEarning = 0;
 
@@ -2580,22 +2774,29 @@ export const createBusBookingOrder = async (req, res) => {
 
   const financialSnapshot = {
     baseFare: amount,
+    seatPricesBreakup: seatIds.map((seatId) => ({ seatId, price: Number(seatCellMap.get(seatId)?.price || 0) })),
+    serviceTax: 0,
+    discountAmount: 0,
     totalPaidAmount: amount,
+    platformFee: calculatedPlatformEarning,
+    gatewayFee: 0,
     commissionType: commissionRule.commissionType,
     commissionValue: commissionRule.commissionValue,
     calculatedPlatformEarning,
     operatorEarning,
+    refundedAmount: 0,
     settlementStatus: 'pending',
   };
 
   const booking = await BusBooking.create({
     userId,
+    tripId: trip._id,
     busServiceId,
     bookingCode: createBusBookingCode(),
     scheduleId,
     travelDate,
     seatIds,
-    seatLabels: seatIds.map((seatId) => seatCellMap.get(seatId)?.label || seatId),
+    seatLabels: seatIds.map((seatId) => seatCellMap.get(seatId)?.seatLabel || seatId),
     passenger,
     amount,
     currency: busService.fareCurrency || 'INR',
@@ -2616,6 +2817,8 @@ export const createBusBookingOrder = async (req, res) => {
       driverName: busService.driverName || '',
       driverPhone: busService.driverPhone || '',
     },
+    busSnapshot: trip.busSnapshot || {},
+    blueprintSnapshot: trip.blueprintSnapshot || {},
     payment: {
       provider: 'razorpay',
       orderId: order.id,
@@ -2623,28 +2826,32 @@ export const createBusBookingOrder = async (req, res) => {
     },
   });
 
-  try {
-    await BusSeatHold.insertMany(
-      seatIds.map((seatId) => ({
-        busServiceId,
-        bookingId: booking._id,
-        userId,
-        scheduleId,
-        travelDate,
-        seatId,
-        holdToken: booking.bookingCode,
+  const hold = await BusSeatHold.create({
+    tripId: trip._id,
+    busServiceId,
+    bookingId: booking._id,
+    userId,
+    scheduleId,
+    travelDate,
+    seatId: seatIds[0],
+    seatIds,
+    holdToken: booking.bookingCode,
+    status: 'held',
+    expiresAt,
+  });
+
+  await TripSeatInventory.updateMany(
+    { tripId: trip._id, seatId: { $in: seatIds } },
+    {
+      $set: {
         status: 'held',
-        expiresAt,
-      })),
-      { ordered: true },
-    );
-  } catch (error) {
-    await BusBooking.deleteOne({ _id: booking._id });
-    if (error?.code === 11000) {
-      throw new ApiError(409, 'One or more selected seats were just booked by someone else');
-    }
-    throw error;
-  }
+        bookingId: booking._id,
+        holdId: hold._id,
+        holdExpiresAt: expiresAt,
+        bookedBy: { userId, bookingSource: 'user' },
+      },
+    },
+  );
 
   res.status(201).json({
     success: true,
@@ -2690,65 +2897,19 @@ export const verifyBusBookingPayment = async (req, res) => {
     throw new ApiError(404, 'Bus booking not found');
   }
 
-  const busService = booking.busServiceId
-    ? await BusService.findById(booking.busServiceId)
-      .select('registrationNumber driverName driverPhone cancellationPolicy cancellationRules schedules route rating ratingCount reviews')
-      .lean()
-    : null;
-
-  if (String(booking.status) === 'confirmed') {
-    return res.status(200).json({
-      success: true,
-      data: serializeBusBooking(booking, busService),
-    });
-  }
-
-  if (String(booking.status) !== 'pending') {
-    throw new ApiError(409, 'Bus booking is no longer payable');
-  }
-
-  if (booking.expiresAt && booking.expiresAt <= new Date()) {
-    booking.status = 'expired';
-    booking.payment.status = 'expired';
-    await booking.save();
-    await BusSeatHold.deleteMany({ bookingId: booking._id, status: 'held' });
-    throw new ApiError(409, 'Seat hold expired before payment verification');
-  }
-
-  const holds = await BusSeatHold.find({
+  const updatedBooking = await processBusPaymentConfirmation({
     bookingId: booking._id,
-    status: 'held',
-    expiresAt: { $gt: new Date() },
-  }).lean();
+    paymentId,
+    signature,
+  });
 
-  if (holds.length !== booking.seatIds.length) {
-    booking.status = 'failed';
-    booking.payment.status = 'seat_conflict';
-    await booking.save();
-    await BusSeatHold.deleteMany({ bookingId: booking._id, status: 'held' });
-    throw new ApiError(409, 'Some selected seats are no longer reserved for this payment');
-  }
-
-  booking.status = 'confirmed';
-  booking.payment.paymentId = paymentId;
-  booking.payment.signature = signature;
-  booking.payment.status = 'paid';
-  booking.payment.paidAt = new Date();
-  await booking.save();
-
-  await BusSeatHold.updateMany(
-    { bookingId: booking._id, status: 'held' },
-    {
-      $set: {
-        status: 'booked',
-        expiresAt: null,
-      },
-    },
-  );
+  const busService = updatedBooking.busServiceId
+    ? await BusService.findById(updatedBooking.busServiceId).lean()
+    : null;
 
   res.status(201).json({
     success: true,
-    data: serializeBusBooking(booking, busService),
+    data: serializeBusBooking(updatedBooking, busService),
   });
 };
 
@@ -2926,8 +3087,17 @@ export const cancelMyBusBooking = async (req, res) => {
     seatIds: seatsToCancel.map((item) => item.seatId),
     travelDateOverride: req.body?.travelDate || req.body?.date,
   });
+
   if (!cancellationQuote.allowed) {
     throw new ApiError(409, cancellationQuote.reason || 'This booking can no longer be cancelled');
+  }
+
+  if (booking.cancellation?.refundStatus === 'processing' || booking.cancellation?.refundStatus === 'completed') {
+    return res.status(200).json({
+      success: true,
+      data: serializeBusBooking(booking, busService),
+      message: 'Cancellation / refund is already processed for this booking.',
+    });
   }
 
   const cancelledAt = new Date();
@@ -2939,21 +3109,30 @@ export const cancelMyBusBooking = async (req, res) => {
       throw new ApiError(409, 'This booking cannot be refunded because the payment reference is missing');
     }
 
-    const { keyId, keySecret } = await resolveRazorpayCredentials();
-    refundPayload = await razorpayRequest({
-      method: 'POST',
-      path: `/payments/${paymentId}/refund`,
-      body: {
-        amount: Math.round(cancellationQuote.refundAmount * 100),
-        notes: {
-          bookingId: String(booking._id),
-          bookingCode: booking.bookingCode || '',
-          cancelledSeats: seatsToCancel.map((item) => item.seatLabel || item.seatId).join(', '),
+    booking.cancellation.refundStatus = 'processing';
+    await booking.save();
+
+    try {
+      const { keyId, keySecret } = await resolveRazorpayCredentials();
+      refundPayload = await razorpayRequest({
+        method: 'POST',
+        path: `/payments/${paymentId}/refund`,
+        body: {
+          amount: Math.round(cancellationQuote.refundAmount * 100),
+          notes: {
+            bookingId: String(booking._id),
+            bookingCode: booking.bookingCode || '',
+            cancelledSeats: seatsToCancel.map((item) => item.seatLabel || item.seatId).join(', '),
+          },
         },
-      },
-      keyId,
-      keySecret,
-    });
+        keyId,
+        keySecret,
+      });
+    } catch (refundErr) {
+      booking.cancellation.refundStatus = 'failed';
+      await booking.save();
+      throw refundErr;
+    }
   }
 
   const perSeatRefundAmount = seatsToCancel.length > 0
@@ -2995,15 +3174,37 @@ export const cancelMyBusBooking = async (req, res) => {
     refundAmount: cancellationQuote.refundAmount,
     chargeAmount: cancellationQuote.chargeAmount,
     notes: cancellationQuote.notes,
+    refundStatus: refundPayload ? 'completed' : 'not_requested',
+    refundId: refundPayload?.id || '',
+    refundProcessedAt: refundPayload ? cancelledAt : null,
   };
   booking.payment.status = refundPayload
     ? (remainingActiveSeatCount <= 0 ? 'refunded' : 'partially_refunded')
     : (remainingActiveSeatCount <= 0 ? 'cancelled' : booking.payment.status || 'paid');
+
+  booking.financialSnapshot.refundedAmount = (booking.financialSnapshot?.refundedAmount || 0) + cancellationQuote.refundAmount;
   await booking.save();
+
+  if (booking.tripId) {
+    await TripSeatInventory.updateMany(
+      {
+        tripId: booking.tripId,
+        seatId: { $in: seatsToCancel.map((item) => item.seatId) },
+      },
+      {
+        $set: {
+          status: 'available',
+          bookingId: null,
+          holdId: null,
+          holdExpiresAt: null,
+          bookedBy: {},
+        },
+      },
+    );
+  }
 
   await BusSeatHold.deleteMany({
     bookingId: booking._id,
-    status: { $in: ['held', 'booked'] },
     seatId: { $in: seatsToCancel.map((item) => item.seatId) },
   });
 

@@ -61,8 +61,8 @@ const AppRoutes = () => {
       const role = String(event.detail?.role || 'user').toLowerCase()
       if (role === 'admin') {
         navigate('/admin/login', { replace: true })
-      } else if (role === 'driver') {
-        navigate('/taxi/driver/login', { replace: true })
+      } else if (['driver', 'owner', 'bus_driver', 'service_center', 'service_center_staff'].includes(role)) {
+        navigate(role === 'owner' ? '/taxi/owner/login' : '/taxi/driver/login', { replace: true })
       } else {
         localStorage.removeItem('token')
         localStorage.removeItem('userToken')

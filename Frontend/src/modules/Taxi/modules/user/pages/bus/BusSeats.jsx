@@ -15,22 +15,46 @@ const seatLegend = [
 
 const resolveSeatPrice = (bus, seat) => {
   const variantPricing = bus?.variantPricing || {};
-  const defaultPrice = Number(bus?.price || 0);
-  const variantKey = String(seat?.variant || 'seat').trim().toLowerCase();
-  const resolvedPrice = variantPricing?.[variantKey] ?? variantPricing?.seat ?? defaultPrice;
+  const defaultPrice = Number(bus?.seatPrice || bus?.price || 0);
 
-  return Number.isFinite(Number(resolvedPrice)) ? Number(resolvedPrice) : defaultPrice;
+  let variantKey = String(seat?.variant || 'seat').trim().toLowerCase();
+  const seatLabel = String(seat?.label || seat?.id || '').toUpperCase();
+
+  if (seatLabel.includes('UB')) {
+    variantKey = variantPricing?.upper ? 'upper' : variantPricing?.sleeper ? 'sleeper' : variantKey;
+  } else if (seatLabel.includes('LB')) {
+    variantKey = variantPricing?.lower ? 'lower' : variantKey;
+  }
+
+  const resolvedPrice =
+    variantPricing?.[variantKey] ??
+    variantPricing?.[seat?.variant] ??
+    variantPricing?.seat ??
+    defaultPrice;
+
+  return Number.isFinite(Number(resolvedPrice)) && Number(resolvedPrice) > 0
+    ? Number(resolvedPrice)
+    : defaultPrice;
 };
 
-const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
+const SeatDeck = ({ title, rows, selectedSeatIds, onToggle, bus }) => {
   if (!rows?.length) return null;
+
+  const isUpper = title.toLowerCase().includes('upper');
 
   return (
     <div className="w-full bg-white rounded-[28px] p-5 shadow-[0_8px_30px_rgba(15,23,42,0.06)] border border-slate-100">
-      <div className="flex justify-between items-center mb-5 pb-5 border-b border-dashed border-slate-100">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 py-1 bg-slate-50 rounded">{title}</span>
-        <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-r-transparent border-b-transparent transform rotate-45 flex items-center justify-center">
-          <div className="w-6 h-6 rounded-full border-2 border-slate-200" />
+      <div className="flex justify-between items-center mb-5 pb-4 border-b border-dashed border-slate-100">
+        <div>
+          <span className="text-[11px] font-black text-slate-800 uppercase tracking-[0.16em] px-2.5 py-1 bg-slate-100 rounded-lg">
+            {title} ({isUpper ? 'Upper Berth' : 'Lower Berth'})
+          </span>
+          <p className="text-[10px] font-bold text-slate-400 mt-1">
+            {isUpper ? 'Upper deck sleeper berths' : 'Lower deck berths & seating'}
+          </p>
+        </div>
+        <div className="w-9 h-9 rounded-full border-4 border-slate-200 border-r-transparent border-b-transparent transform rotate-45 flex items-center justify-center">
+          <div className="w-5 h-5 rounded-full border-2 border-slate-200" />
         </div>
       </div>
 
@@ -48,7 +72,8 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
 
               const isBooked = seat.status === 'booked';
               const isSelected = selectedSeatIds.includes(seat.id);
-              const isSleeper = seat.variant === 'sleeper';
+              const isSleeper = seat.variant === 'sleeper' || String(seat.id || '').includes('B');
+              const seatPrice = resolveSeatPrice(bus, seat);
 
               return (
                 <motion.button
@@ -57,7 +82,7 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
                   disabled={isBooked}
                   whileTap={!isBooked ? { scale: 0.85 } : {}}
                   onClick={() => onToggle(seat)}
-                  className={`relative flex w-full items-center justify-center border-2 transition-all ${
+                  className={`relative flex w-full flex-col items-center justify-center border-2 transition-all p-1.5 ${
                     isBooked
                       ? 'cursor-not-allowed border-slate-300 bg-slate-200'
                       : isSelected
@@ -67,34 +92,44 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
                           : 'border-slate-300 bg-white hover:border-orange-300'
                   }`}
                   style={{
-                    minHeight: isSleeper ? '52px' : '44px',
-                    borderRadius: isSleeper ? '18px' : '10px',
+                    minHeight: isSleeper ? '60px' : '50px',
+                    borderRadius: isSleeper ? '18px' : '12px',
                   }}
                   aria-label={isBooked ? `Seat ${seat.label || seat.id} sold out` : `Seat ${seat.label || seat.id}`}
-                  title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Available: ${seat.label || seat.id}`}
+                  title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Available: ${seat.label || seat.id} (₹${seatPrice})`}
                 >
                   {isSleeper ? (
                     <>
                       <div
-                        className={`absolute left-1.5 top-1/2 h-[72%] w-2 -translate-y-1/2 rounded-full transition-colors ${
-                          isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-300' : 'bg-blue-200'
+                        className={`absolute left-1.5 top-1/2 h-[72%] w-1.5 -translate-y-1/2 rounded-full transition-colors ${
+                          isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-400' : 'bg-blue-300'
                         }`}
                       />
-                      <div className="flex w-full items-center justify-center px-3 pl-5">
+                      <div className="flex flex-col items-center justify-center pl-2">
                         <span
                           className={`text-[10px] font-black leading-none ${
-                            isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-700'
+                            isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-800'
                           }`}
                         >
                           {seat.label || seat.id}
+                        </span>
+                        <span
+                          className={`text-[9px] font-bold mt-1 leading-none ${
+                            isSelected ? 'text-orange-300' : isBooked ? 'text-slate-400' : 'text-emerald-700'
+                          }`}
+                        >
+                          ₹{seatPrice}
                         </span>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className={`absolute -top-1 h-2 w-full rounded-t-sm transition-colors ${isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-400' : 'bg-slate-200'}`} />
-                      <span className={`text-[9px] font-black leading-none ${isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-600'}`}>
+                      <span className={`text-[9px] font-black leading-none ${isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-700'}`}>
                         {seat.label || seat.id}
+                      </span>
+                      <span className={`text-[8px] font-bold mt-0.5 leading-none ${isSelected ? 'text-orange-300' : isBooked ? 'text-slate-400' : 'text-emerald-700'}`}>
+                        ₹{seatPrice}
                       </span>
                     </>
                   )}
@@ -207,12 +242,14 @@ const BusSeats = () => {
               rows={seatLayout?.blueprint?.lowerDeck || []}
               selectedSeatIds={selectedSeats.map((seat) => seat.id)}
               onToggle={toggleSeat}
+              bus={seatLayout?.bus || bus}
             />
             <SeatDeck
               title="Upper Deck"
               rows={seatLayout?.blueprint?.upperDeck || []}
               selectedSeatIds={selectedSeats.map((seat) => seat.id)}
               onToggle={toggleSeat}
+              bus={seatLayout?.bus || bus}
             />
 
             <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -271,6 +308,7 @@ const BusSeats = () => {
             navigate(`${routePrefix}/bus/checkout`, {
               state: {
                 ...state,
+                tripId: seatLayout?.tripId || state.tripId,
                 bus: seatLayout?.bus || bus,
                 selectedSeats,
                 totalFare,
@@ -283,7 +321,7 @@ const BusSeats = () => {
               : 'bg-slate-100 text-slate-400 cursor-not-allowed'
           }`}
         >
-          Proceed to Payment <ChevronRight size={18} />
+          Proceed to Passenger Details <ChevronRight size={18} />
         </motion.button>
       </div>
     </div>

@@ -126,9 +126,66 @@ export function useLocation() {
         const parsed = JSON.parse(stored);
         if (parsed?.latitude && parsed?.longitude) return parsed;
       }
+      const taxiStored = localStorage.getItem("eqosy:lastLocation");
+      if (taxiStored) {
+        const parsed = JSON.parse(taxiStored);
+        if (parsed?.lat && parsed?.lon) {
+          return {
+            latitude: Number(parsed.lat),
+            longitude: Number(parsed.lon),
+            address: parsed.address || '',
+            formattedAddress: parsed.address || '',
+            city: parsed.address || 'Current Location'
+          };
+        }
+      }
     } catch {}
     return null;
   });
+
+  // Listen to cross-module storage / location change events to update location state reactively
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleLocationSync = () => {
+      try {
+        const stored = localStorage.getItem("userLocation");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.latitude && parsed?.longitude) {
+            setLocation(parsed);
+            return;
+          }
+        }
+        const taxiStored = localStorage.getItem("eqosy:lastLocation");
+        if (taxiStored) {
+          const parsed = JSON.parse(taxiStored);
+          if (parsed?.lat && parsed?.lon) {
+            setLocation({
+              latitude: Number(parsed.lat),
+              longitude: Number(parsed.lon),
+              address: parsed.address || '',
+              formattedAddress: parsed.address || '',
+              city: parsed.address || 'Current Location'
+            });
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('storage', handleLocationSync);
+    window.addEventListener('eqosy:location-updated', handleLocationSync);
+    window.addEventListener('userLocationUpdated', handleLocationSync);
+    window.addEventListener('locationChanged', handleLocationSync);
+
+    return () => {
+      window.removeEventListener('storage', handleLocationSync);
+      window.removeEventListener('eqosy:location-updated', handleLocationSync);
+      window.removeEventListener('userLocationUpdated', handleLocationSync);
+      window.removeEventListener('locationChanged', handleLocationSync);
+    };
+  }, []);
+
   const [loading, setLoading] = useState(() => !location);
   const [error, setError] = useState(null);
   const [permissionGranted, setPermissionGranted] = useState(() => Boolean(location));
@@ -915,6 +972,18 @@ export function useLocation() {
 
               debugLog("?? Saving location:", finalLoc)
               localStorage.setItem("userLocation", JSON.stringify(finalLoc))
+              try {
+                localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+                  address: finalLoc.formattedAddress || finalLoc.address || finalLoc.city || '',
+                  lat: finalLoc.latitude,
+                  lon: finalLoc.longitude,
+                  updatedAt: Date.now()
+                }))
+                window.dispatchEvent(new Event("storage"))
+                window.dispatchEvent(new Event("eqosy:location-updated"))
+                window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: finalLoc }))
+                window.dispatchEvent(new CustomEvent("locationChanged", { detail: finalLoc }))
+              } catch {}
               setLocation(finalLoc)
               setPermissionGranted(true)
               if (showLoading) setLoading(false)

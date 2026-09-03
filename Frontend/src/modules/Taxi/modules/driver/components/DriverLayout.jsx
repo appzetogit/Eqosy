@@ -10,6 +10,8 @@ import {
 import { RENTAL_ENABLED } from '../../../shared/featureFlags';
 import DriverRideRequestListener from './DriverRideRequestListener';
 
+import OwnerHeaderNav from './OwnerHeaderNav';
+
 const unwrapDriver = (response) => response?.data?.data || response?.data || response;
 const getPortalPrefix = (pathname = '', role = '') => {
     if (pathname.startsWith('/taxi/owner')) {
@@ -236,25 +238,36 @@ const DriverLayout = () => {
                     return;
                 }
 
-                setIsAllowed(false);
-                verifiedTokenRef.current = '';
-                verifiedApprovalRef.current = false;
-
-                if (error?.status === 401) {
-                    redirectToDriverLogin(navigate, currentPath, authenticatedRole);
+                if (verifiedApprovalRef.current && error?.status !== 401 && error?.status !== 403) {
+                    setIsChecking(false);
                     return;
                 }
 
-                if (error?.status === 404) {
+                if (error?.status === 401 || error?.status === 404) {
+                    setIsAllowed(false);
+                    verifiedTokenRef.current = '';
+                    verifiedApprovalRef.current = false;
                     redirectToDriverLogin(navigate, currentPath, authenticatedRole);
                     return;
                 }
 
                 if (error?.status === 403) {
+                    setIsAllowed(false);
+                    verifiedTokenRef.current = '';
+                    verifiedApprovalRef.current = false;
                     navigate(getPendingDriverRoute(currentPath), { replace: true });
                     return;
                 }
 
+                // If transient network glitch or server error (e.g. 500/502/timeout), do not boot approved user to registration status
+                if (verifiedApprovalRef.current || !error?.status || error?.status >= 500) {
+                    setIsChecking(false);
+                    return;
+                }
+
+                setIsAllowed(false);
+                verifiedTokenRef.current = '';
+                verifiedApprovalRef.current = false;
                 navigate(getPendingDriverRoute(currentPath), { replace: true });
             } finally {
                 if (active) {
@@ -270,6 +283,8 @@ const DriverLayout = () => {
         };
     }, [isAllowed, location.pathname, navigate]);
 
+    const isOwnerPortal = location.pathname.startsWith('/taxi/owner') && !onboardingRoutes.has(location.pathname);
+
     return (
         <div className="driver-theme min-h-screen">
             {isChecking && !onboardingRoutes.has(location.pathname) ? (
@@ -278,6 +293,7 @@ const DriverLayout = () => {
                 </div>
             ) : (
                 <>
+                    {isAllowed && isOwnerPortal && <OwnerHeaderNav />}
                     <Outlet context={{ isAllowed }} />
                     {isAllowed && getStoredRole() === 'driver' && <DriverRideRequestListener />}
                 </>

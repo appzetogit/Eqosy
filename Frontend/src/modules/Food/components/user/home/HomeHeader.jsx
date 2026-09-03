@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ChevronDown, Search, Mic, Bell, CheckCircle2, Tag, AlertCircle, BellOff, X, ShoppingBag } from 'lucide-react';
+import { MapPin, ChevronDown, Search, Mic, Bell, CheckCircle2, Tag, AlertCircle, BellOff, X, ShoppingBag, Loader2 } from 'lucide-react';
+import { useLocation as useUserGeoLocation } from "@food/hooks/useLocation";
 import {
   Popover,
   PopoverContent,
@@ -52,6 +53,29 @@ const GROCERY_PLACEHOLDERS = [
 function readEqosyLocation() {
   if (typeof window === 'undefined') return null;
   try {
+    // 1. Priority: Read Food/Grocery location key userLocation FIRST for full accuracy
+    const foodSaved = JSON.parse(window.localStorage.getItem('userLocation') || '{}');
+    if (foodSaved?.latitude && foodSaved?.longitude) {
+      const address = String(foodSaved.formattedAddress || foodSaved.address || foodSaved.city || '').trim();
+      const area = String(foodSaved.area || '').trim();
+      const city = String(foodSaved.city || '').trim();
+      const state = String(foodSaved.state || '').trim();
+      const zip = String(foodSaved.postalCode || foodSaved.zipCode || '').trim();
+      if (address) {
+        return {
+          formattedAddress: address,
+          area: area || address.split(',')[0]?.trim() || '',
+          city,
+          state,
+          zipCode: zip,
+          address,
+          latitude: Number(foodSaved.latitude),
+          longitude: Number(foodSaved.longitude),
+        };
+      }
+    }
+
+    // 2. Fallback to Taxi location key eqosy:lastLocation
     const saved = JSON.parse(window.localStorage.getItem(LOCATION_STORAGE_KEY) || '{}');
     const address = String(saved?.address || '').trim();
     if (!address) return null;
@@ -259,6 +283,8 @@ export default function HomeHeader({
   const verticalTheme = getVerticalTheme(activeVertical);
   const bannerImages = heroBannerImages.length > 0 ? heroBannerImages : FALLBACK_BANNER_IMAGES;
 
+  const { location: geoLoc, loading: isGeoLoading } = useUserGeoLocation();
+
   const [storedLocation, setStoredLocation] = useState(() => readEqosyLocation());
   const [internalPlaceholderIndex, setInternalPlaceholderIndex] = useState(0);
 
@@ -267,13 +293,18 @@ export default function HomeHeader({
     syncLocation();
     window.addEventListener('storage', syncLocation);
     window.addEventListener(LOCATION_UPDATED_EVENT, syncLocation);
+    window.addEventListener('userLocationUpdated', syncLocation);
+    window.addEventListener('locationChanged', syncLocation);
     return () => {
       window.removeEventListener('storage', syncLocation);
       window.removeEventListener(LOCATION_UPDATED_EVENT, syncLocation);
+      window.removeEventListener('userLocationUpdated', syncLocation);
+      window.removeEventListener('locationChanged', syncLocation);
     };
   }, []);
 
-  const location = locationProp ?? storedLocation;
+  const location = locationProp ?? storedLocation ?? geoLoc;
+  const isLocating = isGeoLoading && !location?.formattedAddress && !location?.address;
 
   const selectedAddressDistanceKm = useMemo(() => {
     const deliveryAddressMode = localStorage.getItem("deliveryAddressMode") || "saved";
@@ -352,20 +383,34 @@ export default function HomeHeader({
   const walletPath = isTaxi ? '/taxi/user/wallet' : '/food/user/wallet';
 
   const displayTitle = useMemo(() => {
+    if (isLocating) return "Locating...";
     if (locationTitle?.trim()) return locationTitle.trim();
     if (savedAddressText?.trim()) {
       const firstPart = savedAddressText.split(',')[0]?.trim();
       return firstPart || savedAddressText;
     }
     if (location?.area && location?.city) return `${location.area}, ${location.city}`;
-    return location?.area || location?.city || location?.formattedAddress?.split(',')[0] || "Select Location";
-  }, [locationTitle, savedAddressText, location]);
+    if (location?.area) return location.area;
+    if (location?.city) return location.city;
+    if (location?.formattedAddress) {
+      const parts = location.formattedAddress.split(',').map((p) => p.trim()).filter(Boolean);
+      return parts[0] || location.formattedAddress;
+    }
+    return "Locating...";
+  }, [locationTitle, savedAddressText, location, isLocating]);
 
   const displaySubtitle = useMemo(() => {
+    if (isLocating) return "Fetching address...";
     if (locationSubtitle?.trim()) return locationSubtitle.trim();
+    if (location?.formattedAddress) {
+      const parts = location.formattedAddress.split(',').map((p) => p.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        return parts.slice(1).join(', ');
+      }
+    }
     const parts = [location?.state, location?.zipCode || location?.postalCode].filter(Boolean);
     return parts.join(", ");
-  }, [locationSubtitle, location]);
+  }, [locationSubtitle, location, isLocating]);
 
   const [notifications, setNotifications] = useState(() => {
     if (typeof window === 'undefined') return [];
@@ -491,7 +536,11 @@ export default function HomeHeader({
             className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
             onClick={onLocationClick}
           >
-            <MapPin className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} style={{ color: verticalTheme.accent, fill: verticalTheme.accent }} />
+            {isLocating ? (
+              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0 text-white" />
+            ) : (
+              <MapPin className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} style={{ color: verticalTheme.accent, fill: verticalTheme.accent }} />
+            )}
             <div className="flex flex-col min-w-0 text-white">
               <div className="flex items-center gap-0.5 min-w-0">
                 <span className="text-[14px] font-bold truncate drop-shadow-sm">
