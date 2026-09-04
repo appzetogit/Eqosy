@@ -467,26 +467,27 @@ export default function UserOrderDetails() {
           {items.map((item, idx) => {
             const isVeg = determineIsVeg(item);
             return (
-            <div key={idx} className="flex justify-between items-start mt-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-3 h-3 border ${isVeg ? "border-green-600" : "border-red-600"
-                    } flex items-center justify-center p-[1px]`}
-                >
+              <div key={idx} className="flex justify-between items-start mt-2">
+                <div className="flex items-center gap-2">
                   <div
-                    className={`w-full h-full rounded-full ${isVeg ? "bg-green-600" : "bg-red-600"
-                      }`}
-                  />
+                    className={`w-3 h-3 border ${isVeg ? "border-green-600" : "border-red-600"
+                      } flex items-center justify-center p-[1px]`}
+                  >
+                    <div
+                      className={`w-full h-full rounded-full ${isVeg ? "bg-green-600" : "bg-red-600"
+                        }`}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    {item.quantity || item.qty || 1} x {item.name}{item.variantName ? ` (${item.variantName})` : ""}
+                  </span>
                 </div>
-                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                  {item.quantity || item.qty || 1} x {item.name}{item.variantName ? ` (${item.variantName})` : ""}
+                <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">
+                  ₹{(item.price || 0).toFixed(2)}
                 </span>
               </div>
-              <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">
-                ₹{(item.price || 0).toFixed(2)}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Bill Summary Card */}
