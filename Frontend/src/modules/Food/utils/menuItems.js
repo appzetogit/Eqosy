@@ -65,6 +65,14 @@ export const flattenMenuItems = (menu) => {
   return items
 }
 
+export const getMenuFromResponse = (response) => {
+  if (!response) return null;
+  const data = response?.data?.data || response?.data || response;
+  if (data?.menu) return data.menu;
+  if (data?.sections) return data;
+  return data;
+};
+
 export const findItemInSections = (sections = [], targetId) => {
   const wantedId = String(targetId || "")
   if (!wantedId || !Array.isArray(sections)) return null
