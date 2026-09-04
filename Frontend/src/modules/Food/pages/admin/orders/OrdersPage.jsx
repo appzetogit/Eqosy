@@ -87,7 +87,11 @@ export default function OrdersPage({ statusKey = "all" }) {
       }
 
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-        navigator.vibrate([200, 100, 200, 100, 300])
+        try {
+          navigator.vibrate([200, 100, 200, 100, 300])
+        } catch {
+          // Ignore vibration intervention if blocked by browser policy
+        }
       }
 
       notificationAudioRef.current.muted = false

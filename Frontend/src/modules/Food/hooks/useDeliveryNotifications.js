@@ -262,8 +262,12 @@ export const useDeliveryNotifications = () => {
     try {
       const usedNativeBridge = await triggerWebViewNativeNotification(orderData);
 
-      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        navigator.vibrate([200, 100, 200, 100, 300]);
+      if (userInteractedRef.current && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate([200, 100, 200, 100, 300]);
+        } catch {
+          // Ignore vibration intervention if user activation hasn't occurred yet
+        }
       }
 
       if (usedNativeBridge) {

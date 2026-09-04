@@ -52,6 +52,29 @@ const RedirectToFoodUser = () => {
 const LandingPage = lazy(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
 
+const SmartFallbackRedirect = () => {
+  const location = useLocation()
+  const pathname = location.pathname.toLowerCase()
+
+  if (pathname.startsWith('/taxi')) {
+    return <Navigate to="/taxi/user" replace />
+  }
+  if (pathname.startsWith('/admin')) {
+    return <Navigate to="/admin/food" replace />
+  }
+  if (pathname.startsWith('/food/delivery') || pathname.startsWith('/delivery')) {
+    return <Navigate to="/food/delivery" replace />
+  }
+  if (pathname.startsWith('/food') || pathname.startsWith('/restaurant')) {
+    return <Navigate to="/food/user" replace />
+  }
+  if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <Navigate to="/landing" replace />
+}
+
 const AppRoutes = () => {
   const location = useLocation()
   const navigate = useNavigate()
@@ -130,7 +153,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/food/user" replace />} />
+      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/landing" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
@@ -151,7 +174,7 @@ const AppRoutes = () => {
       <Route path="/profile/*" element={<RedirectToFoodUser />} />
       <Route path="/cart/*" element={<RedirectToFoodUser />} />
       <Route path="/orders/*" element={<RedirectToFoodUser />} />
-      <Route path="*" element={<Navigate to="/food/user" replace />} />
+      <Route path="*" element={<SmartFallbackRedirect />} />
     </Routes>
   )
 }

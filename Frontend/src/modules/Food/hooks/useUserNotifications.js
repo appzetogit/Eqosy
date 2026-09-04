@@ -119,6 +119,11 @@ export const useUserNotifications = () => {
             note: data.note,
             deliveryState: data.deliveryState,
             deliveryVerification: data.deliveryVerification,
+            deliveryPartner: data.deliveryPartner,
+            deliveryPartnerId: data.deliveryPartnerId,
+            dispatch: data.dispatch,
+            assignmentInfo: data.assignmentInfo,
+            handoverOtp: data.handoverOtp || data.otp,
             timestamp: new Date().toISOString()
           }
         });
@@ -169,7 +174,7 @@ export const useUserNotifications = () => {
       setIsConnected(true);
       if (typeof window !== 'undefined') window.orderSocketConnected = true;
     };
-    
+
     const onDisconnect = () => {
       setIsConnected(false);
       if (typeof window !== 'undefined') window.orderSocketConnected = false;

@@ -194,7 +194,9 @@ const deliveryVerificationSchema = new mongoose.Schema(
         dropOtp: {
             required: { type: Boolean, default: false },
             verified: { type: Boolean, default: false }
-        }
+        },
+        handoverImageUrl: { type: String, default: '' },
+        handoverUploadedAt: { type: Date, default: null }
     },
     { _id: false }
 );

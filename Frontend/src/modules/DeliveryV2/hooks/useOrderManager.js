@@ -7,8 +7,8 @@ import { toast } from 'sonner';
  * Connects directly to the backend API services.
  */
 export const useOrderManager = () => {
-  const { 
-    activeOrder, tripStatus, updateTripStatus, clearActiveOrder, setActiveOrder, riderLocation 
+  const {
+    activeOrder, tripStatus, updateTripStatus, clearActiveOrder, setActiveOrder, riderLocation
   } = useDeliveryStore();
 
   const acceptOrder = async (order) => {
@@ -20,10 +20,10 @@ export const useOrderManager = () => {
 
     try {
       const response = await deliveryAPI.acceptOrder(orderId);
-      
+
       if (response?.data?.success) {
         const fullOrder = response.data.data?.order || order;
-        
+
         // Robustly determine locations from multiple possible formats (Populated API vs Socket)
         const getLoc = (ref, keysLat, keysLng) => {
           if (!ref) return null;
@@ -47,11 +47,11 @@ export const useOrderManager = () => {
           return null;
         };
 
-        const resLoc = getLoc(fullOrder.restaurantId, ['latitude', 'lat'], ['longitude', 'lng']) || 
-                       getLoc(fullOrder, ['restaurant_lat', 'restaurantLat', 'latitude'], ['restaurant_lng', 'restaurantLng', 'longitude']);
-                       
-        const cusLoc = getLoc(fullOrder.deliveryAddress, ['latitude', 'lat'], ['longitude', 'lng']) || 
-                       getLoc(fullOrder, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']);
+        const resLoc = getLoc(fullOrder.restaurantId, ['latitude', 'lat'], ['longitude', 'lng']) ||
+          getLoc(fullOrder, ['restaurant_lat', 'restaurantLat', 'latitude'], ['restaurant_lng', 'restaurantLng', 'longitude']);
+
+        const cusLoc = getLoc(fullOrder.deliveryAddress, ['latitude', 'lat'], ['longitude', 'lng']) ||
+          getLoc(fullOrder, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']);
 
         setActiveOrder({
           ...fullOrder,
@@ -112,12 +112,12 @@ export const useOrderManager = () => {
     const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
       const response = await deliveryAPI.confirmOrderId(
-        orderId, 
-        activeOrder.displayOrderId || activeOrder.order_id || orderId, 
+        orderId,
+        activeOrder.displayOrderId || activeOrder.order_id || orderId,
         riderLocation || {},
         { billImageUrl }
       );
-      
+
       if (response?.data?.success) {
         const fullOrder = response.data.data?.order || response.data?.data;
         setActiveOrder({
@@ -173,27 +173,27 @@ export const useOrderManager = () => {
   /**
    * Finalize Delivery with OTP Check
    */
-  const completeDelivery = async (otp) => {
+  const completeDelivery = async (otp, handoverImageUrl = null) => {
     const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
       // 1. Verify OTP first
       const verifyRes = await deliveryAPI.verifyDropOtp(orderId, otp);
-      
+
       if (verifyRes?.data?.success) {
         let finalOrder = verifyRes.data?.data?.order || activeOrder;
-        
+
         // 2. Mark as complete
-        const completeRes = await deliveryAPI.completeDelivery(orderId, { otp, rating: 5 });
+        const completeRes = await deliveryAPI.completeDelivery(orderId, { otp, handoverImageUrl, rating: 5 });
         if (completeRes.data?.success && completeRes.data?.data?.order) {
           finalOrder = completeRes.data.data.order;
         } else {
           toast.error(completeRes.data?.message || 'Failed to complete delivery on server');
           throw new Error('Complete call failed');
         }
-        
+
         // Update local order state so Summary Modal shows 'delivered' status
         if (finalOrder) setActiveOrder(finalOrder, 'COMPLETED');
-        
+
         updateTripStatus('COMPLETED');
       } else {
         toast.error('Invalid OTP. Please check with customer.');

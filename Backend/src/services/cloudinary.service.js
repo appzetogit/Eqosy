@@ -12,12 +12,18 @@ export const uploadImageBuffer = async (buffer, folder = 'uploads') => {
         throw new Error('File buffer is required');
     }
 
-    return new Promise((resolve, reject) => {
+    if (!config.cloudinaryCloudName || !config.cloudinaryApiKey || !config.cloudinaryApiSecret) {
+        // Fallback if Cloudinary is not configured in env
+        return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    }
+
+    return new Promise((resolve) => {
         const stream = cloudinary.uploader.upload_stream(
             { folder, resource_type: 'image' },
             (error, result) => {
-                if (error) {
-                    return reject(error);
+                if (error || !result?.secure_url) {
+                    console.warn('[Cloudinary Service] Upload stream failed, using base64 fallback:', error?.message || error);
+                    return resolve(`data:image/jpeg;base64,${buffer.toString('base64')}`);
                 }
                 return resolve(result.secure_url);
             }

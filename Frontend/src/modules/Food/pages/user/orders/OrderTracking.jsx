@@ -602,7 +602,7 @@ export default function OrderTracking({ isSharedView = false }) {
           return transformOrderForTracking(parsed);
         }
       }
-    } catch {}
+    } catch { }
     return null;
   });
   const [loading, setLoading] = useState(() => !order);
@@ -647,7 +647,7 @@ export default function OrderTracking({ isSharedView = false }) {
           setUnreadChatCount(Number(d.data.conversation.userUnreadCount || 0));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     if (!socket) return;
 
@@ -763,7 +763,7 @@ export default function OrderTracking({ isSharedView = false }) {
         description: supportDescription.trim() || supportCategory,
         ...(mongoOrderId ? { orderId: mongoOrderId } : {})
       }
-      await api.post("/food/user/support/ticket", payload).catch(() => {})
+      await api.post("/food/user/support/ticket", payload).catch(() => { })
 
       toast.success(`Support request submitted for Order #${displayOrderRef}! Our support team will assist you shortly.`)
       setShowSupportModal(false)
@@ -1277,11 +1277,13 @@ export default function OrderTracking({ isSharedView = false }) {
       if (pollRef.current) pollRef.current(false);
     };
 
-    const pollInterval = (isSocketConnected || window.orderSocketConnected) ? 12000 : 5000;
+    // Fast polling (3s) while order is active for rapid fallback
+    const isTerminal = orderStatus === 'delivered' || orderStatus === 'cancelled';
+    const pollInterval = isTerminal ? 15000 : 3000;
     const interval = setInterval(tick, pollInterval);
 
     return () => clearInterval(interval);
-  }, [trackingKey, isSocketConnected]);
+  }, [trackingKey, isSocketConnected, orderStatus]);
 
   useEffect(() => {
     if (!order) return
@@ -1327,24 +1329,51 @@ export default function OrderTracking({ isSharedView = false }) {
           status,
           orderStatus: payload.orderStatus || status,
           deliveryState: payload.deliveryState,
+          dispatch: payload.dispatch,
+          assignmentInfo: payload.assignmentInfo,
+          deliveryPartner: payload.deliveryPartner,
+          deliveryPartnerId: payload.deliveryPartnerId,
         });
         setOrderStatus(next);
 
-        // Optimistically update order state from socket payload
-        if (payload.note || payload.orderStatus || payload.status) {
-          setOrder(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: payload.orderStatus || payload.status || prev.status,
-              note: payload.note || prev.note
-            };
-          });
-        }
+        // Optimistically update order state from socket payload with full deliveryState merging
+        setOrder(prev => {
+          if (!prev) return prev;
+          const mergedDeliveryState = payload.deliveryState
+            ? { ...(prev.deliveryState || {}), ...payload.deliveryState }
+            : prev.deliveryState;
 
-        // Pull latest order state without refresh spam on bursty socket events.
+          const mergedDV = payload.deliveryVerification
+            ? { ...(prev.deliveryVerification || {}), ...payload.deliveryVerification }
+            : prev.deliveryVerification;
+
+          const handoverCode = payload.handoverOtp || payload.otp;
+          if (handoverCode && mergedDV) {
+            mergedDV.dropOtp = {
+              ...(mergedDV.dropOtp || {}),
+              required: true,
+              verified: false,
+              code: String(handoverCode),
+            };
+          }
+
+          return {
+            ...prev,
+            status: payload.orderStatus || payload.status || prev.status,
+            orderStatus: payload.orderStatus || payload.status || prev.orderStatus || prev.status,
+            note: payload.note || prev.note,
+            deliveryState: mergedDeliveryState,
+            deliveryVerification: mergedDV,
+            deliveryPartner: payload.deliveryPartner || prev.deliveryPartner,
+            deliveryPartnerId: payload.deliveryPartnerId || prev.deliveryPartnerId,
+            dispatch: payload.dispatch ? { ...(prev.dispatch || {}), ...payload.dispatch } : prev.dispatch,
+            assignmentInfo: payload.assignmentInfo ? { ...(prev.assignmentInfo || {}), ...payload.assignmentInfo } : prev.assignmentInfo,
+          };
+        });
+
+        // Pull latest order state without refresh delay
         const now = Date.now();
-        if (now - lastRealtimeRefreshRef.current > 1500 && !isRefreshing) {
+        if (now - lastRealtimeRefreshRef.current > 500 && !isRefreshing) {
           lastRealtimeRefreshRef.current = now;
           handleRefresh();
         }
@@ -1437,7 +1466,7 @@ export default function OrderTracking({ isSharedView = false }) {
             const apiOrder = orderResponse.data.data.order;
             setOrder(transformOrderForTracking(apiOrder, order));
           }
-        } catch (_) {}
+        } catch (_) { }
       } else {
         toast.error(response.data?.message || 'Failed to cancel order');
       }
@@ -1630,8 +1659,8 @@ export default function OrderTracking({ isSharedView = false }) {
       iconType: 'rider'
     },
     at_pickup: {
-      title: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready') 
-        ? "Food is ready for pickup 🟢" 
+      title: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
+        ? "Food is ready for pickup 🟢"
         : "Food preparation in progress 🟠",
       subtitle: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
         ? "Your order is ready and your delivery partner is collecting it."
@@ -2163,16 +2192,14 @@ export default function OrderTracking({ isSharedView = false }) {
                       key={reason}
                       type="button"
                       onClick={() => setCancellationReason(reason)}
-                      className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${
-                        isSelected
+                      className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${isSelected
                           ? 'bg-red-50 dark:bg-red-950/30 border-red-500 text-red-600 dark:text-red-400 shadow-sm'
                           : 'bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                      }`}
+                        }`}
                     >
                       <span>{reason}</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        isSelected ? 'border-red-500 bg-red-500' : 'border-gray-300 dark:border-zinc-600'
-                      }`}>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-red-500 bg-red-500' : 'border-gray-300 dark:border-zinc-600'
+                        }`}>
                         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                       </div>
                     </button>
@@ -2352,8 +2379,8 @@ export default function OrderTracking({ isSharedView = false }) {
                     >
                       <Star
                         className={`w-8 h-8 ${star <= deliveryRating
-                            ? 'text-amber-400 fill-amber-400'
-                            : 'text-gray-300 dark:text-zinc-600'
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-gray-300 dark:text-zinc-600'
                           }`}
                       />
                     </button>
@@ -2372,8 +2399,8 @@ export default function OrderTracking({ isSharedView = false }) {
                         )
                       }
                       className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${deliveryComment.includes(tag)
-                          ? 'bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-600 dark:text-orange-400'
-                          : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
+                        ? 'bg-orange-50 dark:bg-orange-950/50 border-orange-500 text-orange-600 dark:text-orange-400'
+                        : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
                         }`}
                     >
                       {tag}
@@ -2415,8 +2442,8 @@ export default function OrderTracking({ isSharedView = false }) {
                   >
                     <Star
                       className={`w-8 h-8 ${star <= restaurantRating
-                          ? 'text-amber-400 fill-amber-400'
-                          : 'text-gray-300 dark:text-zinc-600'
+                        ? 'text-amber-400 fill-amber-400'
+                        : 'text-gray-300 dark:text-zinc-600'
                         }`}
                     />
                   </button>
@@ -2435,8 +2462,8 @@ export default function OrderTracking({ isSharedView = false }) {
                       )
                     }
                     className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${restaurantComment.includes(tag)
-                        ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-gray-400'
                       }`}
                   >
                     {tag}
@@ -2534,16 +2561,14 @@ export default function OrderTracking({ isSharedView = false }) {
                       key={cat}
                       type="button"
                       onClick={() => setSupportCategory(cat)}
-                      className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${
-                        isSelected
+                      className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${isSelected
                           ? "bg-orange-50 dark:bg-orange-950/30 border-[#EB590E] text-[#EB590E] dark:text-orange-400 shadow-sm"
                           : "bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
-                      }`}
+                        }`}
                     >
                       <span>{cat}</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        isSelected ? "border-[#EB590E] bg-[#EB590E]" : "border-gray-300 dark:border-zinc-600"
-                      }`}>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-[#EB590E] bg-[#EB590E]" : "border-gray-300 dark:border-zinc-600"
+                        }`}>
                         {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
                       </div>
                     </button>
