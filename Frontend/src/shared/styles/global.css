@@ -159,6 +159,19 @@ html[data-theme="dark"] {
   body {
     @apply bg-background text-foreground m-0 min-h-screen;
   }
+
+  /* Disable spin buttons / up-down scroller arrows on all inputs globally */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+  }
+
+  input[type="number"],
+  input[type="tel"] {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+  }
 }
 
 @layer utilities {

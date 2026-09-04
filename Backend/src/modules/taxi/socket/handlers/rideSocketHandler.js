@@ -13,6 +13,7 @@ import {
 import { authorizeRideRoomAccess } from '../middleware/rideRoomAuth.js';
 import { SOCKET_EVENTS } from '../events.js';
 import { clearDriverRoute, updateDriverRoute } from '../services/driverRouteService.js';
+import { sendPushNotificationToEntities } from '../../services/pushNotificationService.js';
 
 const driverLifecycleStatuses = new Set([
   RIDE_LIVE_STATUS.ACCEPTED,
@@ -190,6 +191,41 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
         io.to(getDriverRoom(driverId)).emit('chat:message', savedMessage);
         io.to(getDriverRoom(driverId)).emit('chat:notification', notifPayload);
         io.to(getDriverRoom(driverId)).emit('order-chat-notification', notifPayload);
+      }
+
+      // Send FCM Push Notification if app is in background or closed
+      try {
+        const isDriverSender = socket.auth.role === 'driver';
+        const senderTitle = isDriverSender ? 'New Message from Driver' : 'New Message from Passenger';
+        const cleanMessageText = String(message || '').trim();
+
+        if (isDriverSender && userId) {
+          sendPushNotificationToEntities({
+            userIds: [userId],
+            title: senderTitle,
+            body: cleanMessageText,
+            data: {
+              type: 'ride_chat_message',
+              rideId: String(rideId),
+              senderRole: 'driver',
+              click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            },
+          }).catch(() => {});
+        } else if (!isDriverSender && driverId) {
+          sendPushNotificationToEntities({
+            driverIds: [driverId],
+            title: senderTitle,
+            body: cleanMessageText,
+            data: {
+              type: 'ride_chat_message',
+              rideId: String(rideId),
+              senderRole: 'user',
+              click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            },
+          }).catch(() => {});
+        }
+      } catch (pushErr) {
+        // Log & ignore push errors
       }
     }),
   );

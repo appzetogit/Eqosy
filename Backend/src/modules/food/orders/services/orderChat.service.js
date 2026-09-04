@@ -8,6 +8,7 @@ import { OrderConversation } from '../models/orderConversation.model.js';
 import { OrderMessage } from '../models/orderMessage.model.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { logger } from '../../../../utils/logger.js';
+import { notifyOwnerSafely } from '../../../../core/notifications/firebase.service.js';
 
 const TERMINAL_CANCELLED_STATUSES = new Set([
   'cancelled_by_user',
@@ -243,6 +244,33 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
     }
   } catch (socketErr) {
     logger.warn(`Failed to broadcast chat message via socket: ${socketErr?.message || socketErr}`);
+  }
+
+  // Send FCM Push Notification if app is in background or closed
+  try {
+    const recipientOwnerType = isUserSender ? 'DELIVERY_PARTNER' : 'USER';
+    const recipientOwnerId = isUserSender ? conversation?.deliveryPartnerId : order?.userId;
+
+    if (recipientOwnerId) {
+      const senderTitle = isUserSender ? 'New Message from Customer' : 'New Message from Delivery Partner';
+      notifyOwnerSafely(
+        { ownerType: recipientOwnerType, ownerId: String(recipientOwnerId) },
+        {
+          title: senderTitle,
+          body: cleanText,
+          data: {
+            type: 'chat_message',
+            chatType: 'food_order_chat',
+            orderId: String(conversation.orderId),
+            displayOrderId: String(conversation.displayOrderId || order?.order_id || order?.orderId || ''),
+            conversationId: String(conversation._id),
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          },
+        }
+      ).catch((err) => logger.warn(`FCM chat push failed: ${err?.message || err}`));
+    }
+  } catch (pushErr) {
+    logger.warn(`Failed to send FCM chat push notification: ${pushErr?.message || pushErr}`);
   }
 
   return {

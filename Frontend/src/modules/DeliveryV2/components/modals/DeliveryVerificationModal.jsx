@@ -134,7 +134,10 @@ const OtpModal = ({ order, onVerified, onClose }) => {
               <input
                 key={i}
                 ref={inputRefs[i]}
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={1}
                 disabled={isOtpVerified}
                 value={digit}
                 onChange={(e) => handleOtpChange(i, e.target.value)}
