@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Calendar, Clock, Plus, Users, CheckCircle2, AlertTriangle, XCircle, 
+import {
+  Calendar, Clock, Plus, Users, CheckCircle2, AlertTriangle, XCircle,
   Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List
 } from 'lucide-react';
 import { apiClient } from '@/services/api';
@@ -14,7 +14,7 @@ export const GigsManagement = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [statusFilter, setStatusFilter] = useState('active');
   const [viewMode, setViewMode] = useState('card');
-  
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingGig, setEditingGig] = useState(null);
   const [deactivatingGig, setDeactivatingGig] = useState(null);
@@ -220,11 +220,10 @@ export const GigsManagement = () => {
           <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
             <button
               onClick={() => setViewMode('card')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                viewMode === 'card'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${viewMode === 'card'
                   ? 'bg-white text-emerald-700 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
               title="Card View"
             >
               <LayoutGrid className="w-4 h-4" />
@@ -232,11 +231,10 @@ export const GigsManagement = () => {
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                viewMode === 'list'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${viewMode === 'list'
                   ? 'bg-white text-emerald-700 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
-              }`}
+                }`}
               title="List View"
             >
               <List className="w-4 h-4" />
@@ -271,9 +269,8 @@ export const GigsManagement = () => {
           {gigs.map((gig) => (
             <div
               key={gig._id}
-              className={`p-6 rounded-3xl bg-white border shadow-sm flex flex-col justify-between transition-all ${
-                gig.status === 'inactive' ? 'border-slate-200 opacity-60' : 'border-slate-100 hover:border-emerald-300'
-              }`}
+              className={`p-6 rounded-3xl bg-white border shadow-sm flex flex-col justify-between transition-all ${gig.status === 'inactive' ? 'border-slate-200 opacity-60' : 'border-slate-100 hover:border-emerald-300'
+                }`}
             >
               <div>
                 <div className="flex justify-between items-start mb-3">
@@ -284,11 +281,10 @@ export const GigsManagement = () => {
                     <h3 className="text-lg font-black text-slate-900 mt-2">{gig.title}</h3>
                   </div>
                   <span
-                    className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${
-                      gig.status === 'active'
+                    className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${gig.status === 'active'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-rose-50 text-rose-600 border-rose-200'
-                    }`}
+                      }`}
                   >
                     {gig.status}
                   </span>
@@ -359,9 +355,8 @@ export const GigsManagement = () => {
                 {gigs.map((gig) => (
                   <tr
                     key={gig._id}
-                    className={`hover:bg-slate-50/60 transition-colors ${
-                      gig.status === 'inactive' ? 'opacity-60' : ''
-                    }`}
+                    className={`hover:bg-slate-50/60 transition-colors ${gig.status === 'inactive' ? 'opacity-60' : ''
+                      }`}
                   >
                     <td className="py-4 px-6 font-bold text-slate-900">
                       {gig.title}
@@ -388,11 +383,10 @@ export const GigsManagement = () => {
                     </td>
                     <td className="py-4 px-6 text-center">
                       <span
-                        className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border inline-block ${
-                          gig.status === 'active'
+                        className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border inline-block ${gig.status === 'active'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : 'bg-rose-50 text-rose-600 border-rose-200'
-                        }`}
+                          }`}
                       >
                         {gig.status}
                       </span>

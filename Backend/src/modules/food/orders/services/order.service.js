@@ -1186,6 +1186,12 @@ export async function updateOrderStatusRestaurant(
 
       io.to(restRoom).emit("order_status_update", payload);
       io.to(userRoom).emit("order_status_update", payload);
+      if (order._id) {
+        io.to(rooms.tracking(order._id)).emit("order_status_update", payload);
+      }
+      if (order.order_id) {
+        io.to(rooms.tracking(order.order_id)).emit("order_status_update", payload);
+      }
 
       // Notify assigned rider via socket if they exist
       const assignedRiderId = order.dispatch?.deliveryPartnerId;

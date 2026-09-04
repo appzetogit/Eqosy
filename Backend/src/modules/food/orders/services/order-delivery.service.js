@@ -38,22 +38,49 @@ function emitOrderUpdate(order, deliveryPartnerId) {
     if (io) {
       const dv =
         order.deliveryVerification?.toObject?.() || order.deliveryVerification;
+
+      const partnerObj =
+        order.dispatch?.deliveryPartnerId && typeof order.dispatch.deliveryPartnerId === 'object'
+          ? {
+              name: order.dispatch.deliveryPartnerId.name || order.dispatch.deliveryPartnerId.fullName || 'Delivery Partner',
+              phone: order.dispatch.deliveryPartnerId.phone || order.dispatch.deliveryPartnerId.phoneNumber || '',
+              avatar: order.dispatch.deliveryPartnerId.avatar || order.dispatch.deliveryPartnerId.profileImage || null
+            }
+          : undefined;
+
+      const resolvedPartnerId =
+        deliveryPartnerId?.toString?.() ||
+        order.dispatch?.deliveryPartnerId?._id?.toString?.() ||
+        order.dispatch?.deliveryPartnerId?.toString?.();
+
       const payload = {
         orderMongoId: order._id?.toString?.(),
-        orderId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
         orderStatus: order.orderStatus,
         deliveryState: order.deliveryState,
         deliveryVerification: dv,
+        dispatch: order.dispatch,
+        assignmentInfo: order.assignmentInfo,
+        deliveryPartnerId: resolvedPartnerId,
+        deliveryPartner: partnerObj,
+        handoverOtp: String(order.deliveryOtp || '').trim() || undefined,
       };
-      io.to(rooms.delivery(deliveryPartnerId)).emit(
-        'order_status_update',
-        payload,
-      );
-      io.to(rooms.restaurant(order.restaurantId)).emit(
-        'order_status_update',
-        payload,
-      );
-      io.to(rooms.user(order.userId)).emit('order_status_update', payload);
+
+      if (resolvedPartnerId) {
+        io.to(rooms.delivery(resolvedPartnerId)).emit('order_status_update', payload);
+      }
+      if (order.restaurantId) {
+        io.to(rooms.restaurant(order.restaurantId)).emit('order_status_update', payload);
+      }
+      if (order.userId) {
+        io.to(rooms.user(order.userId)).emit('order_status_update', payload);
+      }
+      if (order._id) {
+        io.to(rooms.tracking(order._id)).emit('order_status_update', payload);
+      }
+      if (order.order_id) {
+        io.to(rooms.tracking(order.order_id)).emit('order_status_update', payload);
+      }
     }
 
     // Only send push notifications for key delivery milestones
@@ -434,15 +461,7 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
     try {
       const io = getIO();
       if (io) {
-        const payload = {
-          orderMongoId: order._id?.toString?.(),
-          orderId: order._id.toString(),
-          orderStatus: order.orderStatus,
-          dispatchStatus: order.dispatch?.status,
-        };
-        io.to(rooms.delivery(deliveryPartnerId)).emit('order_status_update', payload);
-        io.to(rooms.restaurant(order.restaurantId)).emit('order_status_update', payload);
-        io.to(rooms.user(order.userId)).emit('order_status_update', payload);
+        emitOrderUpdate(order, deliveryPartnerId);
 
         // Notify ALL other delivery partners who were offered this order to dismiss it
         const offeredPartners = order.dispatch?.offeredTo || [];
@@ -814,8 +833,18 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     throw new ForbiddenError('Not your order');
   }
 
-  const { otp, ratings } = body;
+  const { otp, ratings, handoverImageUrl, handoverPhoto } = body;
+  const photoUrl = handoverImageUrl || handoverPhoto || '';
   logger.info(`[DeliveryComplete] Attempting to complete order ${order._id} for partner ${deliveryPartnerId}. Status: ${order.orderStatus}`);
+
+  if (photoUrl) {
+    order.deliveryVerification = {
+      ...(order.deliveryVerification?.toObject?.() || order.deliveryVerification || {}),
+      handoverImageUrl: photoUrl,
+      handoverUploadedAt: new Date(),
+    };
+    order.markModified('deliveryVerification');
+  }
 
   if (
     otp &&
@@ -944,4 +973,3 @@ export async function updateOrderStatusDelivery(orderId, deliveryPartnerId, orde
   });
   return order.toObject();
 }
-

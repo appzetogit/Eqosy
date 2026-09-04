@@ -1223,9 +1223,9 @@ export const restaurantAPI = {
       contextModule: "restaurant",
     }),
   bulkUploadTemplate: () =>
-    apiClient.get("/food/restaurant/bulk-upload/template", { 
-      responseType: 'blob', 
-      contextModule: "restaurant" 
+    apiClient.get("/food/restaurant/bulk-upload/template", {
+      responseType: 'blob',
+      contextModule: "restaurant"
     }),
   bulkUpload: (file) => {
     const formData = new FormData();
@@ -1698,7 +1698,7 @@ export const deliveryAPI = {
     deliveryMeCacheTime = 0;
     try {
       localStorage.removeItem("app:isOnline");
-    } catch (_) {}
+    } catch (_) { }
     const token =
       refreshToken ||
       (typeof localStorage !== "undefined"
@@ -2627,7 +2627,7 @@ export const diningAPI = {
           return (
             String(booking?.userId || "") === String(userId) ||
             String(booking?.user?._id || booking?.user?.id || "") ===
-              String(userId)
+            String(userId)
           );
         }
 
@@ -2731,14 +2731,14 @@ export const diningAPI = {
   createBooking: async (payload = {}) => {
     const restaurantId = String(
       payload?.restaurant ||
-        payload?.restaurantId ||
-        payload?.restaurantRef?._id ||
-        payload?.restaurantRef?.id ||
-        payload?.restaurantRef?.restaurant?._id ||
-        payload?.restaurantRef?.restaurant?.id ||
-        payload?.restaurant?._id ||
-        payload?.restaurant?.id ||
-        "",
+      payload?.restaurantId ||
+      payload?.restaurantRef?._id ||
+      payload?.restaurantRef?.id ||
+      payload?.restaurantRef?.restaurant?._id ||
+      payload?.restaurantRef?.restaurant?.id ||
+      payload?.restaurant?._id ||
+      payload?.restaurant?.id ||
+      "",
     ).trim();
 
     if (!restaurantId) {

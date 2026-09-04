@@ -61,8 +61,14 @@ export const verifyLiveSelfie = async (deliveryPartnerId, payload, files = null)
     throw new ValidationError('Selfie image file size is too large (max 10MB)');
   }
 
-  // Upload to Cloudinary
-  const uploadedUrl = await uploadImageBuffer(buffer, 'food/delivery/selfies');
+  // Upload to Cloudinary with base64 fallback on error
+  let uploadedUrl = '';
+  try {
+    uploadedUrl = await uploadImageBuffer(buffer, 'food/delivery/selfies');
+  } catch (uploadErr) {
+    console.warn('[Selfie Verification] Image upload error fallback:', uploadErr?.message);
+    uploadedUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  }
 
   // Verify face match against registered profile photo
   const analysis = calculateSimulatedFaceMatch(buffer, partner.profilePhoto);
