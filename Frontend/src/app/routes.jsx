@@ -72,7 +72,7 @@ const SmartFallbackRedirect = () => {
     return <Navigate to="/login" replace />
   }
 
-  return <Navigate to="/landing" replace />
+  return <Navigate to="/food/user" replace />
 }
 
 const AppRoutes = () => {
@@ -153,8 +153,8 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
-      <Route path="/landing" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+      <Route path="/" element={<Navigate to="/food/user" replace />} />
+      <Route path="/landing" element={<Navigate to="/food/user" replace />} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
