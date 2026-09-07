@@ -10,10 +10,10 @@ import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
 
 export const registerDeliveryPartner = async (payload, files) => {
-    const { 
+    const {
         name, phone, email, countryCode, address, city, state, zoneId, zoneName,
         vehicleType, vehicleName, vehicleNumber, drivingLicenseNumber, panNumber, aadharNumber,
-        fcmToken, platform 
+        fcmToken, platform
     } = payload;
     const refRaw = typeof payload?.ref === 'string' ? String(payload.ref).trim() : '';
 

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Bell, Menu, ChevronDown, Calendar, Download, FileText, Wallet, X } from "lucide-react"
@@ -832,9 +832,9 @@ export default function HubFinance() {
                       onClick={() => {
                         setShowWithdrawalModal(true);
                       }}
-                      disabled={!(financeData?.currentCycle?.estimatedPayout > 0)}
+                      disabled={!(financeData?.currentCycle?.netAvailable > 0 || withdrawableAmount > 0)}
                       className={`w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 mt-4 transition-colors ${
-                        financeData?.currentCycle?.estimatedPayout > 0
+                        (financeData?.currentCycle?.netAvailable > 0 || withdrawableAmount > 0)
                           ? "bg-black text-white hover:bg-gray-800"
                           : "bg-gray-200 text-gray-500 cursor-not-allowed"
                       }`}

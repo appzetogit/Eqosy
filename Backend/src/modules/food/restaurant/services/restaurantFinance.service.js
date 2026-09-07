@@ -63,6 +63,37 @@ function parseISODateParamEnd(v) {
     return d;
 }
 
+function resolveTxPayout(tx) {
+    const rawShare = Number(tx?.amounts?.restaurantShare);
+    if (Number.isFinite(rawShare) && rawShare > 0) {
+        return rawShare;
+    }
+    const order = (tx?.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
+    const subtotal = Number(order?.pricing?.subtotal) || 0;
+    const packagingFee = Number(order?.pricing?.packagingFee) || 0;
+    const restaurantCommission = Number(tx?.amounts?.restaurantCommission ?? order?.pricing?.restaurantCommission ?? 0);
+    return Math.max(0, subtotal + packagingFee - restaurantCommission);
+}
+
+function resolveTxCommission(tx) {
+    const rawComm = Number(tx?.amounts?.restaurantCommission);
+    if (Number.isFinite(rawComm) && rawComm >= 0) {
+        return rawComm;
+    }
+    const order = (tx?.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
+    return Number(order?.pricing?.restaurantCommission) || 0;
+}
+
+function isCompletedTx(tx) {
+    if (!tx) return false;
+    const order = (tx.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
+    const orderStatus = String(order.orderStatus || order.deliveryState?.currentPhase || order.deliveryState?.status || '').toLowerCase();
+    if (['delivered', 'completed'].includes(orderStatus)) return true;
+    const txStatus = String(tx.status || '').toLowerCase();
+    const payStatus = String(tx.payment?.status || '').toLowerCase();
+    return ['captured', 'authorized', 'settled', 'completed', 'paid'].includes(txStatus) || payStatus === 'paid';
+}
+
 export async function getRestaurantFinance(restaurantId, query = {}) {
     if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) return null;
     const rid = new mongoose.Types.ObjectId(restaurantId);
@@ -81,34 +112,38 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
     const nowWindow = getFixedCurrentCycleWindow(new Date());
 
     // Current cycle: sum ledger payouts in the fixed window.
-    const currentTransactions = await FoodTransaction.find({
+    const rawCurrentTransactions = await FoodTransaction.find({
         restaurantId: rid,
-        status: { $in: ['captured', 'authorized'] },
         createdAt: { $gte: nowWindow.start, $lte: nowWindow.end }
     })
         .populate('orderId', 'orderId createdAt items pricing deliveryState orderStatus')
         .sort({ createdAt: -1 })
         .lean();
 
+    const currentTransactions = (rawCurrentTransactions || []).filter(isCompletedTx);
+
     const currentCycleOrders = currentTransactions.map((tx) => {
-        const order = tx.orderId || {};
+        const order = (tx.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
         const items = Array.isArray(order.items) ? order.items : [];
         const foodNames = items.map((it) => it?.name).filter(Boolean).join(', ');
         const orderTotalExclTax = Math.max(
             0,
             Number(order?.pricing?.total ?? 0) - Number(order?.pricing?.tax ?? 0) || 0
         );
+        const payout = resolveTxPayout(tx);
+        const commission = resolveTxCommission(tx);
+
         return {
             orderId: order?.orderId || tx.orderReadableId,
             createdAt: tx.createdAt,
             items,
             foodNames,
             orderTotal: orderTotalExclTax,
-            totalAmount: tx.amounts?.totalCustomerPaid || 0,
-            payout: tx.amounts?.restaurantShare || 0,
-            commission: tx.amounts?.restaurantCommission || 0,
+            totalAmount: tx.amounts?.totalCustomerPaid || order?.pricing?.total || 0,
+            payout,
+            commission,
             paymentMethod: tx.paymentMethod || order?.payment?.method,
-            orderStatus: order?.orderStatus || order?.deliveryState?.currentPhase || order?.deliveryState?.status,
+            orderStatus: order?.orderStatus || order?.deliveryState?.currentPhase || order?.deliveryState?.status || tx.status,
             status: tx.status
         };
     });
@@ -118,14 +153,18 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         0
     );
 
-    // Calculate global estimated payout (all captured/authorized transactions)
-    const allTransactions = await FoodTransaction.find({
-        restaurantId: rid,
-        status: { $in: ['captured', 'authorized'] }
-    }).select('amounts.restaurantShare').lean();
+    // Calculate global estimated payout (all completed/captured transactions)
+    const rawAllTransactions = await FoodTransaction.find({
+        restaurantId: rid
+    })
+        .populate('orderId', 'pricing orderStatus deliveryState')
+        .select('amounts.restaurantShare amounts.restaurantCommission status payment orderId')
+        .lean();
 
-    const globalEstimatedPayout = allTransactions.reduce(
-        (sum, tx) => sum + (Number(tx.amounts?.restaurantShare) || 0),
+    const allCompletedTx = (rawAllTransactions || []).filter(isCompletedTx);
+
+    const globalEstimatedPayout = allCompletedTx.reduce(
+        (sum, tx) => sum + (Number(resolveTxPayout(tx)) || 0),
         0
     );
 
@@ -152,7 +191,7 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         end: { ...nowWindow.endMeta },
         totalEarnings: currentCycleEstimatedPayout, // We still show current cycle earnings label
         totalWithdrawn: totalDeductedWithdrawals,
-        estimatedPayout: availableBalance,
+        estimatedPayout: currentCycleEstimatedPayout,
         netAvailable: availableBalance,
         minimumWithdrawalAmount,
         totalOrders: currentCycleOrders.length,
@@ -174,17 +213,18 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
 
     let pastCyclesResult = { orders: [], totalOrders: 0 };
     if (startDate && endDate) {
-        const pastTransactions = await FoodTransaction.find({
+        const rawPastTransactions = await FoodTransaction.find({
             restaurantId: rid,
-            status: { $in: ['captured', 'authorized'] },
             createdAt: { $gte: startDate, $lte: endDate }
         })
             .populate('orderId', 'orderId createdAt items pricing deliveryState orderStatus')
             .sort({ createdAt: -1 })
             .lean();
 
+        const pastTransactions = (rawPastTransactions || []).filter(isCompletedTx);
+
         const pastCycleOrders = pastTransactions.map((tx) => {
-            const order = tx.orderId || {};
+            const order = (tx.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
             const items = Array.isArray(order.items) ? order.items : [];
             const foodNames = items.map((it) => it?.name).filter(Boolean).join(', ');
             const orderTotalExclTax = Math.max(
@@ -198,11 +238,11 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
                 items,
                 foodNames,
                 orderTotal: orderTotalExclTax,
-                totalAmount: tx.amounts?.totalCustomerPaid || 0,
-                payout: tx.amounts?.restaurantShare || 0,
-                commission: tx.amounts?.restaurantCommission || 0,
+                totalAmount: tx.amounts?.totalCustomerPaid || order?.pricing?.total || 0,
+                payout: resolveTxPayout(tx),
+                commission: resolveTxCommission(tx),
                 paymentMethod: tx.paymentMethod || order?.payment?.method,
-                orderStatus: order?.orderStatus || order?.deliveryState?.currentPhase || order?.deliveryState?.status,
+                orderStatus: order?.orderStatus || order?.deliveryState?.currentPhase || order?.deliveryState?.status || tx.status,
                 status: tx.status
             };
         });

@@ -10,73 +10,73 @@ let restaurantCommissionRulesCache = null;
 let restaurantCommissionRulesLoadedAt = 0;
 
 async function getActiveRestaurantCommissionRules() {
-  const now = Date.now();
-  if (
-    restaurantCommissionRulesCache &&
-    now - restaurantCommissionRulesLoadedAt < RESTAURANT_COMMISSION_CACHE_MS
-  ) {
-    return restaurantCommissionRulesCache;
-  }
+    const now = Date.now();
+    if (
+        restaurantCommissionRulesCache &&
+        now - restaurantCommissionRulesLoadedAt < RESTAURANT_COMMISSION_CACHE_MS
+    ) {
+        return restaurantCommissionRulesCache;
+    }
 
-  const list = await FoodRestaurantCommission.find({
-    status: { $ne: false },
-  }).lean();
-  restaurantCommissionRulesCache = list || [];
-  restaurantCommissionRulesLoadedAt = now;
-  return restaurantCommissionRulesCache;
+    const list = await FoodRestaurantCommission.find({
+        status: { $ne: false },
+    }).lean();
+    restaurantCommissionRulesCache = list || [];
+    restaurantCommissionRulesLoadedAt = now;
+    return restaurantCommissionRulesCache;
 }
 
 export function computeRestaurantCommissionAmount(baseAmount, rule) {
-  const safeBase = Math.max(0, Number(baseAmount) || 0);
-  if (!Number.isFinite(safeBase) || safeBase < 0) return 0;
+    const safeBase = Math.max(0, Number(baseAmount) || 0);
+    if (!Number.isFinite(safeBase) || safeBase < 0) return 0;
 
-  const commissionType = rule?.defaultCommission?.type || 'percentage';
-  const commissionValue = Math.max(
-    0,
-    Number(rule?.defaultCommission?.value ?? 0) || 0
-  );
+    const commissionType = rule?.defaultCommission?.type || 'percentage';
+    const commissionValue = Math.max(
+        0,
+        Number(rule?.defaultCommission?.value ?? 0) || 0
+    );
 
-  let commissionAmount = 0;
-  if (commissionType === 'percentage') {
-    commissionAmount = safeBase * (commissionValue / 100);
-  } else if (commissionType === 'amount') {
-    commissionAmount = commissionValue;
-  }
+    let commissionAmount = 0;
+    if (commissionType === 'percentage') {
+        commissionAmount = safeBase * (commissionValue / 100);
+    } else if (commissionType === 'amount') {
+        commissionAmount = commissionValue;
+    }
 
-  // Round to 2 decimals and clamp to [0, base]
-  commissionAmount = Math.round((commissionAmount || 0) * 100) / 100;
-  commissionAmount = Math.max(0, Math.min(commissionAmount, safeBase));
+    // Round to 2 decimals and clamp to [0, base]
+    commissionAmount = Math.round((commissionAmount || 0) * 100) / 100;
+    commissionAmount = Math.max(0, Math.min(commissionAmount, safeBase));
 
-  return { commissionAmount, commissionType, commissionValue, baseAmount: safeBase };
+    return { commissionAmount, commissionType, commissionValue, baseAmount: safeBase };
 }
 
 export async function getRestaurantCommissionSnapshot(orderDoc) {
-  const baseAmount = Number(orderDoc?.pricing?.subtotal ?? 0) || 0;
-  const restaurantIdRaw =
-    orderDoc?.restaurantId?._id ?? orderDoc?.restaurantId ?? null;
+    const baseAmount = Number(orderDoc?.pricing?.subtotal ?? 0) || 0;
+    const restaurantIdRaw =
+        orderDoc?.restaurantId?._id ?? orderDoc?.restaurantId ?? null;
 
-  if (!restaurantIdRaw) {
-    return {
-      commissionAmount: 0,
-      commissionType: 'percentage',
-      commissionValue: 0,
-      baseAmount,
+    if (!restaurantIdRaw) {
+        return {
+            commissionAmount: 0,
+            commissionType: 'percentage',
+            commissionValue: 0,
+            baseAmount,
+        };
+    }
+
+    const rules = await getActiveRestaurantCommissionRules();
+    const rule =
+        rules.find((r) => String(r.restaurantId) === String(restaurantIdRaw)) ||
+        // Fallback: accept legacy docs where restaurantId may be stored under `restaurant` / `restaurant_id`
+        rules.find((r) => String(r.restaurant || r.restaurant_id || '') === String(restaurantIdRaw)) ||
+        null;
+
+    // Fallback default commission rule (10% percentage) if no explicit custom rule is configured for this restaurant
+    const effectiveRule = rule || {
+        defaultCommission: { type: 'percentage', value: 10 }
     };
-  }
 
-  const rules = await getActiveRestaurantCommissionRules();
-  const rule =
-    rules.find((r) => String(r.restaurantId) === String(restaurantIdRaw)) ||
-    // Fallback: accept legacy docs where restaurantId may be stored under `restaurant` / `restaurant_id`
-    rules.find((r) => String(r.restaurant || r.restaurant_id || '') === String(restaurantIdRaw)) ||
-    null;
-
-  // Fallback default commission rule (10% percentage) if no explicit custom rule is configured for this restaurant
-  const effectiveRule = rule || {
-    defaultCommission: { type: 'percentage', value: 10 }
-  };
-
-  return computeRestaurantCommissionAmount(baseAmount, effectiveRule);
+    return computeRestaurantCommissionAmount(baseAmount, effectiveRule);
 }
 
 /**
@@ -86,11 +86,11 @@ export async function createInitialTransaction(order) {
     if (!order) return null;
 
     const { commissionAmount = 0 } = await getRestaurantCommissionSnapshot(order).catch(() => ({ commissionAmount: 0 }));
-    
+
     // Split logic - Ensure all values are finite numbers
     const totalCustomerPaid = Number(order.pricing?.total) || 0;
     const riderShare = Number(order.riderTotalPayout) || Number(order.riderEarning) || 0;
-    
+
     // Prefer commission already computed & stored on the order (source of truth for this order),
     // fallback to rule snapshot for older orders.
     const restaurantCommissionFromOrder = Number(order.pricing?.restaurantCommission);
@@ -247,7 +247,7 @@ export async function updateTransactionStatus(orderId, kind, details = {}) {
     if (details.status) transaction.status = details.status;
     if (details.razorpayPaymentId) transaction.gateway.razorpayPaymentId = details.razorpayPaymentId;
     if (details.razorpaySignature) transaction.gateway.razorpaySignature = details.razorpaySignature;
-    
+
     transaction.history.push({
         kind,
         amount: transaction.amounts?.totalCustomerPaid || 0,
@@ -269,7 +269,62 @@ export async function updateTransactionStatus(orderId, kind, details = {}) {
 export async function creditWalletsForTransaction(transaction) {
     if (!transaction || !transaction.orderId) return;
 
-    const restaurantShare = Number(transaction.amounts?.restaurantShare) || 0;
+    let restaurantShare = Number(transaction.amounts?.restaurantShare) || 0;
+    let riderShare = Number(transaction.amounts?.riderShare || transaction.amounts?.riderTotalPayout) || 0;
+    let riderId = transaction.deliveryPartnerId?._id ? String(transaction.deliveryPartnerId._id) : (transaction.deliveryPartnerId ? String(transaction.deliveryPartnerId) : null);
+
+    // Fallback: If restaurantShare, riderId or riderShare is missing/0, resolve from FoodOrder
+    if ((restaurantShare <= 0 || !riderId || riderId === '[object Object]' || riderShare <= 0) && transaction.orderId) {
+        try {
+            const FoodOrderModel = mongoose.model('FoodOrder');
+            const orderDoc = await FoodOrderModel.findById(transaction.orderId).lean();
+            if (orderDoc) {
+                if (restaurantShare <= 0) {
+                    const subtotal = Number(orderDoc.pricing?.subtotal) || 0;
+                    const packagingFee = Number(orderDoc.pricing?.packagingFee) || 0;
+                    const restaurantCommission = Number(orderDoc.pricing?.restaurantCommission) || 0;
+                    restaurantShare = Math.max(0, subtotal + packagingFee - restaurantCommission);
+                }
+
+                if (!riderId || riderId === '[object Object]') {
+                    const rawPartnerId = orderDoc.dispatch?.deliveryPartnerId || orderDoc.deliveryPartnerId;
+                    riderId = rawPartnerId?._id ? String(rawPartnerId._id) : (rawPartnerId ? String(rawPartnerId) : null);
+                    if (riderId && riderId !== '[object Object]') {
+                        transaction.deliveryPartnerId = new mongoose.Types.ObjectId(riderId);
+                    }
+                }
+
+                if (riderShare <= 0) {
+                    const riderDeliveryFeeShare = Number(orderDoc.riderDeliveryFeeShare || orderDoc.pricing?.riderDeliveryEarningAfterAdminCommission || orderDoc.pricing?.deliveryFee || 0);
+                    const riderSurgePay = Number(orderDoc.riderSurgePay || orderDoc.pricing?.surgeAmount || 0);
+                    const riderIncentivePay = Number(orderDoc.riderIncentivePay || orderDoc.pricing?.deliveryPartnerIncentiveAmount || 0);
+                    const computedPayout = Math.round((riderDeliveryFeeShare + riderSurgePay + riderIncentivePay) * 100) / 100;
+                    riderShare = Number(orderDoc.riderTotalPayout || computedPayout || orderDoc.riderEarning || 0);
+                }
+
+                transaction.amounts = {
+                    ...(transaction.amounts || {}),
+                    restaurantShare,
+                    riderShare,
+                    riderTotalPayout: riderShare,
+                };
+
+                await FoodTransaction.updateOne(
+                    { _id: transaction._id },
+                    {
+                        $set: {
+                            deliveryPartnerId: transaction.deliveryPartnerId,
+                            'amounts.restaurantShare': restaurantShare,
+                            'amounts.riderShare': riderShare,
+                            'amounts.riderTotalPayout': riderShare,
+                        }
+                    }
+                ).catch(() => {});
+            }
+        } catch (err) {
+            logger.error(`[FoodTransaction] Error resolving order fallback for transaction ${transaction._id}: ${err?.message || err}`);
+        }
+    }
     const restId = transaction.restaurantId?._id ? String(transaction.restaurantId._id) : (transaction.restaurantId ? String(transaction.restaurantId) : null);
     if (restaurantShare > 0 && restId && restId !== '[object Object]') {
         try {
@@ -295,8 +350,6 @@ export async function creditWalletsForTransaction(transaction) {
         }
     }
 
-    const riderShare = Number(transaction.amounts?.riderShare || transaction.amounts?.riderTotalPayout) || 0;
-    const riderId = transaction.deliveryPartnerId?._id ? String(transaction.deliveryPartnerId._id) : (transaction.deliveryPartnerId ? String(transaction.deliveryPartnerId) : null);
     if (riderShare > 0 && riderId && riderId !== '[object Object]') {
         try {
             const existingRiderTxn = await Transaction.findOne({

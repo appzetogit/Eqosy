@@ -35,12 +35,12 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
         ]),
         // 2. Gross cash collected (COD orders)
         FoodOrder.aggregate([
-            { 
-                $match: { 
-                    'dispatch.deliveryPartnerId': partnerId, 
-                    orderStatus: 'delivered', 
+            {
+                $match: {
+                    'dispatch.deliveryPartnerId': partnerId,
+                    orderStatus: 'delivered',
                     'payment.method': 'cash'
-                } 
+                }
             },
             { $group: { _id: null, cashCollected: { $sum: { $ifNull: ['$pricing.total', 0] } } } }
         ]),
@@ -62,12 +62,12 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
         // 5. Withdrawal Aggregates (Approved vs Pending)
         FoodDeliveryWithdrawal.aggregate([
             { $match: { deliveryPartnerId: partnerId } },
-            { 
-                $group: { 
-                    _id: null, 
+            {
+                $group: {
+                    _id: null,
                     totalWithdrawn: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, '$amount', 0] } },
                     pendingWithdrawals: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } }
-                } 
+                }
             }
         ]),
         // 6. Recent Withdrawals for History
