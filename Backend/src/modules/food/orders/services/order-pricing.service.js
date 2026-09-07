@@ -7,6 +7,8 @@ import { FoodOfferUsage } from '../../admin/models/offerUsage.model.js';
 import { FoodDeliverySurgeZone } from '../../admin/models/deliverySurgeZone.model.js';
 import { FoodDeliveryCommissionRule } from '../../admin/models/deliveryCommissionRule.model.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
+import { FoodItem } from '../../admin/models/food.model.js';
+import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { haversineKm } from './order.helpers.js';
 

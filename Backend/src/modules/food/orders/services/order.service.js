@@ -363,12 +363,24 @@ export async function createOrder(userId, dto) {
         String(paymentMethod || "").toLowerCase() === "razorpay" &&
         String(payment?.status || "").toLowerCase() !== "paid";
 
+      const isScheduledFutureOrder =
+        Boolean(order.scheduledAt) &&
+        (new Date(order.scheduledAt).getTime() - Date.now() > 35 * 60 * 1000);
+
+      const formattedScheduledTime = order.scheduledAt
+        ? new Date(order.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
+
       await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
         title: isAwaitingOnlinePayment
           ? "Complete Payment to Confirm Order"
+          : isScheduledFutureOrder
+          ? `Order Scheduled for ${formattedScheduledTime} ⏰`
           : "Order Confirmed! 🎉",
         body: isAwaitingOnlinePayment
           ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
+          : isScheduledFutureOrder
+          ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before your scheduled time.`
           : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
         image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
         data: {
@@ -379,8 +391,14 @@ export async function createOrder(userId, dto) {
         },
       });
 
-      // Restaurant gets new-order request only when payment flow is eligible.
-      await notifyRestaurantNewOrder(order);
+      // Restaurant gets new-order request only if NOT a future scheduled order (> 35 mins away)
+      if (!isScheduledFutureOrder) {
+        order.scheduledDispatched = true;
+        await order.save();
+        await notifyRestaurantNewOrder(order);
+      } else {
+        logger.info(`[Scheduled Order Created] Order #${order.order_id || order._id} is scheduled for ${order.scheduledAt}. Dispatch to restaurant deferred to 30 minutes prior.`);
+      }
 
       emitOrderStatusSocket(
         { userId },
@@ -390,9 +408,13 @@ export async function createOrder(userId, dto) {
           orderStatus: order.orderStatus,
           title: isAwaitingOnlinePayment
             ? "Complete Payment to Confirm Order"
+            : isScheduledFutureOrder
+            ? "Order Scheduled!"
             : "Order Confirmed!",
           message: isAwaitingOnlinePayment
             ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
+            : isScheduledFutureOrder
+            ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before scheduled time.`
             : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
         },
       );
@@ -686,6 +708,39 @@ export async function recoverStuckOrders() {
     logger.error(`Watchdog recovery error: ${err.message}`);
   }
 }
+
+/**
+ * Watchdog / Worker: Processes scheduled food orders whose scheduledAt time is within 30 minutes.
+ * Dispatches them to the restaurant if not already dispatched.
+ */
+export async function processScheduledFoodOrders() {
+  try {
+    const thirtyMinsFromNow = new Date(Date.now() + 30 * 60 * 1000);
+    const dueOrders = await FoodOrder.find({
+      scheduledAt: { $exists: true, $ne: null, $lte: thirtyMinsFromNow },
+      scheduledDispatched: { $ne: true },
+      orderStatus: { $nin: ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'pending_payment'] }
+    });
+
+    if (!dueOrders.length) return;
+
+    logger.info(`[Scheduled Orders Watchdog] Processing ${dueOrders.length} scheduled order(s) due for restaurant dispatch.`);
+
+    for (const order of dueOrders) {
+      try {
+        order.scheduledDispatched = true;
+        await order.save();
+        await notifyRestaurantNewOrder(order);
+        logger.info(`[Scheduled Order Dispatched] Order #${order.order_id || order._id} sent to restaurant.`);
+      } catch (orderErr) {
+        logger.error(`[Scheduled Order Dispatch Error] Order #${order._id}: ${orderErr.message}`);
+      }
+    }
+  } catch (err) {
+    logger.error(`[Scheduled Orders Process Error]: ${err.message}`);
+  }
+}
+
 
 export async function resyncState(userId, role) {
   if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
@@ -1201,20 +1256,33 @@ export async function updateOrderStatusRestaurant(
       }
     }
 
+    const isCancelStatus = String(orderStatus).includes("cancel");
+    const isFoodReady = String(orderStatus) === "ready_for_pickup" || String(orderStatus) === "ready";
+
     const notifyList = [
       { ownerType: "USER", ownerId: order.userId },
-      { ownerType: "RESTAURANT", ownerId: restaurantId },
     ];
 
+    // Restaurant ONLY receives push notification on cancellation (New Order, Reached Pickup & Delivered are handled in their dedicated flows)
+    if (isCancelStatus) {
+      notifyList.push({ ownerType: "RESTAURANT", ownerId: restaurantId });
+    }
+
+    // Delivery partner ONLY receives push notification when food is ready (#2) or order is cancelled
     const assignedRiderId = order.dispatch?.deliveryPartnerId;
-    if (assignedRiderId) {
+    if (assignedRiderId && (isFoodReady || isCancelStatus)) {
       notifyList.push({ ownerType: "DELIVERY_PARTNER", ownerId: assignedRiderId });
     }
 
     let riderTitle = `Order #${order.order_id || order._id} updated`;
     let riderBody = `The order status is now ${String(orderStatus).replace(/_/g, " ")}.`;
 
-    if (String(orderStatus).includes("cancel")) {
+    if (isFoodReady) {
+      riderTitle = "Order is Ready for Pickup! 🍳";
+      riderBody = `Order #${order.order_id || order._id} is prepared and ready to be picked up at the restaurant.`;
+    }
+
+    if (isCancelStatus) {
       riderTitle = "Order Cancelled ❌";
       riderBody = `Order #${order.order_id || order._id} has been cancelled. Please stop your current task.`;
 
@@ -1232,21 +1300,23 @@ export async function updateOrderStatusRestaurant(
       }
     }
 
-    await notifyOwnersSafely(
-      notifyList,
-      {
-        title: title,
-        body: body,
-        image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
-        data: {
-          type: "order_status_update",
-          orderId: order._id.toString(),
-          orderMongoId: order._id?.toString?.() || "",
-          orderStatus: String(orderStatus || ""),
-          link: `/food/user/orders/${order._id?.toString?.() || ""}`,
+    if (notifyList.length > 0) {
+      await notifyOwnersSafely(
+        notifyList,
+        {
+          title: isFoodReady ? riderTitle : title,
+          body: isFoodReady ? riderBody : body,
+          image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
+          data: {
+            type: "order_status_update",
+            orderId: order._id.toString(),
+            orderMongoId: order._id?.toString?.() || "",
+            orderStatus: String(orderStatus || ""),
+            link: `/food/user/orders/${order._id?.toString?.() || ""}`,
+          },
         },
-      },
-    );
+      );
+    }
   } catch (err) {
     logger.warn(`Error emitting status update to restaurant: ${err?.message || err}`);
   }
@@ -1783,6 +1853,40 @@ export async function handoverDeliveryOrder(orderId, partnerId, payload = {}) {
     }
   } catch (err) {
     logger.warn(`Handover socket notification error: ${err.message}`);
+  }
+
+  // Update OrderConversation state and append system note in order chat thread
+  try {
+    const { OrderConversation } = await import('../models/orderConversation.model.js');
+    const { OrderMessage } = await import('../models/orderMessage.model.js');
+    const conv = await OrderConversation.findOne({ orderId: order._id });
+    if (conv) {
+      conv.deliveryPartnerId = null;
+      conv.partnerUnreadCount = 0;
+      conv.status = 'WAITING_FOR_PARTNER';
+      await conv.save();
+
+      const sysMsg = await OrderMessage.create({
+        conversationId: conv._id,
+        orderId: order._id,
+        senderId: partnerId,
+        senderRole: 'SYSTEM',
+        text: `Previous delivery partner handed over the order (${emergencyReason}). Waiting for new delivery partner to accept.`,
+        messageType: 'system',
+        status: 'sent',
+      });
+
+      const io = getIO();
+      if (io) {
+        io.to(`order-chat:${order._id}`).emit('new-order-chat-message', {
+          orderId: String(order._id),
+          message: sysMsg.toObject(),
+          conversation: conv.toObject(),
+        });
+      }
+    }
+  } catch (convErr) {
+    logger.warn(`Handover chat update error: ${convErr.message}`);
   }
 
   // Instantly re-trigger auto-assign search for other drivers in the zone!

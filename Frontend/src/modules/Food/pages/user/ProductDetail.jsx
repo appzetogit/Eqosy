@@ -325,6 +325,12 @@ export default function ProductDetail() {
                   <Badge variant="outline" className="text-xs sm:text-sm md:text-base">
                     {product.category}
                   </Badge>
+                  {product.availableTime && product.availableTime.isAllDay === false && product.availableTime.startTime && product.availableTime.endTime && (
+                    <Badge className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-xs sm:text-sm flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Available {product.availableTime.startTime} - {product.availableTime.endTime}
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="flex-shrink-0 text-right">

@@ -142,11 +142,35 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
   const todayStr = now.toISOString().slice(0, 10);
   const { date = todayStr } = query;
 
-  // Active gigs on or after selected date
-  const gigs = await FoodGig.find({
+  // Fetch delivery partner to check assigned area/zone
+  const partner = await FoodDeliveryPartner.findById(deliveryPartnerId).select('zoneId zoneName city address').lean();
+
+  const match = {
     status: 'active',
     date: { $gte: date }
-  }).sort({ startDateTime: 1 }).lean();
+  };
+
+  // If partner has an assigned zone or city, filter gigs for that zone OR 'All Zones'
+  if (partner) {
+    const partnerZoneName = (partner.zoneName || partner.city || partner.address || '').trim();
+    const partnerZoneId = partner.zoneId;
+
+    if (partnerZoneId && mongoose.Types.ObjectId.isValid(partnerZoneId)) {
+      match.$or = [
+        { zoneId: partnerZoneId },
+        { zoneName: 'All Zones' },
+        { zoneName: { $regex: new RegExp(partnerZoneName || 'All Zones', 'i') } }
+      ];
+    } else if (partnerZoneName && partnerZoneName.toLowerCase() !== 'all zones') {
+      match.$or = [
+        { zoneName: 'All Zones' },
+        { zoneName: { $regex: new RegExp(partnerZoneName, 'i') } }
+      ];
+    }
+  }
+
+  // Active gigs matching zone on or after selected date
+  const gigs = await FoodGig.find(match).sort({ startDateTime: 1 }).lean();
 
   const gigIds = gigs.map(g => g._id);
   const partnerBookings = await FoodGigBooking.find({
@@ -440,4 +464,121 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
     logger.error(`[Gig Auto-Offline Error] ${error.message}`);
     return { processed: 0, error: error.message };
   }
+};
+
+export const listGigBookingsForAdmin = async (query = {}) => {
+  const { date, gigId, zoneId, status = 'all', page = 1, limit = 200 } = query;
+  const now = new Date();
+
+  const match = {};
+  if (gigId && mongoose.Types.ObjectId.isValid(gigId)) {
+    match.gigId = new mongoose.Types.ObjectId(gigId);
+  }
+
+  const bookings = await FoodGigBooking.find(match)
+    .populate({
+      path: 'gigId',
+      select: 'title date startTime endTime startDateTime endDateTime zoneName zoneId capacity status'
+    })
+    .populate({
+      path: 'deliveryPartnerId',
+      select: 'name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address updatedAt'
+    })
+    .sort({ bookedAt: -1 })
+    .lean();
+
+  let filtered = bookings.filter(b => b.gigId && b.deliveryPartnerId);
+
+  // Date filter
+  if (date) {
+    filtered = filtered.filter(b => b.gigId.date === date);
+  }
+
+  // Zone filter
+  if (zoneId) {
+    filtered = filtered.filter(b => 
+      String(b.gigId.zoneId || '') === String(zoneId) || 
+      String(b.gigId.zoneName || '').toLowerCase().includes(String(zoneId).toLowerCase())
+    );
+  }
+
+  const enriched = filtered.map(b => {
+    const gig = b.gigId;
+    const partner = b.deliveryPartnerId;
+    const isOnline = partner.availabilityStatus === 'online';
+
+    let workStatus = 'Booked';
+    if (b.status === 'completed') {
+      workStatus = 'Completed';
+    } else if (b.status === 'cancelled') {
+      workStatus = 'Cancelled';
+    } else if (b.status === 'no_show') {
+      workStatus = 'No-show';
+    } else if (isOnline) {
+      workStatus = 'Working / Online';
+    } else {
+      workStatus = 'Booked but Offline';
+    }
+
+    return {
+      _id: b._id,
+      bookingId: b._id,
+      gigId: gig._id,
+      gigTitle: gig.title,
+      gigDate: gig.date,
+      gigTime: `${gig.startTime} - ${gig.endTime}`,
+      zoneName: gig.zoneName || partner.zoneName || partner.city || 'All Zones',
+      bookedAt: b.bookedAt || b.createdAt,
+      partnerId: partner._id,
+      partnerName: partner.name,
+      partnerPhone: partner.phone,
+      partnerEmail: partner.email || '',
+      profilePhoto: partner.profilePhoto || partner.onlineSelfie?.imageUrl || '',
+      availabilityStatus: partner.availabilityStatus || 'offline',
+      bookingStatus: b.status,
+      workStatus,
+      isOnline,
+      lastActiveAt: partner.updatedAt
+    };
+  });
+
+  // Calculate summary counts
+  const totalBooked = enriched.length;
+  const currentlyWorking = enriched.filter(b => b.workStatus === 'Working / Online').length;
+  const bookedButOffline = enriched.filter(b => b.workStatus === 'Booked but Offline').length;
+  const completedCount = enriched.filter(b => b.workStatus === 'Completed').length;
+  const noShowCount = enriched.filter(b => b.workStatus === 'No-show').length;
+
+  // Filter by status tab
+  let finalBookings = enriched;
+  if (status === 'working' || status === 'online') {
+    finalBookings = enriched.filter(b => b.workStatus === 'Working / Online');
+  } else if (status === 'offline') {
+    finalBookings = enriched.filter(b => b.workStatus === 'Booked but Offline');
+  } else if (status === 'no_show') {
+    finalBookings = enriched.filter(b => b.workStatus === 'No-show');
+  } else if (status === 'completed') {
+    finalBookings = enriched.filter(b => b.workStatus === 'Completed');
+  } else if (status === 'cancelled') {
+    finalBookings = enriched.filter(b => b.workStatus === 'Cancelled');
+  }
+
+  const skip = (Math.max(1, Number(page)) - 1) * Math.min(200, Number(limit));
+  const paginated = finalBookings.slice(skip, skip + Number(limit));
+
+  return {
+    bookings: paginated,
+    summary: {
+      totalBooked,
+      currentlyWorking,
+      bookedButOffline,
+      completedCount,
+      noShowCount
+    },
+    pagination: {
+      total: finalBookings.length,
+      page: Number(page),
+      limit: Number(limit)
+    }
+  };
 };

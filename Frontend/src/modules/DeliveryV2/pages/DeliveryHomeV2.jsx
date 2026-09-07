@@ -30,7 +30,7 @@ import {
   Bell, HelpCircle, AlertTriangle,
   Wallet, History, User as UserIcon, LayoutGrid,
   Plus, Minus, Navigation2, Navigation, Target, Play, CheckCircle2, Clock, ChevronDown, Phone,
-  Contact, Package, Camera, MessageCircle
+  Contact, Package, Camera, MessageCircle, Compass, RefreshCw, MapPin
 } from 'lucide-react';
 
 import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
@@ -257,6 +257,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [showEmergencyPopup, setShowEmergencyPopup] = useState(false);
   const [showBookGigModal, setShowBookGigModal] = useState(false);
   const [showSelfieVerificationModal, setShowSelfieVerificationModal] = useState(false);
+  const [showGpsModal, setShowGpsModal] = useState(false);
+  const [gpsErrorMessage, setGpsErrorMessage] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [showOnlineSelfiePrompt, setShowOnlineSelfiePrompt] = useState(false);
   const [showSelfieCameraCapture, setShowSelfieCameraCapture] = useState(false);
@@ -647,13 +649,38 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const goOnline = useCallback(async (selfieImageUrl = '') => {
     setIsTogglingDuty(true);
     try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 8000,
-          maximumAge: 0,
+      if (typeof window === 'undefined' || !navigator.geolocation) {
+        const errorMsg = 'GPS Location services are not supported on this device or browser.';
+        setGpsErrorMessage(errorMsg);
+        setShowGpsModal(true);
+        throw new Error(errorMsg);
+      }
+
+      let position;
+      try {
+        position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          });
         });
-      });
+      } catch (geoError) {
+        setOnline(false);
+        setIsTogglingDuty(false);
+        let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
+        if (geoError.code === 1) {
+          errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
+        } else if (geoError.code === 2) {
+          errorMsg = 'Your mobile GPS / Location is turned OFF. Please turn ON location services on your phone to go online and accept delivery orders.';
+        } else if (geoError.code === 3) {
+          errorMsg = 'GPS signal request timed out. Please make sure location / GPS is turned ON and try again.';
+        }
+        setGpsErrorMessage(errorMsg);
+        setShowGpsModal(true);
+        toast.error(errorMsg);
+        return;
+      }
 
       const { latitude, longitude } = position.coords;
       const cachedSelfieUrl = selfieImageUrl || onlineSelfieRef.current?.imageUrl || '';
@@ -666,6 +693,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         setOnlineSelfie(data.onlineSelfie);
       }
       setOnline(true);
+      setShowGpsModal(false);
       toast.success('You are now online');
     } catch (error) {
       setOnline(false);
@@ -1271,6 +1299,22 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             </div>
           </div>
 
+          {/* 📍 GPS OFF Sticky Alert Banner */}
+          {!isOnline && gpsErrorMessage && (
+            <div className="bg-rose-500 text-white px-4 py-1.5 text-[11px] font-bold flex items-center justify-between shadow-md">
+              <span className="flex items-center gap-1.5 truncate">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-300 animate-pulse" />
+                <span className="truncate">GPS Location is OFF. Turn ON location to go online.</span>
+              </span>
+              <button
+                onClick={() => setShowGpsModal(true)}
+                className="underline font-black text-[10px] uppercase ml-2 bg-white/20 px-2.5 py-0.5 rounded-full shrink-0 hover:bg-white/30 transition-colors"
+              >
+                Turn ON GPS
+              </button>
+            </div>
+          )}
+
           {/* â”€â”€â”€ LIVE STATUS / PROGRESS BADGE (MATCHED PRO) â”€â”€â”€ */}
           <AnimatePresence>
             {currentTab === 'feed' && (
@@ -1823,6 +1867,69 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* 📍 GPS Location OFF Warning Modal */}
+      <AnimatePresence>
+        {showGpsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[850] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 font-sans"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[28px] p-6 max-w-sm w-full shadow-2xl border border-rose-100 text-center relative overflow-hidden"
+            >
+              <div className="w-16 h-16 rounded-full bg-rose-100 border-4 border-rose-50 flex items-center justify-center text-rose-600 mx-auto mb-4 shadow-lg animate-bounce">
+                <Compass className="w-8 h-8 stroke-[2.5]" />
+              </div>
+
+              <h3 className="text-lg font-black text-slate-900 tracking-tight mb-1">
+                📍 Mobile GPS Location is OFF
+              </h3>
+              <p className="text-xs font-bold text-rose-600 mb-3 bg-rose-50 border border-rose-200/60 p-2.5 rounded-xl leading-relaxed">
+                {gpsErrorMessage || 'Your mobile GPS / Location is turned OFF. Please turn ON location services to go online.'}
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 mb-5 text-left text-[11px] font-semibold text-slate-700 space-y-1.5 shadow-xs">
+                <div className="font-bold flex items-center gap-1.5 text-slate-900">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span>How to enable GPS on your mobile:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-slate-600 font-medium pl-0.5">
+                  <li>Swipe down phone Notification / Quick Settings bar.</li>
+                  <li>Tap to turn <strong>ON Location / GPS</strong>.</li>
+                  <li>Grant location permission to Eqosy app if prompted.</li>
+                </ol>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowGpsModal(false);
+                    await goOnline();
+                  }}
+                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white rounded-2xl text-xs font-black tracking-wide uppercase shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4 animate-spin-reverse" />
+                  <span>Check GPS & Retry Going Online</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGpsModal(false)}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

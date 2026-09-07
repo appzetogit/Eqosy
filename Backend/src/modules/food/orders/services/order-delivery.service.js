@@ -99,32 +99,26 @@ function emitOrderUpdate(order, deliveryPartnerId) {
     if (status === 'picked_up') {
       userTitle = 'Order Picked Up! 🛵';
       userBody = 'Your order has been picked up by the delivery partner and is on the way to deliver your order.';
-      restTitle = 'Order Picked Up! 🛵';
-      restBody = `Order #${displayOrderId} has been picked up by the delivery partner.`;
-      riderTitle = 'Order Picked Up! 📦';
-      riderBody = `You have picked up order #${displayOrderId}. Proceed to the customer location.`;
+      restTitle = '';
+      restBody = '';
+      riderTitle = '';
+      riderBody = '';
     } else if (status === 'reached_drop') {
       const billAmount = order.pricing?.total || order.amounts?.totalCustomerPaid || order.total || 0;
       const otpCode = String(order.deliveryOtp || '').trim() || '----';
       userTitle = '🚚 Your Delivery Partner Has Arrived!';
       userBody = `Your order has reached your location. Please come to the door to receive your order.\n\n💰 Total Bill: ₹${billAmount}\n🔐 Delivery OTP: ${otpCode}\n\nPlease share this OTP with the delivery partner to confirm and receive your order.\n\nThank you for choosing Eqosy! ❤️`;
-      restTitle = 'Rider at Customer Location 📍';
-      restBody = `Delivery partner has arrived at customer location for Order #${displayOrderId}.`;
-      riderTitle = 'Arrived at Drop! 📍';
-      riderBody = `You have reached the customer location for Order #${displayOrderId}.`;
+      restTitle = '';
+      restBody = '';
+      riderTitle = '';
+      riderBody = '';
     } else if (status === 'delivered') {
       userTitle = 'Order Completed! 🎉';
       userBody = 'Your order is completed, now enjoy your meal';
       restTitle = `Order #${displayOrderId} Delivered! ✅`;
       restBody = `Order #${displayOrderId} has been successfully delivered to customer.`;
-      riderTitle = 'Delivery successful! ✅';
-      riderBody = `Order #${displayOrderId} has been successfully delivered.`;
-
-      if (order.payment?.method === 'cash' || order.paymentMethod === 'cash') {
-        riderTitle = 'Payment collected! 💰';
-        const amt = order.pricing?.total || order.amounts?.totalCustomerPaid || 0;
-        riderBody = `You have collected ₹${amt} cash for Order #${displayOrderId}.`;
-      }
+      riderTitle = '';
+      riderBody = '';
     }
 
     if (userTitle) {
@@ -479,14 +473,50 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
         logger.info(`[DeliveryDispatch] Broadcasted order_claimed to ${offeredPartners.length - 1} other partners for order ${order._id.toString()}`);
       }
 
+      // Synchronize OrderConversation to new delivery partner
+      try {
+        const { OrderConversation } = await import('../models/orderConversation.model.js');
+        const { OrderMessage } = await import('../models/orderMessage.model.js');
+        const conv = await OrderConversation.findOne({ orderId: order._id });
+        if (conv) {
+          conv.deliveryPartnerId = deliveryPartnerId;
+          conv.partnerUnreadCount = 0;
+          conv.status = 'CHAT_ACTIVE';
+          await conv.save();
+
+          const partnerDoc = await FoodDeliveryPartner.findById(deliveryPartnerId).select('fullName name').lean();
+          const partnerName = partnerDoc?.fullName || partnerDoc?.name || 'Delivery Partner';
+
+          const sysMsg = await OrderMessage.create({
+            conversationId: conv._id,
+            orderId: order._id,
+            senderId: deliveryPartnerId,
+            senderRole: 'SYSTEM',
+            text: `${partnerName} has accepted your order as your delivery partner.`,
+            messageType: 'system',
+            status: 'sent',
+          });
+
+          if (io) {
+            io.to(`order-chat:${order._id}`).emit('new-order-chat-message', {
+              orderId: String(order._id),
+              message: sysMsg.toObject(),
+              conversation: conv.toObject(),
+            });
+          }
+        }
+      } catch (convErr) {
+        logger.warn(`Accept order chat update error: ${convErr.message}`);
+      }
+
+      // Store does NOT get notified when rider accepts (Store gets 1. New Order, 2. Rider Reached Pickup, 3. Order Delivered)
+      // Rider gets Notification #1: Order Accepted
       await notifyOwnersSafely(
         [
           { ownerType: 'USER', ownerId: order.userId },
-          { ownerType: 'RESTAURANT', ownerId: order.restaurantId },
-          { ownerType: 'DELIVERY_PARTNER', ownerId: deliveryPartnerId },
         ],
         {
-          title: `Order ${order._id.toString()} accepted`,
+          title: 'Delivery Partner Assigned 🛵',
           body: 'A delivery partner has accepted your order.',
           data: {
             type: 'delivery_accepted',
@@ -494,6 +524,19 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
             orderMongoId: order._id?.toString?.() || '',
             dispatchStatus: order.dispatch?.status,
             link: '/food/user/orders',
+          },
+        },
+      );
+
+      await notifyOwnerSafely(
+        { ownerType: 'DELIVERY_PARTNER', ownerId: deliveryPartnerId },
+        {
+          title: 'Order Accepted! 🛵',
+          body: `You have accepted Order #${order.order_id || order.orderId || order._id.toString()}. Head to the restaurant for pickup.`,
+          data: {
+            type: 'delivery_accepted',
+            orderId: order.order_id || order.orderId || order._id.toString(),
+            orderMongoId: order._id?.toString?.() || '',
           },
         },
       );
@@ -812,15 +855,63 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   if (!order.deliveryVerification) order.deliveryVerification = { dropOtp: {} };
   order.deliveryVerification.dropOtp.verified = true;
   order.markModified('deliveryVerification.dropOtp.verified');
+
+  const from = order.orderStatus;
+  if (from !== 'delivered') {
+    order.orderStatus = 'delivered';
+    order.deliveryState = {
+      ...(order.deliveryState?.toObject?.() || order.deliveryState || {}),
+      currentPhase: 'delivered',
+      status: 'delivered',
+      deliveredAt: new Date(),
+    };
+    pushStatusHistory(order, {
+      byRole: 'DELIVERY_PARTNER',
+      byId: deliveryPartnerId,
+      from,
+      to: 'delivered',
+      note: 'Delivery completed via OTP verification',
+    });
+  }
+
   await order.save();
 
+  try {
+    const tx = await FoodTransaction.findOne({ orderId: order._id }).lean();
+    const prevPayStatus = String(tx?.payment?.status || order?.payment?.status || 'unpaid').toLowerCase();
+    const payMethod = String(tx?.payment?.method || order?.payment?.method || order?.paymentMethod || 'cash').toLowerCase();
+    const ledgerKind =
+      payMethod === 'cash' && prevPayStatus === 'cod_pending'
+        ? 'cod_marked_paid_on_delivery'
+        : 'payment_snapshot_sync';
+
+    await foodTransactionService.updateTransactionStatus(order._id, ledgerKind, {
+      status: 'captured',
+      recordedByRole: 'DELIVERY_PARTNER',
+      recordedById: deliveryPartnerId,
+      note: `Delivery completed via OTP verification. Prev status: ${prevPayStatus}`,
+    });
+  } catch (txErr) {
+    logger.warn(`Failed to update transaction status during verifyDropOtpDelivery: ${txErr?.message}`);
+  }
+
   emitOrderUpdate(order, deliveryPartnerId);
-  enqueueOrderEvent('drop_otp_verified', {
+  enqueueOrderEvent('delivery_completed', {
     orderMongoId: order._id?.toString?.(),
     orderId: order._id.toString(),
     deliveryPartnerId,
   });
-  return { order: sanitizeOrderForExternal(order) };
+
+  const sanitized = sanitizeOrderForExternal(order);
+  const payMsg = sanitized.isPaid
+    ? `OTP Verified! Payment is ALREADY PAID via ${String(sanitized.paymentMethod || 'online').toUpperCase()}. Collect ₹0 cash from customer.`
+    : `OTP Verified! Please collect ₹${sanitized.collectCashAmount} cash from customer.`;
+
+  return {
+    order: sanitized,
+    message: payMsg,
+    paymentSummary: sanitized.paymentSummary
+  };
 }
 
 export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
@@ -874,7 +965,7 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
 
   const from = order.orderStatus;
   const nextStatus = 'delivered';
-  if (!isStatusAdvance(from, nextStatus)) {
+  if (from !== 'delivered' && !isStatusAdvance(from, nextStatus)) {
     logger.warn(`[DeliveryComplete] Status advance check failed for ${order._id}. Current: ${from}`);
     throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);
   }

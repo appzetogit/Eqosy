@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react"
 import { buildCartLineId } from "@food/utils/foodVariants"
 import EqosyCartLoader from "@food/components/ui/EqosyCartLoader"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 // Default cart context value to prevent errors during initial render
@@ -15,7 +15,7 @@ const defaultCartContext = {
   total: 0,
   lastAddEvent: null,
   lastRemoveEvent: null,
-  triggerEqosyCartLoader: () => {},
+  triggerEqosyCartLoader: () => { },
   addToCart: () => {
     debugWarn('CartProvider not available - addToCart called');
   },
@@ -189,7 +189,34 @@ export function CartProvider({ children }) {
     }
   }, [cart])
 
+const isItemAvailableNow = (availableTime) => {
+  if (!availableTime || availableTime.isAllDay !== false) return true
+  const startTime = availableTime.startTime
+  const endTime = availableTime.endTime
+  if (!startTime || !endTime) return true
+
+  const now = new Date()
+  const hrs = String(now.getHours()).padStart(2, '0')
+  const mins = String(now.getMinutes()).padStart(2, '0')
+  const currentTime = `${hrs}:${mins}`
+
+  if (startTime <= endTime) {
+    return currentTime >= startTime && currentTime <= endTime
+  } else {
+    return currentTime >= startTime || currentTime <= endTime
+  }
+}
+
   const addToCart = (item, sourcePosition = null) => {
+    if (item?.availableTime && item.availableTime.isAllDay === false) {
+      if (!isItemAvailableNow(item.availableTime)) {
+        const timeMsg = item.availableTime.startTime && item.availableTime.endTime
+          ? ` (available between ${item.availableTime.startTime} and ${item.availableTime.endTime})`
+          : ''
+        const message = `Product "${item.name || 'Item'}" is currently unavailable${timeMsg}.`
+        return { ok: false, error: message, code: 'TIME_UNAVAILABLE' }
+      }
+    }
     triggerEqosyCartLoader("Adding to Cart...", "Preparing your fresh delicacies with Eqosy", 850);
     const safeCart = normalizeCartData(cart)
     if (safeCart.length > 0) {
@@ -238,12 +265,12 @@ export function CartProvider({ children }) {
         const firstItemRestaurantName = getRestaurantName(safePrev[0]);
         const newItemRestaurantId = item?.restaurantId || item?.restaurant?._id;
         const newItemRestaurantName = getRestaurantName(item);
-        
+
         // Normalize restaurant names for comparison (trim and case-insensitive)
         const normalizeName = (name) => name ? String(name).trim().toLowerCase() : '';
         const firstRestaurantNameNormalized = normalizeName(firstItemRestaurantName);
         const newRestaurantNameNormalized = normalizeName(newItemRestaurantName);
-        
+
         // Check restaurant name first (more reliable than IDs which can have different formats)
         // If names match, allow it even if IDs differ (same restaurant, different ID format)
         if (firstRestaurantNameNormalized && newRestaurantNameNormalized) {
@@ -270,7 +297,7 @@ export function CartProvider({ children }) {
           }
         }
       }
-      
+
       const existing = safePrev.find((i) => i.id === item.id)
       if (existing) {
         // Set last add event for animation when incrementing existing item
@@ -290,15 +317,15 @@ export function CartProvider({ children }) {
           i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
-      
+
       // Validate item has required restaurant info
       if (!item.restaurantId && !item.restaurant) {
         debugError('❌ Cannot add item: Missing restaurant information!', item);
         return safePrev;
       }
-      
+
       const newItem = { ...item, quantity: 1 }
-      
+
       // Set last add event for animation if sourcePosition is provided
       if (sourcePosition) {
         setLastAddEvent({
@@ -312,7 +339,7 @@ export function CartProvider({ children }) {
         // Clear after animation completes (increased delay to allow full animation)
         setTimeout(() => setLastAddEvent(null), 1500)
       }
-      
+
       return [...safePrev, newItem]
     })
 
@@ -365,7 +392,7 @@ export function CartProvider({ children }) {
       })
       return
     }
-    
+
     // When quantity decreases (but not to 0), also trigger removal animation
     setCart((prev) => {
       const safePrev = normalizeCartData(prev)
@@ -420,31 +447,31 @@ export function CartProvider({ children }) {
     setCart((prev) => {
       const safePrev = normalizeCartData(prev)
       if (safePrev.length === 0) return safePrev;
-      
+
       // Normalize restaurant name for comparison
       const normalizeName = (name) => name ? name.trim().toLowerCase() : '';
       const targetRestaurantNameNormalized = normalizeName(restaurantName);
-      
+
       // Filter cart to keep only items from the target restaurant
       const cleanedCart = safePrev.filter((item) => {
         const itemRestaurantId = item?.restaurantId || item?.restaurant?._id;
         const itemRestaurantName = typeof item?.restaurant === 'string' ? item.restaurant : item?.restaurant?.name;
         const itemRestaurantNameNormalized = normalizeName(itemRestaurantName);
-        
+
         // Check by restaurant name first (more reliable)
         if (targetRestaurantNameNormalized && itemRestaurantNameNormalized) {
           return itemRestaurantNameNormalized === targetRestaurantNameNormalized;
         }
         // Fallback to ID comparison
         if (restaurantId && itemRestaurantId) {
-          return itemRestaurantId === restaurantId || 
-                 itemRestaurantId === restaurantId.toString() ||
-                 itemRestaurantId.toString() === restaurantId;
+          return itemRestaurantId === restaurantId ||
+            itemRestaurantId === restaurantId.toString() ||
+            itemRestaurantId.toString() === restaurantId;
         }
         // If no match, remove item
         return false;
       });
-      
+
       if (cleanedCart.length !== safePrev.length) {
         debugWarn('🧹 Cleaned cart: Removed items from different restaurants', {
           before: safePrev.length,
@@ -452,7 +479,7 @@ export function CartProvider({ children }) {
           removed: safePrev.length - cleanedCart.length
         });
       }
-      
+
       return cleanedCart;
     });
   }
@@ -466,48 +493,48 @@ export function CartProvider({ children }) {
       return
     }
     if (safeCart.length === 0) return;
-    
+
     // Get unique restaurant IDs and names
     const restaurantIds = safeCart.map(item => item.restaurantId).filter(Boolean);
     const restaurantNames = safeCart.map(item => item.restaurant).filter(Boolean);
     const uniqueRestaurantIds = [...new Set(restaurantIds)];
     const uniqueRestaurantNames = [...new Set(restaurantNames)];
-    
+
     // Normalize restaurant names for comparison
     const normalizeName = (name) => name ? name.trim().toLowerCase() : '';
     const uniqueRestaurantNamesNormalized = uniqueRestaurantNames.map(normalizeName);
     const uniqueRestaurantNamesSet = new Set(uniqueRestaurantNamesNormalized);
-    
+
     // Check if cart has items from multiple restaurants
     if (uniqueRestaurantIds.length > 1 || uniqueRestaurantNamesSet.size > 1) {
       debugWarn('⚠️ Cart contains items from multiple restaurants. Cleaning cart...', {
         restaurantIds: uniqueRestaurantIds,
         restaurantNames: uniqueRestaurantNames
       });
-      
+
       // Keep items from the first restaurant (most recent or first in cart)
       const firstRestaurantId = uniqueRestaurantIds[0];
       const firstRestaurantName = uniqueRestaurantNames[0];
-      
+
       setCart((prev) => {
         const safePrev = normalizeCartData(prev)
         const normalizeName = (name) => name ? name.trim().toLowerCase() : '';
         const firstRestaurantNameNormalized = normalizeName(firstRestaurantName);
-        
+
         return safePrev.filter((item) => {
           const itemRestaurantId = item?.restaurantId || item?.restaurant?._id;
           const itemRestaurantName = typeof item?.restaurant === 'string' ? item.restaurant : item?.restaurant?.name;
           const itemRestaurantNameNormalized = normalizeName(itemRestaurantName);
-          
+
           // Check by restaurant name first
           if (firstRestaurantNameNormalized && itemRestaurantNameNormalized) {
             return itemRestaurantNameNormalized === firstRestaurantNameNormalized;
           }
           // Fallback to ID comparison
           if (firstRestaurantId && itemRestaurantId) {
-            return itemRestaurantId === firstRestaurantId || 
-                   itemRestaurantId === firstRestaurantId.toString() ||
-                   itemRestaurantId.toString() === firstRestaurantId;
+            return itemRestaurantId === firstRestaurantId ||
+              itemRestaurantId === firstRestaurantId.toString() ||
+              itemRestaurantId.toString() === firstRestaurantId;
           }
           return false;
         });
@@ -527,10 +554,10 @@ export function CartProvider({ children }) {
       },
       quantity: item.quantity || 1,
     }))
-    
+
     const itemCount = safeCart.reduce((total, item) => total + (item.quantity || 0), 0)
     const total = safeCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
-    
+
     return {
       items,
       itemCount,

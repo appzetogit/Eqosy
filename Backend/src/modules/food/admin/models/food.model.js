@@ -25,6 +25,11 @@ const foodSchema = new mongoose.Schema(
         lowStockThreshold: { type: Number, default: 5 },
         isRecommended: { type: Boolean, default: false, index: true },
         preparationTime: { type: String, trim: true, default: '' },
+        availableTime: {
+            isAllDay: { type: Boolean, default: true },
+            startTime: { type: String, trim: true, default: '' },
+            endTime: { type: String, trim: true, default: '' }
+        },
         approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved', index: true },
         rejectionReason: { type: String, trim: true, default: '' },
         requestedAt: { type: Date },

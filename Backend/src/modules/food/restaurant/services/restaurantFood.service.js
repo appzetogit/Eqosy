@@ -179,6 +179,18 @@ const resolveCategoryForRestaurant = async (context, body = {}) => {
     };
 };
 
+const normalizeAvailableTime = (input) => {
+    if (!input || typeof input !== 'object') {
+        return { isAllDay: true, startTime: '', endTime: '' };
+    }
+    const isAllDay = input.isAllDay !== false;
+    return {
+        isAllDay,
+        startTime: isAllDay ? '' : String(input.startTime || '').trim(),
+        endTime: isAllDay ? '' : String(input.endTime || '').trim()
+    };
+};
+
 export async function createRestaurantFood(restaurantId, body = {}) {
     const context = await getRestaurantContext(restaurantId);
 
@@ -195,6 +207,7 @@ export async function createRestaurantFood(restaurantId, body = {}) {
     const isRecommended = normalizeRecommendedFlag(body.isRecommended);
     const foodType = normalizeFoodType(body.foodType);
     const preparationTime = toStr(body.preparationTime);
+    const availableTime = normalizeAvailableTime(body.availableTime);
     const { categoryObjectId, categoryName } = await resolveCategoryForRestaurant(context, { ...body, foodType });
 
     const doc = await FoodItem.create({
@@ -211,6 +224,7 @@ export async function createRestaurantFood(restaurantId, body = {}) {
         isAvailable,
         isRecommended,
         preparationTime,
+        availableTime,
         approvalStatus: 'pending',
         requestedAt: new Date()
     });
@@ -244,7 +258,7 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     if (!existing) return null;
 
     const providedKeys = Object.keys(body || {});
-    const operationalOnlyKeys = ['isActive', 'isAvailable', 'isRecommended'];
+    const operationalOnlyKeys = ['isActive', 'isAvailable', 'isRecommended', 'availableTime'];
     const isOperationalOnlyUpdate =
         providedKeys.length > 0 &&
         providedKeys.every((key) => operationalOnlyKeys.includes(key));
@@ -284,6 +298,9 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
         update.isRecommended = normalizeRecommendedFlag(body.isRecommended);
     }
     if (body.preparationTime !== undefined) update.preparationTime = toStr(body.preparationTime);
+    if (body.availableTime !== undefined) {
+        update.availableTime = normalizeAvailableTime(body.availableTime);
+    }
 
     const targetFoodType = body.foodType !== undefined ? normalizeFoodType(body.foodType) : normalizeFoodType(existing.foodType);
     if (body.foodType !== undefined) update.foodType = targetFoodType;

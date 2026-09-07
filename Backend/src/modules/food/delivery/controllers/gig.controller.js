@@ -32,6 +32,11 @@ export const getGigStatsHandler = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: result });
 });
 
+export const listGigBookingsHandler = asyncHandler(async (req, res) => {
+  const result = await gigService.listGigBookingsForAdmin(req.query);
+  res.status(200).json({ success: true, data: result });
+});
+
 // --- Partner Gig Handlers ---
 export const listPartnerGigsHandler = asyncHandler(async (req, res) => {
   const partnerId = req.user?.userId || req.user?.id;

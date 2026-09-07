@@ -131,10 +131,10 @@ function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
         if (!isMounted) return;
 
         if (response.data?.success && response.data.data?.orders) {
-          const completedOrders = response.data.data.orders.filter(
-            (order) =>
-              order.status === "delivered" || order.status === "completed",
-          );
+          const completedOrders = response.data.data.orders.filter((order) => {
+            const s = String(order.status || order.orderStatus || "").toLowerCase();
+            return s === "delivered" || s === "completed";
+          });
 
           const transformedOrders = completedOrders.map((order) => ({
             orderId: order.orderId || order._id,
@@ -676,7 +676,7 @@ function TableBookings() {
   );
 }
 
-function AllOrders({ onSelectOrder, onCancel }) {
+function AllOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -775,7 +775,7 @@ function AllOrders({ onSelectOrder, onCancel }) {
       if (intervalId) clearInterval(intervalId);
       if (countdownIntervalId) clearInterval(countdownIntervalId);
     };
-  }, []);
+  }, [refreshToken]);
 
   const handleMarkReady = async ({ orderId, mongoId }) => {
     const orderKey = mongoId || orderId;
@@ -986,7 +986,7 @@ export default function OrdersMain() {
   };
 
   // Restaurant notifications hook for real-time orders
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications();
+  const { newOrder, clearNewOrder, isConnected, lastOrderUpdate } = useRestaurantNotifications();
 
   const rejectReasons = [
     "Restaurant is too busy",
@@ -1168,6 +1168,28 @@ export default function OrdersMain() {
       }
     }
   }, [newOrder]);
+
+  // Handle real-time order status updates (e.g. delivered, out_for_delivery, preparing, ready)
+  useEffect(() => {
+    const handleStatusUpdate = (updateData) => {
+      if (!updateData) return;
+      debugLog("Real-time order status update received in OrdersMain:", updateData);
+      requestOrdersRefresh();
+    };
+
+    if (lastOrderUpdate) {
+      handleStatusUpdate(lastOrderUpdate);
+    }
+
+    const customEventListener = (event) => {
+      handleStatusUpdate(event.detail);
+    };
+
+    window.addEventListener("restaurant_order_updated", customEventListener);
+    return () => {
+      window.removeEventListener("restaurant_order_updated", customEventListener);
+    };
+  }, [lastOrderUpdate]);
 
   // Keep refs in sync to avoid stale state inside one-time event handlers.
   useEffect(() => {
@@ -1886,6 +1908,7 @@ export default function OrdersMain() {
           <AllOrders
             onSelectOrder={handleSelectOrder}
             onCancel={handleCancelClick}
+            refreshToken={ordersRefreshToken}
           />
         );
       case "preparing":
@@ -2929,10 +2952,22 @@ function OrderCard({
               ? "bg-green-50 border border-green-400 text-green-700"
               : isPreparing
                 ? "bg-amber-50 border border-amber-400 text-amber-700"
-                : "bg-gray-100 border border-gray-300 text-gray-700"
+                : (normalizedStatus === "delivered" || normalizedStatus === "completed")
+                  ? "bg-emerald-50 border border-emerald-400 text-emerald-700"
+                  : (normalizedStatus === "out_for_delivery" || normalizedStatus === "picked_up" || normalizedStatus === "reached_drop")
+                    ? "bg-blue-50 border border-blue-400 text-blue-700"
+                    : "bg-gray-100 border border-gray-300 text-gray-700"
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              isReady ? "bg-green-500" : isPreparing ? "bg-amber-500" : "bg-gray-500"
+              isReady
+                ? "bg-green-500"
+                : isPreparing
+                  ? "bg-amber-500"
+                  : (normalizedStatus === "delivered" || normalizedStatus === "completed")
+                    ? "bg-emerald-500"
+                    : (normalizedStatus === "out_for_delivery" || normalizedStatus === "picked_up" || normalizedStatus === "reached_drop")
+                      ? "bg-blue-500"
+                      : "bg-gray-500"
             }`} />
             {statusLabel}
           </span>
@@ -3373,9 +3408,10 @@ function ReadyOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
 
         if (response.data?.success && response.data.data?.orders) {
           // Filter orders with 'ready' status
-          const readyOrders = response.data.data.orders.filter(
-            (order) => order.status === "ready",
-          );
+          const readyOrders = response.data.data.orders.filter((order) => {
+            const s = String(order.status || order.orderStatus || "").toLowerCase();
+            return s === "ready";
+          });
 
           const transformedOrders = readyOrders.map((order) => ({
             orderId: order.orderId || order._id,

@@ -4,6 +4,7 @@ import { FoodRestaurant } from '../models/restaurant.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { getFoodDisplayPrice, serializeFoodVariants } from '../../admin/services/foodVariant.service.js';
+import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 
 const buildMenuFromFoods = async (foods = []) => {
     const categoryIds = Array.from(
@@ -27,7 +28,7 @@ const buildMenuFromFoods = async (foods = []) => {
 
     const byCategory = new Map();
     for (const food of foods) {
-        const isFoodAvailable = food?.isActive !== false && food?.isAvailable !== false;
+        const isFoodAvailable = isFoodItemAvailableNow(food);
         const categoryId = food?.categoryId ? String(food.categoryId) : '';
         const categoryDoc = categoryMap.get(categoryId) || null;
         const sectionName = (categoryDoc?.name || food?.categoryName || food?.category || 'Menu').trim() || 'Menu';
@@ -58,6 +59,7 @@ const buildMenuFromFoods = async (foods = []) => {
             foodType: food.foodType || 'Non-Veg',
             isActive: food.isActive !== false,
             isAvailable: isFoodAvailable,
+            availableTime: food.availableTime || { isAllDay: true, startTime: '', endTime: '' },
             isRecommended: food.isRecommended === true,
             approvalStatus: food.approvalStatus || 'approved',
             rejectionReason: food.rejectionReason || '',

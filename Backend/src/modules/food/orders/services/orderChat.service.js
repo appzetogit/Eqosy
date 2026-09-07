@@ -66,7 +66,11 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
   const isDeliveryRole = ['DELIVERY_PARTNER', 'DELIVERY', 'DRIVER', 'PARTNER', 'RIDER'].includes(normalizedRole);
   const isAdmin = normalizedRole === 'ADMIN';
 
-  if (!isUserOwner && !isPartnerOwner && !isDeliveryRole && !isAdmin) {
+  if (isDeliveryRole && !isPartnerOwner && !isAdmin) {
+    throw new ApiError(403, 'You are not assigned to this order delivery chat');
+  }
+
+  if (!isUserOwner && !isPartnerOwner && !isAdmin) {
     throw new ApiError(403, 'You are not authorized to access this delivery chat');
   }
 
@@ -104,9 +108,26 @@ export const getOrCreateOrderConversation = async ({ orderId, currentUserId, cur
       status: lifecycleStatus,
       expiresAt,
     });
-  } else if (conversation.status !== lifecycleStatus && conversation.status !== 'ARCHIVED') {
-    conversation.status = lifecycleStatus;
-    await conversation.save();
+  } else {
+    let updated = false;
+    const currentPartnerStr = order.dispatch?.deliveryPartnerId ? String(order.dispatch.deliveryPartnerId) : null;
+    const convPartnerStr = conversation.deliveryPartnerId ? String(conversation.deliveryPartnerId) : null;
+
+    if (currentPartnerStr !== convPartnerStr) {
+      logger.info(`[OrderChat Sync] Updating conversation ${conversation._id} deliveryPartnerId from ${convPartnerStr} to ${currentPartnerStr} due to reassignment/handover.`);
+      conversation.deliveryPartnerId = order.dispatch?.deliveryPartnerId || null;
+      conversation.partnerUnreadCount = 0;
+      updated = true;
+    }
+
+    if (conversation.status !== lifecycleStatus && conversation.status !== 'ARCHIVED') {
+      conversation.status = lifecycleStatus;
+      updated = true;
+    }
+
+    if (updated) {
+      await conversation.save();
+    }
   }
 
   const isUserView = isUserOwner || (!isPartnerOwner && !isDeliveryRole);

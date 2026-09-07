@@ -82,6 +82,34 @@ export function sanitizeOrderForExternal(orderDoc) {
     };
   }
 
+  // Enrich Payment Status & Cash Collection Summary for Delivery Partners
+  const rawMethod = String(o.paymentMethod || o.payment?.method || 'cash').trim().toLowerCase();
+  const rawStatus = String(o.paymentStatus || o.payment?.status || 'unpaid').trim().toLowerCase();
+  const isPrepaid = ['wallet', 'razorpay', 'card', 'online', 'upi', 'paytm', 'netbanking'].includes(rawMethod) ||
+                    ['paid', 'completed', 'captured', 'settled'].includes(rawStatus);
+  const totalAmount = Number(o.pricing?.total ?? o.total ?? o.amounts?.totalCustomerPaid ?? 0) || 0;
+
+  o.isPaid = isPrepaid;
+  o.paymentMethod = rawMethod;
+  o.paymentStatus = isPrepaid ? 'paid' : rawStatus;
+  o.collectCash = !isPrepaid;
+  o.collectCashAmount = isPrepaid ? 0 : totalAmount;
+  o.amountToCollect = isPrepaid ? 0 : totalAmount;
+  o.paymentSummary = {
+    isPaid: isPrepaid,
+    paymentMethod: rawMethod,
+    paymentStatus: isPrepaid ? 'paid' : rawStatus,
+    collectAmount: isPrepaid ? 0 : totalAmount,
+    collectCash: !isPrepaid,
+    displayTitle: isPrepaid ? 'PAID VIA WALLET / ONLINE' : 'COLLECT CASH ON DELIVERY',
+    displaySubtext: isPrepaid
+      ? `Payment is already completed via ${rawMethod.toUpperCase()}. Collect ₹0 from customer.`
+      : `Please collect ₹${totalAmount.toFixed(2)} cash from customer.`,
+    noteForDriver: isPrepaid
+      ? `PAID ALREADY via ${rawMethod.toUpperCase()} (COLLECT ₹0 CASH)`
+      : `COLLECT CASH: ₹${totalAmount.toFixed(2)}`
+  };
+
   return o;
 }
 

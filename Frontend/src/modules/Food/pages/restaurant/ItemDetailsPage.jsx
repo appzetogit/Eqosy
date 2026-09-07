@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useNavigate, useParams, useLocation } from "react-router-dom"
 import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -24,9 +24,9 @@ import { toast } from "sonner"
 import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
 import { isFlutterBridgeAvailable } from "@food/utils/imageUploadUtils"
 import { getFoodVariants } from "@food/utils/foodVariants"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 const INVENTORY_RECOMMENDED_KEY = "restaurant_inventory_recommended_map"
 
@@ -75,6 +75,9 @@ export default function ItemDetailsPage() {
   const [gst, setGst] = useState("5.0")
   const [isRecommended, setIsRecommended] = useState(false)
   const [isInStock, setIsInStock] = useState(true)
+  const [isAllDay, setIsAllDay] = useState(true)
+  const [startTime, setStartTime] = useState("08:00")
+  const [endTime, setEndTime] = useState("20:00")
   const [weightPerServing, setWeightPerServing] = useState("")
   const [calorieCount, setCalorieCount] = useState("")
   const [proteinCount, setProteinCount] = useState("")
@@ -130,6 +133,10 @@ export default function ItemDetailsPage() {
     setGst(item.gst?.toString() || "5.0")
     setIsRecommended(item.isRecommended || false)
     setIsInStock(item.isAvailable !== false)
+    const avail = item.availableTime || {}
+    setIsAllDay(avail.isAllDay !== false)
+    setStartTime(avail.startTime || "08:00")
+    setEndTime(avail.endTime || "20:00")
     setSelectedTags(item.tags || [])
 
     const existingImages = Array.isArray(item.images) && item.images.length > 0
@@ -644,6 +651,12 @@ export default function ItemDetailsPage() {
         price: variant.price,
       }))
 
+      const availableTimePayload = {
+        isAllDay,
+        startTime: isAllDay ? "" : startTime,
+        endTime: isAllDay ? "" : endTime
+      }
+
       // Create/update FoodItem in DB (single call per explicit Save; no autosave spam)
       let itemId
       if (isNewItem) {
@@ -657,6 +670,7 @@ export default function ItemDetailsPage() {
           isAvailable: isInStock,
           isRecommended,
           preparationTime: preparationTime || "",
+          availableTime: availableTimePayload,
           categoryId: categoryId || undefined,
           categoryName,
         })
@@ -680,6 +694,7 @@ export default function ItemDetailsPage() {
           isAvailable: isInStock,
           isRecommended,
           preparationTime: preparationTime || "",
+          availableTime: availableTimePayload,
           categoryId: categoryId || undefined,
           categoryName,
         })
@@ -1164,6 +1179,46 @@ export default function ItemDetailsPage() {
               />
               <span className="text-sm text-gray-700">In stock</span>
             </div>
+          </div>
+
+          {/* Item Availability Time */}
+          <div className="py-3 border-t border-gray-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Available all day</p>
+                <p className="text-xs text-gray-500">
+                  {isAllDay ? "Product is available for sale all day (24/7)" : "Product will only be available to customers during specific hours"}
+                </p>
+              </div>
+              <Switch
+                checked={isAllDay}
+                onCheckedChange={setIsAllDay}
+                className="data-[state=unchecked]:bg-gray-300"
+              />
+            </div>
+
+            {!isAllDay && (
+              <div className="grid grid-cols-2 gap-3 pt-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Available From</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Available Until</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
 

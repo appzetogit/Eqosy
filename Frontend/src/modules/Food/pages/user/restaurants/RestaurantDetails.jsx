@@ -63,9 +63,9 @@ import fssaiLogo from "@food/assets/fssai.png"
 import { RestaurantDetailSkeleton } from "@food/components/ui/loading-skeletons"
 import EqosyCartLoader from "@food/components/ui/EqosyCartLoader"
 
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 
@@ -812,24 +812,24 @@ function RestaurantDetailsContent() {
                   return Object.values(value).filter((entry) => entry && typeof entry === "object")
                 }
                 const normalizeItem = (item = {}) => {
-                   const isRecommended = item.isRecommended === true || item.isRecommended === 1 || String(item.isRecommended) === "true"
-                   const isSpicy = item.isSpicy === true || item.isSpicy === 1 || String(item.isSpicy) === "true"
-                   const isVeg = determineIsVeg(item)
-                   return {
-                     ...item,
-                      id: String(item.id || item._id || `${Date.now()}-${Math.random()}`),
-                      name: item.name || "Unnamed Item",
-                      isVeg,
-                      foodType: isVeg ? "Veg" : "Non-Veg",
-                      price: getFoodDisplayPrice(item),
-                      variants: getFoodVariants(item),
-                      variations: getFoodVariants(item),
-                      isAvailable: item.isAvailable !== false,
-                      isRecommended,
-                      isSpicy,
-                     description: typeof item.description === "string" ? item.description : "",
-                   }
-                 }
+                  const isRecommended = item.isRecommended === true || item.isRecommended === 1 || String(item.isRecommended) === "true"
+                  const isSpicy = item.isSpicy === true || item.isSpicy === 1 || String(item.isSpicy) === "true"
+                  const isVeg = determineIsVeg(item)
+                  return {
+                    ...item,
+                    id: String(item.id || item._id || `${Date.now()}-${Math.random()}`),
+                    name: item.name || "Unnamed Item",
+                    isVeg,
+                    foodType: isVeg ? "Veg" : "Non-Veg",
+                    price: getFoodDisplayPrice(item),
+                    variants: getFoodVariants(item),
+                    variations: getFoodVariants(item),
+                    isAvailable: item.isAvailable !== false,
+                    isRecommended,
+                    isSpicy,
+                    description: typeof item.description === "string" ? item.description : "",
+                  }
+                }
                 const menuSections = toArray(rawSections).map((section, sectionIndex) => ({
                   ...section,
                   id: String(section.id || section._id || `section-${sectionIndex}`),
@@ -1234,7 +1234,8 @@ function RestaurantDetailsContent() {
       description: item.description,
       originalPrice: item.originalPrice,
       isVeg: determineIsVeg(item),
-      preparationTime: item.preparationTime // Add preparationTime property
+      preparationTime: item.preparationTime, // Add preparationTime property
+      availableTime: item.availableTime
     }
 
     // Get source position for animation from event target
@@ -2152,7 +2153,7 @@ function RestaurantDetailsContent() {
               </div>
               {/* Restaurant Name and Rating */}
               <div className="flex items-start justify-between">
-                <div 
+                <div
                   className="flex items-center gap-2 cursor-pointer group"
                   onClick={() => setShowRatingInfoSheet(true)}
                   title="View Rating & Restaurant Info"
@@ -2160,7 +2161,7 @@ function RestaurantDetailsContent() {
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-[#EB590E] transition-colors">{restaurant?.name || "Unknown Restaurant"}</h1>
                   <Info className="h-5 w-5 text-gray-400 group-hover:text-[#EB590E] transition-colors" />
                 </div>
-                <div 
+                <div
                   className="flex flex-col items-end cursor-pointer group hover:scale-105 transition-transform"
                   onClick={() => setShowRatingInfoSheet(true)}
                   title="View Rating & Reviews Info"
@@ -2313,11 +2314,10 @@ function RestaurantDetailsContent() {
                   <button
                     type="button"
                     onClick={() => setSelectedMenuCategory("all")}
-                    className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                      selectedMenuCategory === "all"
+                    className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${selectedMenuCategory === "all"
                         ? "border-[#EB590E] bg-[#FFF1E8] text-[#EB590E]"
                         : "border-gray-300 bg-white text-gray-700"
-                    }`}
+                      }`}
                   >
                     All
                   </button>
@@ -2326,11 +2326,10 @@ function RestaurantDetailsContent() {
                       key={category.id}
                       type="button"
                       onClick={() => setSelectedMenuCategory(category.id)}
-                      className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                        selectedMenuCategory === category.id
+                      className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${selectedMenuCategory === category.id
                           ? "border-[#EB590E] bg-[#FFF1E8] text-[#EB590E]"
                           : "border-gray-300 bg-white text-gray-700"
-                      }`}
+                        }`}
                     >
                       {category.image ? (
                         <img
@@ -2533,13 +2532,36 @@ function RestaurantDetailsContent() {
                                 </div>
                               )}
 
-                              <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 <p className="font-semibold text-gray-900 dark:text-white">{getFoodPriceLabel(item)}</p>
                                 {/* Preparation Time - Show if available */}
                                 {item.preparationTime && String(item.preparationTime).trim() && (
                                   <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
                                     <Clock size={12} className="text-gray-500" />
                                     <span>{String(item.preparationTime).trim()}</span>
+                                  </div>
+                                )}
+                                {/* Availability Time Window Badge */}
+                                {item.availableTime && item.availableTime.isAllDay === false && item.availableTime.startTime && item.availableTime.endTime && (
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 rounded-full">
+                                    <Clock size={12} className="text-amber-600 dark:text-amber-400" />
+                                    <span>Available {(() => {
+                                      const fmt = (t) => {
+                                        if (!t) return ""
+                                        const [h, m] = t.split(":")
+                                        let hrs = parseInt(h, 10)
+                                        if (isNaN(hrs)) return t
+                                        const ampm = hrs >= 12 ? "PM" : "AM"
+                                        hrs = hrs % 12 || 12
+                                        return `${hrs}:${m} ${ampm}`
+                                      }
+                                      return `${fmt(item.availableTime.startTime)} - ${fmt(item.availableTime.endTime)}`
+                                    })()}</span>
+                                  </div>
+                                )}
+                                {item.isAvailable === false && (
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2.5 py-0.5 rounded-full">
+                                    <span>Unavailable Right Now</span>
                                   </div>
                                 )}
                               </div>
@@ -3580,11 +3602,10 @@ function RestaurantDetailsContent() {
                               key={variant.id}
                               type="button"
                               onClick={() => setSelectedVariantId(variant.id)}
-                              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                                String(selectedVariantId || "") === String(variant.id)
+                              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${String(selectedVariantId || "") === String(variant.id)
                                   ? "border-red-500 bg-red-50 text-red-600 dark:border-red-400 dark:bg-red-900/30 dark:text-red-200"
                                   : "border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-[#2a2a2a] dark:text-gray-300"
-                              }`}
+                                }`}
                             >
                               {variant.name} · {RUPEE_SYMBOL}{Math.round(variant.price)}
                             </button>
@@ -4200,11 +4221,10 @@ function RestaurantDetailsContent() {
                             return (
                               <Star
                                 key={star}
-                                className={`h-4 w-4 ${
-                                  star <= Math.round(ratingVal)
+                                className={`h-4 w-4 ${star <= Math.round(ratingVal)
                                     ? "text-amber-500 fill-amber-500"
                                     : "text-gray-300 dark:text-gray-700"
-                                }`}
+                                  }`}
                               />
                             )
                           })}

@@ -6,9 +6,9 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@food/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@food/components/ui/popover"
 import { getFoodDisplayPrice, getFoodVariants } from "@food/utils/foodVariants"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 const createFoodForm = () => ({
@@ -23,6 +23,7 @@ const createFoodForm = () => ({
   foodType: "Non-Veg",
   isAvailable: true,
   preparationTime: "",
+  availableTime: { isAllDay: true, startTime: "08:00", endTime: "20:00" },
 })
 
 const createVariantDraft = (variant = {}) => ({
@@ -92,13 +93,13 @@ export default function FoodsList() {
         []
 
       const restaurantsMap = new Map()
-      ;[...activeRestaurants, ...inactiveRestaurants].forEach((restaurant) => {
-        const restaurantId = String(restaurant?._id || restaurant?.id || "")
-        if (!restaurantId) return
-        if (!restaurantsMap.has(restaurantId)) {
-          restaurantsMap.set(restaurantId, restaurant)
-        }
-      })
+        ;[...activeRestaurants, ...inactiveRestaurants].forEach((restaurant) => {
+          const restaurantId = String(restaurant?._id || restaurant?.id || "")
+          if (!restaurantId) return
+          if (!restaurantsMap.has(restaurantId)) {
+            restaurantsMap.set(restaurantId, restaurant)
+          }
+        })
       const restaurants = Array.from(restaurantsMap.values())
       setRestaurantsForFilter(
         restaurants
@@ -123,25 +124,26 @@ export default function FoodsList() {
       setFoods(
         Array.isArray(approvedOnly)
           ? approvedOnly.map((f) => ({
-              id: String(f.id || f._id || ""),
-              _id: f._id || f.id,
-              name: f.name || "Unnamed Item",
-              image: f.image || "https://via.placeholder.com/40",
-              status: f.isAvailable !== false && String(f.approvalStatus || "").toLowerCase() !== "rejected",
-              restaurantId: String(f.restaurantId || ""),
-              restaurantName: f.restaurantName || "Unknown Restaurant",
-              categoryId: String(f.categoryId || ""),
-              categoryName: f.categoryName || "",
-              price: getFoodDisplayPrice(f),
-              variants: getFoodVariants(f),
-              foodType: f.foodType || "Non-Veg",
-              approvalStatus: f.approvalStatus || "approved",
-              description: f.description || "",
-              preparationTime: f.preparationTime || "",
-              isAvailable: f.isAvailable !== false,
-              createdAt: f.createdAt,
-              updatedAt: f.updatedAt,
-            }))
+            id: String(f.id || f._id || ""),
+            _id: f._id || f.id,
+            name: f.name || "Unnamed Item",
+            image: f.image || "https://via.placeholder.com/40",
+            status: f.isAvailable !== false && String(f.approvalStatus || "").toLowerCase() !== "rejected",
+            restaurantId: String(f.restaurantId || ""),
+            restaurantName: f.restaurantName || "Unknown Restaurant",
+            categoryId: String(f.categoryId || ""),
+            categoryName: f.categoryName || "",
+            price: getFoodDisplayPrice(f),
+            variants: getFoodVariants(f),
+            foodType: f.foodType || "Non-Veg",
+            approvalStatus: f.approvalStatus || "approved",
+            description: f.description || "",
+            preparationTime: f.preparationTime || "",
+            isAvailable: f.isAvailable !== false,
+            availableTime: f.availableTime || { isAllDay: true, startTime: "08:00", endTime: "20:00" },
+            createdAt: f.createdAt,
+            updatedAt: f.updatedAt,
+          }))
           : []
       )
       setImageVersion(Date.now())
@@ -174,13 +176,13 @@ export default function FoodsList() {
   // Format ID to FOOD format (e.g., FOOD519399)
   const formatFoodId = (id) => {
     if (!id) return "FOOD000000"
-    
+
     const idString = String(id)
     // Extract last 6 digits from the ID
     // Handle formats like "1768285554154-0.703896654519399" or "item-1768285554154-0.703896654519399"
     const parts = idString.split(/[-.]/)
     let lastDigits = ""
-    
+
     // Get the last part and extract digits
     if (parts.length > 0) {
       const lastPart = parts[parts.length - 1]
@@ -192,7 +194,7 @@ export default function FoodsList() {
         lastDigits = allDigits.slice(-6).padStart(6, "0")
       }
     }
-    
+
     // If no digits found, use a hash of the ID
     if (!lastDigits) {
       const hash = idString.split("").reduce((acc, char) => {
@@ -200,13 +202,13 @@ export default function FoodsList() {
       }, 0)
       lastDigits = Math.abs(hash).toString().slice(-6).padStart(6, "0")
     }
-    
+
     return `FOOD${lastDigits}`
   }
 
   const filteredFoods = useMemo(() => {
     let result = [...foods]
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
       result = result.filter(food =>
@@ -278,6 +280,7 @@ export default function FoodsList() {
       foodType: String(food.foodType || "Non-Veg"),
       isAvailable: food.isAvailable !== false,
       preparationTime: String(food.preparationTime || ""),
+      availableTime: food.availableTime || { isAllDay: true, startTime: "08:00", endTime: "20:00" },
     })
     setSelectedImageFile(null)
     setImagePreviewUrl(String(food.image || ""))
@@ -300,8 +303,8 @@ export default function FoodsList() {
         const list = res?.data?.data?.categories || []
         const options = Array.isArray(list)
           ? list
-              .map((c) => ({ id: String(c.id || c._id || c.name), name: String(c.name || "").trim() }))
-              .filter((c) => c.name)
+            .map((c) => ({ id: String(c.id || c._id || c.name), name: String(c.name || "").trim() }))
+            .filter((c) => c.name)
           : []
         if (!cancelled) setCategoryOptions(options)
       } catch (error) {
@@ -411,6 +414,7 @@ export default function FoodsList() {
         foodType: foodForm.foodType === "Veg" ? "Veg" : "Non-Veg",
         isAvailable: foodForm.isAvailable !== false,
         preparationTime: String(foodForm.preparationTime || "").trim(),
+        availableTime: foodForm.availableTime || { isAllDay: true, startTime: "08:00", endTime: "20:00" },
       }
 
       if (foodFormMode === "edit") {
@@ -699,9 +703,9 @@ export default function FoodsList() {
             <div className="p-6 space-y-5">
               <div className="flex items-center gap-4">
                 <img
-                          src={withImageVersion(selectedFood.image)}
-                          alt={selectedFood.name}
-                          className="w-20 h-20 rounded-xl object-cover border border-slate-200"
+                  src={withImageVersion(selectedFood.image)}
+                  alt={selectedFood.name}
+                  className="w-20 h-20 rounded-xl object-cover border border-slate-200"
                   onError={(e) => {
                     e.target.src = "https://via.placeholder.com/64"
                   }}
@@ -818,9 +822,8 @@ export default function FoodsList() {
                               setFoodForm((prev) => ({ ...prev, categoryId: c.id, categoryName: c.name }))
                               setCategoryPopoverOpen(false)
                             }}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 ${
-                              String(foodForm.categoryName || "") === String(c.name) ? "bg-slate-100 font-medium" : ""
-                            }`}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 ${String(foodForm.categoryName || "") === String(c.name) ? "bg-slate-100 font-medium" : ""
+                              }`}
                           >
                             {c.name}
                           </button>
@@ -888,8 +891,8 @@ export default function FoodsList() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Timing</label>
                 <div className="relative">
                   <select
-                  value={foodForm.preparationTime}
-                  onChange={(e) => setFoodForm((prev) => ({ ...prev, preparationTime: e.target.value }))}
+                    value={foodForm.preparationTime}
+                    onChange={(e) => setFoodForm((prev) => ({ ...prev, preparationTime: e.target.value }))}
                     className="w-full px-3 py-2.5 pr-10 border border-slate-300 rounded-lg text-sm bg-white appearance-none"
                   >
                     <option value="">Select timing</option>
@@ -914,14 +917,82 @@ export default function FoodsList() {
                 </div>
               ) : null}
               <div className="flex items-center gap-6 pt-7">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700 font-medium">
                   <input
                     type="checkbox"
                     checked={foodForm.isAvailable}
                     onChange={(e) => setFoodForm((prev) => ({ ...prev, isAvailable: e.target.checked }))}
+                    className="w-4 h-4 text-sky-600 rounded border-slate-300"
                   />
-                  Available
+                  Available in Stock
                 </label>
+              </div>
+
+              {/* Item Availability Time Window Section */}
+              <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Available All Day (24/7)</p>
+                    <p className="text-xs text-slate-500">
+                      {foodForm.availableTime?.isAllDay !== false
+                        ? "Item is available for sale 24 hours a day"
+                        : "Item will only be available to customers during specified hours"}
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={foodForm.availableTime?.isAllDay !== false}
+                    onChange={(e) =>
+                      setFoodForm((prev) => ({
+                        ...prev,
+                        availableTime: {
+                          ...(prev.availableTime || {}),
+                          isAllDay: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="w-4 h-4 text-sky-600 rounded border-slate-300"
+                  />
+                </div>
+
+                {foodForm.availableTime?.isAllDay === false && (
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Start Time (Available From)</label>
+                      <input
+                        type="time"
+                        value={foodForm.availableTime?.startTime || "08:00"}
+                        onChange={(e) =>
+                          setFoodForm((prev) => ({
+                            ...prev,
+                            availableTime: {
+                              ...(prev.availableTime || {}),
+                              startTime: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">End Time (Available Until)</label>
+                      <input
+                        type="time"
+                        value={foodForm.availableTime?.endTime || "20:00"}
+                        onChange={(e) =>
+                          setFoodForm((prev) => ({
+                            ...prev,
+                            availableTime: {
+                              ...(prev.availableTime || {}),
+                              endTime: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div>

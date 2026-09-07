@@ -2026,7 +2026,7 @@ export default function Cart() {
       if (addOrder && order) addOrder(order);
       try {
         if (order) localStorage.setItem("lastPlacedOrder", JSON.stringify(order));
-      } catch {}
+      } catch { }
 
       // Cash flow: order placed without online payment
       if (selectedPaymentMethod === "cash") {
@@ -2696,11 +2696,10 @@ export default function Cart() {
                         <button
                           type="button"
                           onClick={() => setShowTimeSlotModal(true)}
-                          className={`w-full flex items-center justify-between text-sm font-bold p-3 rounded-xl transition-all shadow-sm ${
-                            !scheduledTimeAvailability.isValid
+                          className={`w-full flex items-center justify-between text-sm font-bold p-3 rounded-xl transition-all shadow-sm ${!scheduledTimeAvailability.isValid
                               ? 'border-2 border-red-500 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
                               : 'border border-[#EB590E] bg-orange-50/50 dark:bg-orange-950/20 text-[#EB590E] hover:bg-orange-100/60'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-2">
                             <Clock className={`w-4 h-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[#EB590E]'}`} />
@@ -2794,8 +2793,7 @@ export default function Cart() {
                                 }
                               }}
                               disabled={label !== "Other" && !addressExists}
-                              className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${
-                                label === "Other" || addressExists
+                              className={`text-xs px-4 py-1.5 rounded-full font-semibold transition-all ${label === "Other" || addressExists
                                   ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-gray-800 dark:text-gray-300 cursor-pointer'
                                   : 'bg-gray-50 text-gray-400 border border-gray-100 cursor-not-allowed dark:bg-gray-900'
                                 }`}
@@ -2970,11 +2968,10 @@ export default function Cart() {
                           setCustomTipInput(isCustomActive ? String(deliveryPartnerTip) : "");
                         }
                       }}
-                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${
-                        showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
+                      className={`rounded-xl border px-4 py-2.5 text-sm font-bold transition-all inline-flex items-center gap-1.5 ${showCustomTipInput || (deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip))
                           ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
                           : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222222] text-gray-800 dark:text-gray-100"
-                      }`}
+                        }`}
                     >
                       {deliveryPartnerTip > 0 && !TIP_PRESET_AMOUNTS.includes(deliveryPartnerTip)
                         ? `${RUPEE_SYMBOL}${deliveryPartnerTip}`
@@ -3847,7 +3844,8 @@ export default function Cart() {
                       <span>Total</span>
                       <span>{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
                     </div>
-                  </div>                  <div className="border-t border-gray-100 dark:border-gray-800">
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-800">
                     <button
                       onClick={() => setShowGstModal(false)}
                       className="w-full py-3.5 text-center text-sm font-bold text-[#009b4d] dark:text-[#00c562] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -4470,11 +4468,10 @@ export default function Cart() {
             </div>
 
             {/* Live Time Display Banner */}
-            <div className={`mx-4 mt-3 p-3.5 rounded-2xl text-white shadow-md flex items-center justify-between transition-all ${
-              pickerMode === 'custom' && !customTimeAvailability.isValid
+            <div className={`mx-4 mt-3 p-3.5 rounded-2xl text-white shadow-md flex items-center justify-between transition-all ${pickerMode === 'custom' && !customTimeAvailability.isValid
                 ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600'
                 : 'bg-gradient-to-r from-[#EB590E] via-[#f76419] to-[#EB590E]'
-            }`}>
+              }`}>
               <div>
                 <span className="text-[10px] font-extrabold text-white/80 uppercase tracking-wider block">DELIVERY TIME</span>
                 <span className="text-2xl font-black text-white tracking-tight drop-shadow-xs">
@@ -4552,22 +4549,20 @@ export default function Cart() {
               <button
                 type="button"
                 onClick={() => setPickerMode('custom')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  pickerMode === 'custom'
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${pickerMode === 'custom'
                     ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
+                  }`}
               >
                 Exact Tumbler
               </button>
               <button
                 type="button"
                 onClick={() => setPickerMode('slots')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  pickerMode === 'slots'
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${pickerMode === 'slots'
                     ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
+                  }`}
               >
                 30-Min Slots
               </button>
@@ -4615,11 +4610,10 @@ export default function Cart() {
                                   const hIdx = (parseInt(h, 10) || 1) - 1;
                                   hourContainerRef.current?.scrollTo({ top: hIdx * 40, behavior: 'smooth' });
                                 }}
-                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${
-                                  isSelected
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${isSelected
                                     ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
                                     : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                }`}
+                                  }`}
                               >
                                 {h}
                               </div>
@@ -4654,11 +4648,10 @@ export default function Cart() {
                                   const mIdx = parseInt(m, 10) || 0;
                                   minuteContainerRef.current?.scrollTo({ top: mIdx * 40, behavior: 'smooth' });
                                 }}
-                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${
-                                  isSelected
+                                className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${isSelected
                                     ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
                                     : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                }`}
+                                  }`}
                               >
                                 {m}
                               </div>
@@ -4673,22 +4666,20 @@ export default function Cart() {
                           <button
                             type="button"
                             onClick={() => setCustomPeriod('AM')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                              customPeriod === 'AM'
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${customPeriod === 'AM'
                                 ? 'bg-[#EB590E] text-white shadow-md scale-105'
                                 : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                            }`}
+                              }`}
                           >
                             AM
                           </button>
                           <button
                             type="button"
                             onClick={() => setCustomPeriod('PM')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                              customPeriod === 'PM'
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${customPeriod === 'PM'
                                 ? 'bg-[#EB590E] text-white shadow-md scale-105'
                                 : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                            }`}
+                              }`}
                           >
                             PM
                           </button>
@@ -4714,17 +4705,15 @@ export default function Cart() {
                             setScheduledTime(slot.value);
                             setShowTimeSlotModal(false);
                           }}
-                          className={`w-full flex items-center justify-between py-2.5 px-3.5 text-left rounded-2xl text-xs transition-all border ${
-                            isSelected
+                          className={`w-full flex items-center justify-between py-2.5 px-3.5 text-left rounded-2xl text-xs transition-all border ${isSelected
                               ? 'border-[#EB590E] bg-orange-50 dark:bg-orange-950/40 text-gray-900 dark:text-white font-bold shadow-xs'
                               : 'border-gray-100 dark:border-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-800/50 text-gray-700 dark:text-gray-300'
-                          }`}
+                            }`}
                         >
                           <span className="font-semibold">{slot.label}</span>
                           <div
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              isSelected ? 'border-[#EB590E] bg-[#EB590E]' : 'border-gray-300 dark:border-gray-600'
-                            }`}
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#EB590E] bg-[#EB590E]' : 'border-gray-300 dark:border-gray-600'
+                              }`}
                           >
                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                           </div>
@@ -4755,11 +4744,10 @@ export default function Cart() {
                   }
                   setShowTimeSlotModal(false);
                 }}
-                className={`w-full py-3 font-extrabold rounded-2xl text-xs tracking-wider uppercase shadow-md transition-all ${
-                  pickerMode === 'custom' && !customTimeAvailability.isValid
+                className={`w-full py-3 font-extrabold rounded-2xl text-xs tracking-wider uppercase shadow-md transition-all ${pickerMode === 'custom' && !customTimeAvailability.isValid
                     ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700'
                     : 'bg-gradient-to-r from-[#EB590E] to-[#ff7324] hover:from-[#d94f0c] hover:to-[#eb590e] text-white active:scale-[0.98]'
-                }`}
+                  }`}
               >
                 {pickerMode === 'custom' && !customTimeAvailability.isValid ? 'Invalid Delivery Time' : 'Set Delivery Time'}
               </button>

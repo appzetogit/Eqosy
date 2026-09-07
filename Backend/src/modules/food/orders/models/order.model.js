@@ -307,6 +307,7 @@ const orderSchema = new mongoose.Schema(
         sendCutlery: { type: Boolean, default: true },
         deliveryFleet: { type: String, default: 'standard', trim: true },
         scheduledAt: { type: Date, default: null },
+        scheduledDispatched: { type: Boolean, default: false },
         riderBasePay: { type: Number, default: 0, min: 0 },
         riderSurgePay: { type: Number, default: 0, min: 0 },
         riderDeliveryFeeShare: { type: Number, default: 0, min: 0 },

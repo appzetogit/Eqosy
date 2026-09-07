@@ -22,6 +22,7 @@ let server = null;
 let expireOffersInterval = null;
 let fssaiExpiryInterval = null;
 let gigReminderInterval = null;
+let scheduledOrdersInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -37,6 +38,7 @@ const gracefulShutdown = async (signal) => {
             if (expireOffersInterval) clearInterval(expireOffersInterval);
             if (fssaiExpiryInterval) clearInterval(fssaiExpiryInterval);
             if (gigReminderInterval) clearInterval(gigReminderInterval);
+            if (scheduledOrdersInterval) clearInterval(scheduledOrdersInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -151,6 +153,17 @@ const startServer = async () => {
         };
         runGigReminderCheck();
         gigReminderInterval = setInterval(runGigReminderCheck, 60 * 1000);
+
+        const runScheduledOrdersCheck = async () => {
+            try {
+                const { processScheduledFoodOrders } = await import('./src/modules/food/orders/services/order.service.js');
+                await processScheduledFoodOrders();
+            } catch (err) {
+                logger.error(`Scheduled food orders check error: ${err.message}`);
+            }
+        };
+        runScheduledOrdersCheck();
+        scheduledOrdersInterval = setInterval(runScheduledOrdersCheck, 60 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

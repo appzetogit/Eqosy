@@ -2,6 +2,7 @@ import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
+import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import mongoose from 'mongoose';
 
 /**
@@ -10,14 +11,14 @@ import mongoose from 'mongoose';
  * returning matched restaurants with potential dish highlights.
  */
 export const searchUnified = async (query = {}, options = {}) => {
-    const { 
-        q, 
-        lat, 
-        lng, 
-        radiusKm = 20, 
-        categoryId, 
-        minRating, 
-        maxDeliveryTime, 
+    const {
+        q,
+        lat,
+        lng,
+        radiusKm = 20,
+        categoryId,
+        minRating,
+        maxDeliveryTime,
         isVeg,
         page = 1,
         limit = 20,
@@ -187,7 +188,8 @@ export const searchUnified = async (query = {}, options = {}) => {
             foodFilters.$or = foodOrConditions;
         }
 
-        const matchedFoods = await FoodItem.find(foodFilters).limit(limit * 15).lean();
+        const rawMatchedFoods = await FoodItem.find(foodFilters).limit(limit * 15).lean();
+        const matchedFoods = rawMatchedFoods.filter((food) => isFoodItemAvailableNow(food));
 
         const restaurantDishesMap = new Map();
         const dishResults = [];
@@ -244,7 +246,7 @@ export const searchUnified = async (query = {}, options = {}) => {
             .sort({ isSponsored: -1, rating: -1, createdAt: -1 })
             .limit(limit * 2)
             .lean();
-            
+
         results = allMatching.map(r => ({ ...r, matchType: 'restaurant', matchedDishes: [] }));
     }
 
@@ -266,10 +268,10 @@ export const searchUnified = async (query = {}, options = {}) => {
             if (Number.isFinite(rLat) && Number.isFinite(rLng)) {
                 const dLat = (rLat - userLat) * Math.PI / 180;
                 const dLon = (rLng - userLng) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                          Math.cos(userLat * Math.PI / 180) * Math.cos(rLat * Math.PI / 180) *
-                          Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(userLat * Math.PI / 180) * Math.cos(rLat * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 const distKm = 6371 * c; // Km
                 res.distanceScore = distKm;
                 res.distanceKm = Math.round(distKm * 10) / 10;
@@ -362,7 +364,7 @@ export const getAdminCategories = async (query = {}) => {
             })
             : [];
 
-        const filter = { 
+        const filter = {
             isActive: true,
             $or: [
                 { restaurantId: null },
@@ -384,7 +386,7 @@ export const getAdminCategories = async (query = {}) => {
         }
 
         let categories = await FoodCategory.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
-        
+
         if (!categories || categories.length === 0) {
             categories = await FoodCategory.find({ isActive: { $ne: false } }).sort({ sortOrder: 1, name: 1 }).lean();
         }

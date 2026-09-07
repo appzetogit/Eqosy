@@ -3228,6 +3228,14 @@ export async function createFood(body) {
         pureVegRestaurant: restaurant.pureVegRestaurant === true
     });
 
+    const availableTime = body.availableTime && typeof body.availableTime === 'object'
+        ? {
+            isAllDay: body.availableTime.isAllDay !== false,
+            startTime: body.availableTime.isAllDay !== false ? '' : String(body.availableTime.startTime || '').trim(),
+            endTime: body.availableTime.isAllDay !== false ? '' : String(body.availableTime.endTime || '').trim()
+        }
+        : { isAllDay: true, startTime: '', endTime: '' };
+
     const doc = new FoodItem({
         restaurantId,
         categoryId,
@@ -3240,6 +3248,7 @@ export async function createFood(body) {
         foodType,
         isAvailable: body.isAvailable !== false,
         preparationTime: typeof body.preparationTime === 'string' ? body.preparationTime.trim() : '',
+        availableTime,
         approvalStatus: 'approved'
     });
     await doc.save();
@@ -3269,6 +3278,18 @@ export async function updateFood(id, body) {
     if (body.foodType !== undefined) doc.foodType = targetFoodType;
     if (body.isAvailable !== undefined) doc.isAvailable = body.isAvailable !== false;
     if (body.preparationTime !== undefined) doc.preparationTime = String(body.preparationTime || '').trim();
+    if (body.availableTime !== undefined) {
+        if (body.availableTime && typeof body.availableTime === 'object') {
+            const isAllDay = body.availableTime.isAllDay !== false;
+            doc.availableTime = {
+                isAllDay,
+                startTime: isAllDay ? '' : String(body.availableTime.startTime || '').trim(),
+                endTime: isAllDay ? '' : String(body.availableTime.endTime || '').trim()
+            };
+        } else {
+            doc.availableTime = { isAllDay: true, startTime: '', endTime: '' };
+        }
+    }
     if (body.categoryId !== undefined || body.categoryName !== undefined || body.category !== undefined || body.foodType !== undefined) {
         const nextCategoryName = body.categoryName !== undefined
             ? String(body.categoryName || '').trim()
@@ -3425,7 +3446,7 @@ export async function createRestaurantByAdmin(body) {
     try {
         const { invalidateCache } = await import('../../../../middleware/cache.js');
         await invalidateCache('restaurants*');
-    } catch (_) {}
+    } catch (_) { }
 
     return restaurant.toObject();
 }
