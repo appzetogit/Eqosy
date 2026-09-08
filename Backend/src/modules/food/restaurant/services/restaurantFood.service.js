@@ -258,10 +258,18 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     if (!existing) return null;
 
     const providedKeys = Object.keys(body || {});
-    const operationalOnlyKeys = ['isActive', 'isAvailable', 'isRecommended', 'availableTime'];
-    const isOperationalOnlyUpdate =
-        providedKeys.length > 0 &&
-        providedKeys.every((key) => operationalOnlyKeys.includes(key));
+    const structuralContentKeys = [
+        'name',
+        'description',
+        'image',
+        'price',
+        'variants',
+        'variations',
+        'foodType',
+        'categoryId',
+        'categoryName'
+    ];
+    const isStructuralContentChange = providedKeys.some((key) => structuralContentKeys.includes(key));
 
     const update = {};
 
@@ -287,10 +295,12 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
         update.lowStockThreshold = Number(body.lowStockThreshold) || 5;
     }
 
-    if (body.isActive !== undefined || body.isAvailable !== undefined) {
+    if (body.isActive !== undefined || body.isAvailable !== undefined || body.inStock !== undefined) {
         const nextIsActive = body.isActive !== undefined
             ? body.isActive !== false
-            : body.isAvailable !== false;
+            : body.inStock !== undefined
+                ? body.inStock !== false
+                : body.isAvailable !== false;
         update.isActive = nextIsActive;
         update.isAvailable = nextIsActive;
     }
@@ -319,7 +329,7 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
         update.categoryName = categoryName || '';
     }
 
-    const shouldResubmitForApproval = Object.keys(update).length > 0 && !isOperationalOnlyUpdate;
+    const shouldResubmitForApproval = isStructuralContentChange;
 
     if (shouldResubmitForApproval) {
         update.approvalStatus = 'pending';

@@ -19,6 +19,8 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
     return { isoDate, label, dayNum: d.getDate() };
   });
 
+  const [confirmCancelGig, setConfirmCancelGig] = useState(null); // { gig, type: 'confirm' | 'cutoff_passed', customMessage?: string }
+
   const fetchGigs = async (dateStr) => {
     setLoading(true);
     try {
@@ -59,10 +61,7 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
     }
   };
 
-  const handleCancelGig = async (gig) => {
-    if (!window.confirm(`Are you sure you want to cancel your booked gig for ${gig.startTime} - ${gig.endTime}?`)) {
-      return;
-    }
+  const executeCancelGig = async (gig) => {
     setActionLoadingId(gig._id);
     try {
       const res = await deliveryAPI.cancelGig(gig._id);
@@ -72,9 +71,21 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
       }
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Failed to cancel gig';
-      toast.error(msg);
+      if (msg.toLowerCase().includes('minutes before') || msg.toLowerCase().includes('cancellation is not allowed')) {
+        setConfirmCancelGig({ gig, type: 'cutoff_passed', customMessage: msg });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  const handleCancelClick = (gig) => {
+    if (gig.canCancel === false) {
+      setConfirmCancelGig({ gig, type: 'cutoff_passed' });
+    } else {
+      setConfirmCancelGig({ gig, type: 'confirm' });
     }
   };
 
@@ -222,20 +233,28 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
 
                     {/* Action Button */}
                     {isBooked ? (
-                      <button
-                        onClick={() => handleCancelGig(gig)}
-                        disabled={isLoading}
-                        className="w-full py-3.5 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 text-xs font-black uppercase tracking-widest hover:bg-rose-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
-                      >
-                        {isLoading ? (
-                          <div className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <>
-                            <X className="w-4 h-4" />
-                            <span>Cancel Booking</span>
-                          </>
+                      <div>
+                        <button
+                          onClick={() => handleCancelClick(gig)}
+                          disabled={isLoading}
+                          className="w-full py-3.5 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 text-xs font-black uppercase tracking-widest hover:bg-rose-100 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          {isLoading ? (
+                            <div className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <X className="w-4 h-4" />
+                              <span>Cancel Booking</span>
+                            </>
+                          )}
+                        </button>
+                        {gig.canCancel === false && (
+                          <p className="text-[10px] text-rose-500 font-bold text-center mt-1.5 flex items-center justify-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>Cancellation window closed (within 60m of start)</span>
+                          </p>
                         )}
-                      </button>
+                      </div>
                     ) : isFull ? (
                       <button
                         disabled
@@ -272,6 +291,84 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
             )}
           </div>
         </motion.div>
+
+        {/* Custom Confirmation / Cutoff Modal */}
+        <AnimatePresence>
+          {confirmCancelGig && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[500] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 text-center"
+              >
+                {confirmCancelGig.type === 'cutoff_passed' ? (
+                  <>
+                    <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Clock className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-950 mb-1">
+                      Cancellation Closed
+                    </h3>
+                    <p className="text-xs font-bold text-slate-500 mb-3">
+                      Shift Cancel Nahi Kar Sakte
+                    </p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-600 text-left mb-5 space-y-2">
+                      <p className="font-semibold">
+                        {confirmCancelGig.customMessage ||
+                          `Aap shift start time (${confirmCancelGig.gig.startTime}) ke 60 minute pehle tak hi booking cancel kar sakte hain.`}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Kyunki yeh shift ab shuru hone wali hai ya chal rahi hai, ise cancel karna allowed nahi hai.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setConfirmCancelGig(null)}
+                      className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-wider hover:bg-slate-800 active:scale-95 transition-all shadow-md"
+                    >
+                      Got It (Samajh Gaya)
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertCircle className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-950 mb-1">
+                      Cancel Shift Booking?
+                    </h3>
+                    <p className="text-xs font-semibold text-slate-500 mb-4">
+                      Are you sure you want to cancel your booked delivery shift for {confirmCancelGig.gig.startTime} – {confirmCancelGig.gig.endTime}?
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setConfirmCancelGig(null)}
+                        className="py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors"
+                      >
+                        Keep Shift
+                      </button>
+                      <button
+                        onClick={() => {
+                          const gigToCancel = confirmCancelGig.gig;
+                          setConfirmCancelGig(null);
+                          executeCancelGig(gigToCancel);
+                        }}
+                        className="py-3 rounded-2xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider hover:bg-rose-700 shadow-md shadow-rose-600/30 active:scale-95 transition-all"
+                      >
+                        Yes, Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </AnimatePresence>
   );

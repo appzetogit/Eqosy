@@ -307,16 +307,17 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   if (activeZones && activeZones.length > 0) {
     const partner = await FoodDeliveryPartner.findById(partnerId).select('lastLat lastLng name').lean();
     if (!partner || partner.lastLat == null || partner.lastLng == null) {
-      throw new ForbiddenError('Location unavailable. You must be inside an active delivery zone to accept orders.');
-    }
-    const targetOrder = await FoodOrder.findOne(identity).select('restaurantId').lean();
-    const restaurant = targetOrder?.restaurantId
-      ? await FoodRestaurant.findById(targetOrder.restaurantId).select('zoneId zone').lean()
-      : null;
-    const targetZoneId = restaurant?.zoneId || restaurant?.zone;
-    const isInZone = isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, targetZoneId, activeZones);
-    if (!isInZone) {
-      throw new ForbiddenError('You cannot accept orders when you are outside the zone created by admin.');
+      logger.warn(`[AcceptOrder] Rider ${partnerId} location unavailable during accept, allowing accept.`);
+    } else {
+      const targetOrder = await FoodOrder.findOne(identity).select('restaurantId').lean();
+      const restaurant = targetOrder?.restaurantId
+        ? await FoodRestaurant.findById(targetOrder.restaurantId).select('zoneId zone').lean()
+        : null;
+      const targetZoneId = restaurant?.zoneId || restaurant?.zone;
+      const isInZone = isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, targetZoneId, activeZones);
+      if (!isInZone) {
+        logger.warn(`[AcceptOrder] Rider ${partnerId} accepted order while outside zone, allowing accept.`);
+      }
     }
   }
   const now = new Date();
@@ -853,54 +854,16 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   }
 
   if (!order.deliveryVerification) order.deliveryVerification = { dropOtp: {} };
-  order.deliveryVerification.dropOtp.verified = true;
-  order.markModified('deliveryVerification.dropOtp.verified');
-
-  const from = order.orderStatus;
-  if (from !== 'delivered') {
-    order.orderStatus = 'delivered';
-    order.deliveryState = {
-      ...(order.deliveryState?.toObject?.() || order.deliveryState || {}),
-      currentPhase: 'delivered',
-      status: 'delivered',
-      deliveredAt: new Date(),
-    };
-    pushStatusHistory(order, {
-      byRole: 'DELIVERY_PARTNER',
-      byId: deliveryPartnerId,
-      from,
-      to: 'delivered',
-      note: 'Delivery completed via OTP verification',
-    });
-  }
-
+  order.deliveryVerification.dropOtp = {
+    ...(order.deliveryVerification?.dropOtp || {}),
+    required: true,
+    verified: true,
+    verifiedAt: new Date()
+  };
+  order.markModified('deliveryVerification');
   await order.save();
 
-  try {
-    const tx = await FoodTransaction.findOne({ orderId: order._id }).lean();
-    const prevPayStatus = String(tx?.payment?.status || order?.payment?.status || 'unpaid').toLowerCase();
-    const payMethod = String(tx?.payment?.method || order?.payment?.method || order?.paymentMethod || 'cash').toLowerCase();
-    const ledgerKind =
-      payMethod === 'cash' && prevPayStatus === 'cod_pending'
-        ? 'cod_marked_paid_on_delivery'
-        : 'payment_snapshot_sync';
-
-    await foodTransactionService.updateTransactionStatus(order._id, ledgerKind, {
-      status: 'captured',
-      recordedByRole: 'DELIVERY_PARTNER',
-      recordedById: deliveryPartnerId,
-      note: `Delivery completed via OTP verification. Prev status: ${prevPayStatus}`,
-    });
-  } catch (txErr) {
-    logger.warn(`Failed to update transaction status during verifyDropOtpDelivery: ${txErr?.message}`);
-  }
-
   emitOrderUpdate(order, deliveryPartnerId);
-  enqueueOrderEvent('delivery_completed', {
-    orderMongoId: order._id?.toString?.(),
-    orderId: order._id.toString(),
-    deliveryPartnerId,
-  });
 
   const sanitized = sanitizeOrderForExternal(order);
   const payMsg = sanitized.isPaid

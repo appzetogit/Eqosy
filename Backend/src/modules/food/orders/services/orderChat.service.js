@@ -250,18 +250,56 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
   try {
     const io = getIO();
     if (io) {
+      const roomName = `order-chat:${conversation.orderId}`;
+      const trackingRoom = `tracking:${conversation.orderId}`;
+      const targetUserId = order?.userId || conversation?.userId;
+      const targetDeliveryPartnerId = conversation?.deliveryPartnerId;
+
       const payload = {
+        orderId: String(conversation.orderId),
         message: msgObj,
+        conversation: updatedConversation,
         conversationId: conversation._id,
-        orderId: conversation.orderId,
         displayOrderId: conversation.displayOrderId || order?.order_id || order?.orderId,
       };
-      const roomName = `order-chat:${conversation.orderId}`;
+
+      // 1. Emit to order-chat room & tracking room for active chat/tracking screens
+      io.to(roomName).emit('new-order-chat-message', payload);
       io.to(roomName).emit('order_chat_message', payload);
       io.to(roomName).emit('new_message', payload);
+      io.to(trackingRoom).emit('new-order-chat-message', payload);
 
-      if (order?.userId) io.to(rooms.user(order.userId)).emit('order_chat_notification', payload);
-      if (conversation?.deliveryPartnerId) io.to(rooms.delivery(conversation.deliveryPartnerId)).emit('order_chat_notification', payload);
+      // 2. Format rich notification payload for user & delivery partner
+      const notificationPayload = {
+        orderId: String(conversation.orderId),
+        orderMongoId: order?._id ? String(order._id) : String(conversation.orderId),
+        message: msgObj,
+        senderRole,
+        senderName: senderRole === 'USER' ? 'Customer' : 'Delivery Partner',
+        text: cleanText,
+        userUnreadCount: updatedConversation?.userUnreadCount || 0,
+        partnerUnreadCount: updatedConversation?.partnerUnreadCount || 0,
+      };
+
+      // 3. Notify User room for banner toast, sound, and unread count update
+      if (targetUserId) {
+        const userRoom = rooms.user(targetUserId);
+        io.to(userRoom).emit('order-chat-notification', notificationPayload);
+        io.to(userRoom).emit('order-chat-unread-update', {
+          orderId: String(conversation.orderId),
+          unreadCount: updatedConversation?.userUnreadCount || 0,
+        });
+      }
+
+      // 4. Notify Delivery Partner room
+      if (targetDeliveryPartnerId) {
+        const deliveryRoom = rooms.delivery(targetDeliveryPartnerId);
+        io.to(deliveryRoom).emit('order-chat-notification', notificationPayload);
+        io.to(deliveryRoom).emit('order-chat-unread-update', {
+          orderId: String(conversation.orderId),
+          unreadCount: updatedConversation?.partnerUnreadCount || 0,
+        });
+      }
     }
   } catch (socketErr) {
     logger.warn(`Failed to broadcast chat message via socket: ${socketErr?.message || socketErr}`);
@@ -270,10 +308,10 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
   // Send FCM Push Notification if app is in background or closed
   try {
     const recipientOwnerType = isUserSender ? 'DELIVERY_PARTNER' : 'USER';
-    const recipientOwnerId = isUserSender ? conversation?.deliveryPartnerId : order?.userId;
+    const recipientOwnerId = isUserSender ? conversation?.deliveryPartnerId : (order?.userId || conversation?.userId);
 
     if (recipientOwnerId) {
-      const senderTitle = isUserSender ? 'New Message from Customer' : 'New Message from Delivery Partner';
+      const senderTitle = isUserSender ? '💬 New Message from Customer' : '💬 New Message from Delivery Partner';
       notifyOwnerSafely(
         { ownerType: recipientOwnerType, ownerId: String(recipientOwnerId) },
         {

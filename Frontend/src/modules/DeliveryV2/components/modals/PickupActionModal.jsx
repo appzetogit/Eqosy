@@ -4,7 +4,7 @@ import {
   ChefHat, MapPin, Phone, 
   ChevronDown, ChevronUp, Package, 
   Navigation, CheckCircle2, Camera, Loader2, Image as ImageIcon,
-  AlertTriangle, RefreshCw, X
+  AlertTriangle, RefreshCw, X, MessageCircle
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { uploadAPI, deliveryAPI } from '@food/api';
@@ -24,7 +24,9 @@ export const PickupActionModal = ({
   onReachedPickup, 
   onPickedUp,
   onMinimize,
-  onCancel
+  onCancel,
+  onOpenChat,
+  unreadChatCount = 0
 }) => {
   const [showItems, setShowItems] = useState(false);
   const [isUploadingBill, setIsUploadingBill] = useState(false);
@@ -207,11 +209,34 @@ export const PickupActionModal = ({
                 </div>
               </div>
 
-              <div className="flex gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => {
+                    if (onOpenChat) {
+                      onOpenChat();
+                    } else {
+                      const orderId = order._id || order.orderId || order.order_id;
+                      if (orderId) {
+                        window.location.href = `/food/delivery/orders/${orderId}/chat`;
+                      }
+                    }
+                  }}
+                  className="w-11 h-11 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 border border-orange-100 hover:bg-orange-100 transition-colors active:scale-90 relative"
+                  aria-label="Chat"
+                  title="Chat with Customer & Restaurant"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  {unreadChatCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white font-black text-[10px] min-w-[20px] h-[20px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                      {unreadChatCount}
+                    </span>
+                  )}
+                </button>
                 {restaurantPhone && (
                   <button
                     onClick={() => window.location.href = `tel:${restaurantPhone}`}
                     className="w-11 h-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100 hover:bg-emerald-100 transition-colors active:scale-90"
+                    aria-label="Call restaurant"
                   >
                     <Phone className="w-5 h-5" />
                   </button>

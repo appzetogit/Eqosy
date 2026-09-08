@@ -323,7 +323,10 @@ export const getSupportTicketByIdAndPartner = async (ticketId, deliveryPartnerId
 };
 
 export const updateDeliveryAvailability = async (userId, payload) => {
-    const partner = await FoodDeliveryPartner.findById(userId);
+    let partner = await FoodDeliveryPartner.findById(userId);
+    if (!partner && mongoose.Types.ObjectId.isValid(userId)) {
+        partner = await FoodDeliveryPartner.findOne({ userId: new mongoose.Types.ObjectId(userId) });
+    }
     if (!partner) {
         throw new ValidationError('Delivery partner not found');
     }
@@ -342,13 +345,20 @@ export const updateDeliveryAvailability = async (userId, payload) => {
         if (!activeGig) {
             const upcomingInfo = await getUpcomingGigLoginDetails(partner._id);
             if (upcomingInfo) {
+                const startTimeStr = upcomingInfo.startTime || 'scheduled time';
                 const err = new ValidationError(
-                    `You can only log in online within 30 minutes of your scheduled gig start time (Your shift starts at ${upcomingInfo.startTime}).`
+                    `Aapki shift ${startTimeStr} par start hogi. Aap shift start hone ke 30 minute pehle hi online ja sakte hain.`
                 );
                 err.code = 'GIG_LOGIN_TOO_EARLY';
+                err.details = {
+                    startTime: startTimeStr,
+                    minutesUntilStart: upcomingInfo.minutesUntilStart,
+                    minutesUntilAllowed: upcomingInfo.minutesUntilAllowed,
+                    allowedTimeMs: upcomingInfo.allowedTimeMs
+                };
                 throw err;
             }
-            const err = new ValidationError("You don't have an active gig. Please book a gig before going online.");
+            const err = new ValidationError("Aapke paas abhi koi active gig nahi hai. Online aane ke liye pehle gig book karein.");
             err.code = 'NO_ACTIVE_GIG';
             throw err;
         }
@@ -387,7 +397,7 @@ export const updateDeliveryAvailability = async (userId, payload) => {
 
     if (validStatus === 'offline') {
         // Guard 1: Active Order Running Check
-        const { FoodOrder } = await import('../orders/models/order.model.js');
+        const { FoodOrder } = await import('../../orders/models/order.model.js');
         const activeRunningOrder = await FoodOrder.findOne({
             'dispatch.deliveryPartnerId': partner._id,
             orderStatus: {
@@ -424,13 +434,17 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     }
 
     partner.availabilityStatus = validStatus;
-    if (typeof latitude === 'number' && typeof longitude === 'number') {
+    const numLat = Number(latitude);
+    const numLng = Number(longitude);
+    if (Number.isFinite(numLat) && Number.isFinite(numLng)) {
         partner.lastLocation = {
             type: 'Point',
-            coordinates: [longitude, latitude]
+            coordinates: [numLng, numLat]
         };
-        partner.lastLat = latitude;
-        partner.lastLng = longitude;
+        partner.lastLat = numLat;
+        partner.lastLng = numLng;
+        partner.lastLocationAt = new Date();
+    } else if (validStatus === 'online') {
         partner.lastLocationAt = new Date();
     }
     await partner.save();

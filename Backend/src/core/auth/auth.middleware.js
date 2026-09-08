@@ -30,10 +30,12 @@ export const authMiddleware = (req, res, next) => {
             id: userId,
             role
         };
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return sendError(res, 401, 'Invalid user token');
+        }
+
         if (role === 'USER') {
-            if (!mongoose.Types.ObjectId.isValid(userId)) {
-                return sendError(res, 401, 'Invalid user token');
-            }
             // Enforce active status in real-time - deactivated users are logged out on next request.
             FoodUser.findById(userId).select('isActive').lean().then((doc) => {
                 if (res.headersSent) return;

@@ -23,10 +23,10 @@ function isPointInPolygon(lat, lng, polygon = []) {
   if (!Array.isArray(polygon) || polygon.length < 3) return false;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = Number(polygon[i]?.longitude);
-    const yi = Number(polygon[i]?.latitude);
-    const xj = Number(polygon[j]?.longitude);
-    const yj = Number(polygon[j]?.latitude);
+    const xi = Number(polygon[i]?.longitude ?? polygon[i]?.lng ?? polygon[i]?.[0]);
+    const yi = Number(polygon[i]?.latitude ?? polygon[i]?.lat ?? polygon[i]?.[1]);
+    const xj = Number(polygon[j]?.longitude ?? polygon[j]?.lng ?? polygon[j]?.[0]);
+    const yj = Number(polygon[j]?.latitude ?? polygon[j]?.lat ?? polygon[j]?.[1]);
     const intersects =
       yi > lat !== yj > lat &&
       lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
@@ -67,57 +67,46 @@ async function listNearbyOnlineDeliveryPartners(
   const activeZones = await FoodZone.find({ isActive: true }).select("_id coordinates").lean();
   const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
 
-  if (!restaurant?.location?.coordinates?.length) {
-    let partners = await FoodDeliveryPartner.find({
-      status: "approved",
-      availabilityStatus: "online",
-    })
-      .select("_id status name lastLat lastLng")
-      .limit(Math.max(1, limit))
-      .lean();
-
-    if (hasActiveZones) {
-      partners = partners.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
-    }
-
-    return {
-      restaurant: null,
-      partners: partners.map((p) => ({ partnerId: p._id, distanceKm: null })),
-    };
-  }
-
-  const [rLng, rLat] = restaurant.location.coordinates;
-  const allOnline = await FoodDeliveryPartner.find({
+  let allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
   })
     .select("_id status lastLat lastLng lastLocationAt name")
     .lean();
 
-  const scored = [];
   const allowedStatuses = process.env.NODE_ENV === 'production' ? ['approved'] : ['approved', 'pending'];
-  const STALE_GPS_MS = 10 * 60 * 1000;
+  allOnline = allOnline.filter(p => allowedStatuses.includes(p.status));
+
+  if (!restaurant?.location?.coordinates?.length) {
+    let partners = allOnline;
+    if (hasActiveZones) {
+      const inZone = partners.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+      if (inZone.length > 0) partners = inZone;
+    }
+
+    return {
+      restaurant: null,
+      partners: partners.slice(0, limit).map((p) => ({ partnerId: p._id, distanceKm: null, status: p.status })),
+    };
+  }
+
+  const [rLng, rLat] = restaurant.location.coordinates;
+  const scored = [];
 
   for (const p of allOnline) {
-    if (!allowedStatuses.includes(p.status)) continue;
-
-    const isStale = !p.lastLocationAt || (Date.now() - new Date(p.lastLocationAt).getTime()) > STALE_GPS_MS;
-    if (p.lastLat == null || p.lastLng == null || isStale) {
-      if (hasActiveZones) continue; // Must be inside active zone; missing/stale GPS cannot be verified
-      scored.push({ partnerId: p._id, distanceKm: 999, status: p.status });
-      continue;
+    let isInZone = true;
+    if (hasActiveZones && p.lastLat != null && p.lastLng != null) {
+      isInZone = isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
     }
 
-    if (hasActiveZones) {
-      const isInZone = isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
-      if (!isInZone) {
-        logger.info(`[ZoneDispatchFilter] Skipping rider ${p.name || p._id} - outside admin created zone.`);
-        continue;
-      }
+    let d = 999;
+    if (p.lastLat != null && p.lastLng != null) {
+      const calcD = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
+      if (Number.isFinite(calcD)) d = calcD;
     }
 
-    const d = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
-    if (Number.isFinite(d) && d <= maxKm) {
-      scored.push({ partnerId: p._id, distanceKm: d, status: p.status });
+    // Include if within distance or inside active zone
+    if (d <= maxKm || isInZone) {
+      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, isInZone });
     }
   }
 
@@ -125,20 +114,14 @@ async function listNearbyOnlineDeliveryPartners(
   const picked = scored.slice(0, Math.max(1, limit));
 
   if (picked.length === 0) {
-    let anyOnline = await FoodDeliveryPartner.find({
-      status: { $in: allowedStatuses },
-      availabilityStatus: "online",
-    })
-      .select("_id status name lastLat lastLng")
-      .limit(Math.max(1, limit))
-      .lean();
-
+    let fallback = allOnline;
     if (hasActiveZones) {
-      anyOnline = anyOnline.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+      const inZoneFallback = fallback.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+      if (inZoneFallback.length > 0) fallback = inZoneFallback;
     }
 
     return {
-      partners: anyOnline.map((p) => ({
+      partners: fallback.slice(0, limit).map((p) => ({
         partnerId: p._id,
         distanceKm: null,
         status: p.status,
@@ -146,11 +129,7 @@ async function listNearbyOnlineDeliveryPartners(
     };
   }
 
-  const final = (config.env === 'production')
-    ? picked.filter(p => p.status === 'approved')
-    : picked;
-
-  return { partners: final };
+  return { partners: picked };
 }
 
 async function filterPartnersByCodCashLimit(partners = [], order = null) {

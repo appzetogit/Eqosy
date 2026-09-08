@@ -18,6 +18,7 @@ import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modal
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
 import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
 import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
+import FoodOrderChatScreen from '@food/pages/user/orders/FoodOrderChatScreen';
 import ActionSlider from '@/modules/DeliveryV2/components/ui/ActionSlider';
 
 // Sub Pages
@@ -279,6 +280,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [eta, setEta] = useState(null);
   const [partnerUnreadChatCount, setPartnerUnreadChatCount] = useState(0);
+  const [showEmbeddedChatModal, setShowEmbeddedChatModal] = useState(false);
+  const [gigEarlyLoginInfo, setGigEarlyLoginInfo] = useState({ isOpen: false, startTime: '', message: '' });
 
   // Real-time delivery partner chat listener
   useEffect(() => {
@@ -662,24 +665,34 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
             timeout: 10000,
-            maximumAge: 0,
+            maximumAge: 5000,
           });
         });
-      } catch (geoError) {
-        setOnline(false);
-        setIsTogglingDuty(false);
-        let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
-        if (geoError.code === 1) {
-          errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
-        } else if (geoError.code === 2) {
-          errorMsg = 'Your mobile GPS / Location is turned OFF. Please turn ON location services on your phone to go online and accept delivery orders.';
-        } else if (geoError.code === 3) {
-          errorMsg = 'GPS signal request timed out. Please make sure location / GPS is turned ON and try again.';
+      } catch (highAccError) {
+        try {
+          position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 15000,
+            });
+          });
+        } catch (geoError) {
+          setOnline(false);
+          setIsTogglingDuty(false);
+          let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
+          if (geoError.code === 1) {
+            errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
+          } else if (geoError.code === 2) {
+            errorMsg = 'Your mobile GPS / Location is turned OFF. Please turn ON location services on your phone to go online and accept delivery orders.';
+          } else if (geoError.code === 3) {
+            errorMsg = 'GPS signal request timed out. Please make sure location / GPS is turned ON and try again.';
+          }
+          setGpsErrorMessage(errorMsg);
+          setShowGpsModal(true);
+          toast.error(errorMsg);
+          return;
         }
-        setGpsErrorMessage(errorMsg);
-        setShowGpsModal(true);
-        toast.error(errorMsg);
-        return;
       }
 
       const { latitude, longitude } = position.coords;
@@ -697,8 +710,24 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       toast.success('You are now online');
     } catch (error) {
       setOnline(false);
-      const message = error?.response?.data?.message || error?.message || 'Failed to go online';
-      toast.error(message);
+      const data = error?.response?.data;
+      const errCode = data?.code || error?.code;
+      const details = data?.details;
+      const message = data?.message || data?.error || error?.message || 'Failed to go online';
+
+      if (errCode === 'GIG_LOGIN_TOO_EARLY' || String(message).includes('30 minute pehle') || String(message).includes('scheduled time')) {
+        setGigEarlyLoginInfo({
+          isOpen: true,
+          startTime: details?.startTime || 'upcoming shift',
+          message,
+        });
+      } else if (errCode === 'NO_ACTIVE_GIG' || String(message).includes('active gig nahi') || String(message).includes('gig book')) {
+        setShowBookGigModal(true);
+        toast.warning(message);
+      } else {
+        toast.error(message);
+      }
+
       if (String(message).toLowerCase().includes('selfie')) {
         setShowOnlineSelfiePrompt(true);
       }
@@ -952,10 +981,24 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         lastCoordRef.current = { lat, lng };
         publishLiveRiderLocation(lat, lng, heading || 0, speed || 0, pos.coords.accuracy);
       }
-    }, () => toast.error('GPS Needed!'), {
+    }, (err) => {
+      if (err?.code === 1) {
+        toast.error('Location Permission Denied!');
+      } else {
+        // Fallback check with low accuracy if high accuracy satellite lock temporarily times out
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+            setRiderLocation((prev) => ({ ...prev, lat, lng }));
+          },
+          () => {},
+          { enableHighAccuracy: false, maximumAge: 10000, timeout: 10000 }
+        );
+      }
+    }, {
       enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 5000
+      maximumAge: 3000,
+      timeout: 15000
     });
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -1034,7 +1077,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               }
             ).catch(() => { });
           }
-        }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
+        }, { enableHighAccuracy: false, maximumAge: 10000, timeout: 10000 });
       }
     }, 10000); // Check every 10 seconds
 
@@ -1055,7 +1098,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             }
           },
           (err) => console.warn('Auto location re-fetch error:', err),
-          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
         );
       }
     };
@@ -1505,6 +1548,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     onReachedPickup={reachPickup}
                     onPickedUp={(billImageUrl) => pickUpOrder(billImageUrl)}
                     onMinimize={() => setIsModalMinimized(true)}
+                    onOpenChat={() => {
+                      setPartnerUnreadChatCount(0);
+                      setShowEmbeddedChatModal(true);
+                    }}
+                    unreadChatCount={partnerUnreadChatCount}
                     onCancel={async () => {
                       const orderId = activeOrder?.orderId || activeOrder?._id;
                       if (!orderId) { resetTrip(); return; }
@@ -1579,11 +1627,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                             <div className="flex items-center gap-2.5 shrink-0">
                               <button
                                 onClick={() => {
-                                  const orderId = activeOrder?.order_id || activeOrder?.orderId || activeOrder?._id;
-                                  if (orderId) {
-                                    setPartnerUnreadChatCount(0);
-                                    navigate(`/food/delivery/orders/${orderId}/chat`);
-                                  }
+                                  setPartnerUnreadChatCount(0);
+                                  setShowEmbeddedChatModal(true);
                                 }}
                                 className="w-11 h-11 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 border border-orange-100 hover:bg-orange-100 transition-colors active:scale-90 relative"
                                 aria-label="Chat with customer"
@@ -1663,8 +1708,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 {showVerification && tripStatus !== 'COMPLETED' && (
                   <DeliveryVerificationModal
                     order={activeOrder}
-                    onComplete={async (otp) => {
-                      const res = await completeDelivery(otp);
+                    onComplete={async (otp, photoUrl) => {
+                      const res = await completeDelivery(otp, photoUrl);
                       setShowVerification(false);
                       return res;
                     }}
@@ -1677,6 +1722,91 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           )}
         </AnimatePresence>
       )}
+
+      {/* Embedded Order Chat Modal */}
+      <AnimatePresence>
+        {showEmbeddedChatModal && activeOrder && (
+          <div className="fixed inset-0 z-[500] flex items-end justify-center pointer-events-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => setShowEmbeddedChatModal(false)}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-full max-w-lg bg-white rounded-t-[2.5rem] shadow-2xl h-[88vh] flex flex-col overflow-hidden relative z-10"
+            >
+              <FoodOrderChatScreen
+                isEmbedded={true}
+                embeddedOrderId={activeOrder.order_id || activeOrder.orderId || activeOrder._id}
+                onClose={() => setShowEmbeddedChatModal(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Gig Early Login Alert Modal */}
+      <AnimatePresence>
+        {gigEarlyLoginInfo.isOpen && (
+          <div className="fixed inset-0 z-[550] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setGigEarlyLoginInfo((prev) => ({ ...prev, isOpen: false }))}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl z-10 text-center space-y-4 border border-orange-100"
+            >
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto text-orange-600 shadow-inner">
+                <Clock className="w-8 h-8 animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-orange-500 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+                  Shift Timing Alert
+                </span>
+                <h3 className="text-xl font-black text-gray-900 mt-2.5 tracking-tight">Shift Starts at {gigEarlyLoginInfo.startTime}</h3>
+                <p className="text-xs font-semibold text-gray-600 leading-relaxed mt-2">
+                  Aapki booked gig shift <span className="font-bold text-gray-900">{gigEarlyLoginInfo.startTime}</span> baje start hogi. Aap shift start hone ke <span className="font-bold text-orange-600">30 minute pehle</span> hi online ja sakte hain.
+                </p>
+              </div>
+
+              <div className="bg-orange-50/80 border border-orange-200 rounded-2xl p-3.5 text-xs text-orange-950 font-bold flex items-center justify-center gap-2">
+                <Clock className="w-4 h-4 text-orange-600 shrink-0" />
+                <span>Shift shuru hone ke 30 min pehle Online button dabayein</span>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setGigEarlyLoginInfo((prev) => ({ ...prev, isOpen: false }));
+                    setShowBookGigModal(true);
+                  }}
+                  className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                >
+                  View Booked Gigs
+                </button>
+                <button
+                  onClick={() => setGigEarlyLoginInfo((prev) => ({ ...prev, isOpen: false }))}
+                  className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-2xl active:scale-95 transition-all"
+                >
+                  Got it, Thanks
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Gig Booking Modal */}
       <BookGigModal

@@ -181,8 +181,8 @@ export default function FeedNavbar({ className = "" }) {
         try {
           const position = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-              timeout: 5000,
-              maximumAge: 0,
+              timeout: 10000,
+              maximumAge: 5000,
               enableHighAccuracy: true
             });
           });

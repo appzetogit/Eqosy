@@ -176,32 +176,18 @@ export const useOrderManager = () => {
   const completeDelivery = async (otp, handoverImageUrl = null) => {
     const orderId = activeOrder?.orderId || activeOrder?._id;
     try {
-      // 1. Verify OTP first
-      const verifyRes = await deliveryAPI.verifyDropOtp(orderId, otp);
-
-      if (verifyRes?.data?.success) {
-        let finalOrder = verifyRes.data?.data?.order || activeOrder;
-
-        // 2. Mark as complete
-        const completeRes = await deliveryAPI.completeDelivery(orderId, { otp, handoverImageUrl, rating: 5 });
-        if (completeRes.data?.success && completeRes.data?.data?.order) {
-          finalOrder = completeRes.data.data.order;
-        } else {
-          toast.error(completeRes.data?.message || 'Failed to complete delivery on server');
-          throw new Error('Complete call failed');
-        }
-
-        // Update local order state so Summary Modal shows 'delivered' status
-        if (finalOrder) setActiveOrder(finalOrder, 'COMPLETED');
-
+      const completeRes = await deliveryAPI.completeDelivery(orderId, { otp, handoverImageUrl, rating: 5 });
+      if (completeRes.data?.success) {
+        const finalOrder = completeRes.data?.data?.order || completeRes.data?.data || activeOrder;
+        setActiveOrder(finalOrder, 'COMPLETED');
         updateTripStatus('COMPLETED');
+        return completeRes.data;
       } else {
-        toast.error('Invalid OTP. Please check with customer.');
-        throw new Error('Invalid OTP');
+        toast.error(completeRes.data?.message || 'Failed to complete delivery on server');
+        throw new Error('Complete call failed');
       }
     } catch (error) {
-      console.error('Completion Error:', error);
-      toast.error(error?.response?.data?.message || 'Verification failed');
+      toast.error('Failed to complete delivery');
       throw error;
     }
   };

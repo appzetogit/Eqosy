@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import { userAPI } from '@food/api';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 
 const debugLog = (...args) => {
   if (import.meta.env.DEV) {
@@ -161,6 +162,21 @@ export const useUserNotifications = () => {
           duration: 8000
         });
         dispatchNotificationInboxRefresh();
+      });
+
+      sharedSocket.on('order-chat-notification', (payload) => {
+        debugLog('💬 User Chat Notification received:', payload);
+        const senderName = payload?.senderName || 'Delivery Partner';
+        const msgText = payload?.text || payload?.message?.text || 'Sent you a message';
+        const notifId = payload?.message?._id || `${payload?.orderId}-${Date.now()}`;
+        
+        showChatNotification(senderName, msgText, notifId);
+        
+        window.dispatchEvent(
+          new CustomEvent('orderChatNotification', {
+            detail: payload
+          })
+        );
       });
 
       sharedSocket.on('connect_error', (error) => {

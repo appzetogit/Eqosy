@@ -227,7 +227,7 @@ apiClient.interceptors.response.use(
     const module = original.contextModule || getModuleFromUrl(original.url);
     const refreshToken = getRefreshToken(module);
     if (!refreshToken) {
-      clearModuleAuth(module);
+      onRefreshFailed(module);
       return Promise.reject(err);
     }
 

@@ -137,13 +137,28 @@ export const listAdminGigs = async (query = {}) => {
   };
 };
 
+const resolvePartnerAndIds = async (deliveryPartnerId) => {
+  if (!deliveryPartnerId) return { partner: null, partnerIds: [] };
+  let partner = null;
+  if (mongoose.Types.ObjectId.isValid(deliveryPartnerId)) {
+    const objId = new mongoose.Types.ObjectId(deliveryPartnerId);
+    partner = await FoodDeliveryPartner.findOne({
+      $or: [{ _id: objId }, { userId: objId }]
+    });
+  }
+  const partnerIds = partner
+    ? [partner._id, partner._id.toString(), partner.userId, partner.userId?.toString()].filter(Boolean)
+    : (mongoose.Types.ObjectId.isValid(deliveryPartnerId) ? [new mongoose.Types.ObjectId(deliveryPartnerId), String(deliveryPartnerId)] : [deliveryPartnerId]);
+  return { partner, partnerIds };
+};
+
 export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {}) => {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const { date = todayStr } = query;
 
   // Fetch delivery partner to check assigned area/zone
-  const partner = await FoodDeliveryPartner.findById(deliveryPartnerId).select('zoneId zoneName city address').lean();
+  const { partner, partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
   const match = {
     status: 'active',
@@ -174,7 +189,7 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
 
   const gigIds = gigs.map(g => g._id);
   const partnerBookings = await FoodGigBooking.find({
-    deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+    deliveryPartnerId: { $in: partnerIds },
     gigId: { $in: gigIds },
     status: { $in: ['booked', 'completed'] }
   }).lean();
@@ -187,6 +202,11 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
     const isFull = remainingSlots <= 0;
     const isExpired = new Date(gig.endDateTime) < now;
 
+    const gigStartMs = new Date(gig.startDateTime).getTime();
+    const cutoffMins = gig.cancellationCutoffMinutes || 60;
+    const cutoffMs = cutoffMins * 60 * 1000;
+    const canCancel = now.getTime() <= (gigStartMs - cutoffMs);
+
     let partnerStatus = 'available';
     if (isBooked) partnerStatus = 'booked';
     else if (isExpired) partnerStatus = 'expired';
@@ -198,6 +218,8 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
       isBooked,
       isFull,
       isExpired,
+      canCancel,
+      cancellationCutoffMinutes: cutoffMins,
       partnerStatus
     };
   });
@@ -206,7 +228,7 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
 };
 
 export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
-  const partner = await FoodDeliveryPartner.findById(deliveryPartnerId);
+  const { partner, partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
   if (!partner) throw new NotFoundError('Delivery partner not found');
   if (partner.status !== 'approved') {
     throw new ValidationError('Your delivery partner account is not approved yet');
@@ -225,7 +247,7 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
   // Check if already booked
   const existingBooking = await FoodGigBooking.findOne({
     gigId: gig._id,
-    deliveryPartnerId: partner._id,
+    deliveryPartnerId: { $in: partnerIds },
     status: { $in: ['booked', 'completed'] }
   });
 
@@ -240,7 +262,7 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
 
   // Overlap Check: Find all active bookings of this partner and check for overlapping time range
   const activeBookings = await FoodGigBooking.find({
-    deliveryPartnerId: partner._id,
+    deliveryPartnerId: { $in: partnerIds },
     status: { $in: ['booked', 'completed'] }
   }).populate('gigId').lean();
 
@@ -286,9 +308,16 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
 };
 
 export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
+  const { partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
+  const targetGigId = mongoose.Types.ObjectId.isValid(gigId) ? new mongoose.Types.ObjectId(gigId) : gigId;
+
+  // Search booking by gigId OR booking._id, matching partnerId or userId
   const booking = await FoodGigBooking.findOne({
-    gigId: new mongoose.Types.ObjectId(gigId),
-    deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+    $or: [
+      { gigId: targetGigId },
+      { _id: targetGigId }
+    ],
+    deliveryPartnerId: { $in: partnerIds },
     status: 'booked'
   });
 
@@ -296,7 +325,7 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
     throw new NotFoundError('No active booking found for this gig');
   }
 
-  const gig = await FoodGig.findById(gigId);
+  const gig = await FoodGig.findById(booking.gigId || targetGigId);
   if (!gig) {
     throw new NotFoundError('Gig not found');
   }
@@ -316,7 +345,7 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
   booking.cancelledAt = new Date();
   await booking.save();
 
-  await FoodGig.findByIdAndUpdate(gigId, {
+  await FoodGig.findByIdAndUpdate(gig.id || gig._id, {
     $inc: { bookedCount: -1 }
   });
 
@@ -326,10 +355,11 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
 export const getActiveGigForPartner = async (deliveryPartnerId) => {
   const now = new Date();
   const nowMs = now.getTime();
+  const { partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
   // Find booking for a gig where current time falls within gig window (starts within 30 mins or currently running)
   const bookings = await FoodGigBooking.find({
-    deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+    deliveryPartnerId: { $in: partnerIds },
     status: { $in: ['booked', 'completed'] }
   }).populate('gigId').lean();
 
@@ -351,9 +381,10 @@ export const getActiveGigForPartner = async (deliveryPartnerId) => {
 export const getUpcomingGigLoginDetails = async (deliveryPartnerId) => {
   const now = new Date();
   const nowMs = now.getTime();
+  const { partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
   const bookings = await FoodGigBooking.find({
-    deliveryPartnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+    deliveryPartnerId: { $in: partnerIds },
     status: 'booked'
   }).populate('gigId').lean();
 
