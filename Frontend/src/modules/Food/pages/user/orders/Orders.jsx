@@ -6,6 +6,7 @@ import { useCart } from "@food/context/CartContext"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { determineIsVeg } from "@food/utils/menuItems"
+import { getOrderDisplayDistance } from "@food/utils/common"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -922,11 +923,7 @@ Order again from this restaurant in the ${companyName} app.`
                           }}
                           className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium text-left w-fit"
                         >
-                          Delivery partner fee (up to {(() => {
-                            const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
-                            if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                            return "1.2";
-                          })()} km)
+                          Delivery partner fee (up to {getOrderDisplayDistance(order)} km)
                         </button>
                         <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 font-medium">Goes to them for their time and effort</span>
                       </div>
@@ -1391,12 +1388,7 @@ Order again from this restaurant in the ${companyName} app.`
             <div className="flex justify-between items-start border-b border-gray-100 dark:border-zinc-800 pb-4">
               <div>
                 <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
-                  Delivery partner fee (up to {(() => {
-                    const o = selectedOrderForDeliveryFee;
-                    const d = parseFloat(o?.pricing?.deliveryFeeBreakdown?.distanceKm ?? o?.pricing?.distanceKm ?? o?.distanceKm);
-                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                    return "1.2";
-                  })()} km)
+                  Delivery partner fee (up to {getOrderDisplayDistance(selectedOrderForDeliveryFee)} km)
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                   Goes to them for their time and effort

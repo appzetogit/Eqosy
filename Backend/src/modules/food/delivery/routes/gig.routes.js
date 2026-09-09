@@ -9,6 +9,7 @@ import {
   listAdminGigsHandler,
   getGigStatsHandler,
   listGigBookingsHandler,
+  remindGigBookingHandler,
   listPartnerGigsHandler,
   bookGigHandler,
   cancelGigHandler,
@@ -38,6 +39,7 @@ router.delete('/admin/gigs/:gigId', authMiddleware, requireRoles('ADMIN'), delet
 router.get('/admin/gigs', authMiddleware, requireRoles('ADMIN'), listAdminGigsHandler);
 router.get('/admin/gigs/stats', authMiddleware, requireRoles('ADMIN'), getGigStatsHandler);
 router.get('/admin/gigs/bookings', authMiddleware, requireRoles('ADMIN'), listGigBookingsHandler);
+router.post('/admin/gigs/bookings/:bookingId/remind', authMiddleware, requireRoles('ADMIN'), remindGigBookingHandler);
 router.get('/admin/gigs/selfie-logs', authMiddleware, requireRoles('ADMIN'), listSelfieLogsHandler);
 router.patch('/admin/gigs/selfie-logs/:logId', authMiddleware, requireRoles('ADMIN'), reviewSelfieLogHandler);
 

@@ -5,6 +5,7 @@ import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { logger } from '../../../../utils/logger.js';
+import { notifyOwnerSafely } from '../../../../core/notifications/firebase.service.js';
 
 const parseDateTime = (dateStr, timeStr) => {
   // dateStr: YYYY-MM-DD, timeStr: HH:mm
@@ -51,12 +52,13 @@ export const updateGig = async (gigId, payload) => {
     throw new NotFoundError('Gig not found');
   }
 
-  const { title, date, startTime, endTime, zoneId, zoneName, capacity, cancellationCutoffMinutes, status } = payload;
+  const { title, date, startTime, endTime, zoneId, zoneName, capacity, cancellationCutoffMinutes, status, isActive } = payload;
 
   if (title !== undefined) gig.title = title.trim();
   if (capacity !== undefined) gig.capacity = Math.max(gig.bookedCount, Number(capacity) || 1);
   if (cancellationCutoffMinutes !== undefined) gig.cancellationCutoffMinutes = Math.max(0, Number(cancellationCutoffMinutes) || 0);
   if (status !== undefined && ['active', 'inactive', 'cancelled'].includes(status)) gig.status = status;
+  if (isActive !== undefined) gig.status = isActive === false ? 'inactive' : 'active';
   if (zoneName !== undefined) gig.zoneName = zoneName.trim();
   if (zoneId !== undefined) gig.zoneId = zoneId && mongoose.Types.ObjectId.isValid(zoneId) ? zoneId : null;
 
@@ -162,7 +164,7 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
 
   const match = {
     status: 'active',
-    date: { $gte: date }
+    date: date
   };
 
   // If partner has an assigned zone or city, filter gigs for that zone OR 'All Zones'
@@ -611,5 +613,84 @@ export const listGigBookingsForAdmin = async (query = {}) => {
       page: Number(page),
       limit: Number(limit)
     }
+  };
+};
+
+export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
+  const { partnerId: bodyPartnerId, customMessage } = payload || {};
+  let booking = null;
+  let partner = null;
+
+  if (bookingId && mongoose.Types.ObjectId.isValid(bookingId)) {
+    booking = await FoodGigBooking.findById(bookingId)
+      .populate({
+        path: 'gigId',
+        select: 'title date startTime endTime'
+      })
+      .populate({
+        path: 'deliveryPartnerId',
+        select: 'name phone email fcmTokens fcmTokenMobile fcmTokenWeb'
+      });
+  }
+
+  if (booking) {
+    partner = booking.deliveryPartnerId;
+  } else if (bodyPartnerId && mongoose.Types.ObjectId.isValid(bodyPartnerId)) {
+    partner = await FoodDeliveryPartner.findById(bodyPartnerId).select('name phone email fcmTokens fcmTokenMobile fcmTokenWeb');
+  }
+
+  if (!partner) {
+    throw new NotFoundError('Delivery partner or booking record not found');
+  }
+
+  const gig = booking?.gigId;
+  const targetPartnerId = partner._id;
+  const partnerName = partner.name || 'Delivery Partner';
+  const gigTitle = gig?.title || 'Shift';
+  const gigTime = gig?.startTime && gig?.endTime ? `${gig.startTime} - ${gig.endTime}` : '';
+
+  const notifTitle = `🔔 Shift Reminder: ${gigTitle}`;
+  const notifBody = customMessage?.trim() || `Hi ${partnerName}, reminder for your booked gig shift (${gigTime || 'today'}). Please log in and go online!`;
+
+  // 1. FCM Push Notification
+  try {
+    await notifyOwnerSafely(
+      { ownerType: 'DELIVERY_PARTNER', ownerId: String(targetPartnerId) },
+      {
+        title: notifTitle,
+        body: notifBody,
+        data: {
+          type: 'gig_reminder',
+          bookingId: String(bookingId || ''),
+          link: '/food/delivery',
+          targetUrl: '/food/delivery'
+        }
+      }
+    );
+  } catch (pushErr) {
+    logger.warn(`FCM push for gig reminder failed: ${pushErr?.message || pushErr}`);
+  }
+
+  // 2. Realtime Socket Notification
+  try {
+    const io = getIO();
+    if (io) {
+      const deliveryRoom = `delivery:${targetPartnerId}`;
+      io.to(deliveryRoom).emit('admin_notification', {
+        title: notifTitle,
+        message: notifBody,
+        type: 'gig_reminder',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (socketErr) {
+    logger.warn(`Socket notification for gig reminder failed: ${socketErr?.message || socketErr}`);
+  }
+
+  return {
+    success: true,
+    message: `Reminder notification sent successfully to ${partnerName}`,
+    partnerName,
+    partnerId: targetPartnerId
   };
 };

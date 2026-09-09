@@ -429,6 +429,37 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
             </div>
           )}
 
+          {/* Handover Proof Photo (Uploaded by Delivery Boy) */}
+          {(order.handoverImageUrl || order.deliveryVerification?.handoverImageUrl || order.deliveryState?.handoverImageUrl || order.handoverPhoto) && (
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Handover Proof Photo (Uploaded by Delivery Boy)
+              </h3>
+              <div className="space-y-3">
+                <div className="relative w-full max-w-2xl border-2 border-emerald-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <img
+                    src={order.handoverImageUrl || order.deliveryVerification?.handoverImageUrl || order.deliveryState?.handoverImageUrl || order.handoverPhoto}
+                    alt="Handover Proof Photo"
+                    className="w-full h-auto object-contain max-h-[500px] mx-auto block"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={order.handoverImageUrl || order.deliveryVerification?.handoverImageUrl || order.deliveryState?.handoverImageUrl || order.handoverPhoto}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-sm"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View Full Size
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Delivery Address */}
           {order.address && (
             <div className="border-t border-slate-200 pt-4">

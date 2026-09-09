@@ -312,6 +312,10 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
 
     if (recipientOwnerId) {
       const senderTitle = isUserSender ? '💬 New Message from Customer' : '💬 New Message from Delivery Partner';
+      const targetLink = isUserSender
+        ? `/food/delivery/orders/${conversation.orderId}/chat`
+        : `/food/user/orders/${conversation.orderId}/chat`;
+
       notifyOwnerSafely(
         { ownerType: recipientOwnerType, ownerId: String(recipientOwnerId) },
         {
@@ -320,10 +324,14 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
           data: {
             type: 'chat_message',
             chatType: 'food_order_chat',
+            role: isUserSender ? 'delivery' : 'user',
             orderId: String(conversation.orderId),
             displayOrderId: String(conversation.displayOrderId || order?.order_id || order?.orderId || ''),
             conversationId: String(conversation._id),
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            link: targetLink,
+            targetUrl: targetLink,
+            openChat: 'true',
+            click_action: targetLink,
           },
         }
       ).catch((err) => logger.warn(`FCM chat push failed: ${err?.message || err}`));

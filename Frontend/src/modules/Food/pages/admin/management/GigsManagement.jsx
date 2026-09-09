@@ -36,6 +36,32 @@ export const GigsManagement = () => {
   const [partnerFilterTab, setPartnerFilterTab] = useState('all');
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('');
   const [selectedGigIdFilter, setSelectedGigIdFilter] = useState('');
+  const [remindingBookingId, setRemindingBookingId] = useState(null);
+
+  const handleRemindPartner = async (booking) => {
+    const bookingId = booking._id || booking.bookingId;
+    if (!bookingId) {
+      toast.error('Invalid booking record');
+      return;
+    }
+
+    try {
+      setRemindingBookingId(bookingId);
+      const res = await apiClient.post(`/food/gigs/admin/gigs/bookings/${bookingId}/remind`, {
+        partnerId: booking.partnerId
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message || `Reminder notification sent to ${booking.partnerName}`);
+      } else {
+        toast.error(res.data?.message || 'Failed to send reminder notification');
+      }
+    } catch (err) {
+      console.error('Send reminder error:', err);
+      toast.error(err.response?.data?.message || 'Failed to send reminder notification');
+    } finally {
+      setRemindingBookingId(null);
+    }
+  };
 
   const fetchGigs = async () => {
     setLoading(true);
@@ -623,12 +649,19 @@ export const GigsManagement = () => {
                           Call
                         </a>
                         <button
-                          onClick={() => {
-                            toast.info(`Reminder notification sent to ${b.partnerName}`);
-                          }}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-black transition-colors"
+                          type="button"
+                          disabled={remindingBookingId === (b._id || b.bookingId)}
+                          onClick={() => handleRemindPartner(b)}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-black transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Contact / Remind
+                          {remindingBookingId === (b._id || b.bookingId) ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            'Contact / Remind'
+                          )}
                         </button>
                       </div>
                     </td>

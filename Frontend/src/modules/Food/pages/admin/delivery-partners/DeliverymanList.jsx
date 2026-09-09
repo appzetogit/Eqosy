@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X, ImageOff } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X, ImageOff, AlertTriangle } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
@@ -90,6 +90,45 @@ export default function DeliverymanList() {
   const [editValues, setEditValues] = useState({ pocketBalance: "", cashInHand: "" })
   const [savingDeliveryId, setSavingDeliveryId] = useState(null)
   const [deletingDeliveryId, setDeletingDeliveryId] = useState(null)
+  const [approvingEmergencyId, setApprovingEmergencyId] = useState(null)
+
+  const pendingEmergencyRequests = useMemo(() => {
+    return deliverymen.filter(
+      (dm) => dm.emergencyOfflineRequest?.status === 'pending'
+    )
+  }, [deliverymen])
+
+  const handleApproveEmergencyOffline = async (deliveryman) => {
+    const deliverymanId = String(deliveryman?._id || "")
+    if (!deliverymanId) return
+
+    try {
+      setApprovingEmergencyId(deliverymanId)
+      const response = await adminAPI.approveEmergencyOffline(deliverymanId)
+      if (response?.data?.success) {
+        toast.success(`Emergency offline request approved for ${deliveryman.name}`)
+        fetchDeliverymen()
+        if (viewDetails && String(viewDetails._id) === deliverymanId) {
+          setViewDetails(prev => ({
+            ...prev,
+            availabilityStatus: 'offline',
+            emergencyOfflineApproved: true,
+            emergencyOfflineRequest: {
+              ...(prev?.emergencyOfflineRequest || {}),
+              status: 'approved'
+            }
+          }))
+        }
+      } else {
+        toast.error(response?.data?.message || "Failed to approve emergency offline request")
+      }
+    } catch (err) {
+      debugError("Error approving emergency offline:", err)
+      toast.error(err?.response?.data?.message || "Failed to approve emergency offline request")
+    } finally {
+      setApprovingEmergencyId(null)
+    }
+  }
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
     name: true,
@@ -501,6 +540,44 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
             </div>
           </div>
 
+          {/* Emergency Offline Requests Banner */}
+          {pendingEmergencyRequests.length > 0 && (
+            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-base">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span>Emergency Offline Requests ({pendingEmergencyRequests.length})</span>
+              </div>
+              <p className="text-xs text-amber-800">
+                The following delivery partners have requested emergency offline approval during their active gig shift:
+              </p>
+              <div className="space-y-2">
+                {pendingEmergencyRequests.map((dm) => (
+                  <div key={dm._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-lg border border-amber-200 gap-3">
+                    <div>
+                      <span className="font-bold text-slate-900">{dm.name}</span>
+                      <span className="text-xs text-slate-500 ml-2">({dm.phone || dm.email})</span>
+                      <p className="text-xs text-amber-900 mt-1 font-medium">
+                        Reason: "{dm.emergencyOfflineRequest?.reason || 'Emergency'}"
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleApproveEmergencyOffline(dm)}
+                      disabled={approvingEmergencyId === String(dm._id)}
+                      className="px-4 py-2 text-xs font-bold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm"
+                    >
+                      {approvingEmergencyId === String(dm._id) ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      Approve Offline
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -715,10 +792,29 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                         )}
                         {visibleColumns.availabilityStatus && (
                           <td className="px-6 py-4">
-                            <div className="flex flex-col">
+                            <div className="flex flex-col gap-1">
                               <span className="text-xs">
-                                Active Status: <span className={`${dm.status === 'Online' ? 'text-blue-600' : 'text-slate-600'} underline`}>{dm.status}</span>
+                                Active Status: <span className={`${dm.availabilityStatus === 'online' || dm.status === 'Online' ? 'text-blue-600' : 'text-slate-600'} font-semibold`}>{dm.availabilityStatus || dm.status}</span>
                               </span>
+                              {dm.emergencyOfflineRequest?.status === 'pending' && (
+                                <div className="flex flex-col items-start gap-1.5 mt-1 p-2 bg-amber-50 rounded-lg border border-amber-200 max-w-[200px]">
+                                  <span className="text-[11px] font-bold text-amber-800 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                    Emergency Requested
+                                  </span>
+                                  <p className="text-[10px] text-slate-700 italic line-clamp-2">
+                                    "{dm.emergencyOfflineRequest?.reason}"
+                                  </p>
+                                  <button
+                                    onClick={() => handleApproveEmergencyOffline(dm)}
+                                    disabled={approvingEmergencyId === String(dm._id)}
+                                    className="mt-0.5 px-2.5 py-1 text-[11px] font-bold rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-all flex items-center gap-1"
+                                  >
+                                    {approvingEmergencyId === String(dm._id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                    Approve Offline
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </td>
                         )}
@@ -803,6 +899,33 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
           <div className="px-6 pb-6">
             {viewDetails ? (
               <div className="space-y-6 mt-4">
+                {/* Emergency Offline Request Notice in View Details */}
+                {viewDetails.emergencyOfflineRequest?.status === 'pending' && (
+                  <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        Pending Emergency Offline Request
+                      </span>
+                      <button
+                        onClick={() => handleApproveEmergencyOffline(viewDetails)}
+                        disabled={approvingEmergencyId === String(viewDetails._id)}
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                      >
+                        {approvingEmergencyId === String(viewDetails._id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Approve Offline
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-700">
+                      <strong>Reason given:</strong> "{viewDetails.emergencyOfflineRequest?.reason}"
+                    </p>
+                    {viewDetails.emergencyOfflineRequest?.requestedAt && (
+                      <p className="text-[11px] text-slate-500">
+                        Requested on: {new Date(viewDetails.emergencyOfflineRequest.requestedAt).toLocaleString('en-IN')}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {/* Profile Image & Basic Info */}
                 <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                   <div className="flex-shrink-0">

@@ -21,7 +21,7 @@ import { toast } from "sonner"
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCompanyNameAsync } from "@food/utils/businessSettings"
-import { calculateDistance } from "@food/utils/common"
+import { calculateDistance, getOrderDisplayDistance } from "@food/utils/common"
 import { determineIsVeg } from "@food/utils/menuItems"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -533,11 +533,7 @@ export default function UserOrderDetails() {
                   onClick={() => setShowDeliveryFeeModal(true)}
                   className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 font-medium text-left w-fit text-sm"
                 >
-                  Delivery partner fee (up to {(() => {
-                    const d = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm ?? pricing?.distanceKm ?? order?.distanceKm);
-                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                    return "1.2";
-                  })()} km)
+                  Delivery partner fee (up to {getOrderDisplayDistance(order)} km)
                 </button>
                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
               </div>
@@ -781,11 +777,7 @@ export default function UserOrderDetails() {
             <div className="flex justify-between items-start border-b border-gray-100 dark:border-zinc-800 pb-4">
               <div>
                 <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
-                  Delivery partner fee (up to {(() => {
-                    const d = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm ?? pricing?.distanceKm ?? order?.distanceKm);
-                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                    return "1.2";
-                  })()} km)
+                  Delivery partner fee (up to {getOrderDisplayDistance(order)} km)
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                   Goes to them for their time and effort

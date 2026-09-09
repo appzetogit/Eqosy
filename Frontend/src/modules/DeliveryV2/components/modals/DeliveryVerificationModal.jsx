@@ -425,20 +425,27 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Instant local preview
+    const tempPreview = URL.createObjectURL(file);
+    setPhotoUrl(tempPreview);
     setIsUploading(true);
+
     try {
-      const res = await uploadAPI.uploadMedia(file);
-      const url = res?.data?.url || res?.data?.data?.url || res?.url;
-      if (url) {
-        setPhotoUrl(url);
+      const res = await uploadAPI.uploadMedia(file, { folder: 'eqosy/delivery/handovers' });
+      const serverUrl = res?.data?.data?.url || res?.data?.url || res?.data?.data?.imageUrl || res?.url;
+      if (serverUrl) {
+        setPhotoUrl(serverUrl);
         toast.success("Handover photo uploaded!");
       } else {
-        toast.error("Failed to upload photo");
+        toast.error("Failed to upload photo to server");
       }
     } catch (err) {
+      console.error('Handover photo upload error:', err);
       toast.error(err?.response?.data?.message || "Error uploading handover photo");
     } finally {
       setIsUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 

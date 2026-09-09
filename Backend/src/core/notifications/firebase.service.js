@@ -201,13 +201,16 @@ const buildMessagePayload = (payload = {}, token) => {
         message.data = data;
     }
 
+    const targetLink = data.link || payload.link || data.targetUrl || data.url;
+
     message.android = {
         priority: 'high',
         notification: {
             channel_id: 'default',
             sound: 'default',
             default_vibrate_timings: true,
-            default_light_settings: true
+            default_light_settings: true,
+            ...(targetLink ? { click_action: targetLink } : {})
         }
     };
 
@@ -219,7 +222,8 @@ const buildMessagePayload = (payload = {}, token) => {
             title: notification.title,
             body: notification.body,
             icon: image || payload.icon || '/favicon.ico'
-        }
+        },
+        ...(targetLink ? { fcm_options: { link: targetLink } } : {})
     };
 
     return message;

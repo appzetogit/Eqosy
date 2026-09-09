@@ -5,6 +5,7 @@ import { deliveryAPI } from '@food/api';
 import alertSound from '@food/assets/audio/alert.mp3';
 import originalSound from '@food/assets/audio/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
+import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import {
   joinOrderTrackingRooms,
   leaveAllOrderTrackingRooms,
@@ -944,6 +945,23 @@ export const useDeliveryNotifications = () => {
         activeOrderRef.current = null;
         setNewOrder(null);
       }
+    });
+
+    socketRef.current.on('order-chat-notification', (payload) => {
+      debugLog('💬 Delivery Partner Chat Notification received via socket:', payload);
+      const senderName = payload?.senderName || 'Customer';
+      const msgText = payload?.text || payload?.message?.text || 'Sent you a message';
+      const notifId = payload?.message?._id || `${payload?.orderId}-${Date.now()}`;
+      const orderId = payload?.orderId || payload?.message?.orderId;
+      const targetUrl = orderId ? `/food/delivery/orders/${orderId}/chat` : '/food/delivery';
+
+      showChatNotification(senderName, msgText, notifId, { targetUrl, orderId });
+
+      window.dispatchEvent(
+        new CustomEvent('orderChatNotification', {
+          detail: payload
+        })
+      );
     });
 
     socketRef.current.on('admin_notification', (payload) => {

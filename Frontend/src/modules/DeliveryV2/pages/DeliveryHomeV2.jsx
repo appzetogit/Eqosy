@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
@@ -280,8 +281,17 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [eta, setEta] = useState(null);
   const [partnerUnreadChatCount, setPartnerUnreadChatCount] = useState(0);
+  const [searchParams] = useSearchParams();
   const [showEmbeddedChatModal, setShowEmbeddedChatModal] = useState(false);
   const [gigEarlyLoginInfo, setGigEarlyLoginInfo] = useState({ isOpen: false, startTime: '', message: '' });
+
+  // Automatically open embedded chat modal if openChat=true query param is present
+  useEffect(() => {
+    const shouldOpenChat = searchParams.get("openChat") === "true" || searchParams.get("chat") === "true";
+    if (shouldOpenChat) {
+      setShowEmbeddedChatModal(true);
+    }
+  }, [searchParams]);
 
   // Real-time delivery partner chat listener
   useEffect(() => {

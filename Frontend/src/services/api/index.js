@@ -278,6 +278,11 @@ export const adminAPI = {
       params,
       contextModule: "admin",
     }),
+  /** Approve delivery partner emergency offline request */
+  approveEmergencyOffline: (deliveryId) =>
+    apiClient.post(`/food/admin/delivery/${deliveryId}/approve-emergency-offline`, {}, {
+      contextModule: "admin",
+    }),
   getDeliverymanReviews: (params = {}) =>
     apiClient.get("/food/admin/delivery/reviews", {
       params,

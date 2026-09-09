@@ -51,7 +51,7 @@ let lastNotificationTime = 0;
 const DUP_WINDOW_MS = 6000;
 const SOUND_THROTTLE_MS = 1500;
 
-export const showChatNotification = (senderName, messageText, notifId = null) => {
+export const showChatNotification = (senderName, messageText, notifId = null, options = {}) => {
   const text = String(messageText || '').trim();
   const name = String(senderName || '').trim();
   const now = Date.now();
@@ -73,11 +73,22 @@ export const showChatNotification = (senderName, messageText, notifId = null) =>
   }
 
   const title = name ? `💬 Message from ${name}` : '💬 New Chat Message';
-  
+  const targetUrl = options.targetUrl || (options.orderId ? `/food/user/orders/${options.orderId}/chat` : null);
+
   if (typeof toast !== 'undefined' && typeof toast.info === 'function') {
     toast.info(title, {
       description: text || 'You have received a new message.',
-      duration: 5000,
+      duration: 6000,
+      action: targetUrl ? {
+        label: 'Open Chat',
+        onClick: () => {
+          if (typeof options.onNavigate === 'function') {
+            options.onNavigate(targetUrl);
+          } else if (typeof window !== 'undefined') {
+            window.location.href = targetUrl;
+          }
+        }
+      } : undefined
     });
   }
 

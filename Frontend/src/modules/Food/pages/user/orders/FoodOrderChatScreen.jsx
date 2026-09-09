@@ -382,7 +382,7 @@ export default function FoodOrderChatScreen({ isEmbedded = false, embeddedOrderI
   };
 
   return (
-    <div className={`flex flex-col bg-white ${isEmbedded ? 'h-full rounded-2xl overflow-hidden shadow-lg border border-slate-200' : 'fixed inset-0 z-50 max-w-md mx-auto font-sans bg-white shadow-2xl'}`}>
+    <div className={`flex flex-col bg-white w-full max-w-full overflow-hidden ${isEmbedded ? 'h-full rounded-2xl shadow-lg border border-slate-200' : 'fixed inset-0 z-50 max-w-md mx-auto font-sans shadow-2xl'}`}>
       <div className="bg-slate-900 text-white px-4 py-3.5 shadow-md flex items-center justify-between shrink-0 border-b border-slate-800">
         <div className="flex items-center gap-3 min-w-0">
           <button
@@ -588,13 +588,13 @@ export default function FoodOrderChatScreen({ isEmbedded = false, embeddedOrderI
       </AnimatePresence>
 
       {canChat ? (
-        <div className="bg-white p-3 border-t border-slate-200 flex items-center gap-2 shrink-0">
+        <div className="bg-white p-2.5 sm:p-3 border-t border-slate-200 flex items-center gap-2 shrink-0 w-full max-w-full box-border">
           <button
             type="button"
             onClick={() => setShowEmojiPicker((prev) => !prev)}
-            className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center hover:text-amber-500 hover:bg-slate-200 transition-colors shrink-0"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center hover:text-amber-500 hover:bg-slate-200 transition-colors shrink-0"
           >
-            <Smile size={20} />
+            <Smile size={19} />
           </button>
           <input
             type="text"
@@ -603,15 +603,15 @@ export default function FoodOrderChatScreen({ isEmbedded = false, embeddedOrderI
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Type a message..."
             maxLength={500}
-            className="flex-1 h-10 px-3.5 bg-slate-100 border border-slate-200 rounded-xl text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white transition-all font-medium"
+            className="flex-1 min-w-0 w-0 h-9 sm:h-10 px-3 bg-slate-100 border border-slate-200 rounded-xl text-[13px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white transition-all font-medium"
           />
           <button
             type="button"
             onClick={() => handleSendMessage()}
             disabled={!inputText.trim() || isSending}
-            className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors shadow-md shrink-0"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors shadow-md shrink-0"
           >
-            <Send size={18} />
+            <Send size={17} />
           </button>
         </div>
       ) : (

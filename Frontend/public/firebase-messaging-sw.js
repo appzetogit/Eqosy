@@ -178,12 +178,29 @@ self.addEventListener("notificationclick", (event) => {
   });
   event.notification.close();
   const notificationData = event?.notification?.data || {};
-  const rideId = notificationData.rideId || notificationData.ride_id || notificationData.id || "";
-  const rawLink =
+  const rideId = notificationData.rideId || notificationData.ride_id || "";
+  const orderId = notificationData.orderId || notificationData.order_id || "";
+  
+  let rawLink =
     notificationData.link ||
-    notificationData.click_action ||
     notificationData.targetUrl ||
-    (rideId ? `/taxi/driver/home?rideId=${encodeURIComponent(rideId)}` : "/taxi/driver/home");
+    (notificationData.click_action && String(notificationData.click_action).startsWith("/") ? notificationData.click_action : null);
+
+  if (!rawLink || !rawLink.startsWith("/")) {
+    if (notificationData.type === 'chat_message' || notificationData.chatType === 'food_order_chat' || notificationData.openChat === 'true') {
+      if (orderId) {
+        const isDelivery = notificationData.role === 'delivery' || notificationData.ownerType === 'DELIVERY_PARTNER';
+        rawLink = isDelivery 
+          ? `/food/delivery/orders/${orderId}/chat` 
+          : `/food/user/orders/${orderId}/chat`;
+      }
+    } else if (rideId) {
+      rawLink = `/taxi/driver/home?rideId=${encodeURIComponent(rideId)}`;
+    } else {
+      rawLink = "/";
+    }
+  }
+
   const targetUrl = String(rawLink || "/").startsWith("/") ? String(rawLink || "/") : "/";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {

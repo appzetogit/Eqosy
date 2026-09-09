@@ -169,8 +169,10 @@ export const useUserNotifications = () => {
         const senderName = payload?.senderName || 'Delivery Partner';
         const msgText = payload?.text || payload?.message?.text || 'Sent you a message';
         const notifId = payload?.message?._id || `${payload?.orderId}-${Date.now()}`;
+        const orderId = payload?.orderId || payload?.message?.orderId;
+        const targetUrl = orderId ? `/food/user/orders/${orderId}/chat` : null;
         
-        showChatNotification(senderName, msgText, notifId);
+        showChatNotification(senderName, msgText, notifId, { targetUrl, orderId });
         
         window.dispatchEvent(
           new CustomEvent('orderChatNotification', {

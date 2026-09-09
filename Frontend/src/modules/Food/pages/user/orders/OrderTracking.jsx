@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom"
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
 import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
@@ -48,6 +48,7 @@ import {
 } from "@food/utils/sharedOrderStorage"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { useUserNotifications, getSocket } from "@food/hooks/useUserNotifications"
+import { getOrderDisplayDistance } from "@food/utils/common"
 import circleIcon from "@food/assets/circleicon.png"
 import { RESTAURANT_PIN_SVG, CUSTOMER_PIN_SVG, RIDER_BIKE_SVG } from "@food/constants/mapIcons"
 
@@ -587,7 +588,16 @@ export default function OrderTracking({ isSharedView = false }) {
   const { userProfile, getDefaultAddress } = useProfile()
   const { location: userLiveLocation } = useUserLocation()
 
+  const navigate = useNavigate()
   const { isConnected: isSocketConnected } = useUserNotifications()
+
+  // Automatically open chat screen if URL contains openChat=true
+  useEffect(() => {
+    const shouldOpenChat = searchParams.get("openChat") === "true" || searchParams.get("chat") === "true";
+    if (shouldOpenChat && orderId) {
+      navigate(`/food/user/orders/${orderId}/chat`, { replace: true });
+    }
+  }, [searchParams, orderId, navigate]);
 
   // State for order data (pre-hydrated from cache for instant 0ms load)
   const [order, setOrder] = useState(() => {
@@ -2066,11 +2076,7 @@ export default function OrderTracking({ isSharedView = false }) {
                   onClick={() => setShowDeliveryFeeModal(true)}
                   className="font-medium hover:text-gray-900 dark:hover:text-white transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left w-fit text-sm text-gray-800 dark:text-gray-300"
                 >
-                  Delivery partner fee (up to {(() => {
-                    const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
-                    if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                    return "1.2";
-                  })()} km)
+                  Delivery partner fee (up to {getOrderDisplayDistance(order)} km)
                 </button>
                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
               </div>
@@ -2317,11 +2323,7 @@ export default function OrderTracking({ isSharedView = false }) {
           <DialogHeader className="border-b border-gray-100 dark:border-zinc-800 pb-4">
             <DialogTitle className="text-left font-bold text-gray-900 dark:text-white">
               <span className="text-base underline decoration-dotted underline-offset-4 decoration-gray-400">
-                Delivery partner fee (up to {(() => {
-                  const d = parseFloat(order?.pricing?.deliveryFeeBreakdown?.distanceKm ?? order?.pricing?.distanceKm ?? order?.distanceKm);
-                  if (!isNaN(d) && d > 0) return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-                  return "1.2";
-                })()} km)
+                Delivery partner fee (up to {getOrderDisplayDistance(order)} km)
               </span>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                 Goes to them for their time and effort
