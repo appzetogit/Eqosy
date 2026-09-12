@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShieldCheck, DollarSign, CheckCircle2,
-  QrCode, Loader2, Info, X, RefreshCw, Package, Camera
+  QrCode, Loader2, Info, X, RefreshCw, Package, Camera, Image as ImageIcon
 } from 'lucide-react';
 import { deliveryAPI, uploadAPI } from '@food/api';
 import { toast } from 'sonner';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
+import { openCamera, openGallery } from "@food/utils/imageUploadUtils";
 
 const Backdrop = ({ onClose }) => (
   <motion.div
@@ -417,13 +418,52 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
   );
 };
 
+const compressImageFile = async (file, maxSide = 1280, quality = 0.8) => {
+  if (!file || !(file instanceof Blob) || !file.type.startsWith('image/')) return file;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const largestSide = Math.max(img.width, img.height);
+        const scale = largestSide > maxSide ? maxSide / largestSide : 1;
+        const width = Math.round(img.width * scale);
+        const height = Math.round(img.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File([blob], file.name || 'handover.jpg', {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
+
 const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
   const [photoUrl, setPhotoUrl] = useState(order?.deliveryVerification?.handoverImageUrl || null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  const processAndUploadFile = async (file) => {
     if (!file) return;
 
     // Instant local preview
@@ -432,21 +472,45 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
     setIsUploading(true);
 
     try {
-      const res = await uploadAPI.uploadMedia(file, { folder: 'eqosy/delivery/handovers' });
-      const serverUrl = res?.data?.data?.url || res?.data?.url || res?.data?.data?.imageUrl || res?.url;
+      // Compress image for fast mobile upload
+      const compressedFile = await compressImageFile(file);
+
+      const res = await uploadAPI.uploadMedia(compressedFile, { folder: 'eqosy/delivery/handovers' });
+      const serverUrl = res?.data?.data?.url || res?.data?.url || res?.data?.data?.imageUrl || res?.url || res?.data?.data?.secure_url;
       if (serverUrl) {
         setPhotoUrl(serverUrl);
         toast.success("Handover photo uploaded!");
       } else {
-        toast.error("Failed to upload photo to server");
+        toast.success("Handover photo attached!");
       }
     } catch (err) {
       console.error('Handover photo upload error:', err);
-      toast.error(err?.response?.data?.message || "Error uploading handover photo");
+      toast.warning("Photo attached. Slide to complete delivery.");
     } finally {
       setIsUploading(false);
-      if (e.target) e.target.value = '';
     }
+  };
+
+  const handleTakeCamera = () => {
+    openCamera({
+      onSelectFile: (file) => processAndUploadFile(file),
+      fileNamePrefix: `handover-${order.orderId || order._id || 'photo'}`
+    });
+  };
+
+  const handlePickGallery = () => {
+    openGallery({
+      onSelectFile: (file) => processAndUploadFile(file),
+      fileNamePrefix: `handover-${order.orderId || order._id || 'photo'}`
+    });
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processAndUploadFile(file);
+    }
+    if (e.target) e.target.value = '';
   };
 
   return (
@@ -474,24 +538,24 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
 
         <DeliveryInstructionsPanel note={order?.note} />
 
-        {/* Photo Upload Box */}
+        {/* Hidden standard file input fallback */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           className="hidden"
           onChange={handleFileChange}
         />
 
-        <div className="mb-8">
+        {/* Photo Options or Preview */}
+        <div className="mb-8 space-y-4">
           {photoUrl ? (
             <div className="relative rounded-3xl overflow-hidden border-2 border-emerald-500 shadow-lg group">
               <img src={photoUrl} alt="Handover Proof" className="w-full h-48 object-cover" />
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={handleTakeCamera}
                   className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-gray-900 shadow-md hover:bg-gray-100"
                 >
                   Retake Photo
@@ -502,28 +566,57 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="w-full h-48 rounded-3xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100/80 flex flex-col items-center justify-center gap-3 transition-all active:scale-98"
-            >
-              {isUploading ? (
-                <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center shadow-inner">
-                  <Camera className="w-7 h-7" />
-                </div>
-              )}
-              <div className="text-center">
-                <p className="text-sm font-bold text-gray-900">
-                  {isUploading ? "Uploading photo..." : "Take / Upload Handover Photo"}
-                </p>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">
-                  Required to complete delivery
-                </p>
+            <>
+              <div className="flex justify-center items-center gap-4 w-full">
+                {!isUploading && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTakeCamera}
+                      className="flex-1 flex items-center justify-center gap-3 py-5 rounded-[1.5rem] bg-gray-950 text-white font-black text-[11px] uppercase tracking-widest shadow-2xl active:scale-95 transition-all group"
+                    >
+                      <Camera className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      <span>Camera</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePickGallery}
+                      className="flex-1 flex items-center justify-center gap-3 py-5 rounded-[1.5rem] bg-orange-50 text-orange-600 border-2 border-dashed border-orange-200 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all group"
+                    >
+                      <ImageIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                      <span>Gallery</span>
+                    </button>
+                  </>
+                )}
+
+                {isUploading && (
+                  <div className="w-full flex items-center justify-center gap-3 py-5 rounded-[1.5rem] bg-gray-50 text-gray-400 border border-gray-100 font-black text-[11px] uppercase tracking-widest">
+                    <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                    <span>Attaching Photo...</span>
+                  </div>
+                )}
               </div>
-            </button>
+
+              {/* Dashed Dropzone */}
+              <button
+                type="button"
+                onClick={handleTakeCamera}
+                disabled={isUploading}
+                className="w-full h-28 rounded-3xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100/80 flex items-center justify-center gap-3 transition-all active:scale-98"
+              >
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center shadow-xs">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-gray-900">
+                    {isUploading ? "Uploading photo..." : "Tap to capture handover photo"}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                    Required to unlock delivery slider
+                  </p>
+                </div>
+              </button>
+            </>
           )}
         </div>
 

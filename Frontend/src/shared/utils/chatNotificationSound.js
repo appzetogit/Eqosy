@@ -51,7 +51,8 @@ let lastNotificationTime = 0;
 const DUP_WINDOW_MS = 6000;
 const SOUND_THROTTLE_MS = 1500;
 
-export const showChatNotification = (senderName, messageText, notifId = null, options = {}) => {
+export const 
+showChatNotification = (senderName, messageText, notifId = null, options = {}) => {
   const text = String(messageText || '').trim();
   const name = String(senderName || '').trim();
   const now = Date.now();

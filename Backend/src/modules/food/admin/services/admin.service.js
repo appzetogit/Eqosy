@@ -4026,6 +4026,65 @@ export async function getDeliveryEarnings(query = {}) {
         'dispatch.deliveryPartnerId': { $ne: null }
     };
 
+    const andConditions = [];
+
+    // Zone / Area Filter
+    const zoneRaw = String(query.zone || query.zoneId || '').trim();
+    if (zoneRaw && zoneRaw.toLowerCase() !== 'all' && zoneRaw.toLowerCase() !== 'all zones') {
+        let zoneObjectId = null;
+        let matchedZoneName = '';
+
+        if (mongoose.Types.ObjectId.isValid(zoneRaw)) {
+            zoneObjectId = new mongoose.Types.ObjectId(zoneRaw);
+            const zDoc = await FoodZone.findById(zoneObjectId).select('name zoneName').lean();
+            if (zDoc) {
+                matchedZoneName = zDoc.name || zDoc.zoneName || '';
+            }
+        } else {
+            const zDoc = await FoodZone.findOne({
+                $or: [{ name: zoneRaw }, { zoneName: zoneRaw }]
+            }).select('_id name zoneName').lean();
+            if (zDoc) {
+                zoneObjectId = zDoc._id;
+                matchedZoneName = zDoc.name || zDoc.zoneName || zoneRaw;
+            } else {
+                matchedZoneName = zoneRaw;
+            }
+        }
+
+        const restFilter = zoneObjectId ? { zoneId: zoneObjectId } : { zoneName: matchedZoneName };
+        const partnerFilter = zoneObjectId
+            ? { $or: [{ zoneId: zoneObjectId }, { zoneName: matchedZoneName }] }
+            : { zoneName: matchedZoneName };
+
+        const [restaurantsInZone, partnersInZone] = await Promise.all([
+            FoodRestaurant.find(restFilter).select('_id').lean(),
+            FoodDeliveryPartner.find(partnerFilter).select('_id').lean()
+        ]);
+
+        const resIds = restaurantsInZone.map((r) => r._id);
+        const partnerIds = partnersInZone.map((p) => p._id);
+
+        const zoneOrConditions = [];
+        if (zoneObjectId) {
+            zoneOrConditions.push({ zoneId: zoneObjectId });
+        }
+        if (resIds.length > 0) {
+            zoneOrConditions.push({ restaurantId: { $in: resIds } });
+        }
+        if (partnerIds.length > 0) {
+            zoneOrConditions.push({ 'dispatch.deliveryPartnerId': { $in: partnerIds } });
+        }
+
+        if (zoneOrConditions.length > 0) {
+            andConditions.push({ $or: zoneOrConditions });
+        } else if (zoneObjectId) {
+            andConditions.push({ zoneId: zoneObjectId });
+        } else {
+            andConditions.push({ _id: null });
+        }
+    }
+
     // Date range filters
     const createdAtFilter = {};
     if (query.fromDate) {
@@ -4097,11 +4156,17 @@ export async function getDeliveryEarnings(query = {}) {
         const partnerIds = partners.map((p) => p._id);
         const restaurantIds = restaurants.map((r) => r._id);
 
-        filter.$or = [
-            { orderId: regex },
-            { 'dispatch.deliveryPartnerId': { $in: partnerIds } },
-            { restaurantId: { $in: restaurantIds } }
-        ];
+        andConditions.push({
+            $or: [
+                { orderId: regex },
+                { 'dispatch.deliveryPartnerId': { $in: partnerIds } },
+                { restaurantId: { $in: restaurantIds } }
+            ]
+        });
+    }
+
+    if (andConditions.length > 0) {
+        filter.$and = andConditions;
     }
 
     const [orders, total, earningsAgg, distinctPartners] = await Promise.all([
@@ -4109,9 +4174,14 @@ export async function getDeliveryEarnings(query = {}) {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('orderId orderStatus createdAt pricing riderEarning deliveryPartnerSettlement dispatch.deliveryPartnerId restaurantId')
-            .populate({ path: 'dispatch.deliveryPartnerId', select: 'name phone' })
-            .populate({ path: 'restaurantId', select: 'restaurantName name' })
+            .select('orderId orderStatus createdAt pricing riderEarning deliveryPartnerSettlement dispatch.deliveryPartnerId restaurantId zoneId')
+            .populate({ path: 'dispatch.deliveryPartnerId', select: 'name phone zoneName' })
+            .populate({
+                path: 'restaurantId',
+                select: 'restaurantName name zoneId',
+                populate: { path: 'zoneId', select: 'name zoneName' }
+            })
+            .populate({ path: 'zoneId', select: 'name zoneName' })
             .lean(),
         FoodOrder.countDocuments(filter),
         FoodOrder.aggregate([
@@ -4148,6 +4218,14 @@ export async function getDeliveryEarnings(query = {}) {
             0
         ) || 0;
 
+        const zoneName =
+            order?.zoneId?.name ||
+            order?.zoneId?.zoneName ||
+            order?.restaurantId?.zoneId?.name ||
+            order?.restaurantId?.zoneId?.zoneName ||
+            partner?.zoneName ||
+            'N/A';
+
         return {
             transactionId: String(order._id),
             orderId: order.orderId || 'N/A',
@@ -4155,6 +4233,7 @@ export async function getDeliveryEarnings(query = {}) {
             deliveryPartnerName: partner?.name || 'N/A',
             deliveryPartnerPhone: partner?.phone || 'N/A',
             restaurantName: order?.restaurantId?.restaurantName || order?.restaurantId?.name || 'N/A',
+            zoneName,
             amount,
             orderTotal: Number(order?.pricing?.total || 0) || 0,
             deliveryFee: Number(order?.pricing?.deliveryFee || 0) || 0,

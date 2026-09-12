@@ -288,6 +288,7 @@ export default function Orders() {
             const deliveryPartnerRating = order.ratings?.deliveryPartner?.rating || null
 
             return {
+              ...order,
               id: order._id?.toString() || order.orderId || `ORD-${order._id}`,
               mongoId: order._id,
               orderId: order.orderId || order._id?.toString(), // Keep orderId for display
@@ -295,6 +296,10 @@ export default function Orders() {
               originalStatus: originalStatus, // Keep original status for reference
               createdAt: createdAt.toISOString(),
               address: order.address || order.deliveryAddress || {},
+              deliveryAddress: order.deliveryAddress || order.address || {},
+              distanceKm: order.distanceKm ?? order.pricing?.distanceKm ?? order.pricing?.deliveryFeeBreakdown?.distanceKm ?? null,
+              rawRestaurantLocation: order.restaurantId?.location || order.restaurantLocation || null,
+              rawOrderData: order,
               items: (order.items || []).map(item => ({
                 itemId: item.itemId || item._id || item.id,
                 name: item.name || item.foodName || 'Item',

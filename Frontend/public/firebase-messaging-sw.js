@@ -161,15 +161,52 @@ async function loadFirebaseWebConfig() {
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
-  try {
-    const payload = event.data.json();
-    pushDebugLog(PUSH_DEBUG_PREFIX, "Received raw push event", { payload });
-    // No client relay here. onBackgroundMessage handles delivery, and relaying in both
-    // places can produce duplicate notifications in web clients.
-    event.waitUntil(Promise.resolve());
-  } catch {
-    // Ignore malformed payloads.
-  }
+  const promiseChain = (async () => {
+    try {
+      let payload = {};
+      try {
+        payload = event.data.json();
+      } catch {
+        payload = { data: { title: "Eqosy Notification", body: event.data.text() } };
+      }
+
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Received push event in service worker", { payload });
+
+      const title = payload?.notification?.title || payload?.data?.title || "Eqosy Notification";
+      const body = payload?.notification?.body || payload?.data?.body || "";
+      const image =
+        payload?.notification?.image ||
+        payload?.data?.image ||
+        payload?.data?.imageUrl ||
+        undefined;
+      const notificationKey = getNotificationKey(payload);
+
+      // Check if user has an active, focused tab open for this target
+      const visibleClient = await hasVisibleClientForTarget(payload);
+
+      // If app/tab is closed or in background, show native OS notification popup!
+      if (!visibleClient) {
+        await self.registration.showNotification(title, {
+          body,
+          icon: "/eqosy-logo.png",
+          badge: "/eqosy-logo.png",
+          image,
+          tag: notificationKey || `push_${Date.now()}`,
+          renotify: true,
+          silent: false,
+          requireInteraction: true,
+          vibrate: [200, 100, 200, 100, 300],
+          data: payload?.data || {},
+        });
+      }
+
+      await notifyOpenClients(payload);
+    } catch (err) {
+      console.error("[push-sw] Error processing push event:", err);
+    }
+  })();
+
+  event.waitUntil(promiseChain);
 });
 
 self.addEventListener("notificationclick", (event) => {

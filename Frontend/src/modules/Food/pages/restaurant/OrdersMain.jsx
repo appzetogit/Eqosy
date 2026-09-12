@@ -1169,11 +1169,35 @@ export default function OrdersMain() {
     }
   }, [newOrder]);
 
-  // Handle real-time order status updates (e.g. delivered, out_for_delivery, preparing, ready)
+  // Handle real-time order status updates (e.g. delivered, out_for_delivery, preparing, ready, cancelled)
   useEffect(() => {
     const handleStatusUpdate = (updateData) => {
       if (!updateData) return;
       debugLog("Real-time order status update received in OrdersMain:", updateData);
+
+      const statusStr = String(updateData?.orderStatus || updateData?.status || "").toLowerCase();
+      const isCancelled = statusStr.includes("cancel") || statusStr.includes("reject");
+      const currentPopupId = String(popupOrderRef.current?.orderId || popupOrderRef.current?.orderMongoId || popupOrderRef.current?._id || "");
+      const updatedId = String(updateData?.orderId || updateData?.orderMongoId || updateData?.displayId || "");
+
+      const isCurrentPopup = Boolean(
+        currentPopupId && updatedId && (currentPopupId === updatedId || currentPopupId.includes(updatedId) || updatedId.includes(currentPopupId))
+      );
+
+      if (isCancelled || (isCurrentPopup && statusStr !== "created" && statusStr !== "confirmed" && statusStr !== "pending")) {
+        debugLog("🛑 Closing new order popup due to status update:", { statusStr, updatedId, currentPopupId });
+        setShowNewOrderPopup(false);
+        setPopupOrder(null);
+        if (typeof clearNewOrder === "function") clearNewOrder();
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        if (isCancelled) {
+          toast.error(`Order #${updatedId || currentPopupId} was cancelled by user!`);
+        }
+      }
+
       requestOrdersRefresh();
     };
 
@@ -1189,7 +1213,12 @@ export default function OrdersMain() {
     return () => {
       window.removeEventListener("restaurant_order_updated", customEventListener);
     };
-  }, [lastOrderUpdate]);
+  }, [lastOrderUpdate, clearNewOrder]);
+
+  const popupOrderRef = useRef(popupOrder);
+  useEffect(() => {
+    popupOrderRef.current = popupOrder;
+  }, [popupOrder]);
 
   // Keep refs in sync to avoid stale state inside one-time event handlers.
   useEffect(() => {
@@ -1246,21 +1275,45 @@ export default function OrdersMain() {
   // Check for confirmed orders that haven't been shown in popup yet, or scheduled orders whose time has come
   useEffect(() => {
     const checkOrdersToPopup = async () => {
-      // Skip if popup is already showing or Socket.IO order exists
-      if (showNewOrderPopupRef.current || newOrderRef.current) return;
-
       try {
         const response = await restaurantAPI.getOrders();
         if (response.data?.success && response.data.data?.orders) {
+          const allOrders = response.data.data.orders;
+
+          // If popup is showing, verify that active popup order hasn't been cancelled on server
+          if (showNewOrderPopupRef.current && popupOrderRef.current) {
+            const popupId = String(popupOrderRef.current.orderId || popupOrderRef.current.orderMongoId || popupOrderRef.current._id || '');
+            const matchingDoc = allOrders.find((o) => {
+              const oId = String(o.orderId || o._id || '');
+              return oId === popupId || (popupId && (popupId.includes(oId) || oId.includes(popupId)));
+            });
+            if (matchingDoc) {
+              const statusStr = String(matchingDoc.status || matchingDoc.orderStatus || '').toLowerCase();
+              if (statusStr.includes('cancel')) {
+                debugLog('🛑 Currently displayed popup order was cancelled on server! Auto-closing popup...', popupId);
+                setShowNewOrderPopup(false);
+                setPopupOrder(null);
+                if (typeof clearNewOrder === 'function') clearNewOrder();
+                if (audioRef.current) {
+                  audioRef.current.pause();
+                  audioRef.current.currentTime = 0;
+                }
+                toast.error(`Order #${popupId} was cancelled by user!`);
+                return;
+              }
+            }
+          }
+
+          // Skip if popup is already showing or Socket.IO order exists
+          if (showNewOrderPopupRef.current || newOrderRef.current) return;
+
           const now = Date.now();
 
           // Find orders that should trigger the popup
-          const targetOrders = response.data.data.orders.filter((order) => {
+          const targetOrders = allOrders.filter((order) => {
             if (hasOrderBeenShown(order)) return false;
 
             const isConfirmed = order.status === "confirmed";
-            const isCreatedScheduled =
-              order.status === "created" && order.scheduledAt;
 
             if (isConfirmed && !order.scheduledAt) return true; // ordinary confirmed fallback
 
@@ -1321,9 +1374,9 @@ export default function OrdersMain() {
       }
     };
 
-    // Check once on mount, and then every minute
+    // Check once on mount, and then every 5 seconds for instant cancellation sync
     checkOrdersToPopup();
-    const intervalId = setInterval(checkOrdersToPopup, 60000);
+    const intervalId = setInterval(checkOrdersToPopup, 5000);
 
     return () => clearInterval(intervalId);
   }, []);
@@ -1458,10 +1511,15 @@ export default function OrdersMain() {
     if (isAcceptingOrder) return;
     setIsAcceptingOrder(true);
 
+    // Stop audio ringing and clear popup state immediately in 0ms upon swipe/click!
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    if (typeof clearNewOrder === "function") {
+      clearNewOrder();
+    }
+    setShowNewOrderPopup(false);
 
     // Use popupOrder (from Socket.IO or API fallback) or newOrder (from hook)
     const orderToAccept = popupOrder || newOrder;
@@ -2896,6 +2954,10 @@ function OrderCard({
   const isReady = normalizedStatus === "ready";
   const isPreparing = normalizedStatus === "preparing";
   const normalizedDispatchStatus = String(dispatchStatus || "").toLowerCase();
+  const deliveryPartnerName =
+    deliveryPartnerId && typeof deliveryPartnerId === "object"
+      ? (deliveryPartnerId.fullName || deliveryPartnerId.name || "").trim()
+      : "";
   const deliveryPartnerPhone =
     deliveryPartnerId && typeof deliveryPartnerId === "object"
       ? String(
@@ -2904,6 +2966,13 @@ function OrderCard({
             "",
         ).trim()
       : "";
+  const hasPartnerAssigned = Boolean(
+    deliveryPartnerId &&
+    (deliveryPartnerName || deliveryPartnerPhone || normalizedDispatchStatus === "accepted") &&
+    normalizedDispatchStatus !== "handover_requested" &&
+    normalizedDispatchStatus !== "unassigned" &&
+    normalizedStatus !== "handover_requested"
+  );
   const canCallDeliveryPartner = Boolean(
     deliveryPartnerPhone &&
       (normalizedDispatchStatus === "accepted" ||
@@ -2933,11 +3002,11 @@ function OrderCard({
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">Order #{orderId}</p>
             <p className="text-[11px] text-gray-500 truncate">{customerName}</p>
-            {canCallDeliveryPartner ? (
+            {hasPartnerAssigned ? (
               <p className="text-[10px] font-bold text-blue-600 truncate flex items-center gap-1 mt-0.5">
-                <span>🏍️</span> {typeof deliveryPartnerId === 'object' && (deliveryPartnerId.fullName || deliveryPartnerId.name) ? (deliveryPartnerId.fullName || deliveryPartnerId.name) : 'Partner Assigned'}
+                <span>🏍️</span> {deliveryPartnerName || 'Partner Assigned'}
               </p>
-            ) : (!isReady && !normalizedStatus.includes('delivered') && !normalizedStatus.includes('cancel')) ? (
+            ) : (!normalizedStatus.includes('delivered') && !normalizedStatus.includes('cancel') && !normalizedStatus.includes('completed')) ? (
               <p className="text-[10px] font-semibold text-amber-600 truncate flex items-center gap-1 mt-0.5">
                 <span>🚚</span> Finding Partner...
               </p>

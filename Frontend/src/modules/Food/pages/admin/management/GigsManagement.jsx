@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Calendar, Clock, Plus, Users, CheckCircle2, AlertTriangle, XCircle,
-  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List
+  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List, ShieldAlert
 } from 'lucide-react';
 import { apiClient } from '@/services/api';
 import { toast } from 'sonner';
+import useAdminNotifications from '@food/hooks/useAdminNotifications';
+import HandoverApprovalModal from '@food/components/admin/HandoverApprovalModal';
 
 export const GigsManagement = () => {
+  const [searchParams] = useSearchParams();
+  const handoverIdFromUrl = searchParams.get('handoverId');
+  const { items: adminNotifications, approveHandover, rejectHandover } = useAdminNotifications();
+  const pendingHandovers = adminNotifications.filter(it => it.category === "handover_approval");
+
+  const [selectedHandoverItem, setSelectedHandoverItem] = useState(null);
+  const [handoverModalOpen, setHandoverModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (handoverIdFromUrl && pendingHandovers.length > 0) {
+      const match = pendingHandovers.find(h => String(h.orderMongoId) === String(handoverIdFromUrl) || String(h.orderId) === String(handoverIdFromUrl));
+      if (match) {
+        setSelectedHandoverItem(match);
+        setHandoverModalOpen(true);
+      }
+    }
+  }, [handoverIdFromUrl, pendingHandovers]);
+
   const [gigs, setGigs] = useState([]);
   const [stats, setStats] = useState(null);
   const [zones, setZones] = useState([]);
@@ -22,7 +43,7 @@ export const GigsManagement = () => {
   const [isCustomZone, setIsCustomZone] = useState(false);
 
   const [formData, setFormData] = useState({
-    title: 'Lunch Peak Shift',
+    title: '',
     date: new Date().toISOString().slice(0, 10),
     startTime: '12:00',
     endTime: '16:00',
@@ -194,7 +215,7 @@ export const GigsManagement = () => {
             setEditingGig(null);
             setIsCustomZone(false);
             setFormData({
-              title: 'Shift',
+              title: '',
               date: selectedDate,
               startTime: '12:00',
               endTime: '16:00',
@@ -245,6 +266,97 @@ export const GigsManagement = () => {
           <p className="text-2xl font-black text-slate-900">{stats?.attendanceRate || '100%'}</p>
         </div>
       </div>
+
+      {/* 🚨 Pending Emergency Handover Requests List Box */}
+      {pendingHandovers.length > 0 && (
+        <div className="bg-gradient-to-br from-rose-50 to-amber-50 p-6 rounded-3xl border border-rose-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  Pending Order Handover Requests
+                  <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-bold">
+                    {pendingHandovers.length}
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">Review driver emergency handover requests zone-wise, inspect customer & driver details, and approve for automatic re-dispatch.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingHandovers.map((item) => {
+              const rawOrder = item?.rawOrder || {};
+              const orderDisplayId = item?.orderId || item?.orderMongoId || "N/A";
+              const partnerName = item?.partnerName || rawOrder?.deliveryPartnerName || "Delivery Partner";
+              const partnerPhone = item?.partnerPhone || rawOrder?.deliveryPartnerPhone || "N/A";
+              const customerName = item?.customerName || rawOrder?.customerName || "Customer";
+              const customerPhone = item?.customerPhone || rawOrder?.userPhone || "N/A";
+              const restaurantName = item?.restaurantName || rawOrder?.restaurantName || "Restaurant";
+              const zoneName = item?.zoneName || rawOrder?.zoneName || "Zone";
+              const reason = item?.reason || "Emergency";
+
+              return (
+                <div key={item.id} className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold">
+                      Order #{orderDisplayId}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
+                      Zone: {zoneName}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Requesting Driver</span>
+                      <span className="font-bold text-slate-900">{partnerName}</span>
+                      <span className="text-[11px] text-slate-500 block">{partnerPhone}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-bold block">Customer</span>
+                      <span className="font-bold text-slate-900">{customerName}</span>
+                      <span className="text-[11px] text-slate-500 block">{customerPhone}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <span className="text-slate-500 font-medium">Restaurant: </span>
+                    <span className="font-bold text-slate-900">{restaurantName}</span>
+                    <div className="mt-1 text-rose-700 font-medium">
+                      Reason: "{reason}"
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setSelectedHandoverItem(item);
+                        setHandoverModalOpen(true);
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors text-center shadow-sm"
+                    >
+                      Review & Approve Request
+                    </button>
+                    {partnerPhone && partnerPhone !== "N/A" && (
+                      <a
+                        href={`tel:${partnerPhone}`}
+                        className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                      >
+                        Call
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Controls & Filters */}
       <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
@@ -471,6 +583,81 @@ export const GigsManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Pending Handover Requests Control Box */}
+      <div className="bg-gradient-to-r from-rose-50 via-amber-50/50 to-white p-6 rounded-3xl border border-rose-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900">Pending Delivery Handover Requests</h2>
+                <span className="bg-rose-600 text-white px-2.5 py-0.5 rounded-full text-xs font-black">
+                  {pendingHandovers.length}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Emergency handover requests submitted by delivery partners requiring admin authorization.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {pendingHandovers.length === 0 ? (
+          <div className="py-6 text-center text-xs font-medium text-slate-400 bg-white/60 rounded-2xl border border-dashed border-rose-200">
+            No active pending handover requests.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingHandovers.map((item) => (
+              <div key={item.id} className="bg-white p-4 rounded-2xl border border-rose-200 shadow-sm flex flex-col justify-between gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                      Order #{item.orderId}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">{item.timeLabel}</span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-900">{item.title}</p>
+                  <p className="text-xs text-slate-600 mt-1 leading-snug">{item.message}</p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedHandoverItem(item);
+                      setHandoverModalOpen(true);
+                    }}
+                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all text-center"
+                  >
+                    Review Handover Box
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => approveHandover(item.orderMongoId || item.orderId)}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const r = prompt("Reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                      rejectHandover(item.orderMongoId || item.orderId, r);
+                    }}
+                    className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* SECTION 5 & 9: Delivery Partner Workforce Status & Attendance Table */}
       <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
@@ -874,6 +1061,14 @@ export const GigsManagement = () => {
           </div>
         </div>
       )}
+
+      <HandoverApprovalModal
+        isOpen={handoverModalOpen}
+        onClose={() => setHandoverModalOpen(false)}
+        notification={selectedHandoverItem}
+        onApprove={approveHandover}
+        onReject={rejectHandover}
+      />
     </div>
   );
 };

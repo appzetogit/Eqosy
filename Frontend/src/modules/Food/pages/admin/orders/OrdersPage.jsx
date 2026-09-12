@@ -177,6 +177,18 @@ export default function OrdersPage({ statusKey = "all" }) {
       alertLoopTimerRef.current = null
     }
     alertLoopStartedAtRef.current = 0
+    if (notificationAudioRef.current) {
+      try {
+        notificationAudioRef.current.pause()
+        notificationAudioRef.current.currentTime = 0
+      } catch (_) {}
+    }
+    if (fallbackAudioRef.current) {
+      try {
+        fallbackAudioRef.current.pause()
+        fallbackAudioRef.current.currentTime = 0
+      } catch (_) {}
+    }
   }, [])
 
   const startAlertLoop = useCallback(() => {
@@ -610,19 +622,49 @@ export default function OrdersPage({ statusKey = "all" }) {
       fetchOrders({ silent: true, withRingCheck: false })
     }
 
+    const handleOrderCancelled = (payload = {}) => {
+      debugLog("Order cancelled event received in Admin OrdersPage:", payload)
+      activeOrderAlertRef.current = null
+      stopAlertLoop()
+      if (notificationAudioRef.current) {
+        notificationAudioRef.current.pause()
+        notificationAudioRef.current.currentTime = 0
+      }
+      if (fallbackAudioRef.current) {
+        fallbackAudioRef.current.pause()
+        fallbackAudioRef.current.currentTime = 0
+      }
+      const orderId = payload?.orderId || payload?.orderMongoId || payload?.displayId || ""
+      if (orderId) {
+        toast.error(`Order #${orderId} was cancelled by user`)
+      }
+      fetchOrders({ silent: true, withRingCheck: false })
+    }
+
     socket.on("connect", () => {
       socket.emit("join-admin-orders")
     })
     socket.on("admin_new_order", handleIncomingRealtimeOrder)
     socket.on("play_notification_sound", handleIncomingRealtimeOrder)
+    socket.on("order_cancelled", handleOrderCancelled)
+    socket.on("order_status_update", (payload = {}) => {
+      const statusStr = String(payload?.orderStatus || payload?.status || "").toLowerCase()
+      if (statusStr.includes("cancel")) {
+        handleOrderCancelled(payload)
+      } else {
+        fetchOrders({ silent: true, withRingCheck: false })
+      }
+    })
 
     return () => {
       socket.off("admin_new_order", handleIncomingRealtimeOrder)
       socket.off("play_notification_sound", handleIncomingRealtimeOrder)
+      socket.off("order_cancelled", handleOrderCancelled)
+      socket.off("order_status_update", handleOrderCancelled)
       socket.disconnect()
       socketRef.current = null
     }
-  }, [statusKey, fetchOrders, playDefaultRing, showBrowserNotification, startAlertLoop])
+  }, [statusKey, fetchOrders, playDefaultRing, showBrowserNotification, startAlertLoop, stopAlertLoop])
 
   useEffect(() => {
     const onVisibilityChange = () => {

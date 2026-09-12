@@ -116,7 +116,7 @@ const dispatchSchema = new mongoose.Schema(
         modeAtCreation: { type: String, enum: ['auto'], default: 'auto' },
         status: {
             type: String,
-            enum: ['unassigned', 'assigned', 'accepted', 'rejected', 'cancelled'],
+            enum: ['unassigned', 'assigned', 'accepted', 'rejected', 'cancelled', 'handover_requested'],
             default: 'unassigned'
         },
         deliveryPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
@@ -126,8 +126,18 @@ const dispatchSchema = new mongoose.Schema(
         offeredTo: [{
             partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner' },
             at: { type: Date, default: Date.now },
-            action: { type: String, enum: ['offered', 'rejected', 'timeout'], default: 'offered' }
+            action: { type: String, enum: ['offered', 'rejected', 'handover', 'timeout'], default: 'offered' }
         }],
+        handoverRequest: {
+            status: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+            requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+            reason: { type: String, default: '' },
+            note: { type: String, default: '' },
+            requestedAt: { type: Date, default: null },
+            approvedAt: { type: Date, default: null },
+            approvedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+            rejectionReason: { type: String, default: '' }
+        },
         dispatchingAt: { type: Date }
     },
     { _id: false }
@@ -279,7 +289,8 @@ const orderSchema = new mongoose.Schema(
                 'delivered',
                 'cancelled_by_user',
                 'cancelled_by_restaurant',
-                'cancelled_by_admin'
+                'cancelled_by_admin',
+                'handover_requested'
             ],
             default: 'created'
         },

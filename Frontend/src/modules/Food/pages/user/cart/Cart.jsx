@@ -23,7 +23,7 @@ import { determineIsVeg } from "@food/utils/menuItems"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
-import { calculateDistance } from "@food/utils/common"
+import { calculateDistance, getOrderDisplayDistance } from "@food/utils/common"
 import { calculateDistanceInKm, extractCoords } from "@food/utils/geoDistance"
 import { isModuleAuthenticated, clearModuleAuth, clearAuthData } from "@food/utils/auth"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
@@ -277,14 +277,60 @@ export default function Cart() {
   const [restaurantFetchComplete, setRestaurantFetchComplete] = useState(false)
 
   // Check if restaurant is offline
+  const restaurantAvailability = useMemo(() => {
+    if (!restaurantData) return null
+    return getRestaurantAvailabilityStatus(restaurantData)
+  }, [restaurantData])
+
   const isRestaurantOffline = useMemo(() => {
     if (!restaurantData) return false
-    const status = getRestaurantAvailabilityStatus(restaurantData)
-    return !status.isOpen
-  }, [restaurantData])
+    return !restaurantAvailability?.isOpen
+  }, [restaurantData, restaurantAvailability])
+
+  const [openSuggestions, setOpenSuggestions] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+
+  useEffect(() => {
+    if (!isRestaurantOffline) {
+      setOpenSuggestions([])
+      return
+    }
+
+    let isMounted = true
+    const fetchOpenSuggestions = async () => {
+      setLoadingSuggestions(true)
+      try {
+        const response = await restaurantAPI.getRestaurants({ limit: 30 })
+        const list = response?.data?.data?.restaurants || response?.data?.data || []
+        const currentId = String(restaurantData?._id || restaurantData?.restaurantId || "")
+
+        const openRestos = list.filter((r) => {
+          const rId = String(r._id || r.restaurantId || "")
+          if (rId && currentId && rId === currentId) return false
+          const status = getRestaurantAvailabilityStatus(r)
+          return status.isOpen
+        })
+
+        if (isMounted) {
+          setOpenSuggestions(openRestos.slice(0, 6))
+        }
+      } catch (err) {
+        debugWarn("Failed to fetch open restaurant suggestions:", err)
+      } finally {
+        if (isMounted) setLoadingSuggestions(false)
+      }
+    }
+
+    fetchOpenSuggestions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isRestaurantOffline, restaurantData])
 
   const [pricing, setPricing] = useState(null)
   const [loadingPricing, setLoadingPricing] = useState(false)
+  const [pricingError, setPricingError] = useState(null)
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
 
   // Addons state
@@ -1159,6 +1205,7 @@ export default function Cart() {
 
         if (response?.data?.success && response?.data?.data?.pricing) {
           setPricing(response.data.data.pricing)
+          setPricingError(null)
 
           // Update applied coupon if backend returns one
           if (response.data.data.pricing.appliedCoupon && !appliedCoupon) {
@@ -1177,6 +1224,8 @@ export default function Cart() {
         if (error.code !== 'ERR_NETWORK' && error.response?.status !== 404) {
           debugError("Error calculating pricing:", error)
         }
+        const errMsg = error?.response?.data?.message || error?.message || "Delivery unavailable for selected address or location is outside service area."
+        setPricingError(errMsg)
         setPricing(null)
       } finally {
         setLoadingPricing(false)
@@ -1300,27 +1349,12 @@ export default function Cart() {
   const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - baseTotal)
 
   const getCartActualDistanceKm = () => {
-    const d = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm ?? pricing?.distanceKm);
-    if (!isNaN(d) && d > 0 && d < 100) {
-      return d % 1 === 0 ? d.toFixed(0) : d.toFixed(1);
-    }
-    const resLoc = restaurantData?.location || {};
-    const resCoords = Array.isArray(resLoc.coordinates) ? resLoc.coordinates : [];
-    const resLat = parseFloat(resLoc.latitude || resLoc.lat || (resCoords.length >= 2 ? resCoords[1] : NaN));
-    const resLng = parseFloat(resLoc.longitude || resLoc.lng || (resCoords.length >= 2 ? resCoords[0] : NaN));
-
-    const custLoc = defaultAddress?.location || selectedAddress?.location || {};
-    const custCoords = Array.isArray(custLoc.coordinates) ? custLoc.coordinates : [];
-    const custLat = parseFloat(custLoc.latitude || custLoc.lat || (custCoords.length >= 2 ? custCoords[1] : NaN));
-    const custLng = parseFloat(custLoc.longitude || custLoc.lng || (custCoords.length >= 2 ? custCoords[0] : NaN));
-
-    if (!isNaN(resLat) && !isNaN(resLng) && !isNaN(custLat) && !isNaN(custLng)) {
-      const dKm = calculateDistance(resLat, resLng, custLat, custLng);
-      if (dKm && dKm > 0 && dKm < 100) {
-        return dKm % 1 === 0 ? dKm.toFixed(0) : dKm.toFixed(1);
-      }
-    }
-    return "1.2";
+    return getOrderDisplayDistance({
+      pricing,
+      restaurantId: restaurantData,
+      restaurantLocation: restaurantData?.location,
+      deliveryAddress: selectedAddress || defaultAddress
+    });
   };
   const selectedPaymentLabel =
     selectedPaymentMethod === "wallet"
@@ -1763,8 +1797,13 @@ export default function Cart() {
       return
     }
 
+    if (pricingError) {
+      toast.error(pricingError)
+      return
+    }
+
     if (!pricing) {
-      toast.error(loadingPricing ? "Calculating fees. Please wait." : "Unable to calculate fees. Please try again.")
+      toast.error(loadingPricing ? "Calculating fees. Please wait." : "Unable to calculate fees. Selected location may be outside delivery area.")
       return
     }
 
@@ -2021,6 +2060,7 @@ export default function Cart() {
 
       const rawOrderData = orderResponse?.data?.data
       const order = rawOrderData?.order || rawOrderData || {}
+      const razorpay = rawOrderData?.razorpay
       const orderIdToStore = String(order?._id || order?.orderId || order?.id || "")
 
       if (addOrder && order) addOrder(order);
@@ -2283,10 +2323,7 @@ export default function Cart() {
   }
 
   return (
-    <div
-      className="relative min-h-screen bg-slate-50 dark:bg-[#0a0a0a]"
-      style={isRestaurantOffline ? { filter: "grayscale(100%)" } : {}}
-    >
+    <div className="relative min-h-screen bg-slate-50 dark:bg-[#0a0a0a]">
       {/* Header - Sticky at top */}
       <div className="bg-white dark:bg-[#1a1a1a] border-b dark:border-gray-800 sticky top-0 z-20 flex-shrink-0">
         <div className="max-w-7xl mx-auto">
@@ -2322,6 +2359,46 @@ export default function Cart() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-52">
+        {/* Restaurant Closed Warning Banner */}
+        {isRestaurantOffline && (
+          <div className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white px-4 md:px-6 py-3.5 shadow-md flex-shrink-0">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-white/20 backdrop-blur-xs rounded-xl flex-shrink-0 mt-0.5">
+                  <Clock className="h-5 w-5 text-white animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm md:text-base font-bold tracking-tight">Restaurant is Currently Closed</h3>
+                    <span className="bg-white/20 text-white text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full">
+                      Not Accepting Orders
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/90 mt-0.5">
+                    <span className="font-semibold">{restaurantName}</span> is closed right now.
+                    {restaurantAvailability?.openingTime && (
+                      <span className="ml-1 opacity-90 font-medium">
+                        (Hours: {restaurantAvailability.openingTime} - {restaurantAvailability.closingTime || "Close"})
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const suggestionsEl = document.getElementById("open-restaurant-suggestions");
+                  if (suggestionsEl) {
+                    suggestionsEl.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+                className="text-xs font-bold bg-white text-red-600 hover:bg-red-50 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs flex-shrink-0 self-stretch md:self-auto text-center cursor-pointer"
+              >
+                View Open Outlets 👇
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Selected Address Far Distance Warning Banner */}
         {selectedAddressDistanceKm > 0.5 && (
           <div className="bg-amber-100/90 dark:bg-amber-950/50 border-b border-amber-200/80 dark:border-amber-900/50 px-4 md:px-6 py-2.5 flex-shrink-0 transition-all">
@@ -3120,6 +3197,15 @@ export default function Cart() {
                       <span>To Pay</span>
                       <span>{RUPEE_SYMBOL}{total.toFixed(2)}</span>
                     </div>
+                    {pricingError && (
+                      <div className="mt-3 p-3.5 bg-red-50 dark:bg-red-950/40 rounded-2xl border border-red-200 dark:border-red-800 flex items-start gap-3 shadow-xs">
+                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-bold text-red-800 dark:text-red-300">Delivery Unavailable</p>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5 leading-snug">{pricingError}</p>
+                        </div>
+                      </div>
+                    )}
                     {!isUserAuthenticated && (
                       <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3 shadow-xs">
                         <div className="flex items-center gap-2">
@@ -3162,6 +3248,84 @@ export default function Cart() {
                   </div>
                 </div>
               </div>
+
+              {/* Open Restaurants Suggestions when offline */}
+              {isRestaurantOffline && (
+                <div id="open-restaurant-suggestions" className="mt-6 mb-6 p-4 md:p-6 bg-gradient-to-br from-orange-50/90 to-amber-50/50 dark:from-orange-950/20 dark:to-amber-950/10 border border-orange-200/80 dark:border-orange-900/40 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base md:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-orange-500" />
+                        Currently Open Restaurants Nearby
+                      </h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                        Order from these open outlets right now for quick delivery
+                      </p>
+                    </div>
+                    <Link
+                      to="/food/user"
+                      className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1"
+                    >
+                      View All <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+
+                  {loadingSuggestions ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="h-24 bg-gray-200/70 dark:bg-gray-800/60 rounded-2xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : openSuggestions.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {openSuggestions.map((resto) => {
+                        const rId = resto._id || resto.restaurantId
+                        const img = resto.profileImage || resto.coverImages?.[0] || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400"
+                        const slug = resto.slug || rId
+
+                        return (
+                          <div
+                            key={rId}
+                            onClick={() => navigate(`/food/user/restaurants/${slug}`)}
+                            className="bg-white dark:bg-[#1f1f1f] p-3.5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center gap-3.5 group"
+                          >
+                            <img
+                              src={img}
+                              alt={resto.restaurantName || resto.name}
+                              className="w-16 h-16 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
+                              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400' }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-orange-600 transition-colors">
+                                {resto.restaurantName || resto.name}
+                              </h4>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                {Array.isArray(resto.cuisines) ? resto.cuisines.join(", ") : resto.cuisines || "Multi-cuisine"}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+                                <span className="bg-green-600 text-white font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px]">
+                                  ★ {resto.rating ? Number(resto.rating).toFixed(1) : "4.2"}
+                                </span>
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {resto.estimatedDeliveryTime || "25-30 mins"}
+                                </span>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 flex-shrink-0" />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No other open restaurants found right now in your area.</p>
+                      <Link to="/food/user" className="mt-2 inline-block text-xs font-bold text-orange-600 hover:underline">
+                        Go to Home
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           </div>
@@ -3214,9 +3378,21 @@ export default function Cart() {
 
             {/* Place Order Button */}
             <button
-              onClick={!isUserAuthenticated ? handleLoginRedirect : handlePlaceOrder}
-              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline)}
-              className="w-full bg-gradient-to-r from-[#EB590E] to-[#E23744] hover:from-[#D94F0C] hover:to-[#CF2834] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#EB590E]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
+              onClick={
+                !isUserAuthenticated
+                  ? handleLoginRedirect
+                  : isRestaurantOffline
+                  ? () => toast.error("Restaurant is currently closed. Please order from an open outlet.")
+                  : pricingError
+                  ? () => toast.error(pricingError)
+                  : handlePlaceOrder
+              }
+              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || !!pricingError || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline)}
+              className={`w-full ${
+                isRestaurantOffline || pricingError
+                  ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed shadow-none"
+                  : "bg-gradient-to-r from-[#EB590E] to-[#E23744] hover:from-[#D94F0C] hover:to-[#CF2834] shadow-lg shadow-[#EB590E]/30"
+              } text-white px-6 h-12 md:h-14 rounded-2xl font-bold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]`}
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
@@ -3228,16 +3404,16 @@ export default function Cart() {
                 {!isUserAuthenticated
                   ? "Login to Place Order"
                   : isRestaurantOffline
-                    ? "Restaurant Offline"
-                    : isPlacingOrder
-                      ? "Processing..."
-                      : loadingPricing
-                        ? "Calculating Fees..."
-                        : !hasSavedAddress
-                          ? "Select Address"
-                          : !isPricingAvailable
-                            ? "Fees Unavailable"
-                            : "Place Order"}
+                  ? "Restaurant Closed"
+                  : pricingError
+                  ? "Location Outside Delivery Zone"
+                  : isPlacingOrder
+                  ? "Processing..."
+                  : loadingPricing
+                  ? "Calculating Fees..."
+                  : !hasSavedAddress
+                  ? "Select Address"
+                  : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>

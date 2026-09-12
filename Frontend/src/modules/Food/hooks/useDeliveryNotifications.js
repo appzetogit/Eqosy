@@ -5,11 +5,9 @@ import { deliveryAPI } from '@food/api';
 import alertSound from '@food/assets/audio/alert.mp3';
 import originalSound from '@food/assets/audio/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
+import { toast } from 'sonner';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
-import {
-  joinOrderTrackingRooms,
-  leaveAllOrderTrackingRooms,
-} from '@food/utils/orderTrackingRooms';
+import { isPushRingEvent } from '@food/utils/firebaseMessaging';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -172,6 +170,60 @@ const triggerWebViewNativeNotification = async (orderData = {}) => {
 }
 
 
+/**
+ * Join socket tracking rooms for a given order so this delivery partner
+ * receives real-time location/status updates for that order.
+ *
+ * @param {Socket|null} socket - Active socket.io client instance
+ * @param {string|object} orderOrId - Order object (with _id / orderId) or a plain ID string
+ * @param {Set<string>} joinedRooms - Ref.current Set that tracks rooms already joined
+ * @param {string[]} extraIds - Additional room IDs to join (e.g. restaurantId, userId)
+ * @returns {string[]} Array of room names that were joined in this call
+ */
+const joinOrderTrackingRooms = (socket, orderOrId, joinedRooms, extraIds = []) => {
+  if (!socket || !socket.connected) return [];
+
+  const resolveId = (v) => String(v || '').trim();
+
+  const orderId = resolveId(
+    typeof orderOrId === 'object'
+      ? (orderOrId?.orderId || orderOrId?._id || orderOrId?.id)
+      : orderOrId,
+  );
+
+  const candidates = [
+    orderId && `order-tracking-${orderId}`,
+    orderId && `order-${orderId}`,
+    ...extraIds.map((id) => resolveId(id) && `order-tracking-${resolveId(id)}`),
+  ].filter(Boolean);
+
+  const joined = [];
+  for (const room of candidates) {
+    if (!joinedRooms.has(room)) {
+      socket.emit('join-order-tracking', { room, orderId });
+      joinedRooms.add(room);
+      joined.push(room);
+    }
+  }
+  return joined;
+};
+
+/**
+ * Leave all socket tracking rooms that have been joined and clear the Set.
+ *
+ * @param {Socket|null} socket - Active socket.io client instance
+ * @param {Set<string>} joinedRooms - Ref.current Set that tracks rooms already joined
+ */
+const leaveAllOrderTrackingRooms = (socket, joinedRooms) => {
+  if (!joinedRooms || joinedRooms.size === 0) return;
+  if (socket && socket.connected) {
+    for (const room of joinedRooms) {
+      socket.emit('leave-order-tracking', { room });
+    }
+  }
+  joinedRooms.clear();
+};
+
 export const useDeliveryNotifications = () => {
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
@@ -217,6 +269,10 @@ export const useDeliveryNotifications = () => {
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
     if (!key) return true;
+    if (orderData?.forceAlert || orderData?.forceRebroadcast || orderData?.isHandover || orderData?.dispatchStatus === 'unassigned') {
+      lastAlertAtByOrderRef.current.set(key, Date.now());
+      return true;
+    }
     const now = Date.now();
     const last = lastAlertAtByOrderRef.current.get(key) || 0;
     if (now - last < ALERT_DEDUPE_MS) return false;
@@ -240,6 +296,12 @@ export const useDeliveryNotifications = () => {
       alertLoopTimerRef.current = null;
     }
     alertLoopStartedAtRef.current = 0;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (_) {}
+    }
   }, []);
 
   const startAlertLoop = useCallback((playSoundFn) => {
@@ -388,8 +450,10 @@ export const useDeliveryNotifications = () => {
     }
 
     activeOrderRef.current = orderData || { id: Date.now() };
-    playNotificationSound(orderData);
-    startAlertLoop(playNotificationSound);
+    if (isPushRingEvent(orderData)) {
+      playNotificationSound(orderData);
+      startAlertLoop(playNotificationSound);
+    }
 
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       showBackgroundOrderNotification(orderData);
@@ -902,7 +966,9 @@ export const useDeliveryNotifications = () => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
       });
       setOrderReady(orderData);
-      playNotificationSound(orderData);
+      if (isPushRingEvent(orderData)) {
+        playNotificationSound(orderData);
+      }
     });
 
     socketRef.current.on('order_status_update', (statusData) => {
@@ -945,6 +1011,46 @@ export const useDeliveryNotifications = () => {
         activeOrderRef.current = null;
         setNewOrder(null);
       }
+    });
+
+    socketRef.current.on('order_handover_approved', (data) => {
+      debugLog('✅ Order handover approved by Admin:', data);
+      stopAlertLoop();
+      activeOrderRef.current = null;
+      setNewOrder(null);
+      try {
+        localStorage.setItem('app:isOnline', 'false');
+      } catch (_) {}
+      toast.success('Handover Approved by Admin. Your status is set to Offline.');
+      window.dispatchEvent(new CustomEvent('delivery_handover_approved', { detail: data }));
+    });
+
+    socketRef.current.on('order_handover_rejected', (data) => {
+      debugLog('❌ Order handover rejected by Admin:', data);
+      toast.error(data?.message || 'Handover request was rejected by Admin. Please complete your delivery.');
+      window.dispatchEvent(new CustomEvent('delivery_handover_rejected', { detail: data }));
+    });
+
+    socketRef.current.on('order_cancelled', (data) => {
+      debugLog('❌ Order cancelled event received in delivery partner app:', data);
+      stopAlertLoop();
+      activeOrderRef.current = null;
+      setNewOrder(null);
+      const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+      toast.error(`User cancelled order #${displayId}`);
+      window.dispatchEvent(new CustomEvent('delivery_order_cancelled', { detail: data }));
+    });
+
+    socketRef.current.on('order_status_update', (data) => {
+      const statusStr = String(data?.orderStatus || data?.status || '').toLowerCase();
+      if (statusStr.includes('cancel')) {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        setNewOrder(null);
+        const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+        toast.error(`User cancelled order #${displayId}`);
+      }
+      window.dispatchEvent(new CustomEvent('delivery_order_status_updated', { detail: data }));
     });
 
     socketRef.current.on('order-chat-notification', (payload) => {

@@ -149,6 +149,15 @@ export async function notifyOwnersSafely(targets, payload) {
   }
 }
 
+export async function notifyAdminsSafely(payload) {
+  try {
+    const { notifyAdminsSafely: firebaseNotifyAdmins } = await import("../../../../core/notifications/firebase.service.js");
+    await firebaseNotifyAdmins(payload);
+  } catch (error) {
+    logger.warn(`FCM admin notification failed: ${error?.message || error}`);
+  }
+}
+
 export async function notifyOwnerSafely(target, payload) {
   try {
     await sendNotificationToOwner({ ...target, payload });
@@ -195,10 +204,12 @@ export function normalizeOrderForClient(orderDoc) {
   const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc || {};
   const mongoId = (order._id || orderDoc?._id || "").toString();
   const displayId = order.order_id || mongoId;
+  const distanceKm = order.distanceKm ?? order.pricing?.distanceKm ?? order.pricing?.deliveryFeeBreakdown?.distanceKm ?? null;
   return {
     ...order,
     orderMongoId: mongoId,
     orderId: displayId,
+    distanceKm: distanceKm != null && !isNaN(Number(distanceKm)) ? Number(distanceKm) : null,
     status: order?.orderStatus || order?.status || "",
     deliveredAt:
       order?.deliveryState?.deliveredAt || order?.deliveredAt || null,

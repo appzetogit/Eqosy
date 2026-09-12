@@ -404,8 +404,40 @@ export async function handoverDeliveryOrderController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;
         const orderId = req.params.orderId;
-        const order = await orderService.handoverDeliveryOrder(orderId, deliveryPartnerId, req.body || {});
-        return sendResponse(res, 200, 'Order handed over successfully. Searching for another delivery partner.', { order });
+        const result = await orderService.handoverDeliveryOrder(orderId, deliveryPartnerId, req.body || {});
+        return sendResponse(res, 200, 'Handover request submitted to Admin for approval. You have been set offline.', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function approveOrderHandoverAdminController(req, res, next) {
+    try {
+        const adminId = req.user?.userId;
+        const orderId = req.params.orderId;
+        const order = await orderService.approveOrderHandoverAdmin(orderId, adminId);
+        return sendResponse(res, 200, 'Order handover approved by Admin', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function rejectOrderHandoverAdminController(req, res, next) {
+    try {
+        const adminId = req.user?.userId;
+        const orderId = req.params.orderId;
+        const { reason } = req.body || {};
+        const order = await orderService.rejectOrderHandoverAdmin(orderId, adminId, reason);
+        return sendResponse(res, 200, 'Order handover rejected by Admin', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function listPendingHandoverRequestsAdminController(req, res, next) {
+    try {
+        const orders = await orderService.listPendingHandoverRequestsAdmin();
+        return sendResponse(res, 200, 'Pending handover requests retrieved', { orders });
     } catch (err) {
         next(err);
     }

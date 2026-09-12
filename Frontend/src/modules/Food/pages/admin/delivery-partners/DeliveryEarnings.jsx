@@ -36,12 +36,14 @@ export default function DeliveryEarnings() {
     totalOrders: 0
   })
   const [filters, setFilters] = useState({
+    zone: 'All Zones',
     period: 'all',
     deliveryPartnerId: '',
     fromDate: '',
     toDate: ''
   })
   const [deliveryPartners, setDeliveryPartners] = useState([])
+  const [zones, setZones] = useState([])
 
   // Fetch delivery partners for filter dropdown
   const fetchDeliveryPartners = useCallback(async () => {
@@ -55,6 +57,18 @@ export default function DeliveryEarnings() {
     }
   }, [])
 
+  // Fetch zones for filter dropdown
+  const fetchZones = useCallback(async () => {
+    try {
+      const response = await adminAPI.getZones({ limit: 1000 })
+      if (response.data?.success && response.data.data?.zones) {
+        setZones(response.data.data.zones || [])
+      }
+    } catch (err) {
+      debugError("Error fetching zones:", err)
+    }
+  }, [])
+
   // Fetch earnings from API
   const fetchEarnings = useCallback(async () => {
     try {
@@ -65,6 +79,7 @@ export default function DeliveryEarnings() {
         page: pagination.page,
         limit: pagination.limit,
         period: filters.period,
+        ...(filters.zone && filters.zone !== 'All Zones' && { zone: filters.zone }),
         ...(filters.deliveryPartnerId && { deliveryPartnerId: filters.deliveryPartnerId }),
         ...(filters.fromDate && { fromDate: filters.fromDate }),
         ...(filters.toDate && { toDate: filters.toDate }),
@@ -94,7 +109,8 @@ export default function DeliveryEarnings() {
 
   useEffect(() => {
     fetchDeliveryPartners()
-  }, [fetchDeliveryPartners])
+    fetchZones()
+  }, [fetchDeliveryPartners, fetchZones])
 
   useEffect(() => {
     fetchEarnings()
@@ -121,6 +137,7 @@ export default function DeliveryEarnings() {
       { key: "deliveryPartnerPhone", label: "Phone" },
       { key: "orderId", label: "Order ID" },
       { key: "restaurantName", label: "Restaurant" },
+      { key: "zoneName", label: "Zone/Area" },
       { key: "amount", label: "Earning" },
       { key: "orderTotal", label: "Order Total" },
       { key: "deliveryFee", label: "Delivery Fee" },
@@ -134,6 +151,7 @@ export default function DeliveryEarnings() {
       deliveryPartnerPhone: earning.deliveryPartnerPhone || 'N/A',
       orderId: earning.orderId || 'N/A',
       restaurantName: earning.restaurantName || 'N/A',
+      zoneName: earning.zoneName || 'N/A',
       amount: formatCurrency(earning.amount),
       orderTotal: formatCurrency(earning.orderTotal),
       deliveryFee: formatCurrency(earning.deliveryFee),
@@ -242,13 +260,26 @@ export default function DeliveryEarnings() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Zone / Area</label>
+              <select
+                value={filters.zone}
+                onChange={(e) => handleFilterChange('zone', e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="All Zones">All Zones</option>
+                {zones.map(zone => (
+                  <option key={zone._id} value={zone.zoneName || zone.name}>{zone.zoneName || zone.name}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Period</label>
               <select
                 value={filters.period}
                 onChange={(e) => handleFilterChange('period', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
@@ -261,7 +292,7 @@ export default function DeliveryEarnings() {
               <select
                 value={filters.deliveryPartnerId}
                 onChange={(e) => handleFilterChange('deliveryPartnerId', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="">All Delivery Boys</option>
                 {deliveryPartners.map(dp => (
@@ -275,7 +306,7 @@ export default function DeliveryEarnings() {
                 type="date"
                 value={filters.fromDate}
                 onChange={(e) => handleFilterChange('fromDate', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
             <div>
@@ -284,7 +315,7 @@ export default function DeliveryEarnings() {
                 type="date"
                 value={filters.toDate}
                 onChange={(e) => handleFilterChange('toDate', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
             </div>
           </div>
@@ -351,6 +382,7 @@ export default function DeliveryEarnings() {
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Phone</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Order ID</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Restaurant</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Zone / Area</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Earning</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Order Total</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Status</th>
@@ -360,7 +392,7 @@ export default function DeliveryEarnings() {
               <tbody className="divide-y divide-slate-100">
                 {earnings.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center">
+                    <td colSpan={10} className="px-4 py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <p className="text-lg font-semibold text-slate-700 mb-1">No Earnings Found</p>
                         <p className="text-sm text-slate-500">No earnings match your filters</p>
@@ -384,6 +416,11 @@ export default function DeliveryEarnings() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {earning.restaurantName || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700 font-medium">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">
+                          {earning.zoneName || 'N/A'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-green-600">
                         {formatCurrency(earning.amount)}

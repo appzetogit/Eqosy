@@ -39,6 +39,7 @@ import {
   sanitizeOrderForExternal,
   emitDeliveryDropOtpToUser,
   notifyOwnersSafely,
+  notifyAdminsSafely,
   notifyOwnerSafely,
   buildOrderIdentityFilter,
   toGeoPoint,
@@ -92,14 +93,27 @@ export async function createOrder(userId, dto) {
   try {
     const restaurantId = toObjectId(dto.restaurantId, 'Restaurant ID');
     const restaurant = await FoodRestaurant.findById(restaurantId)
-      .select("status restaurantName zoneId location isAcceptingOrders")
+      .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
       .lean();
 
     if (!restaurant) throw new ValidationError("Restaurant not found");
-    if (restaurant.status !== "approved")
-      throw new ValidationError("Restaurant not accepting orders");
-    if (restaurant.isAcceptingOrders === false)
-      throw new ValidationError("Restaurant not accepting orders");
+
+    try {
+      const { FoodRestaurantOutletTimings } = await import('../../restaurant/models/outletTimings.model.js');
+      const timingsDoc = await FoodRestaurantOutletTimings.findOne({ restaurantId }).lean();
+      if (timingsDoc?.timings) {
+        restaurant.outletTimings = timingsDoc.timings;
+      }
+    } catch {
+      // ignore
+    }
+
+    const { getRestaurantAvailabilityStatusServer } = await import('../../utils/foodAvailability.js');
+    const availabilityDate = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
+    const availability = getRestaurantAvailabilityStatusServer(restaurant, availabilityDate);
+    if (!availability.isOpen) {
+      throw new ValidationError(availability.message || "Restaurant is currently closed and not accepting orders");
+    }
 
     const settings = await getDispatchSettings();
     const dispatchMode = settings.dispatchMode;
@@ -145,6 +159,7 @@ export async function createOrder(userId, dto) {
       tax: Number(pricingResult.pricing.tax ?? 0) || 0,
       packagingFee: Number(pricingResult.pricing.packagingFee ?? 0) || 0,
       deliveryFee: Number(pricingResult.pricing.deliveryFee ?? 0) || 0,
+      distanceKm: Math.round(Number(pricingResult.pricing.distanceKm ?? pricingResult.pricing.deliveryFeeBreakdown?.distanceKm ?? 0) * 100) / 100,
       deliveryFeeBreakdown: pricingResult.pricing.deliveryFeeBreakdown || null,
       adminDeliveryCommissionEnabled: Boolean(pricingResult.pricing.adminDeliveryCommissionEnabled || false),
       adminDeliveryCommissionPercent: Number(pricingResult.pricing.adminDeliveryCommissionPercent ?? 0) || 0,
@@ -908,26 +923,31 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     logger.warn(`cancelOrder transaction sync failed: ${err?.message || err}`);
   }
 
-  // Notify User and Restaurant about the cancellation
+  // Notify User, Restaurant, and Delivery Partner about the cancellation
   const finalPaymentMethod = String(order.payment?.method || paymentMethod || "cash").toLowerCase();
   const finalPaymentStatus = String(order.payment?.status || paymentStatus || "cod_pending").toLowerCase();
   const isOnlinePaid =
     finalPaymentMethod === "razorpay" &&
     (finalPaymentStatus === "paid" || finalPaymentStatus === "refunded");
-  const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+  const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing?.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+
+  const notificationTargets = [
+    { ownerType: "USER", ownerId: userId },
+    { ownerType: "RESTAURANT", ownerId: order.restaurantId },
+  ];
+  if (order.deliveryPartnerId) {
+    notificationTargets.push({ ownerType: "DELIVERY_PARTNER", ownerId: order.deliveryPartnerId });
+  }
 
   await notifyOwnersSafely(
-    [
-      { ownerType: "USER", ownerId: userId },
-      { ownerType: "RESTAURANT", ownerId: order.restaurantId },
-    ],
+    notificationTargets,
     {
       title: "Order Cancelled ❌",
-      body: `Order #${order.order_id || order._id} has been cancelled successfully.${refundDetail}`,
+      body: `Order #${order.order_id || order._id} has been cancelled by customer.${refundDetail}`,
       image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
       data: {
         type: "order_cancelled",
-        orderId: String(order._id.toString()),
+        orderId: String(order.order_id || order._id),
         orderMongoId: String(order._id),
       },
     },
@@ -939,12 +959,29 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     if (io) {
       const payload = {
         orderMongoId: order._id?.toString?.(),
-        orderId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        displayId: order.order_id || order._id.toString(),
         orderStatus: order.orderStatus,
-        message: `Order #${order.order_id || order._id} has been cancelled successfully.${refundDetail}`
+        status: order.orderStatus,
+        cancelledBy: "user",
+        message: `User cancelled order #${order.order_id || order._id}.${refundDetail}`
       };
       io.to(rooms.user(userId)).emit("order_status_update", payload);
-      io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", payload);
+      io.to(rooms.user(userId)).emit("order_cancelled", payload);
+
+      if (order.restaurantId) {
+        io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", payload);
+        io.to(rooms.restaurant(order.restaurantId)).emit("order_cancelled", payload);
+      }
+
+      if (order.deliveryPartnerId) {
+        io.to(rooms.delivery(order.deliveryPartnerId)).emit("order_status_update", payload);
+        io.to(rooms.delivery(order.deliveryPartnerId)).emit("order_cancelled", payload);
+      }
+
+      // Also broadcast to delivery_partners room so any pending order popup stops ringing for online drivers
+      io.to("delivery_partners").emit("order_cancelled", payload);
+      io.to("delivery_partners").emit("order_status_update", payload);
     }
   } catch (err) {
     logger.warn(`cancelOrder socket emit failed: ${err?.message || err}`);
@@ -1325,23 +1362,8 @@ export async function updateOrderStatusRestaurant(
   try {
     const io = getIO();
     if (io) {
-      // On accept (confirmed or preparing) -> request delivery partners via central logic
-      if (
-        (String(orderStatus) === "preparing" || String(orderStatus) === "confirmed") &&
-        (String(from) !== "preparing" && String(from) !== "confirmed")
-      ) {
-        try {
-          await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
-          await tryAutoAssign(order._id);
-          // Refresh local order state after assignment search
-          order = await FoodOrder.findById(order._id);
-        } catch (err) {
-          logger.warn(`Auto-assign in updateOrderStatusRestaurant failed: ${err?.message || err}`);
-        }
-      }
-
-      // When ready for pickup -> ping assigned delivery partner OR trigger auto-assign dispatch immediately.
-      if (String(orderStatus) === 'ready_for_pickup' && String(from) !== 'ready_for_pickup') {
+      // When ready for pickup (Mark Ready) -> trigger auto-assign dispatch to closest delivery partner.
+      if (['ready_for_pickup', 'ready'].includes(String(orderStatus)) && !['ready_for_pickup', 'ready'].includes(String(from))) {
         const assignedId = order.dispatch?.deliveryPartnerId?.toString?.() || order.dispatch?.deliveryPartnerId;
         const isAccepted = order.dispatch?.status === 'accepted';
         if (assignedId && isAccepted) {
@@ -1351,10 +1373,26 @@ export async function updateOrderStatusRestaurant(
             `[DeliveryDispatch] Emitting order_ready to ${rooms.delivery(assignedId)} for order ${order._id.toString()}`,
           );
           io.to(rooms.delivery(assignedId)).emit('order_ready', payload);
+          try {
+            await notifyOwnersSafely(
+              [{ ownerType: 'DELIVERY_PARTNER', ownerId: assignedId }],
+              {
+                title: 'Order is Ready for Pickup! 🛍️',
+                body: `Order #${order.order_id || order._id} is prepared and ready to be picked up at ${restaurant?.restaurantName || 'the restaurant'}.`,
+                data: {
+                  type: 'order_ready',
+                  orderId: order._id.toString(),
+                  orderMongoId: order._id?.toString?.() || '',
+                },
+              }
+            );
+          } catch (pErr) {
+            logger.warn(`Push notification on order_ready failed: ${pErr.message}`);
+          }
         } else {
           try {
-            await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
-            await tryAutoAssign(order._id);
+            await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 }, $set: { 'dispatch.status': 'unassigned', 'dispatch.deliveryPartnerId': null } });
+            await tryAutoAssign(order._id, { forceRebroadcast: true });
           } catch (err) {
             logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
           }
@@ -1804,40 +1842,229 @@ export async function handoverDeliveryOrder(orderId, partnerId, payload = {}) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
+  const pIdStr = partnerId?.toString?.() || String(partnerId);
+  const pIdObj = mongoose.Types.ObjectId.isValid(pIdStr) ? new mongoose.Types.ObjectId(pIdStr) : pIdStr;
+
   const order = await FoodOrder.findOne({
     ...identity,
-    "dispatch.deliveryPartnerId": new mongoose.Types.ObjectId(partnerId)
+    $or: [
+      { "dispatch.deliveryPartnerId": pIdStr },
+      { "dispatch.deliveryPartnerId": pIdObj },
+      { "deliveryPartnerId": pIdStr },
+      { "deliveryPartnerId": pIdObj }
+    ]
   });
 
   if (!order) throw new NotFoundError("Order not found or not assigned to you");
 
   const emergencyReason = payload.emergencyReason || payload.reason || "Emergency situation";
   const note = payload.note || "";
-  const displayNote = `Emergency Handover by driver: ${emergencyReason}${note ? ` (${note})` : ""}`;
+  const displayNote = `Emergency Handover requested by driver: ${emergencyReason}${note ? ` (${note})` : ""}`;
 
   const fromStatus = order.orderStatus;
   const fromDispatchStatus = order.dispatch?.status;
 
-  // Unassign partner
-  order.dispatch.status = "unassigned";
-  order.dispatch.deliveryPartnerId = null;
-
-  // If order was picked up or ready, reset status back to ready_for_pickup so next rider can pick up
-  if (fromStatus === "picked_up" || fromStatus === "reached_drop") {
-    order.orderStatus = "ready_for_pickup";
+  // Turn delivery partner OFFLINE immediately so they don't receive any more orders
+  try {
+    const partner = await FoodDeliveryPartner.findById(partnerId);
+    if (partner) {
+      partner.availabilityStatus = 'offline';
+      partner.emergencyOfflineApproved = true;
+      if (!partner.emergencyOfflineRequest) partner.emergencyOfflineRequest = {};
+      partner.emergencyOfflineRequest = {
+        status: 'pending',
+        reason: emergencyReason,
+        requestedAt: new Date()
+      };
+      await partner.save();
+    }
+  } catch (err) {
+    logger.warn(`Failed to set partner ${partnerId} offline on handover request: ${err.message}`);
   }
+
+  // Create pending handover request on order
+  if (!order.dispatch) order.dispatch = {};
+  order.dispatch.status = 'handover_requested';
+  order.orderStatus = 'handover_requested';
+  order.dispatch.handoverRequest = {
+    status: 'pending',
+    requestedBy: new mongoose.Types.ObjectId(pIdStr),
+    reason: emergencyReason,
+    note: note || '',
+    previousOrderStatus: fromStatus !== 'handover_requested' ? fromStatus : 'ready_for_pickup',
+    requestedAt: new Date()
+  };
 
   pushStatusHistory(order, {
     byRole: "DELIVERY_PARTNER",
     byId: partnerId,
     from: fromDispatchStatus || fromStatus,
-    to: "unassigned",
+    to: "handover_requested",
     note: displayNote
   });
 
+  order.markModified('dispatch');
   await order.save();
 
-  // Notify driver, user, restaurant, admin via Socket & Push
+  // Socket & Push notification to Admin, Restaurant, and User
+  try {
+    const partnerDoc = partnerId ? await FoodDeliveryPartner.findById(partnerId).select('name fullName phone vehicleType vehicleNumber').lean() : null;
+    const restDoc = order?.restaurantId ? await FoodRestaurant.findById(order.restaurantId).select('restaurantName name zoneId location area city').populate('zoneId', 'name').lean() : null;
+    const userDoc = order?.userId ? await FoodUser.findById(order.userId).select('name fullName phone').lean() : null;
+
+    const partnerName = partnerDoc?.name || partnerDoc?.fullName || "Delivery Partner";
+    const partnerPhone = partnerDoc?.phone || "";
+    const partnerVehicle = [partnerDoc?.vehicleType, partnerDoc?.vehicleNumber].filter(Boolean).join(" - ") || "";
+
+    const restaurantName = restDoc?.restaurantName || restDoc?.name || "Restaurant";
+    const zoneName = restDoc?.zoneId?.name || restDoc?.area || restDoc?.city || "Zone";
+
+    const customerName = userDoc?.name || userDoc?.fullName || "Customer";
+    const customerPhone = userDoc?.phone || order.deliveryAddress?.contactPhone || "";
+    const customerAddress = order.deliveryAddress?.formattedAddress || [order.deliveryAddress?.addressLine1, order.deliveryAddress?.city].filter(Boolean).join(", ") || "";
+
+    const io = getIO();
+    if (io) {
+      const adminPayload = {
+        orderMongoId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        requestedByPartnerId: partnerId.toString(),
+        reason: emergencyReason,
+        note,
+        partnerName,
+        partnerPhone,
+        partnerVehicle,
+        restaurantName,
+        zoneName,
+        customerName,
+        customerPhone,
+        customerAddress,
+        message: `Driver ${partnerName}${partnerPhone ? ` (${partnerPhone})` : ""} requested handover for Order #${order.order_id || order._id}. Reason: ${emergencyReason}.`
+      };
+      io.to('admin_room').emit("admin_handover_request", adminPayload);
+      io.to('admin_room').emit("admin_notification", adminPayload);
+      io.emit("admin_handover_request", adminPayload);
+      io.to(rooms.delivery(partnerId)).emit("order_handover_requested", adminPayload);
+
+      const restaurantPayload = {
+        orderMongoId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        orderStatus: 'handover_requested',
+        dispatchStatus: 'handover_requested',
+        deliveryPartnerId: null,
+        deliveryPartner: null,
+        message: `Driver requested emergency handover. Finding new partner...`
+      };
+      io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", restaurantPayload);
+      io.to(rooms.user(order.userId)).emit("order_status_update", restaurantPayload);
+    }
+
+    await notifyAdminsSafely({
+      title: '🚨 Emergency Handover Request!',
+      body: `Order #${order.order_id || order._id} handover requested. Driver set Offline. Admin approval required.`,
+      data: {
+        type: 'handover_request',
+        orderId: order._id.toString(),
+        orderMongoId: order._id.toString()
+      }
+    });
+  } catch (err) {
+    logger.warn(`Handover request notification error: ${err.message}`);
+  }
+
+  return {
+    success: true,
+    pendingApproval: true,
+    message: "Handover request submitted to Admin for approval. Your status has been set offline.",
+    order: normalizeOrderForClient(order)
+  };
+}
+
+export async function approveOrderHandoverAdmin(orderId, adminId) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError("Order not found");
+
+  const partnerId = order.dispatch?.handoverRequest?.requestedBy || order.dispatch?.deliveryPartnerId;
+  if (!partnerId) throw new ValidationError("No delivery partner associated with this handover request");
+
+  const fromStatus = order.orderStatus;
+  const fromDispatchStatus = order.dispatch?.status;
+  const emergencyReason = order.dispatch?.handoverRequest?.reason || "Emergency Handover Approved";
+
+  // Ensure driver is OFFLINE
+  try {
+    const partner = await FoodDeliveryPartner.findById(partnerId);
+    if (partner) {
+      partner.availabilityStatus = 'offline';
+      partner.emergencyOfflineApproved = true;
+      if (partner.emergencyOfflineRequest) {
+        partner.emergencyOfflineRequest.status = 'approved';
+        partner.emergencyOfflineRequest.approvedAt = new Date();
+        partner.emergencyOfflineRequest.approvedBy = adminId;
+      }
+      await partner.save();
+    }
+  } catch (err) {
+    logger.warn(`Failed to update partner offline status on admin handover approve: ${err.message}`);
+  }
+
+  // Unassign partner and reset dispatch lock
+  order.dispatch.status = "unassigned";
+  order.dispatch.deliveryPartnerId = null;
+  order.dispatch.dispatchingAt = null;
+  if (!order.dispatch.handoverRequest) order.dispatch.handoverRequest = {};
+  order.dispatch.handoverRequest.status = 'approved';
+  order.dispatch.handoverRequest.approvedAt = new Date();
+  order.dispatch.handoverRequest.approvedBy = adminId;
+
+  // Record handover in offeredTo to prevent re-assigning this order back to the same partner,
+  // and clear previous 'offered' entries for other partners so they become eligible for handover re-dispatch
+  if (!Array.isArray(order.dispatch.offeredTo)) {
+    order.dispatch.offeredTo = [];
+  }
+  const existingOffer = order.dispatch.offeredTo.find(
+    (item) => String(item.partnerId) === String(partnerId)
+  );
+  if (existingOffer) {
+    existingOffer.action = 'handover';
+    existingOffer.at = new Date();
+  } else {
+    order.dispatch.offeredTo.push({
+      partnerId: new mongoose.Types.ObjectId(partnerId),
+      at: new Date(),
+      action: 'handover',
+    });
+  }
+
+  // Keep ONLY handover and rejected entries in offeredTo so all other online drivers are eligible for re-dispatch
+  order.dispatch.offeredTo = order.dispatch.offeredTo.filter(
+    (item) => item.action === 'handover' || item.action === 'rejected'
+  );
+
+  // Reset orderStatus to a dispatchable status so tryAutoAssign will assign/offer to other drivers
+  const previousStatus = order.dispatch?.handoverRequest?.previousOrderStatus || 'ready_for_pickup';
+  const DISPATCHABLE = ['confirmed', 'preparing', 'ready_for_pickup', 'ready'];
+  if (DISPATCHABLE.includes(previousStatus)) {
+    order.orderStatus = previousStatus;
+  } else {
+    order.orderStatus = "ready_for_pickup";
+  }
+
+  pushStatusHistory(order, {
+    byRole: "ADMIN",
+    byId: adminId,
+    from: fromDispatchStatus || fromStatus,
+    to: "unassigned",
+    note: `Handover approved by Admin. Reason: ${emergencyReason}`
+  });
+
+  order.markModified('dispatch');
+  await order.save();
+
+  // Socket & Push notifications
   try {
     const io = getIO();
     if (io) {
@@ -1845,58 +2072,120 @@ export async function handoverDeliveryOrder(orderId, partnerId, payload = {}) {
         orderMongoId: order._id.toString(),
         orderId: order.order_id || order._id.toString(),
         orderStatus: order.orderStatus,
-        message: `Order released due to emergency handover: ${emergencyReason}`
+        dispatchStatus: 'unassigned',
+        deliveryPartnerId: null,
+        deliveryPartner: null,
+        message: `Handover approved by Admin. Order released for re-dispatch.`
       };
-      io.to(rooms.delivery(partnerId)).emit("order_handover_success", socketPayload);
+      io.to(rooms.delivery(partnerId)).emit("order_handover_approved", socketPayload);
       io.to(rooms.user(order.userId)).emit("order_status_update", socketPayload);
       io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", socketPayload);
     }
-  } catch (err) {
-    logger.warn(`Handover socket notification error: ${err.message}`);
-  }
 
-  // Update OrderConversation state and append system note in order chat thread
-  try {
-    const { OrderConversation } = await import('../models/orderConversation.model.js');
-    const { OrderMessage } = await import('../models/orderMessage.model.js');
-    const conv = await OrderConversation.findOne({ orderId: order._id });
-    if (conv) {
-      conv.deliveryPartnerId = null;
-      conv.partnerUnreadCount = 0;
-      conv.status = 'WAITING_FOR_PARTNER';
-      await conv.save();
-
-      const sysMsg = await OrderMessage.create({
-        conversationId: conv._id,
-        orderId: order._id,
-        senderId: partnerId,
-        senderRole: 'SYSTEM',
-        text: `Previous delivery partner handed over the order (${emergencyReason}). Waiting for new delivery partner to accept.`,
-        messageType: 'system',
-        status: 'sent',
-      });
-
-      const io = getIO();
-      if (io) {
-        io.to(`order-chat:${order._id}`).emit('new-order-chat-message', {
-          orderId: String(order._id),
-          message: sysMsg.toObject(),
-          conversation: conv.toObject(),
-        });
+    await notifyOwnersSafely(
+      [{ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId }],
+      {
+        title: 'Handover Approved ✓',
+        body: `Your handover request for Order #${order.order_id || order._id} was approved by Admin. Your status is set to Offline.`,
+        data: {
+          type: 'handover_approved',
+          orderId: order._id.toString(),
+          orderMongoId: order._id.toString()
+        }
       }
-    }
-  } catch (convErr) {
-    logger.warn(`Handover chat update error: ${convErr.message}`);
+    );
+  } catch (err) {
+    logger.warn(`Handover approval notification error: ${err.message}`);
   }
 
   // Instantly re-trigger auto-assign search for other drivers in the zone!
   try {
-    void dispatchService.tryAutoAssign(order._id);
+    void dispatchService.tryAutoAssign(order._id, { forceRebroadcast: true });
   } catch (err) {
-    logger.error(`Failed to restart auto-assign after handover for order ${order._id}: ${err.message}`);
+    logger.error(`Failed to restart auto-assign after handover approval for order ${order._id}: ${err.message}`);
   }
 
   return normalizeOrderForClient(order);
+}
+
+export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError("Order not found");
+
+  const partnerId = order.dispatch?.handoverRequest?.requestedBy || order.dispatch?.deliveryPartnerId;
+  if (!partnerId) throw new ValidationError("No delivery partner associated with this handover request");
+
+  if (!order.dispatch.handoverRequest) order.dispatch.handoverRequest = {};
+  order.dispatch.handoverRequest.status = 'rejected';
+  order.dispatch.handoverRequest.rejectionReason = reason || 'Rejected by Admin';
+
+  pushStatusHistory(order, {
+    byRole: "ADMIN",
+    byId: adminId,
+    from: order.dispatch?.status,
+    to: order.dispatch?.status,
+    note: `Handover request rejected by Admin: ${reason || 'Rejected'}`
+  });
+
+  order.markModified('dispatch');
+  await order.save();
+
+  try {
+    const io = getIO();
+    if (io) {
+      const socketPayload = {
+        orderMongoId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        message: `Handover request rejected by Admin: ${reason || 'Please continue trip'}`
+      };
+      io.to(rooms.delivery(partnerId)).emit("order_handover_rejected", socketPayload);
+    }
+
+    await notifyOwnersSafely(
+      [{ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId }],
+      {
+        title: 'Handover Request Rejected ❌',
+        body: `Your handover request for Order #${order.order_id || order._id} was rejected by Admin. Please complete your trip.`,
+        data: {
+          type: 'handover_rejected',
+          orderId: order._id.toString(),
+          orderMongoId: order._id.toString()
+        }
+      }
+    );
+  } catch (err) {
+    logger.warn(`Handover rejection notification error: ${err.message}`);
+  }
+
+  return normalizeOrderForClient(order);
+}
+
+export async function listPendingHandoverRequestsAdmin() {
+  const orders = await FoodOrder.find({
+    $or: [
+      { 'dispatch.handoverRequest.status': 'pending' },
+      { 'dispatch.status': 'handover_requested' },
+      { orderStatus: 'handover_requested' },
+      {
+        'dispatch.handoverRequest.requestedBy': { $exists: true, $ne: null },
+        'dispatch.handoverRequest.status': { $nin: ['approved', 'rejected'] }
+      }
+    ]
+  })
+    .populate({
+      path: 'restaurantId',
+      select: 'restaurantName name phone location area city zoneId',
+      populate: { path: 'zoneId', select: 'name' }
+    })
+    .populate('userId', 'name fullName phone')
+    .populate('dispatch.handoverRequest.requestedBy', 'name fullName phone vehicleType vehicleNumber availabilityStatus')
+    .sort({ 'dispatch.handoverRequest.requestedAt': -1 })
+    .lean();
+
+  return orders.map(o => normalizeOrderForClient(o));
 }
 
 export async function deleteOrderAdmin(orderId, adminId) {

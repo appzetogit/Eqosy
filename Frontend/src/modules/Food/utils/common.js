@@ -110,30 +110,38 @@ export const slugify = (value) =>
  */
 export const getOrderDisplayDistance = (orderLike) => {
   if (!orderLike) return "1.2";
-  const pricing = orderLike?.pricing || {};
+  const pricing = orderLike?.pricing || orderLike?.rawOrderData?.pricing || {};
   const breakdownDistance = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm);
   const pricingDistance = parseFloat(pricing?.distanceKm);
-  const orderDistance = parseFloat(orderLike?.distanceKm);
+  const orderDistance = parseFloat(orderLike?.distanceKm ?? orderLike?.rawOrderData?.distanceKm);
+  const directDistance = parseFloat(orderLike?.distance ?? orderLike?.rawOrderData?.distance);
 
-  const rawDist = !isNaN(breakdownDistance) && breakdownDistance > 0
+  const rawDist = (!isNaN(breakdownDistance) && breakdownDistance >= 0)
     ? breakdownDistance
-    : !isNaN(pricingDistance) && pricingDistance > 0
+    : (!isNaN(pricingDistance) && pricingDistance >= 0)
     ? pricingDistance
-    : !isNaN(orderDistance) && orderDistance > 0
+    : (!isNaN(orderDistance) && orderDistance >= 0)
     ? orderDistance
+    : (!isNaN(directDistance) && directDistance >= 0)
+    ? directDistance
     : null;
 
-  if (rawDist !== null) {
+  if (rawDist !== null && rawDist > 0 && rawDist < 100) {
     return rawDist % 1 === 0 ? rawDist.toFixed(0) : rawDist.toFixed(1);
   }
 
   // Calculate distance dynamically from coordinates if distance is missing or 0
-  const restLoc = orderLike?.restaurantId?.location || orderLike?.restaurantLocation || {};
+  const restLoc =
+    orderLike?.rawRestaurantLocation ||
+    (typeof orderLike?.restaurantLocation === 'object' ? orderLike?.restaurantLocation : null) ||
+    orderLike?.restaurantId?.location ||
+    orderLike?.restaurantId ||
+    {};
   const restCoords = Array.isArray(restLoc.coordinates) ? restLoc.coordinates : [];
   const restLat = parseFloat(orderLike?.restaurant_lat ?? orderLike?.restaurantLat ?? restLoc.latitude ?? restLoc.lat ?? (restCoords.length >= 2 ? restCoords[1] : NaN));
   const restLng = parseFloat(orderLike?.restaurant_lng ?? orderLike?.restaurantLng ?? restLoc.longitude ?? restLoc.lng ?? (restCoords.length >= 2 ? restCoords[0] : NaN));
 
-  const custLoc = orderLike?.deliveryAddress?.location || orderLike?.address?.location || {};
+  const custLoc = orderLike?.deliveryAddress?.location || orderLike?.address?.location || orderLike?.deliveryAddress || orderLike?.address || {};
   const custCoords = Array.isArray(custLoc.coordinates) ? custLoc.coordinates : [];
   const custLat = parseFloat(custLoc.latitude ?? custLoc.lat ?? (custCoords.length >= 2 ? custCoords[1] : NaN));
   const custLng = parseFloat(custLoc.longitude ?? custLoc.lng ?? (custCoords.length >= 2 ? custCoords[0] : NaN));
@@ -143,6 +151,10 @@ export const getOrderDisplayDistance = (orderLike) => {
     if (calcDist && calcDist > 0 && calcDist < 100) {
       return calcDist % 1 === 0 ? calcDist.toFixed(0) : calcDist.toFixed(1);
     }
+  }
+
+  if (rawDist !== null) {
+    return rawDist % 1 === 0 ? rawDist.toFixed(0) : rawDist.toFixed(1);
   }
 
   return "1.2";

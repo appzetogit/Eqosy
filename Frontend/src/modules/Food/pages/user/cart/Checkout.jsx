@@ -13,6 +13,8 @@ import { Badge } from "@food/components/ui/badge"
 import { useCart } from "@food/context/CartContext"
 import { useProfile } from "@food/context/ProfileContext"
 import { useOrders } from "@food/context/OrdersContext"
+import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
+import { toast } from "sonner"
 
 export default function Checkout() {
   const navigate = useNavigate()
@@ -23,6 +25,10 @@ export default function Checkout() {
   const [selectedAddressId, setSelectedAddressId] = useState(getAddressId(getDefaultAddress()))
   const [selectedPayment, setSelectedPayment] = useState(getDefaultPaymentMethod()?.id || "")
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+
+  const isRestaurantOffline = Boolean(
+    cart[0]?.restaurantData && !getRestaurantAvailabilityStatus(cart[0].restaurantData).isOpen
+  )
 
   const selectedAddress = addresses.find(addr => getAddressId(addr) === selectedAddressId) || getDefaultAddress()
   const defaultPayment = paymentMethods.find(pm => pm.id === selectedPayment) || getDefaultPaymentMethod()
@@ -42,6 +48,11 @@ export default function Checkout() {
   const total = subtotal + deliveryFee + tax
 
   const handlePlaceOrder = async () => {
+    if (isRestaurantOffline) {
+      toast.error("Restaurant is currently closed and not accepting orders.")
+      return
+    }
+
     if (!selectedAddress || !selectedPayment) {
       alert("Please select a delivery address and payment method")
       return

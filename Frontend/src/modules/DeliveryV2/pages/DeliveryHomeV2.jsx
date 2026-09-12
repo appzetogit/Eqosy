@@ -249,6 +249,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   const [incomingOrder, setIncomingOrder] = useState(null);
   const [currentTab, setCurrentTab] = useState(tab);
+  const ignoredOrderIdsRef = useRef(new Set());
 
   // Track URL changes (Prop changes) to update sub-page content
   useEffect(() => {
@@ -1179,6 +1180,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               : [];
 
         const nextIncomingOrder = availableOrders.find((order) => {
+          const oId = String(order?.orderId || order?._id || order?.orderMongoId || '');
+          if (ignoredOrderIdsRef.current.has(oId)) return false;
+
+          const offeredTo = order?.dispatch?.offeredTo || [];
+          const isRejectedByMe = offeredTo.some(
+            (o) => String(o.partnerId) === String(deliveryPartnerId) && ['rejected', 'timeout', 'handed_over'].includes(o.action)
+          );
+          if (isRejectedByMe) return false;
+
           const dispatchStatus = String(order?.dispatch?.status || '').toLowerCase();
           const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
           return (
@@ -1214,6 +1224,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       window.clearInterval(poller);
     };
   }, [activeOrder, currentTab, isOnline, isSocketConnected, setActiveOrder]);
+
+  useEffect(() => {
+    const handleHandoverApproved = () => {
+      resetTrip();
+      setIncomingOrder(null);
+      setOnline(false);
+      try {
+        localStorage.setItem('app:isOnline', 'false');
+      } catch (_) {}
+      toast.success('Handover Approved by Admin. You are now Offline.');
+    };
+
+    window.addEventListener('delivery_handover_approved', handleHandoverApproved);
+    return () => window.removeEventListener('delivery_handover_approved', handleHandoverApproved);
+  }, [resetTrip, setOnline]);
 
   useEffect(() => {
     if (orderStatusUpdate) {
@@ -1543,8 +1568,23 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 {incomingOrder && (
                   <NewOrderModal
                     order={incomingOrder}
-                    onAccept={(o) => { acceptOrder(o); setIncomingOrder(null); clearNewOrder(); }}
-                    onReject={() => { setIncomingOrder(null); clearNewOrder(); }}
+                    onAccept={async (o) => {
+                      try {
+                        await acceptOrder(o);
+                      } catch (err) {
+                        const oId = String(o?.orderId || o?._id || o?.id || '');
+                        if (oId) ignoredOrderIdsRef.current.add(oId);
+                      } finally {
+                        setIncomingOrder(null);
+                        clearNewOrder();
+                      }
+                    }}
+                    onReject={(o) => {
+                      const oId = String(o?.orderId || o?._id || o?.id || '');
+                      if (oId) ignoredOrderIdsRef.current.add(oId);
+                      setIncomingOrder(null);
+                      clearNewOrder();
+                    }}
                     onMinimize={() => setIsModalMinimized(true)}
                   />
                 )}
@@ -1563,6 +1603,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       setShowEmbeddedChatModal(true);
                     }}
                     unreadChatCount={partnerUnreadChatCount}
+                    onHandoverSuccess={(handedOrderId) => {
+                      if (handedOrderId) ignoredOrderIdsRef.current.add(String(handedOrderId));
+                      resetTrip();
+                      clearActiveOrder();
+                      setIncomingOrder(null);
+                      clearNewOrder();
+                    }}
                     onCancel={async () => {
                       const orderId = activeOrder?.orderId || activeOrder?._id;
                       if (!orderId) { resetTrip(); return; }

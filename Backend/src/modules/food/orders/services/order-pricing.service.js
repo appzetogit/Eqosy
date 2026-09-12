@@ -92,11 +92,26 @@ async function resolveBaseDistanceSlab() {
 
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
-    .select("status zoneId location")
+    .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
-  if (restaurant.status !== "approved")
-    throw new ValidationError("Restaurant not available");
+
+  try {
+    const { FoodRestaurantOutletTimings } = await import('../../restaurant/models/outletTimings.model.js');
+    const timingsDoc = await FoodRestaurantOutletTimings.findOne({ restaurantId: dto.restaurantId }).lean();
+    if (timingsDoc?.timings) {
+      restaurant.outletTimings = timingsDoc.timings;
+    }
+  } catch {
+    // ignore
+  }
+
+  const { getRestaurantAvailabilityStatusServer } = await import('../../utils/foodAvailability.js');
+  const availabilityDate = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
+  const availability = getRestaurantAvailabilityStatusServer(restaurant, availabilityDate);
+  if (!availability.isOpen) {
+    throw new ValidationError(availability.message || "Restaurant is currently closed and not accepting orders");
+  }
 
   const items = Array.isArray(dto.items) ? dto.items : [];
   const subtotal = items.reduce(
@@ -154,6 +169,28 @@ export async function calculateOrderPricing(userId, dto) {
     const [rLng, rLat] = restCoords;
     const [cLng, cLat] = customerCoords;
     const distanceKm = haversineKm(rLat, rLng, cLat, cLng);
+
+    // 1. Zone Validation: Ensure customer location is inside an active service zone
+    const activeZones = await FoodZone.find({ isActive: true }).select('_id name coordinates').lean();
+    if (activeZones && activeZones.length > 0) {
+      const customerZoneId = await detectZoneIdFromAddress(dto?.address || dto?.deliveryAddress);
+      if (!customerZoneId) {
+        throw new ValidationError('Your selected delivery location is outside our service zone. Delivery is not available to this location.');
+      }
+    }
+
+    // 2. Maximum Delivery Distance Validation
+    const rules = await FoodDeliveryCommissionRule.find({ status: { $ne: false } }).lean();
+    if (rules && rules.length > 0) {
+      const maxDistances = rules.map(r => r.maxDistance).filter(m => m != null && Number.isFinite(Number(m)));
+      if (maxDistances.length > 0) {
+        const maxConfiguredKm = Math.max(...maxDistances.map(Number));
+        if (distanceKm > maxConfiguredKm) {
+          throw new ValidationError(`Delivery location is outside our maximum service distance (${distanceKm.toFixed(1)} km). Maximum delivery radius is ${maxConfiguredKm} km.`);
+        }
+      }
+    }
+
     const distanceRule = await resolveDistanceRule(distanceKm);
     if (!distanceRule) {
       throw new ValidationError('No active distance slab found for this delivery distance');

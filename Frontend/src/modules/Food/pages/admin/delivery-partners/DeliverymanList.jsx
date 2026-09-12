@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X, ImageOff, AlertTriangle } from "lucide-react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { Search, Download, ChevronDown, Eye, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, Save, Trash2, X, ImageOff, AlertTriangle, Filter } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
@@ -91,6 +91,10 @@ export default function DeliverymanList() {
   const [savingDeliveryId, setSavingDeliveryId] = useState(null)
   const [deletingDeliveryId, setDeletingDeliveryId] = useState(null)
   const [approvingEmergencyId, setApprovingEmergencyId] = useState(null)
+  // Filter state
+  const [zoneFilter, setZoneFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [zones, setZones] = useState([])
 
   const pendingEmergencyRequests = useMemo(() => {
     return deliverymen.filter(
@@ -244,10 +248,23 @@ availableCashLimit: wallet?.availableCashLimit || 0,
     }
   }
 
+  // Fetch zones for area filter
+  const fetchZones = useCallback(async () => {
+    try {
+      const response = await adminAPI.getZones({ limit: 1000 })
+      if (response.data?.success && response.data.data?.zones) {
+        setZones(response.data.data.zones || [])
+      }
+    } catch (err) {
+      // Silent fail — zones are optional for filtering
+    }
+  }, [])
+
   // Fetch on mount
   useEffect(() => {
     fetchDeliverymen()
-  }, [])
+    fetchZones()
+  }, [fetchZones])
 
   // Debounced search effect
   useEffect(() => {
@@ -260,8 +277,39 @@ availableCashLimit: wallet?.availableCashLimit || 0,
   }, [searchQuery])
 
   const filteredDeliverymen = useMemo(() => {
-    // Backend already handles search, but we can do client-side filtering if needed
-    return deliverymen
+    let result = deliverymen
+
+    // Zone / area filter
+    if (zoneFilter && zoneFilter !== "all") {
+      result = result.filter((dm) => {
+        const dmZone = String(dm.zone || dm.zoneId || "").toLowerCase().trim()
+        return dmZone === zoneFilter.toLowerCase().trim()
+      })
+    }
+
+    // Status filter
+    if (statusFilter === "active") {
+      result = result.filter((dm) => {
+        const s = String(dm.availabilityStatus || dm.status || "").toLowerCase()
+        return s === "online"
+      })
+    } else if (statusFilter === "inactive") {
+      result = result.filter((dm) => {
+        const s = String(dm.availabilityStatus || dm.status || "").toLowerCase()
+        return s !== "online"
+      })
+    } else if (statusFilter === "exceeded") {
+      result = result.filter((dm) => {
+        const remaining = Number(dm.remainingCashLimit ?? 0)
+        return remaining <= 0
+      })
+    }
+
+    return result
+  }, [deliverymen, zoneFilter, statusFilter])
+
+  const exceededCount = useMemo(() => {
+    return deliverymen.filter((dm) => Number(dm.remainingCashLimit ?? 0) <= 0).length
   }, [deliverymen])
 
   const handleView = async (deliveryman) => {
@@ -531,12 +579,79 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
             </div>
           </div>
 
-          <div className="mb-4">
+          {/* Filter Bar */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            {/* Zone / Area filter */}
             <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-slate-500 shrink-0" />
+              <select
+                id="deliveryman-zone-filter"
+                value={zoneFilter}
+                onChange={(e) => setZoneFilter(e.target.value)}
+                className="text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
+              >
+                <option value="all">All Areas</option>
+                {zones.map((z) => (
+                  <option key={z._id} value={z.name || z.zoneName}>
+                    {z.name || z.zoneName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status filter */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-500 shrink-0" />
+              <select
+                id="deliveryman-status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 cursor-pointer font-medium"
+              >
+                <option value="all">All Status</option>
+                <option value="active">🟢 Active (Online)</option>
+                <option value="inactive">⚫ Inactive (Offline)</option>
+                <option value="exceeded">🔴 Exceeded Cash Limit</option>
+              </select>
+            </div>
+
+            {/* Quick Filter Button for Cash Limit Exceeded */}
+            <button
+              type="button"
+              onClick={() => setStatusFilter(statusFilter === "exceeded" ? "all" : "exceeded")}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-all cursor-pointer ${
+                statusFilter === "exceeded"
+                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Exceeded Cash Limit</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${statusFilter === "exceeded" ? "bg-white text-red-700" : "bg-red-200 text-red-900"}`}>
+                {exceededCount}
+              </span>
+            </button>
+
+            {/* Active filter pills */}
+            {(zoneFilter !== "all" || statusFilter !== "all") && (
+              <button
+                onClick={() => { setZoneFilter("all"); setStatusFilter("all") }}
+                className="flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-800 border border-red-200 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-all"
+              >
+                <X className="w-3 h-3" />
+                Clear Filters
+              </button>
+            )}
+
+            {/* Count badge */}
+            <div className="flex items-center gap-2 ml-auto">
               <span className="text-sm font-semibold text-slate-700">Deliveryman</span>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
                 {filteredDeliverymen.length}
               </span>
+              {(zoneFilter !== "all" || statusFilter !== "all") && (
+                <span className="text-xs text-slate-400">of {deliverymen.length} total</span>
+              )}
             </div>
           </div>
 
@@ -787,7 +902,11 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                         )}
                         {visibleColumns.remainingCashLimit && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-slate-700">{formatCurrency(dm.remainingCashLimit)}</span>
+                            <span className={`text-sm font-semibold ${Number(dm.remainingCashLimit) <= 0 ? "text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full inline-flex items-center gap-1" : "text-slate-700"}`}>
+                              {Number(dm.remainingCashLimit) <= 0 && <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />}
+                              {formatCurrency(dm.remainingCashLimit)}
+                              {Number(dm.remainingCashLimit) <= 0 && <span className="text-[10px] uppercase font-bold text-red-700 ml-1">(Exceeded)</span>}
+                            </span>
                           </td>
                         )}
                         {visibleColumns.availabilityStatus && (

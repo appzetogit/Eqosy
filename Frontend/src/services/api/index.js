@@ -288,6 +288,22 @@ export const adminAPI = {
       params,
       contextModule: "admin",
     }),
+  getPendingHandovers: () =>
+    apiClient.get("/food/admin/orders/handover-requests/pending", {
+      contextModule: "admin",
+    }),
+  approveHandover: (orderId) =>
+    apiClient.post(
+      `/food/admin/orders/${orderId}/handover/approve`,
+      {},
+      { contextModule: "admin" },
+    ),
+  rejectHandover: (orderId, reason) =>
+    apiClient.post(
+      `/food/admin/orders/${orderId}/handover/reject`,
+      { reason },
+      { contextModule: "admin" },
+    ),
   getContactMessages: (params = {}) =>
     apiClient.get("/food/admin/contact-messages", {
       params,

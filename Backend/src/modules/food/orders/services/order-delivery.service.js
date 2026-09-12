@@ -570,12 +570,22 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
     throw new ForbiddenError('Not your order');
   }
 
+  if (!Array.isArray(order.dispatch.offeredTo)) {
+    order.dispatch.offeredTo = [];
+  }
   const offer = order.dispatch.offeredTo.find(
-    (item) =>
-      String(item.partnerId) === String(deliveryPartnerId) &&
-      item.action === 'offered',
+    (item) => String(item.partnerId) === String(deliveryPartnerId)
   );
-  if (offer) offer.action = 'rejected';
+  if (offer) {
+    offer.action = 'rejected';
+    offer.at = new Date();
+  } else {
+    order.dispatch.offeredTo.push({
+      partnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
+      at: new Date(),
+      action: 'rejected',
+    });
+  }
 
   order.dispatch.status = 'unassigned';
   order.dispatch.deliveryPartnerId = undefined;

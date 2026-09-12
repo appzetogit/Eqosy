@@ -241,6 +241,54 @@ async function triggerWebViewNativeNotification(payload = {}) {
   return false;
 }
 
+export function isPushRingEvent(payload = {}) {
+  const data = payload?.data || {};
+  const type = String(data.type || payload.type || payload.category || '').toLowerCase();
+  const title = String(payload.title || payload.notification?.title || '').toLowerCase();
+  const sound = String(payload.sound || data.sound || '').toLowerCase();
+
+  if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
+    return true;
+  }
+
+  // 1. Order aane par
+  if (
+    type.includes('new_order') ||
+    type.includes('order_created') ||
+    type.includes('place_order') ||
+    title.includes('new order') ||
+    title.includes('order received')
+  ) {
+    return true;
+  }
+
+  // 2. Delivery boy ko order assign karne ke liye
+  if (
+    type.includes('order_assigned') ||
+    type.includes('order_assign') ||
+    type.includes('delivery_assigned') ||
+    type.includes('ring') ||
+    type.includes('gig_reminder') ||
+    title.includes('assigned')
+  ) {
+    return true;
+  }
+
+  // 3. Mark complete karne par
+  if (
+    type.includes('order_completed') ||
+    type.includes('delivered') ||
+    type.includes('mark_completed') ||
+    title.includes('completed') ||
+    title.includes('delivered') ||
+    title.includes('marked complete')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 async function playPushSound(payload = {}) {
   try {
     pushDebugLog(PUSH_DEBUG_PREFIX, "playPushSound called", {
@@ -249,6 +297,12 @@ async function playPushSound(payload = {}) {
       notificationPermission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
       payload,
     });
+
+    if (!isPushRingEvent(payload)) {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Push notification is a silent status update, skipping sound audio", { payload });
+      return;
+    }
+
     const usedNativeBridge = await triggerWebViewNativeNotification(payload);
 
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {

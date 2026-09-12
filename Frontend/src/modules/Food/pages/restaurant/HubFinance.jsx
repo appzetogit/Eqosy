@@ -36,6 +36,7 @@ export default function HubFinance() {
   const [loadingPastCycles, setLoadingPastCycles] = useState(false)
   const [restaurantData, setRestaurantData] = useState(null)
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
+  const [showBankDetailsPrompt, setShowBankDetailsPrompt] = useState(false)
   const [withdrawalAmount, setWithdrawalAmount] = useState('')
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false)
   const [withdrawalRequests, setWithdrawalRequests] = useState([])
@@ -218,8 +219,9 @@ export default function HubFinance() {
   }
 
   const withdrawableAmount = Number(
-    financeData?.currentCycle?.netAvailable ??
-    (financeData?.currentCycle?.estimatedPayout || 0)
+    financeData?.currentCycle?.netAvailable !== undefined
+      ? financeData?.currentCycle?.netAvailable
+      : (financeData?.currentCycle?.estimatedPayout || 0)
   ) || 0
   const minimumWithdrawalAmount = Number(financeData?.currentCycle?.minimumWithdrawalAmount || 0) || 0
   const parsedWithdrawalAmount = Number(withdrawalAmount)
@@ -238,6 +240,60 @@ export default function HubFinance() {
     parsedWithdrawalAmount <= 0 ||
     isAmountBelowMinimum ||
     isAmountAboveWithdrawable
+
+  const handleWithdrawClick = async () => {
+    let currentRest = restaurantData
+    if (!currentRest || (!currentRest.accountNumber && !currentRest.upiId)) {
+      try {
+        const response = await restaurantAPI.getCurrentRestaurant()
+        const doc = response?.data?.data?.restaurant || response?.data?.restaurant || response?.data?.data
+        if (doc) {
+          currentRest = {
+            ...currentRest,
+            accountNumber: doc.accountNumber || '',
+            upiId: doc.upiId || '',
+            ifscCode: doc.ifscCode || '',
+            accountHolderName: doc.accountHolderName || ''
+          }
+          setRestaurantData(currentRest)
+        }
+      } catch (error) {
+        debugError("Error loading bank details for withdrawal check", error)
+      }
+    }
+
+    const hasBankOrUpi = Boolean(currentRest?.accountNumber || currentRest?.upiId)
+    if (!hasBankOrUpi) {
+      setShowBankDetailsPrompt(true)
+      return
+    }
+
+    const pendingReq = (withdrawalRequests || []).find(
+      (r) => String(r?.status || '').trim().toLowerCase() === 'pending'
+    )
+    if (pendingReq) {
+      toast.error('Aapki ek withdrawal request pehle se pending hai. Request approve hone ka wait karein.')
+      return
+    }
+
+    if (withdrawableAmount <= 0) {
+      const estimated = Number(financeData?.currentCycle?.estimatedPayout || 0)
+      if (estimated > 0) {
+        toast.error(`Available balance ₹0.00 hai. Gross earnings (${formatCurrency(estimated)}) me se previous withdrawals complete ho chuki hain.`)
+      } else {
+        toast.error('Withdraw karne ke liye abhi koi balance available nahi hai.')
+      }
+      return
+    }
+
+    if (withdrawableAmount < minimumWithdrawalAmount) {
+      toast.error(`Minimum withdrawal amount ${formatCurrency(minimumWithdrawalAmount)} hai. Aapka net balance (${formatCurrency(withdrawableAmount)}) kam hai.`)
+      return
+    }
+
+    setWithdrawalAmount(String(withdrawableAmount))
+    setShowWithdrawalModal(true)
+  }
 
   // Parse date range string to extract start and end dates
   const parseDateRange = (dateRangeStr) => {
@@ -816,28 +872,48 @@ export default function HubFinance() {
           <div className="space-y-6">
             {/* Current cycle */}
             <div>
-              <h2 className="text-base font-bold text-gray-900 mb-3">Current cycle</h2>
-              <div className="bg-white rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-gray-900">Current cycle</h2>
+                {financeData?.currentCycle?.netAvailable !== undefined && (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Net Balance: {formatCurrency(withdrawableAmount)}
+                  </span>
+                )}
+              </div>
+              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                 {loading ? (
                   <div className="py-8 text-center text-gray-500">Loading...</div>
                 ) : (
                   <>
-                    <p className="text-4xl font-bold text-gray-900 mb-2">
-                      {formatCurrency(financeData?.currentCycle?.estimatedPayout || 0)}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-4">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <div>
+                        <p className="text-xs text-gray-500 font-medium">Gross Cycle Earnings</p>
+                        <p className="text-3xl font-extrabold text-gray-900">
+                          {formatCurrency(financeData?.currentCycle?.estimatedPayout || 0)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500 font-medium">Available to Withdraw</p>
+                        <p className="text-xl font-bold text-emerald-600">
+                          {formatCurrency(withdrawableAmount)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600 mb-3">
                       {financeData?.currentCycle?.totalOrders || 0} {financeData?.currentCycle?.totalOrders === 1 ? 'order' : 'orders'}
                     </p>
+
+                    {Number(financeData?.currentCycle?.totalWithdrawn || 0) > 0 && (
+                      <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-md mb-3 border border-amber-200">
+                        ℹ️ Deducted / Previous Withdrawals: {formatCurrency(financeData?.currentCycle?.totalWithdrawn)}
+                      </p>
+                    )}
+
                     <button
-                      onClick={() => {
-                        setShowWithdrawalModal(true);
-                      }}
-                      disabled={!(financeData?.currentCycle?.netAvailable > 0 || withdrawableAmount > 0)}
-                      className={`w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 mt-4 transition-colors ${
-                        (financeData?.currentCycle?.netAvailable > 0 || withdrawableAmount > 0)
-                          ? "bg-black text-white hover:bg-gray-800"
-                          : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                      }`}
+                      type="button"
+                      onClick={handleWithdrawClick}
+                      className="w-full py-3.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-2 transition-all bg-black text-white hover:bg-gray-800 shadow-md active:scale-[0.99]"
                     >
                       <Wallet className="h-5 w-5" />
                       Withdraw
@@ -1225,6 +1301,57 @@ export default function HubFinance() {
           </div>
         )}
       </div>
+
+      {/* Bank Details Required Modal */}
+      <AnimatePresence>
+        {showBankDetailsPrompt && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-50"
+              onClick={() => setShowBankDetailsPrompt(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
+                <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-600">
+                  <Wallet className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Bank / UPI Details Required
+                </h3>
+                <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                  Payout receive karne ke liye pehle apni Bank Account ya UPI details set karein. Add karne ke baad aap withdrawal request bhej sakte hain.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowBankDetailsPrompt(false)}
+                    className="flex-1 py-3 px-4 rounded-xl border border-gray-300 font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowBankDetailsPrompt(false)
+                      navigate('/restaurant/update-bank-details')
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors shadow-md"
+                  >
+                    Add Bank Details
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Withdrawal Modal */}
       <AnimatePresence>

@@ -19,6 +19,12 @@ import {
   PlusCircle,
   Bell,
   BellOff,
+  MessageSquare,
+  CheckCircle2,
+  ShieldAlert,
+  Bike,
+  Ticket,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -45,6 +51,7 @@ import { adminAPI } from "@food/api";
 import { clearModuleAuth } from "@food/utils/auth";
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings";
 import useAdminNotifications from "@food/hooks/useAdminNotifications";
+import HandoverApprovalModal from "./HandoverApprovalModal";
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -54,6 +61,9 @@ export default function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [selectedHandoverItem, setSelectedHandoverItem] = useState(null);
+  const [handoverModalOpen, setHandoverModalOpen] = useState(false);
+  const [activeNotifTab, setActiveNotifTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
@@ -61,7 +71,20 @@ export default function AdminNavbar({ onMenuClick }) {
   const [adminData, setAdminData] = useState(null);
   const [businessSettings, setBusinessSettings] = useState(() => getCachedSettings() || null);
   const searchInputRef = useRef(null);
-  const { items: adminNotifications } = useAdminNotifications();
+  const { items: adminNotifications, dismissOne, clearAll, approveHandover, rejectHandover } = useAdminNotifications();
+
+  const handoverCount = useMemo(() => adminNotifications.filter(i => i.category === "handover_approval").length, [adminNotifications]);
+  const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category)).length, [adminNotifications]);
+  const supportCount = useMemo(() => adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category)).length, [adminNotifications]);
+  const complianceCount = useMemo(() => adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [adminNotifications]);
+
+  const filteredNotifications = useMemo(() => {
+    if (activeNotifTab === "handovers") return adminNotifications.filter(i => i.category === "handover_approval");
+    if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category));
+    if (activeNotifTab === "support") return adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category));
+    if (activeNotifTab === "compliance") return adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired");
+    return adminNotifications;
+  }, [activeNotifTab, adminNotifications]);
 
   // Load business settings
   useEffect(() => {
@@ -327,54 +350,203 @@ export default function AdminNavbar({ onMenuClick }) {
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-96 p-0 mt-2 border border-neutral-200 shadow-2xl rounded-2xl overflow-hidden" align="end">
+              <PopoverContent className="w-[420px] p-0 mt-2 border border-neutral-200 shadow-2xl rounded-3xl overflow-hidden" align="end">
                 <div className="bg-white">
-                  <div className="px-4 py-3 border-b border-neutral-200 flex items-center justify-between">
+                  {/* Header */}
+                  <div className="px-5 py-3.5 border-b border-neutral-100 flex items-center justify-between bg-slate-50/50">
                     <div>
-                      <p className="text-sm font-semibold text-neutral-900">Notifications</p>
-                      <p className="text-xs text-neutral-500">Approval and support alerts</p>
+                      <p className="text-sm font-black text-slate-900">Notifications</p>
+                      <p className="text-[11px] font-medium text-slate-500">Latest approvals, handovers & support alerts</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={openNotificationsPage}
-                      className="text-xs font-semibold text-amber-600 hover:text-amber-700"
-                    >
-                      View all
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {notificationCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={clearAll}
+                          className="text-[10px] font-bold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
+                        >
+                          CLEAR ({notificationCount})
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={openNotificationsPage}
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
+                      >
+                        View all
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="max-h-96 overflow-y-auto">
-                    {adminNotifications.length === 0 ? (
+                  {/* Category Filter Tabs (Matching Taxi Admin) */}
+                  <div className="flex items-center gap-1.5 px-3 py-2 border-b border-neutral-100 bg-white overflow-x-auto no-scrollbar">
+                    {[
+                      { id: "all", label: "All", count: adminNotifications.length },
+                      { id: "handovers", label: "Handovers", count: handoverCount, alert: true },
+                      { id: "approvals", label: "Approvals", count: approvalCount },
+                      { id: "support", label: "Support", count: supportCount },
+                      { id: "compliance", label: "Compliance", count: complianceCount },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveNotifTab(tab.id)}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                          activeNotifTab === tab.id
+                            ? tab.alert && tab.count > 0
+                              ? "bg-rose-600 text-white shadow-sm"
+                              : "bg-slate-900 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {tab.count > 0 && (
+                          <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
+                            activeNotifTab === tab.id
+                              ? "bg-white/20 text-white"
+                              : tab.alert
+                              ? "bg-rose-100 text-rose-700 font-bold"
+                              : "bg-slate-200 text-slate-700"
+                          }`}>
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Notifications List */}
+                  <div className="max-h-[380px] overflow-y-auto p-3 space-y-2">
+                    {filteredNotifications.length === 0 ? (
                       <div className="px-6 py-10 text-center flex flex-col items-center gap-2">
-                        <BellOff className="w-9 h-9 text-neutral-300" />
-                        <p className="text-sm text-neutral-500">No notifications yet</p>
+                        <BellOff className="w-8 h-8 text-neutral-300" />
+                        <p className="text-xs font-bold text-neutral-500">No notifications in {activeNotifTab}</p>
                       </div>
                     ) : (
-                      adminNotifications.slice(0, 8).map((item) => (
-                        <button
-                          key={item?.id}
-                          type="button"
-                          onClick={openNotificationsPage}
-                          className="w-full text-left px-4 py-4 border-b border-neutral-100 last:border-b-0 hover:bg-neutral-50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-neutral-900 truncate">
-                                {item?.title || "Notification"}
-                              </p>
-                              <p className="text-xs text-neutral-600 mt-1 line-clamp-2">
-                                {item?.message || "-"}
-                              </p>
-                              <p className="text-[11px] text-neutral-400 mt-2">
-                                {item?.metaLabel || item?.category || "Admin alert"}
-                              </p>
+                      filteredNotifications.slice(0, 10).map((item) => {
+                        const isHandover = item?.category === "handover_approval";
+                        const isSupport = item?.category === "support" || item?.category === "delivery_support";
+                        const isCompliance = item?.type === "compliance";
+
+                        let badgeText = "APPROVAL";
+                        let badgeStyle = "bg-amber-50 text-amber-800 border border-amber-200/80 font-bold";
+
+                        if (isHandover) {
+                          badgeText = "HANDOVER";
+                          badgeStyle = "bg-rose-50 text-rose-700 border border-rose-200 font-black shadow-xs";
+                        } else if (item?.category === "restaurant_approval") {
+                          badgeText = "RESTAURANT";
+                          badgeStyle = "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold";
+                        } else if (item?.category === "delivery_approval") {
+                          badgeText = "DRIVER";
+                          badgeStyle = "bg-sky-50 text-sky-700 border border-sky-200 font-bold";
+                        } else if (item?.category === "food_approval") {
+                          badgeText = "FOOD";
+                          badgeStyle = "bg-amber-50 text-amber-800 border border-amber-200 font-bold";
+                        } else if (isSupport) {
+                          badgeText = "SUPPORT";
+                          badgeStyle = "bg-purple-50 text-purple-700 border border-purple-200 font-bold";
+                        } else if (isCompliance) {
+                          badgeText = "COMPLIANCE";
+                          badgeStyle = "bg-red-50 text-red-700 border border-red-200 font-bold";
+                        }
+
+                        const handleItemClick = () => {
+                          setNotificationsOpen(false);
+                          if (isHandover) {
+                            navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                          } else if (item?.path) {
+                            navigate(item.path);
+                          }
+                        };
+
+                        return (
+                          <div
+                            key={item?.id}
+                            className={`relative w-full rounded-2xl border p-3.5 text-left transition-all group cursor-pointer ${
+                              isHandover
+                                ? "border-rose-200 bg-rose-50/40 hover:bg-rose-50/80"
+                                : "border-slate-100 bg-white hover:border-emerald-200 hover:bg-slate-50/80"
+                            }`}
+                            onClick={handleItemClick}
+                          >
+                            <div className="flex items-start justify-between gap-2 pr-6">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-black text-slate-900 leading-tight">
+                                  {item?.title || "Notification"}
+                                </p>
+                                <p className="text-xs font-semibold text-slate-600 mt-1 line-clamp-2 leading-snug">
+                                  {item?.message || "-"}
+                                </p>
+                                {item?.metaLabel && (
+                                  <p className="text-[11px] font-semibold text-slate-400 mt-1 truncate">
+                                    📞 {item.metaLabel}
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${badgeStyle}`}>
+                                {badgeText}
+                              </span>
                             </div>
-                            <span className="shrink-0 text-[10px] text-neutral-400">
-                              {item?.timeLabel || "Now"}
-                            </span>
+
+                            {isHandover && (
+                              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-rose-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setNotificationsOpen(false);
+                                    navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                                  }}
+                                  className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all text-center"
+                                >
+                                  Review & Approve in List
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await approveHandover(item.orderMongoId || item.orderId);
+                                  }}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                                    await rejectHandover(item.orderMongoId || item.orderId, reason);
+                                  }}
+                                  className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+
+                            <div className="mt-2.5 flex items-center justify-between text-[10px] font-bold text-slate-400 pt-1.5 border-t border-slate-100/80">
+                              <span className="text-emerald-600 font-bold hover:underline">
+                                Tap to inspect →
+                              </span>
+                              <span>{item?.timeLabel || "Now"}</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissOne(item?.id);
+                              }}
+                              className="absolute right-3 top-3 inline-flex rounded-lg p-1 text-slate-300 transition-all hover:bg-rose-50 hover:text-rose-600"
+                              aria-label="Dismiss notification"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                        </button>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -610,6 +782,14 @@ export default function AdminNavbar({ onMenuClick }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <HandoverApprovalModal
+        isOpen={handoverModalOpen}
+        onClose={() => setHandoverModalOpen(false)}
+        notification={selectedHandoverItem}
+        onApprove={approveHandover}
+        onReject={rejectHandover}
+      />
     </>
   );
 }

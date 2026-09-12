@@ -177,6 +177,55 @@ const normalizeDataMap = (data = {}) => {
     return result;
 };
 
+const isRingEvent = (payload = {}) => {
+    const data = payload.data || {};
+    const type = String(data.type || payload.type || payload.category || '').toLowerCase();
+    const title = String(payload.title || payload.notification?.title || '').toLowerCase();
+    const sound = String(payload.sound || data.sound || '').toLowerCase();
+
+    if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
+        return true;
+    }
+
+    // 1. Order aane par
+    if (
+        type.includes('new_order') ||
+        type.includes('order_created') ||
+        type.includes('place_order') ||
+        title.includes('new order') ||
+        title.includes('order received')
+    ) {
+        return true;
+    }
+
+    // 2. Delivery boy ko order assign karne ke liye
+    if (
+        type.includes('order_assigned') ||
+        type.includes('order_assign') ||
+        type.includes('delivery_assigned') ||
+        type.includes('ring') ||
+        type.includes('gig_reminder') ||
+        title.includes('assigned')
+    ) {
+        return true;
+    }
+
+    // 3. Mark complete karne par
+    if (
+        type.includes('order_completed') ||
+        type.includes('delivered') ||
+        type.includes('mark_completed') ||
+        title.includes('completed') ||
+        title.includes('delivered') ||
+        title.includes('marked complete')
+    ) {
+        return true;
+    }
+
+    // Status updates like "delivery boy aarha hai", picked_up, reaching, etc. are silent
+    return false;
+};
+
 const buildMessagePayload = (payload = {}, token) => {
     const notification = {
         title: sanitizeString(payload.title || payload.notification?.title || 'New notification'),
@@ -202,13 +251,14 @@ const buildMessagePayload = (payload = {}, token) => {
     }
 
     const targetLink = data.link || payload.link || data.targetUrl || data.url;
+    const ring = isRingEvent(payload);
 
     message.android = {
         priority: 'high',
         notification: {
-            channel_id: 'default',
-            sound: 'default',
-            default_vibrate_timings: true,
+            channel_id: ring ? 'default' : 'silent_channel',
+            ...(ring ? { sound: payload.sound || 'default' } : {}),
+            default_vibrate_timings: ring,
             default_light_settings: true,
             ...(targetLink ? { click_action: targetLink } : {})
         }

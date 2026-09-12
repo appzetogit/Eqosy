@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import { restaurantAPI } from '@food/api';
 import alertSound from '@food/assets/audio/alert.mp3';
+import { toast } from 'sonner';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -181,6 +182,12 @@ export const useRestaurantNotifications = () => {
       alertLoopTimerRef.current = null;
     }
     alertLoopStartedAtRef.current = 0;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (_) {}
+    }
   };
 
   const startAlertLoop = () => {
@@ -509,10 +516,32 @@ export const useRestaurantNotifications = () => {
       handleIncomingOrderAlert(normalizedData);
     });
 
+    // Listen for order cancellation events
+    socketRef.current.on('order_cancelled', (data) => {
+      debugLog('❌ Order cancelled event received:', data);
+      stopAlertLoop();
+      setNewOrder(null);
+      activeOrderRef.current = null;
+      const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+      toast.error(`User cancelled order #${displayId}`);
+      setLastOrderUpdate(data);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('restaurant_order_updated', { detail: data }));
+      }
+    });
+
     // Listen for order status updates
     socketRef.current.on('order_status_update', (data) => {
       debugLog('Order status update:', data);
       setLastOrderUpdate(data);
+      const statusStr = String(data?.orderStatus || data?.status || '').toLowerCase();
+      if (statusStr.includes('cancel')) {
+        stopAlertLoop();
+        setNewOrder(null);
+        activeOrderRef.current = null;
+        const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+        toast.error(`User cancelled order #${displayId}`);
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('restaurant_order_updated', { detail: data }));
       }

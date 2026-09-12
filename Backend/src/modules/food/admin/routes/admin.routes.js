@@ -262,8 +262,11 @@ router.patch('/dining/restaurants/:restaurantId', diningAdminController.updateDi
 
 // ----- Orders -----
 router.get('/orders', requireFoodResourceAccess('orders', 'orders'), orderController.listOrdersAdminController);
+router.get('/orders/handover-requests/pending', orderController.listPendingHandoverRequestsAdminController);
 router.get('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.getOrderByIdAdminController);
 router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orders'), orderController.assignDeliveryPartnerController);
+router.post('/orders/:orderId/handover/approve', orderController.approveOrderHandoverAdminController);
+router.post('/orders/:orderId/handover/reject', orderController.rejectOrderHandoverAdminController);
 router.get('/orders/:orderId/available-partners', requireFoodResourceAccess('orders', 'orders'), orderController.listAvailableDeliveryPartnersForOrderController);
 router.delete('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.deleteOrderAdminController);
 

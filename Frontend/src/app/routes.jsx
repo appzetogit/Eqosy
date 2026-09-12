@@ -6,11 +6,12 @@ import {
   NATIVE_LAST_ROUTE_KEY,
   syncActiveModule,
 } from '../shared/utils/activeModule.js'
+import lazyWithRetry from '../shared/utils/lazyWithRetry.js'
 
 // Lazy load the Food service module (Quick-spicy app)
-const FoodApp = lazy(() => import('../modules/Food/routes'))
-const TaxiApp = lazy(() => import('../modules/Taxi/TaxiApp'))
-const AuthApp = lazy(() => import('../modules/auth/routes'))
+const FoodApp = lazyWithRetry(() => import('../modules/Food/routes'))
+const TaxiApp = lazyWithRetry(() => import('../modules/Taxi/TaxiApp'))
+const AuthApp = lazyWithRetry(() => import('../modules/auth/routes'))
 
 const PageLoader = () => <AppShellSkeleton />
 
@@ -49,8 +50,8 @@ const RedirectToFoodUser = () => {
   return <Navigate to={`/food/user${location.pathname}${location.search}`} replace />
 }
 
-const LandingPage = lazy(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
-const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
+const LandingPage = lazyWithRetry(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
+const AdminRouter = lazyWithRetry(() => import('../modules/Food/components/admin/AdminRouter'))
 
 const SmartFallbackRedirect = () => {
   const location = useLocation()

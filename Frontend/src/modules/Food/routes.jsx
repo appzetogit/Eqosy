@@ -7,21 +7,22 @@ import PushSoundEnableButton from "@food/components/PushSoundEnableButton"
 import { registerWebPushForCurrentModule } from "@food/utils/firebaseMessaging"
 import { isModuleAuthenticated } from "@food/utils/auth"
 import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotifications"
+import lazyWithRetry from "@/shared/utils/lazyWithRetry"
 
 // Lazy Loading Components
-const UserRouter = lazy(() => import("@food/components/user/UserRouter"))
+const UserRouter = lazyWithRetry(() => import("@food/components/user/UserRouter"))
 
 // Restaurant Module
-const RestaurantRouter = lazy(() => import("@food/components/restaurant/RestaurantRouter"))
+const RestaurantRouter = lazyWithRetry(() => import("@food/components/restaurant/RestaurantRouter"))
 
 // Admin Module
-const AdminRouter = lazy(() => import("@food/components/admin/AdminRouter"))
-const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"))
-const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"))
-const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"))
+const AdminRouter = lazyWithRetry(() => import("@food/components/admin/AdminRouter"))
+const AdminLogin = lazyWithRetry(() => import("@food/pages/admin/auth/AdminLogin"))
+const AdminSignup = lazyWithRetry(() => import("@food/pages/admin/auth/AdminSignup"))
+const AdminForgotPassword = lazyWithRetry(() => import("@food/pages/admin/auth/AdminForgotPassword"))
 
 // Delivery Module
-const DeliveryRouter = lazy(() => import("../DeliveryV2"))
+const DeliveryRouter = lazyWithRetry(() => import("../DeliveryV2"))
 
 function UserPathRedirect() {
   const location = useLocation()

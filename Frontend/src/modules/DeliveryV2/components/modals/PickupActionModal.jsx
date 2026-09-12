@@ -25,6 +25,7 @@ export const PickupActionModal = ({
   onPickedUp,
   onMinimize,
   onCancel,
+  onHandoverSuccess,
   onOpenChat,
   unreadChatCount = 0
 }) => {
@@ -69,9 +70,11 @@ export const PickupActionModal = ({
       });
 
       if (res.data?.success) {
-        toast.success("Order handed over successfully. Re-searching another driver in this zone...");
+        toast.success(res.data?.message || "Handover request submitted to Admin for approval. You are now offline.");
         setShowHandoverModal(false);
-        if (onCancel) await onCancel();
+        if (onHandoverSuccess) {
+          await onHandoverSuccess(orderId);
+        }
       } else {
         toast.error(res.data?.message || "Failed to handover order");
       }
