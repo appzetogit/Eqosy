@@ -95,10 +95,11 @@ export const useRestaurantNotifications = () => {
   const lastConnectErrorLogRef = useRef(0);
   const lastAlertAtByOrderRef = useRef(new Map());
   const lastBrowserNotificationAtByOrderRef = useRef(new Map());
+  const alertedOrderIdsRef = useRef(new Set()); // Permanent set of order IDs alerted in this session
+  const isFirstPollRef = useRef(true);
   const CONNECT_ERROR_LOG_THROTTLE_MS = 10000;
   const ALERT_LOOP_INTERVAL_MS = 4500;
   const ALERT_LOOP_MAX_MS = 120000;
-  const ALERT_DEDUPE_MS = 15000;
   const BROWSER_NOTIFICATION_DEDUPE_MS = 20000;
   const NOTIFICATION_PERMISSION_ASKED_KEY = 'restaurant_notification_permission_asked';
 
@@ -117,10 +118,10 @@ export const useRestaurantNotifications = () => {
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
     if (!key) return true;
-    const now = Date.now();
-    const last = lastAlertAtByOrderRef.current.get(key) || 0;
-    if (now - last < ALERT_DEDUPE_MS) return false;
-    lastAlertAtByOrderRef.current.set(key, now);
+    if (alertedOrderIdsRef.current.has(key)) {
+      return false; // Order has already been alerted; do NOT ring again for this order!
+    }
+    alertedOrderIdsRef.current.add(key);
     return true;
   };
 
@@ -256,9 +257,7 @@ export const useRestaurantNotifications = () => {
   }, []);
 
   // Reliability fallback:
-  // If Socket.IO fails (expired jwt / missing token / room join failed),
-  // we still fetch restaurant orders from REST periodically and trigger the same
-  // alert flow. This prevents "restaurant didn't receive the order" cases.
+  // Fetch restaurant orders from REST periodically and trigger sound only for NEW unalerted orders.
   useEffect(() => {
     if (!restaurantId) return;
 
@@ -275,9 +274,6 @@ export const useRestaurantNotifications = () => {
           response?.data?.data?.data?.orders ||
           [];
 
-        // REST layer normalizes backend statuses so:
-        // - backend "created" -> UI "confirmed"
-        // We alert only for "confirmed/new order waiting for review".
         const confirmed = (rows || [])
           .filter((o) => String(o?.status || "").toLowerCase() === "confirmed")
           .sort((a, b) => {
@@ -286,9 +282,29 @@ export const useRestaurantNotifications = () => {
             return new Date(bt).getTime() - new Date(at).getTime();
           });
 
+        if (isFirstPollRef.current) {
+          isFirstPollRef.current = false;
+          // Seed alerted set with existing orders on initial page load
+          // Only alert if created in the last 60 seconds
+          const now = Date.now();
+          confirmed.forEach((o) => {
+            const key = getOrderAlertKey(o);
+            const createdAtMs = new Date(o.createdAt || o.updatedAt || 0).getTime();
+            if (key) {
+              if (now - createdAtMs > 60000) {
+                alertedOrderIdsRef.current.add(key);
+              }
+            }
+          });
+        }
+
         if (confirmed.length > 0) {
-          // Trigger alerts for newest confirmed orders (dedupe prevents spam).
-          confirmed.slice(0, 5).forEach((o) => handleIncomingOrderAlert(o));
+          // Trigger alerts ONLY for unalerted confirmed orders
+          const newConfirmed = confirmed.filter((o) => {
+            const key = getOrderAlertKey(o);
+            return key && !alertedOrderIdsRef.current.has(key);
+          });
+          newConfirmed.slice(0, 5).forEach((o) => handleIncomingOrderAlert(o));
         }
       } catch (error) {
         // Non-blocking: keep polling.

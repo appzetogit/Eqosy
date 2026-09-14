@@ -1272,6 +1272,8 @@ export default function OrdersMain() {
   const [ordersRefreshToken, setOrdersRefreshToken] = useState(0);
   const requestOrdersRefresh = () => setOrdersRefreshToken((t) => t + 1);
 
+  const isFirstPopupCheckRef = useRef(true);
+
   // Check for confirmed orders that haven't been shown in popup yet, or scheduled orders whose time has come
   useEffect(() => {
     const checkOrdersToPopup = async () => {
@@ -1279,6 +1281,18 @@ export default function OrdersMain() {
         const response = await restaurantAPI.getOrders();
         if (response.data?.success && response.data.data?.orders) {
           const allOrders = response.data.data.orders;
+          const now = Date.now();
+
+          if (isFirstPopupCheckRef.current) {
+            isFirstPopupCheckRef.current = false;
+            // Mark existing orders created more than 120 seconds ago as already shown
+            allOrders.forEach((o) => {
+              const createdAt = new Date(o.createdAt || o.updatedAt || 0).getTime();
+              if (now - createdAt > 120000) {
+                markOrderAsShown(o);
+              }
+            });
+          }
 
           // If popup is showing, verify that active popup order hasn't been cancelled on server
           if (showNewOrderPopupRef.current && popupOrderRef.current) {
@@ -1306,8 +1320,6 @@ export default function OrdersMain() {
 
           // Skip if popup is already showing or Socket.IO order exists
           if (showNewOrderPopupRef.current || newOrderRef.current) return;
-
-          const now = Date.now();
 
           // Find orders that should trigger the popup
           const targetOrders = allOrders.filter((order) => {
