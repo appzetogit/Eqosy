@@ -59,6 +59,20 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf-vendor';
+            if (id.includes('@mui') || id.includes('@emotion')) return 'mui-vendor';
+            if (id.includes('lucide-react')) return 'icons-vendor';
+          }
+        }
+      }
+    }
+  }
 });
 
 
