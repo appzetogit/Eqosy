@@ -14,36 +14,110 @@ const parseDateTime = (dateStr, timeStr) => {
   return new Date(year, month - 1, day, hours, minutes, 0);
 };
 
+const addDaysToStrDate = (dateStr, days) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  const year = dt.getFullYear();
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const escapeRegex = (str) => String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const createGig = async (payload, adminId = null) => {
-  const { title, date, startTime, endTime, zoneId, zoneName, capacity, cancellationCutoffMinutes } = payload;
+  const {
+    title,
+    date,
+    startTime,
+    endTime,
+    zoneId,
+    zoneName,
+    capacity,
+    cancellationCutoffMinutes,
+    repeatOption, // 'single', 'everyday', '7_days', '30_days', 'custom_range'
+    endDate
+  } = payload;
 
   if (!date || !startTime || !endTime) {
     throw new ValidationError('Date, start time, and end time are required');
   }
 
-  const startDateTime = parseDateTime(date, startTime);
-  const endDateTime = parseDateTime(date, endTime);
+  // Determine dates list to create gigs for
+  let datesToCreate = [date];
 
-  if (endDateTime <= startDateTime) {
-    throw new ValidationError('End time must be after start time');
+  if (repeatOption === '7_days') {
+    datesToCreate = [];
+    for (let i = 0; i < 7; i++) {
+      datesToCreate.push(addDaysToStrDate(date, i));
+    }
+  } else if (repeatOption === '30_days' || repeatOption === 'everyday') {
+    datesToCreate = [];
+    for (let i = 0; i < 30; i++) {
+      datesToCreate.push(addDaysToStrDate(date, i));
+    }
+  } else if (repeatOption === 'custom_range' && endDate && endDate >= date) {
+    datesToCreate = [];
+    let curDate = date;
+    let daysCount = 0;
+    while (curDate <= endDate && daysCount < 365) {
+      datesToCreate.push(curDate);
+      daysCount++;
+      curDate = addDaysToStrDate(date, daysCount);
+    }
   }
 
-  const gig = await FoodGig.create({
-    title: title?.trim() || 'Delivery Shift',
-    date,
-    startTime,
-    endTime,
-    startDateTime,
-    endDateTime,
-    zoneId: zoneId && mongoose.Types.ObjectId.isValid(zoneId) ? zoneId : null,
-    zoneName: zoneName?.trim() || 'All Zones',
-    capacity: Math.max(1, Number(capacity) || 20),
-    cancellationCutoffMinutes: Math.max(0, Number(cancellationCutoffMinutes) ?? 60),
-    status: 'active',
-    createdByAdmin: adminId
-  });
+  const createdGigs = [];
+  const normalizedZoneName = zoneName?.trim() || 'All Zones';
+  const validZoneId = zoneId && mongoose.Types.ObjectId.isValid(zoneId) ? zoneId : null;
 
-  return gig.toObject();
+  for (const targetDate of datesToCreate) {
+    const startDateTime = parseDateTime(targetDate, startTime);
+    const endDateTime = parseDateTime(targetDate, endTime);
+
+    if (endDateTime <= startDateTime) {
+      throw new ValidationError(`End time must be after start time for date ${targetDate}`);
+    }
+
+    const gigData = {
+      title: title?.trim() || 'Delivery Shift',
+      date: targetDate,
+      startTime,
+      endTime,
+      startDateTime,
+      endDateTime,
+      zoneId: validZoneId,
+      zoneName: normalizedZoneName,
+      capacity: Math.max(1, Number(capacity) || 20),
+      cancellationCutoffMinutes: Math.max(0, Number(cancellationCutoffMinutes) ?? 60),
+      status: 'active',
+      createdByAdmin: adminId
+    };
+
+    // Check if gig already exists for same title, date, startTime, endTime and zoneName
+    const existing = await FoodGig.findOne({
+      title: gigData.title,
+      date: gigData.date,
+      startTime: gigData.startTime,
+      endTime: gigData.endTime,
+      zoneName: gigData.zoneName,
+      status: 'active'
+    });
+
+    if (existing) {
+      existing.capacity = gigData.capacity;
+      existing.cancellationCutoffMinutes = gigData.cancellationCutoffMinutes;
+      await existing.save();
+      createdGigs.push(existing.toObject());
+    } else {
+      const newGig = await FoodGig.create(gigData);
+      createdGigs.push(newGig.toObject());
+    }
+  }
+
+  return createdGigs.length === 1
+    ? createdGigs[0]
+    : { success: true, count: createdGigs.length, gigs: createdGigs };
 };
 
 export const updateGig = async (gigId, payload) => {
@@ -167,23 +241,30 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
     date: date
   };
 
-  // If partner has an assigned zone or city, filter gigs for that zone OR 'All Zones'
+  // STRICT ZONE FILTERING:
+  // Delivery partners can ONLY see gigs for their specific assigned zone/area OR 'All Zones'.
+  // Drivers from two different zones cannot see each other's area gigs!
   if (partner) {
-    const partnerZoneName = (partner.zoneName || partner.city || partner.address || '').trim();
-    const partnerZoneId = partner.zoneId;
+    const partnerZoneId = partner.zoneId ? String(partner.zoneId) : null;
+    const partnerZoneName = (partner.zoneName || '').trim();
+
+    const zoneConditions = [
+      { zoneName: 'All Zones' },
+      { zoneName: '' },
+      { zoneName: null }
+    ];
 
     if (partnerZoneId && mongoose.Types.ObjectId.isValid(partnerZoneId)) {
-      match.$or = [
-        { zoneId: partnerZoneId },
-        { zoneName: 'All Zones' },
-        { zoneName: { $regex: new RegExp(partnerZoneName || 'All Zones', 'i') } }
-      ];
-    } else if (partnerZoneName && partnerZoneName.toLowerCase() !== 'all zones') {
-      match.$or = [
-        { zoneName: 'All Zones' },
-        { zoneName: { $regex: new RegExp(partnerZoneName, 'i') } }
-      ];
+      zoneConditions.push({ zoneId: new mongoose.Types.ObjectId(partnerZoneId) });
     }
+
+    if (partnerZoneName && partnerZoneName.toLowerCase() !== 'all zones') {
+      zoneConditions.push({ zoneName: { $regex: new RegExp(`^${escapeRegex(partnerZoneName)}$`, 'i') } });
+    } else if (partner.city && partner.city.toLowerCase() !== 'all zones') {
+      zoneConditions.push({ zoneName: { $regex: new RegExp(`^${escapeRegex(partner.city.trim())}$`, 'i') } });
+    }
+
+    match.$or = zoneConditions;
   }
 
   // Active gigs matching zone on or after selected date
@@ -244,6 +325,25 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
   const now = new Date();
   if (new Date(gig.endDateTime) <= now) {
     throw new ValidationError('This gig has already expired');
+  }
+
+  // Strict Zone check: Partner can only book gigs for their assigned zone or 'All Zones'
+  if (gig.zoneName && gig.zoneName.toLowerCase() !== 'all zones') {
+    const partnerZoneIdStr = partner.zoneId ? String(partner.zoneId) : null;
+    const partnerZoneNameClean = (partner.zoneName || partner.city || '').trim().toLowerCase();
+    const gigZoneIdStr = gig.zoneId ? String(gig.zoneId) : null;
+    const gigZoneNameClean = (gig.zoneName || '').trim().toLowerCase();
+
+    let isZoneMatch = false;
+    if (gigZoneIdStr && partnerZoneIdStr && gigZoneIdStr === partnerZoneIdStr) {
+      isZoneMatch = true;
+    } else if (gigZoneNameClean && partnerZoneNameClean && gigZoneNameClean === partnerZoneNameClean) {
+      isZoneMatch = true;
+    }
+
+    if (!isZoneMatch) {
+      throw new ValidationError(`This gig is restricted to "${gig.zoneName}". You are listed in "${partner.zoneName || partner.city || 'a different zone'}".`);
+    }
   }
 
   // Check if already booked

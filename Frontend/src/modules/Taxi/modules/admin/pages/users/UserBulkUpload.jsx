@@ -346,7 +346,7 @@ const UserBulkUpload = () => {
         `Imported ${createdCount}, skipped ${skippedCount}, errors ${errorCount}`,
         { id: toastId },
       );
-      navigate("/admin/users");
+      navigate("/taxi/admin/users");
     } catch (err) {
       toast.error(err.message || "Failed to import users");
     } finally {
@@ -367,7 +367,7 @@ const UserBulkUpload = () => {
           <h1 className="text-xl font-semibold text-gray-900">Bulk Upload</h1>
           <button
             type="button"
-            onClick={() => navigate("/admin/users")}
+            onClick={() => navigate("/taxi/admin/users")}
             className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <ArrowLeft size={16} /> Back
           </button>

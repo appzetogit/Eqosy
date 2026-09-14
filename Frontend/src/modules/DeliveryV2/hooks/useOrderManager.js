@@ -63,12 +63,18 @@ export const useOrderManager = () => {
         updateTripStatus('PICKING_UP');
         // toast.success('Order Accepted! Opening Map...');
       } else {
-        toast.error(response?.data?.message || 'Order already taken or unavailable');
-        throw new Error('Accept failed');
+        const msg = response?.data?.message || 'Accepted by other driver';
+        toast.error(msg);
+        throw new Error(msg);
       }
     } catch (error) {
       console.error('Accept Order Error:', error);
-      toast.error('Network error. Please try again.');
+      const serverMsg = error.response?.data?.message || error?.message || '';
+      if (serverMsg.toLowerCase().includes('accepted') || serverMsg.toLowerCase().includes('partner') || serverMsg.toLowerCase().includes('taken')) {
+        toast.error('Accepted by other driver');
+      } else {
+        toast.error(serverMsg || 'Network error. Please try again.');
+      }
       throw error;
     }
   };

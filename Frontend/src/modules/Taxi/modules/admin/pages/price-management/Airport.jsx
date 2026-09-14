@@ -256,7 +256,7 @@ const Airport = ({ mode: initialMode = "list" }) => {
       };
       const res = selectedAirportId ? await adminService.updateAirport(selectedAirportId, payload) : await adminService.createAirport(payload);
       if (res?.success || res?.status === 200 || res?.status === 201) {
-        navigate("/admin/pricing/airport");
+        navigate("/taxi/admin/pricing/airport");
         fetchData();
         resetFormState();
       } else {
@@ -536,7 +536,7 @@ const Airport = ({ mode: initialMode = "list" }) => {
               <div className="flex items-center justify-between">
                 <h1 className="text-xl font-semibold text-gray-900">{id ? 'Edit Airport' : 'Add Airport'}</h1>
                 <button 
-                  onClick={() => navigate("/admin/pricing/airport")}
+                  onClick={() => navigate("/taxi/admin/pricing/airport")}
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <ArrowLeft size={16} /> Back
@@ -661,7 +661,7 @@ const Airport = ({ mode: initialMode = "list" }) => {
                      {id ? 'Update Airport' : 'Save Airport'}
                    </button>
                    <button 
-                     onClick={() => navigate("/admin/pricing/airport")}
+                     onClick={() => navigate("/taxi/admin/pricing/airport")}
                      className="w-full py-3 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
                    >
                      Cancel

@@ -316,18 +316,25 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
 
         {/* Action Area (Fixed / Non-Scrolling Footer) */}
         <div className="px-6 pb-8 pt-2 space-y-4 bg-white">
-          <ActionSlider
-            label="Slide to Accept"
-            onConfirm={() => onAccept(order)}
-            color="bg-emerald-600"
-            successLabel="Order Accepted ✓"
-          />
+          {order.isClaimedByOther || order.isAcceptedByOther || order.status === 'accepted_by_other' ? (
+            <div className="w-full py-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-center font-extrabold text-sm shadow-sm flex items-center justify-center gap-2">
+              <Clock className="w-5 h-5 text-amber-600" />
+              Accepted by other driver
+            </div>
+          ) : (
+            <ActionSlider
+              label="Slide to Accept"
+              onConfirm={() => onAccept(order)}
+              color="bg-emerald-600"
+              successLabel="Order Accepted ✓"
+            />
+          )}
 
           <button
             onClick={onReject}
             className="w-full text-gray-400 font-black text-[11px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors active:scale-95 py-2"
           >
-            Pass this task
+            {order.isClaimedByOther || order.isAcceptedByOther || order.status === 'accepted_by_other' ? 'Close' : 'Pass this task'}
           </button>
         </div>
       </motion.div>

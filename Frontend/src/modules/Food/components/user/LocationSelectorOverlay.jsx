@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react"
-import { ChevronLeft, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, Search, Target, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, CloudRain } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
 import { Label } from "@food/components/ui/label"
@@ -35,6 +35,15 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
   return R * c // Distance in meters
+}
+
+function formatDistanceText(meters) {
+  if (meters === null || meters === undefined || isNaN(meters)) return null
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`
+  }
+  const km = meters / 1000
+  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
 }
 
 // Get icon based on address type/label
@@ -78,6 +87,157 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [lockMapToAutocomplete, setLockMapToAutocomplete] = useState(true)
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState(null)
+  
+  // Top location search bar state
+  const [topSearchQuery, setTopSearchQuery] = useState("")
+  const [topSearchResults, setTopSearchResults] = useState([])
+  const [isTopSearching, setIsTopSearching] = useState(false)
+
+  // Real-time keyword address searching for top search bar
+  useEffect(() => {
+    const q = topSearchQuery.trim()
+    if (!q || q.length < 2) {
+      setTopSearchResults([])
+      setIsTopSearching(false)
+      return
+    }
+
+    const t = setTimeout(async () => {
+      try {
+        setIsTopSearching(true)
+        const refLat = Number.isFinite(location?.latitude) ? location.latitude : mapPosition?.[0] ?? 22.7196
+        const refLng = Number.isFinite(location?.longitude) ? location.longitude : mapPosition?.[1] ?? 75.8577
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=12&q=${encodeURIComponent(q)}`
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+        })
+        const json = await res.json()
+        const list = Array.isArray(json) ? json : []
+        const mapped = list.map((r) => {
+          const displayParts = (r.display_name || "").split(",")
+          const title = displayParts[0]?.trim() || r.name || "Location"
+          const subtitle = displayParts.slice(1).join(",").trim()
+          const lat = Number(r.lat)
+          const lng = Number(r.lon)
+          const meters = (Number.isFinite(refLat) && Number.isFinite(refLng) && Number.isFinite(lat) && Number.isFinite(lng))
+            ? calculateDistance(refLat, refLng, lat, lng)
+            : null
+          return {
+            id: r.place_id || r.osm_id || `${lat},${lng}`,
+            title,
+            subtitle,
+            lat,
+            lng,
+            distanceMeters: meters,
+            raw: r,
+          }
+        })
+
+        mapped.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
+        setTopSearchResults(mapped)
+      } catch (e) {
+        setTopSearchResults([])
+      } finally {
+        setIsTopSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(t)
+  }, [topSearchQuery, location?.latitude, location?.longitude, mapPosition])
+
+  const matchingSavedAddresses = useMemo(() => {
+    const q = topSearchQuery.trim().toLowerCase()
+    if (!q) return addresses
+    return (addresses || []).filter((addr) => {
+      const text = [
+        addr?.label,
+        addr?.additionalDetails,
+        addr?.street,
+        addr?.city,
+        addr?.state,
+        addr?.zipCode,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return text.includes(q)
+    })
+  }, [addresses, topSearchQuery])
+
+  const handleSelectSearchSuggestion = async (suggestion) => {
+    try {
+      const latitude = suggestion.lat
+      const longitude = suggestion.lng
+      const displayAddress = suggestion.subtitle
+        ? `${suggestion.title}, ${suggestion.subtitle}`
+        : suggestion.title
+
+      const locationData = {
+        label: suggestion.title,
+        city: suggestion.raw?.address?.city || suggestion.raw?.address?.town || suggestion.raw?.address?.village || "",
+        state: suggestion.raw?.address?.state || "",
+        address: displayAddress,
+        area: suggestion.raw?.address?.suburb || suggestion.raw?.address?.neighbourhood || "",
+        latitude,
+        longitude,
+        formattedAddress: displayAddress,
+        isManual: true
+      }
+
+      try {
+        await userAPI.updateLocation({
+          latitude,
+          longitude,
+          address: displayAddress,
+          city: locationData.city,
+          state: locationData.state,
+          area: locationData.area,
+          formattedAddress: displayAddress
+        })
+      } catch (e) {
+        debugError("Error updating location on search select:", e)
+      }
+
+      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      localStorage.setItem("deliveryAddressMode", "current")
+      try {
+        localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+          address: displayAddress,
+          lat: Number(latitude),
+          lon: Number(longitude),
+          updatedAt: Date.now()
+        }))
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new Event("eqosy:location-updated"))
+        window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }))
+        window.dispatchEvent(new CustomEvent("locationChanged", { detail: locationData }))
+      } catch {}
+
+      setMapPosition([latitude, longitude])
+      setCurrentAddress(displayAddress)
+      onClose()
+      toast.success(`Location set: ${suggestion.title}`, { duration: 2000 })
+    } catch (error) {
+      debugError("Error selecting location suggestion:", error)
+      toast.error("Failed to set location")
+    }
+  }
+
+  const getSavedAddressDistanceText = (address) => {
+    let lat = address.latitude || address.lat
+    let lng = address.longitude || address.lng
+    if (!lat && address.location?.coordinates && address.location.coordinates.length >= 2) {
+      lng = address.location.coordinates[0]
+      lat = address.location.coordinates[1]
+    }
+    const userLat = location?.latitude || mapPosition?.[0]
+    const userLng = location?.longitude || mapPosition?.[1]
+    if (!userLat || !userLng || !lat || !lng) return null
+    const meters = calculateDistance(Number(userLat), Number(userLng), Number(lat), Number(lng))
+    return formatDistanceText(meters)
+  }
+
   // Backend reverse geocode (on by default unless explicitly disabled)
   const ENABLE_LOCATION_REVERSE_GEOCODE =
     import.meta.env.VITE_ENABLE_LOCATION_REVERSE_GEOCODE !== "false"
@@ -2538,137 +2698,194 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex flex-col bg-white dark:bg-[#0a0a0a]"
+      className="fixed inset-0 z-[9999] flex flex-col bg-gray-50 dark:bg-[#0a0a0a]"
       style={{
         animation: 'fadeIn 0.3s ease-out'
       }}
     >
-      {/* Header */}
-      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
-            <Button
+      {/* Header & Top Search Bar Container */}
+      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 px-4 pt-4 pb-3 shadow-xs space-y-3">
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2 h-9 w-9"
+          >
+            <ChevronDown className="h-6 w-6 text-gray-800 dark:text-gray-200" />
+          </Button>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Select a location</h1>
+        </div>
+
+        {/* Search Bar Input */}
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 h-5 w-5 text-rose-500 flex-shrink-0 pointer-events-none" />
+          <input
+            type="text"
+            value={topSearchQuery}
+            onChange={(e) => setTopSearchQuery(e.target.value)}
+            placeholder="Search location..."
+            className="w-full bg-white dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl pl-11 pr-10 py-3 text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all shadow-xs"
+          />
+          {topSearchQuery && (
+            <button
               type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                onClose()
-              }}
-              className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2"
+              onClick={() => setTopSearchQuery("")}
+              className="absolute right-3.5 p-1 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 transition-colors"
             >
-              <ChevronLeft className="h-6 w-6 text-gray-700 dark:text-gray-300" />
-            </Button>
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Select a location</h1>
-          </div>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0">
-        <div className="max-w-7xl mx-auto w-full pb-6">
-          {/* Use Current Location */}
-          <div
-            className="px-4 sm:px-6 lg:px-8 py-2 bg-white dark:bg-[#1a1a1a]"
-            style={{ animation: 'slideDown 0.3s ease-out 0.1s both' }}
-          >
-            <button
-              onClick={handleUseCurrentLocation}
-              disabled={loading}
-              className="w-full flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:bg-green-100 dark:group-hover:bg-green-900/30 transition-colors">
-                  <Crosshair className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" strokeWidth={2.5} />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-green-700 dark:text-green-400">Use current location</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {loading ? "Getting location..." : currentLocationText}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-            </button>
-
-            {/* Add Address */}
-            <button
-              onClick={handleAddAddress}
-              className="w-full flex items-center justify-between py-4 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors group border-t border-gray-100 dark:border-gray-800"
-            >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:bg-green-100 dark:group-hover:bg-green-900/30 transition-colors">
-                  <Plus className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
-                <p className="font-semibold text-green-700 dark:text-green-400">Add Address</p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-            </button>
+      {/* Scrollable Main Area */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0 px-4 py-3 space-y-3">
+        {/* Use Current Location Option Box */}
+        <button
+          onClick={handleUseCurrentLocation}
+          disabled={loading}
+          className="w-full flex items-center justify-between p-4 bg-white dark:bg-[#1a1a1a] hover:bg-rose-50/40 dark:hover:bg-rose-900/10 rounded-2xl transition-colors border border-gray-100 dark:border-gray-800 shadow-xs group"
+        >
+          <div className="flex items-center gap-3.5">
+            <Target className="h-5 w-5 text-rose-500 dark:text-rose-400 flex-shrink-0 stroke-[2.2]" />
+            <span className="font-semibold text-rose-600 dark:text-rose-400 text-base">
+              Use current location
+            </span>
           </div>
+          <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+        </button>
 
-          {/* Saved Addresses Section */}
-          {addresses.length > 0 && (
-            <div
-              className="mt-2"
-              style={{ animation: 'slideDown 0.3s ease-out 0.2s both' }}
-            >
-              <div className="px-4 sm:px-6 lg:px-8 py-3">
-                <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider uppercase">
-                  Saved Addresses
-                </h2>
+        {/* Add Address Option Box (if query is empty) */}
+        {!topSearchQuery && (
+          <button
+            onClick={handleAddAddress}
+            className="w-full flex items-center justify-between p-4 bg-white dark:bg-[#1a1a1a] hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-2xl transition-colors border border-gray-100 dark:border-gray-800 shadow-xs group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="h-7 w-7 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+                <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
-              <div className="bg-white dark:bg-[#1a1a1a]">
-                {addresses
-                  .filter((address, index, self) => {
-                    // Filter out duplicate addresses with same label - keep only first occurrence
-                    const firstIndex = self.findIndex(addr => addr.label === address.label)
-                    return index === firstIndex
-                  })
-                  .map((address, index) => {
-                    const IconComponent = getAddressIcon(address)
-                    return (
-                      <div
-                        key={address.id}
-                        className="px-4 sm:px-6 lg:px-8"
-                        style={{ animation: `slideUp 0.3s ease-out ${0.25 + index * 0.05}s both` }}
-                      >
-                        <div
-                          className={`py-4 ${index !== 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
-                        >
-                          <button
-                            onClick={() => handleSelectSavedAddress(address)}
-                            className="w-full flex items-start gap-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors p-2 -m-2"
-                          >
-                            <div className="flex flex-col items-center">
-                              <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                                <IconComponent className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 dark:text-white">
-                                {address.label || address.additionalDetails || "Home"}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {[
-                                  address.additionalDetails,
-                                  address.street,
-                                  address.city,
-                                  address.state,
-                                  address.zipCode
-                                ].filter(Boolean).join(", ")}
-                              </p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Phone number: {address.phone || userProfile?.phone || "Not provided"}
-                              </p>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
+              <span className="font-semibold text-gray-800 dark:text-gray-200 text-base">
+                Add Address
+              </span>
             </div>
-          )}
-        </div>
+            <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+          </button>
+        )}
+
+        {/* Loading Indicator for Top Search */}
+        {isTopSearching && (
+          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-rose-500 border-t-transparent" />
+            Searching locations...
+          </div>
+        )}
+
+        {/* Unified Container for Saved Addresses & Search Results */}
+        {(matchingSavedAddresses.length > 0 || topSearchResults.length > 0) && (
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-3xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800/60 overflow-hidden shadow-xs">
+            {/* Matching Saved Addresses */}
+            {matchingSavedAddresses.map((address) => {
+              const IconComponent = getAddressIcon(address)
+              const distStr = getSavedAddressDistanceText(address)
+              const isHome = (address.label || "").toLowerCase().includes("home")
+              return (
+                <div key={address.id || address._id} className="p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
+                  <button
+                    onClick={() => handleSelectSavedAddress(address)}
+                    className="w-full flex items-start gap-4 text-left"
+                  >
+                    <div className="flex flex-col items-center min-w-[48px]">
+                      <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                        <IconComponent className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                      </div>
+                      {distStr && (
+                        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">
+                          {distStr}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-gray-900 dark:text-white text-base">
+                        {address.label || address.additionalDetails || "Home"}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                        {[
+                          address.additionalDetails,
+                          address.street,
+                          address.city,
+                          address.state,
+                          address.zipCode
+                        ].filter(Boolean).join(", ")}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Weather Alert Banner for Home address */}
+                  {isHome && (
+                    <div className="mt-3 bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-3 flex items-center gap-2.5">
+                      <CloudRain className="h-5 w-5 text-indigo-500 flex-shrink-0" />
+                      <p className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
+                        It's raining here, delivery partners may take longer to reach
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Keyword Search Suggestions */}
+            {topSearchResults.map((item) => {
+              const distStr = item.distanceMeters !== null ? formatDistanceText(item.distanceMeters) : null
+              const isStation = item.title.toLowerCase().includes("station") || item.subtitle.toLowerCase().includes("station") || item.title.toLowerCase().includes("railway")
+              return (
+                <div key={item.id} className="p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
+                  <button
+                    onClick={() => handleSelectSearchSuggestion(item)}
+                    className="w-full flex items-start gap-4 text-left"
+                  >
+                    <div className="flex flex-col items-center min-w-[48px]">
+                      <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                        <MapPin className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                      </div>
+                      {distStr && (
+                        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">
+                          {distStr}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-gray-900 dark:text-white text-base">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                        {item.subtitle}
+                      </p>
+
+                      {/* IRCTC Train delivery badge */}
+                      {isStation && (
+                        <div className="mt-2 inline-flex items-center px-3 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-xs font-medium">
+                          Train seat delivery, partnered with IRCTC
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Empty state when searching and no results found */}
+        {topSearchQuery && !isTopSearching && matchingSavedAddresses.length === 0 && topSearchResults.length === 0 && (
+          <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-3xl border border-gray-100 dark:border-gray-800">
+            <MapPin className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="font-semibold text-gray-700 dark:text-gray-300 text-base">No locations found</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try searching with a different keyword or area name</p>
+          </div>
+        )}
       </div>
 
       <style>{`

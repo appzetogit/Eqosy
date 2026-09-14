@@ -367,6 +367,33 @@ export default function useAdminNotifications(options = {}) {
         socket.emit("join-admin");
       });
 
+      const handleRegistrationAlert = (data = {}) => {
+        const title = data.title || `New ${data.type || 'Account'} Registered`;
+        const name = data.name || data.fullName || 'New Account';
+        const phone = data.phone || data.mobile || '';
+
+        toast.info(`🆕 ${title}: ${name}${phone ? ` (${phone})` : ''}`);
+
+        const item = {
+          id: `reg:${data.id || Date.now()}`,
+          title: `🆕 ${title}`,
+          message: `${name}${phone ? ` (${phone})` : ''} registered and requires review.`,
+          type: "approval",
+          category: data.type === 'restaurant' ? 'restaurant_approval' : 'delivery_approval',
+          path: data.type === 'restaurant' ? '/admin/food/restaurants/joining-request' : '/admin/food/delivery-partners/join-request',
+          createdAt: data.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(name, phone, data.type),
+        };
+
+        setItems((prev) => uniqueById([item, ...prev]));
+        dispatchAdminNotificationsUpdated();
+        loadNotifications();
+      };
+
+      socket.on("new_registration_alert", handleRegistrationAlert);
+      socket.on("new_driver_registration", handleRegistrationAlert);
+
       socket.on("admin_handover_request", (payload) => {
         toast.error("🚨 Order Handover Request Received!", {
           description: payload?.message || `Driver ${payload?.partnerName || 'Delivery driver'} requested emergency handover.`,
@@ -419,16 +446,29 @@ export default function useAdminNotifications(options = {}) {
       });
 
       socket.on("admin_notification", () => {
+        loadNotifications();
         dispatchAdminNotificationsUpdated();
       });
 
+      socket.on("support_ticket_created", (data) => {
+        toast.info("🎫 New Support Ticket Raised", {
+          description: data?.subject || data?.message || "A user or delivery partner raised a ticket.",
+        });
+        loadNotifications();
+      });
+
       return () => {
+        socket.off("new_registration_alert", handleRegistrationAlert);
+        socket.off("new_driver_registration", handleRegistrationAlert);
+        socket.off("admin_handover_request");
+        socket.off("admin_notification");
+        socket.off("support_ticket_created");
         socket.disconnect();
       };
     } catch (err) {
       console.warn("Failed to set up admin notification socket:", err);
     }
-  }, []);
+  }, [loadNotifications]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {

@@ -157,8 +157,13 @@ export const GigsManagement = () => {
         await apiClient.patch(`/food/gigs/admin/gigs/${editingGig._id}`, formData);
         toast.success('Gig updated successfully');
       } else {
-        await apiClient.post('/food/gigs/admin/gigs', formData);
-        toast.success('Gig created successfully');
+        const res = await apiClient.post('/food/gigs/admin/gigs', formData);
+        const count = res.data?.data?.count || (Array.isArray(res.data?.data?.gigs) ? res.data.data.gigs.length : 1);
+        if (count > 1) {
+          toast.success(`Created ${count} gig slots for everyday schedule!`);
+        } else {
+          toast.success('Gig created successfully');
+        }
       }
       setShowCreateModal(false);
       setEditingGig(null);
@@ -195,7 +200,9 @@ export const GigsManagement = () => {
       endTime: gig.endTime || '16:00',
       capacity: gig.capacity || 20,
       zoneName: zName,
-      cancellationCutoffMinutes: gig.cancellationCutoffMinutes ?? 60
+      cancellationCutoffMinutes: gig.cancellationCutoffMinutes ?? 60,
+      repeatOption: 'single',
+      endDate: gig.date || selectedDate
     });
     setShowCreateModal(true);
   };
@@ -215,13 +222,15 @@ export const GigsManagement = () => {
             setEditingGig(null);
             setIsCustomZone(false);
             setFormData({
-              title: '',
-              date: selectedDate,
+              title: 'Morning shift',
+              date: selectedDate || new Date().toISOString().slice(0, 10),
               startTime: '12:00',
               endTime: '16:00',
               capacity: 20,
               zoneName: 'All Zones',
-              cancellationCutoffMinutes: 60
+              cancellationCutoffMinutes: 60,
+              repeatOption: 'single',
+              endDate: selectedDate || new Date().toISOString().slice(0, 10)
             });
             setShowCreateModal(true);
           }}
@@ -920,14 +929,32 @@ export const GigsManagement = () => {
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="e.g. Lunch Peak Shift"
+                  placeholder="e.g. Morning Shift"
                   className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500"
                 />
               </div>
 
+              {!editingGig && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Apply Schedule / Frequency</label>
+                  <select
+                    value={formData.repeatOption || 'single'}
+                    onChange={(e) => setFormData({ ...formData, repeatOption: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500 bg-white cursor-pointer"
+                  >
+                    <option value="single">Single Date Only</option>
+                    <option value="everyday">Everyday (Next 30 Days)</option>
+                    <option value="7_days">Everyday (Next 7 Days)</option>
+                    <option value="custom_range">Custom Date Range (Select End Date)</option>
+                  </select>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {formData.repeatOption === 'custom_range' ? 'Start Date' : 'Date'}
+                  </label>
                   <input
                     type="date"
                     required
@@ -937,6 +964,74 @@ export const GigsManagement = () => {
                   />
                 </div>
 
+                {formData.repeatOption === 'custom_range' ? (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      required
+                      min={formData.date}
+                      value={formData.endDate || formData.date}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Zone Name</label>
+                    {!isCustomZone ? (
+                      <select
+                        value={formData.zoneName}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setIsCustomZone(true);
+                            setFormData({ ...formData, zoneName: '' });
+                          } else {
+                            setFormData({ ...formData, zoneName: e.target.value });
+                          }
+                        }}
+                        className="w-full px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500 bg-white cursor-pointer"
+                      >
+                        <option value="All Zones">All Zones</option>
+                        {Array.from(
+                          new Set(
+                            zones
+                              .map((z) => z.name || z.serviceLocation || z.zoneName)
+                              .filter(Boolean)
+                          )
+                        ).map((zoneName) => (
+                          <option key={zoneName} value={zoneName}>
+                            {zoneName}
+                          </option>
+                        ))}
+                        <option value="__custom__">+ Enter Custom Zone Name...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={formData.zoneName}
+                          onChange={(e) => setFormData({ ...formData, zoneName: e.target.value })}
+                          placeholder="e.g. Salar"
+                          className="flex-1 px-3 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomZone(false);
+                            setFormData({ ...formData, zoneName: 'All Zones' });
+                          }}
+                          className="px-2.5 py-2 rounded-xl border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-50 shrink-0"
+                        >
+                          List
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {formData.repeatOption === 'custom_range' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Zone Name</label>
                   {!isCustomZone ? (
@@ -988,7 +1083,7 @@ export const GigsManagement = () => {
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -992,16 +992,34 @@ export const useDeliveryNotifications = () => {
       });
     });
 
-    socketRef.current.on('order_claimed', (data) => {
+    const handleOrderClaimedByOther = (data = {}) => {
       debugLog('?? Order claimed by another partner:', data);
-      const currentActiveId = getOrderAlertKey(activeOrderRef.current);
       const claimedId = getOrderAlertKey(data);
+      const currentPartnerId = String(deliveryPartnerId || '').trim();
+      const claimedByPartnerId = String(data?.claimedBy || '').trim();
 
-      if (currentActiveId && claimedId && currentActiveId === claimedId) {
-        debugLog('?? Removing claimed order from local state');
-        clearNewOrder();
+      if (claimedByPartnerId && currentPartnerId && claimedByPartnerId === currentPartnerId) {
+        return;
       }
-    });
+
+      window.dispatchEvent(new CustomEvent('order_claimed_by_other', { detail: data }));
+
+      if (activeOrderRef.current && getOrderAlertKey(activeOrderRef.current) === claimedId) {
+        stopAlertLoop();
+        const updated = {
+          ...activeOrderRef.current,
+          isClaimedByOther: true,
+          isAcceptedByOther: true,
+          status: 'accepted_by_other',
+        };
+        activeOrderRef.current = updated;
+        setNewOrder(updated);
+        toast.info(`Order #${data.orderId || claimedId.slice(-6)} accepted by other driver`);
+      }
+    };
+
+    socketRef.current.on('order_claimed', handleOrderClaimedByOther);
+    socketRef.current.on('order_accepted_by_other', handleOrderClaimedByOther);
 
     socketRef.current.on('order_reassigned_elsewhere', (data) => {
       debugLog('?? Order reassigned to another partner:', data);

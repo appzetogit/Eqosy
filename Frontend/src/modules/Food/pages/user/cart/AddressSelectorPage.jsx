@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { ChevronLeft, ChevronRight, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, Target, CloudRain, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, Search } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
 import { Label } from "@food/components/ui/label"
@@ -34,6 +34,15 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
   return R * c // Distance in meters
+}
+
+function formatDistanceText(meters) {
+  if (meters === null || meters === undefined || isNaN(meters)) return null
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`
+  }
+  const km = meters / 1000
+  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
 }
 
 // Get icon based on address type/label
@@ -82,6 +91,11 @@ export default function AddressSelectorPage() {
   const formBodyRef = useRef(null)
   const manualFieldRefs = useRef({})
   const suppressAutocompleteFetchRef = useRef(true)
+
+  // Top location search bar state
+  const [topSearchQuery, setTopSearchQuery] = useState("")
+  const [topSearchResults, setTopSearchResults] = useState([])
+  const [isTopSearching, setIsTopSearching] = useState(false)
 
   const dismissSuggestions = useCallback(() => {
     setIsSearchFocused(false)
@@ -230,6 +244,124 @@ export default function AddressSelectorPage() {
 
   const handleBack = () => {
     goBack()
+  }
+
+  // Real-time keyword address searching for top search bar
+  useEffect(() => {
+    const q = topSearchQuery.trim()
+    if (!q || q.length < 2) {
+      setTopSearchResults([])
+      setIsTopSearching(false)
+      return
+    }
+
+    const t = setTimeout(async () => {
+      try {
+        setIsTopSearching(true)
+        const refLat = Number.isFinite(location?.latitude) ? location.latitude : mapPosition?.[0] ?? 22.7196
+        const refLng = Number.isFinite(location?.longitude) ? location.longitude : mapPosition?.[1] ?? 75.8577
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=12&q=${encodeURIComponent(q)}`
+        const res = await fetch(url, {
+          headers: { Accept: "application/json" },
+        })
+        const json = await res.json()
+        const list = Array.isArray(json) ? json : []
+        const mapped = list.map((r) => {
+          const displayParts = (r.display_name || "").split(",")
+          const title = displayParts[0]?.trim() || r.name || "Location"
+          const subtitle = displayParts.slice(1).join(",").trim()
+          const lat = Number(r.lat)
+          const lng = Number(r.lon)
+          const meters = (Number.isFinite(refLat) && Number.isFinite(refLng) && Number.isFinite(lat) && Number.isFinite(lng))
+            ? calculateDistance(refLat, refLng, lat, lng)
+            : null
+          return {
+            id: r.place_id || r.osm_id || `${lat},${lng}`,
+            title,
+            subtitle,
+            lat,
+            lng,
+            distanceMeters: meters,
+            raw: r,
+          }
+        })
+
+        mapped.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
+        setTopSearchResults(mapped)
+      } catch (e) {
+        setTopSearchResults([])
+      } finally {
+        setIsTopSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(t)
+  }, [topSearchQuery, location?.latitude, location?.longitude, mapPosition])
+
+  const matchingSavedAddresses = useMemo(() => {
+    const q = topSearchQuery.trim().toLowerCase()
+    if (!q) return addresses
+    return (addresses || []).filter((addr) => {
+      const text = [
+        addr?.label,
+        addr?.additionalDetails,
+        addr?.street,
+        addr?.city,
+        addr?.state,
+        addr?.zipCode,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return text.includes(q)
+    })
+  }, [addresses, topSearchQuery])
+
+  const handleSelectSearchSuggestion = async (suggestion) => {
+    try {
+      const latitude = suggestion.lat
+      const longitude = suggestion.lng
+      const displayAddress = suggestion.subtitle
+        ? `${suggestion.title}, ${suggestion.subtitle}`
+        : suggestion.title
+
+      const locationData = {
+        latitude,
+        longitude,
+        city: suggestion.raw?.address?.city || suggestion.raw?.address?.town || suggestion.raw?.address?.village || "",
+        state: suggestion.raw?.address?.state || "",
+        area: suggestion.raw?.address?.suburb || suggestion.raw?.address?.neighbourhood || "",
+        street: displayAddress,
+        postalCode: suggestion.raw?.address?.postcode || "",
+        address: displayAddress,
+        formattedAddress: displayAddress,
+        label: suggestion.title,
+      }
+
+      await persistActiveLocation(locationData, "current")
+      setMapPosition([latitude, longitude])
+      setCurrentAddress(displayAddress)
+      toast.success(`Location set: ${suggestion.title}`, { duration: 2000 })
+      handleBack()
+    } catch (error) {
+      debugError("Error selecting location suggestion:", error)
+      toast.error("Failed to set location")
+    }
+  }
+
+  const getSavedAddressDistanceText = (address) => {
+    let lat = address.latitude || address.lat
+    let lng = address.longitude || address.lng
+    if (!lat && address.location?.coordinates && address.location.coordinates.length >= 2) {
+      lng = address.location.coordinates[0]
+      lat = address.location.coordinates[1]
+    }
+    const userLat = location?.latitude || mapPosition?.[0]
+    const userLng = location?.longitude || mapPosition?.[1]
+    if (!userLat || !userLng || !lat || !lng) return null
+    const meters = calculateDistance(Number(userLat), Number(userLng), Number(lat), Number(lng))
+    return formatDistanceText(meters)
   }
 
   const addressAutocompleteSuggestions = useMemo(() => {
@@ -1123,86 +1255,183 @@ export default function AddressSelectorPage() {
   }
 
   return (
-    <AnimatedPage className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col">
-      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full">
-          <ChevronLeft className="h-6 w-6" />
-        </Button>
-        <h1 className="text-xl font-bold">Select Location</h1>
+    <AnimatedPage className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex flex-col">
+      {/* Header & Top Search Bar */}
+      <div className="flex-shrink-0 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 px-4 pt-4 pb-3 shadow-xs space-y-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 -ml-2 h-9 w-9">
+            <ChevronLeft className="h-6 w-6 text-gray-800 dark:text-gray-200" />
+          </Button>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Select Location</h1>
+        </div>
+
+        {/* Search Bar Input matching reference image design */}
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 h-5 w-5 text-rose-500 flex-shrink-0 pointer-events-none" />
+          <input
+            type="text"
+            value={topSearchQuery}
+            onChange={(e) => setTopSearchQuery(e.target.value)}
+            placeholder="Search location..."
+            className="w-full bg-white dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 rounded-2xl pl-11 pr-10 py-3 text-sm font-medium text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all shadow-xs"
+          />
+          {topSearchQuery && (
+            <button
+              type="button"
+              onClick={() => setTopSearchQuery("")}
+              className="absolute right-3.5 p-1 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-400 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-10">
-        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-800 space-y-3">
-          <button 
-            onClick={handleUseCurrentLocation}
-            className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm hover:shadow-md transition-all group"
-          >
-            <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-              <Navigation className="h-5 w-5 text-[#EB590E]" />
-            </div>
-            <div className="text-left flex-1">
-              <p className="font-bold text-[#EB590E]">Use Current Location</p>
-              <p className="text-xs text-gray-500 line-clamp-1">{currentAddress || "Enable GPS for accuracy"}</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-gray-400" />
-          </button>
-
-          <button 
-            onClick={handleAddAddressClick}
-            className="w-full flex items-center gap-4 p-4 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm hover:shadow-md transition-all group"
-          >
-            <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <MapPin className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="text-left flex-1">
-              <p className="font-bold text-blue-600">Select / Search Location Manually</p>
-              <p className="text-xs text-gray-500 line-clamp-1">Search any city, area, or pick location on map</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-gray-400" />
-          </button>
-        </div>
-
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">Saved Addresses</h2>
-            <Button variant="ghost" className="text-[#EB590E] p-0 h-auto font-bold" onClick={handleAddAddressClick}>
-              <Plus className="h-4 w-4 mr-1" /> Add New
-            </Button>
+      <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-3 space-y-3 pb-10">
+        {/* Use Current Location Button */}
+        <button
+          onClick={handleUseCurrentLocation}
+          disabled={loading}
+          className="w-full flex items-center justify-between p-4 bg-white dark:bg-[#1a1a1a] hover:bg-rose-50/40 dark:hover:bg-rose-900/10 rounded-2xl transition-colors border border-gray-100 dark:border-gray-800 shadow-xs group"
+        >
+          <div className="flex items-center gap-3.5">
+            <Target className="h-5 w-5 text-rose-500 dark:text-rose-400 flex-shrink-0 stroke-[2.2]" />
+            <span className="font-semibold text-rose-600 dark:text-rose-400 text-base">
+              Use Current Location
+            </span>
           </div>
+          <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+        </button>
 
-          <div className="space-y-4">
-            {addresses.length === 0 ? (
-              <div className="text-center py-10 opacity-50">
-                <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                <p>No addresses saved yet</p>
+        {/* Add Address Button (when query is empty) */}
+        {!topSearchQuery && (
+          <button
+            onClick={handleAddAddressClick}
+            className="w-full flex items-center justify-between p-4 bg-white dark:bg-[#1a1a1a] hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-2xl transition-colors border border-gray-100 dark:border-gray-800 shadow-xs group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="h-7 w-7 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+                <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
-            ) : (
-              addresses.map((addr, idx) => {
-                const Icon = getAddressIcon(addr)
-                return (
+              <span className="font-semibold text-gray-800 dark:text-gray-200 text-base">
+                Add Address
+              </span>
+            </div>
+            <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+          </button>
+        )}
+
+        {/* Loading Indicator for Top Search */}
+        {isTopSearching && (
+          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-rose-500 border-t-transparent" />
+            Searching locations...
+          </div>
+        )}
+
+        {/* Unified Cards List for Saved Addresses & Search Results */}
+        {(matchingSavedAddresses.length > 0 || topSearchResults.length > 0) && (
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-3xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800/60 overflow-hidden shadow-xs">
+            {/* Matching Saved Addresses */}
+            {matchingSavedAddresses.map((address) => {
+              const IconComponent = getAddressIcon(address)
+              const distStr = getSavedAddressDistanceText(address)
+              const isHome = (address.label || "").toLowerCase().includes("home")
+              return (
+                <div key={getAddressId(address) || address.id} className="p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
                   <button
-                    key={getAddressId(addr) || idx}
-                    onClick={() => handleSelectSavedAddress(addr)}
-                    className="w-full flex items-start gap-4 p-4 bg-slate-50 dark:bg-[#1a1a1a] rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left group"
+                    onClick={() => handleSelectSavedAddress(address)}
+                    className="w-full flex items-start gap-4 text-left"
                   >
-                    <div className="h-10 w-10 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-sm">
-                      <Icon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                    <div className="flex flex-col items-center min-w-[48px]">
+                      <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                        <IconComponent className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                      </div>
+                      {distStr && (
+                        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">
+                          {distStr}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900 dark:text-white capitalize">{addr.label || "Address"}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-0.5">
-                        {[addr.additionalDetails, addr.street, addr.city, addr.state].filter(Boolean).join(", ")}
+                      <p className="font-bold text-gray-900 dark:text-white text-base capitalize">
+                        {address.label || address.additionalDetails || "Home"}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                        {[
+                          address.additionalDetails,
+                          address.street,
+                          address.city,
+                          address.state,
+                          address.zipCode
+                        ].filter(Boolean).join(", ")}
                       </p>
                     </div>
-                    <div className="h-6 w-6 rounded-full border border-gray-200 dark:border-gray-700 mt-2 flex items-center justify-center group-hover:border-[#EB590E]">
-                       <ChevronRight className="h-3 w-3 text-gray-400 group-hover:text-[#EB590E]" />
+                  </button>
+
+                  {/* Weather Alert Banner for Home address */}
+                  {isHome && (
+                    <div className="mt-3 bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-3 flex items-center gap-2.5">
+                      <CloudRain className="h-5 w-5 text-indigo-500 flex-shrink-0" />
+                      <p className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
+                        It's raining here, delivery partners may take longer to reach
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Keyword Search Suggestions */}
+            {topSearchResults.map((item) => {
+              const distStr = item.distanceMeters !== null ? formatDistanceText(item.distanceMeters) : null
+              const isStation = item.title.toLowerCase().includes("station") || item.subtitle.toLowerCase().includes("station") || item.title.toLowerCase().includes("railway")
+              return (
+                <div key={item.id} className="p-4 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
+                  <button
+                    onClick={() => handleSelectSearchSuggestion(item)}
+                    className="w-full flex items-start gap-4 text-left"
+                  >
+                    <div className="flex flex-col items-center min-w-[48px]">
+                      <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                        <MapPin className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                      </div>
+                      {distStr && (
+                        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">
+                          {distStr}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-gray-900 dark:text-white text-base">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
+                        {item.subtitle}
+                      </p>
+
+                      {/* IRCTC Train delivery badge */}
+                      {isStation && (
+                        <div className="mt-2 inline-flex items-center px-3 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-xs font-medium">
+                          Train seat delivery, partnered with IRCTC
+                        </div>
+                      )}
                     </div>
                   </button>
-                )
-              })
-            )}
+                </div>
+              )
+            })}
           </div>
-        </div>
+        )}
+
+        {/* Empty state when searching and no results found */}
+        {topSearchQuery && !isTopSearching && matchingSavedAddresses.length === 0 && topSearchResults.length === 0 && (
+          <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-3xl border border-gray-100 dark:border-gray-800">
+            <MapPin className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="font-semibold text-gray-700 dark:text-gray-300 text-base">No locations found</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Try searching with a different keyword or area name</p>
+          </div>
+        )}
       </div>
       <style>{`
         @keyframes bounce-short {

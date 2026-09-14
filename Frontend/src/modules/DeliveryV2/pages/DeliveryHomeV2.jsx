@@ -1241,6 +1241,29 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   }, [resetTrip, setOnline]);
 
   useEffect(() => {
+    const handleOrderClaimedByOther = (event) => {
+      const data = event.detail || {};
+      const claimedId = String(data.orderId || data.orderMongoId || '');
+      setIncomingOrder((prev) => {
+        if (!prev) return null;
+        const prevId = String(prev.orderId || prev._id || prev.orderMongoId || '');
+        if (prevId === claimedId) {
+          return {
+            ...prev,
+            isClaimedByOther: true,
+            isAcceptedByOther: true,
+            status: 'accepted_by_other',
+          };
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('order_claimed_by_other', handleOrderClaimedByOther);
+    return () => window.removeEventListener('order_claimed_by_other', handleOrderClaimedByOther);
+  }, []);
+
+  useEffect(() => {
     if (orderStatusUpdate) {
       const status = String(orderStatusUpdate.orderStatus || orderStatusUpdate.status || '').toLowerCase();
       if (status.includes('cancel')) {

@@ -230,7 +230,18 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
 
 export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
+  const partnerObjId = new mongoose.Types.ObjectId(deliveryPartnerId);
+
   const filter = {
+    // Exclude orders that the current driver has explicitly handed over or rejected
+    'dispatch.offeredTo': {
+      $not: {
+        $elemMatch: {
+          partnerId: partnerObjId,
+          action: { $in: ['handover', 'handed_over', 'rejected', 'timeout'] }
+        }
+      }
+    },
     $or: [
       {
         'dispatch.status': { $in: ['unassigned', 'assigned'] },
@@ -246,7 +257,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
         },
       },
       {
-        'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(deliveryPartnerId),
+        'dispatch.deliveryPartnerId': partnerObjId,
         orderStatus: {
           $nin: [
             'delivered',
@@ -458,20 +469,26 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
       if (io) {
         emitOrderUpdate(order, deliveryPartnerId);
 
-        // Notify ALL other delivery partners who were offered this order to dismiss it
-        const offeredPartners = order.dispatch?.offeredTo || [];
+        // Notify ALL delivery partners in the room/system that this order was claimed
         const claimedPayload = {
           orderId: order._id.toString(),
           orderMongoId: order._id?.toString?.(),
           claimedBy: deliveryPartnerId.toString(),
+          status: 'accepted_by_other',
+          message: 'Accepted by other driver',
         };
+        io.to('delivery_partners').emit('order_claimed', claimedPayload);
+        io.to('delivery_partners').emit('order_accepted_by_other', claimedPayload);
+
+        const offeredPartners = order.dispatch?.offeredTo || [];
         for (const offer of offeredPartners) {
           const pid = offer.partnerId?.toString?.();
           if (pid && pid !== deliveryPartnerId.toString()) {
             io.to(rooms.delivery(pid)).emit('order_claimed', claimedPayload);
+            io.to(rooms.delivery(pid)).emit('order_accepted_by_other', claimedPayload);
           }
         }
-        logger.info(`[DeliveryDispatch] Broadcasted order_claimed to ${offeredPartners.length - 1} other partners for order ${order._id.toString()}`);
+        logger.info(`[DeliveryDispatch] Broadcasted order_claimed to delivery_partners for order ${order._id.toString()}`);
       }
 
       // Synchronize OrderConversation to new delivery partner
