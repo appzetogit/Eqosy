@@ -346,36 +346,38 @@ export const PocketV2 = () => {
           {/* 5. MORE SERVICES - Vertical List */}
           <div className="space-y-4">
              <div className="grid grid-cols-2 gap-4">
-                <div onClick={() => navigate('/food/delivery/pocket/payout')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50">
-                   <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 border border-blue-100">
+                <div onClick={() => navigate('/food/delivery/pocket/payout')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 min-w-0 overflow-hidden">
+                   <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 border border-blue-100 shrink-0">
                       <IndianRupee className="w-5 h-5" />
                    </div>
-                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Last Payout</p>
-                   <p className="text-xl font-black text-black leading-none mb-1">₹{walletState.payoutAmount}</p>
-                   <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight">Prev Week Info</p>
+                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 truncate">Last Payout</p>
+                   <p className="text-xl font-black text-black leading-none mb-1 truncate" title={`₹${Number(walletState.payoutAmount || 0).toFixed(2)}`}>
+                     ₹{Number(walletState.payoutAmount || 0).toFixed(2)}
+                   </p>
+                   <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight truncate">Prev Week Info</p>
                 </div>
 
-                <div onClick={() => navigate('/food/delivery/pocket/limit-settlement')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between">
-                   <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#ff8100] mb-4 border border-orange-100">
+                <div onClick={() => navigate('/food/delivery/pocket/limit-settlement')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between min-w-0 overflow-hidden">
+                   <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-[#ff8100] mb-4 border border-orange-100 shrink-0">
                       <Receipt className="w-5 h-5" />
                    </div>
-                   <p className="text-sm font-bold text-gray-800 leading-tight">Limit Settlement</p>
+                   <p className="text-sm font-bold text-gray-800 leading-tight break-words">Limit Settlement</p>
                 </div>
              </div>
 
              <div className="grid grid-cols-2 gap-4">
-                <div onClick={() => navigate('/food/delivery/pocket/deductions')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between">
-                   <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-600 mb-4 border border-red-100">
+                <div onClick={() => navigate('/food/delivery/pocket/deductions')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between min-w-0 overflow-hidden">
+                   <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-600 mb-4 border border-red-100 shrink-0">
                       <FileText className="w-5 h-5" />
                    </div>
-                   <p className="text-sm font-bold text-gray-800 leading-tight">Deduction List</p>
+                   <p className="text-sm font-bold text-gray-800 leading-tight break-words">Deduction List</p>
                 </div>
 
-                <div onClick={() => navigate('/food/delivery/pocket/details')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between">
-                   <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 mb-4 border border-purple-100">
+                <div onClick={() => navigate('/food/delivery/pocket/details')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 active:bg-gray-50 flex flex-col justify-between min-w-0 overflow-hidden">
+                   <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 mb-4 border border-purple-100 shrink-0">
                       <LayoutGrid className="w-5 h-5" />
                    </div>
-                   <p className="text-sm font-bold text-gray-800 leading-tight">Pocket statement</p>
+                   <p className="text-sm font-bold text-gray-800 leading-tight break-words">Pocket statement</p>
                 </div>
              </div>
           </div>
@@ -400,7 +402,7 @@ export const PocketV2 = () => {
                    <div className="bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                          <span className="text-xs font-bold text-gray-400 uppercase">Cash in your hand</span>
-                         <span className="text-base font-black text-black">₹{walletState.cashInHand}</span>
+                          <span className="text-base font-black text-black">₹{Number(walletState.cashInHand || 0).toFixed(2)}</span>
                       </div>
                       <div className="relative">
                          <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />

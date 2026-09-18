@@ -83,7 +83,7 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
             transition={{ duration: 0.5, ease: "easeInOut" }}
             className="w-full h-full"
           >
-            <div 
+            <div
               className="block w-full h-full cursor-pointer"
               onClick={(e) => {
                 const cta = banners[currentIndex]?.ctaLink;
@@ -95,9 +95,9 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
                 }
               }}
             >
-              <img 
-                src={banners[currentIndex]?.imageUrl} 
-                alt={banners[currentIndex]?.title || "Promotion"} 
+              <img
+                src={banners[currentIndex]?.imageUrl}
+                alt={banners[currentIndex]?.title || "Promotion"}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -128,9 +128,8 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
             {banners.map((_, idx) => (
               <div
                 key={idx}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === currentIndex ? "w-6 bg-white" : "w-1.5 bg-white/50"
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentIndex ? "w-6 bg-white" : "w-1.5 bg-white/50"
+                  }`}
               />
             ))}
           </div>

@@ -75,16 +75,25 @@ export default function AdminNavbar({ onMenuClick }) {
 
   const handoverCount = useMemo(() => adminNotifications.filter(i => i.category === "handover_approval").length, [adminNotifications]);
   const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category)).length, [adminNotifications]);
+  const withdrawalCount = useMemo(() => adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category)).length, [adminNotifications]);
   const supportCount = useMemo(() => adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category)).length, [adminNotifications]);
   const complianceCount = useMemo(() => adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [adminNotifications]);
 
   const filteredNotifications = useMemo(() => {
     if (activeNotifTab === "handovers") return adminNotifications.filter(i => i.category === "handover_approval");
     if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category));
+    if (activeNotifTab === "withdrawals") return adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category));
     if (activeNotifTab === "support") return adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category));
     if (activeNotifTab === "compliance") return adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired");
     return adminNotifications;
   }, [activeNotifTab, adminNotifications]);
+
+  // Auto-reset active tab to "all" when notifications popover is opened
+  useEffect(() => {
+    if (notificationsOpen) {
+      setActiveNotifTab("all");
+    }
+  }, [notificationsOpen]);
 
   // Load business settings
   useEffect(() => {
@@ -344,8 +353,8 @@ export default function AdminNavbar({ onMenuClick }) {
                 >
                   <Bell className="w-5 h-5" />
                   {notificationCount > 0 && (
-                    <span className="absolute top-2 right-2 min-w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                      {notificationCount > 9 ? "9+" : notificationCount}
+                    <span className="absolute -top-1 -right-1 min-w-[20px] h-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center px-1.5 shadow-md animate-pulse">
+                      {notificationCount > 99 ? "99+" : notificationCount}
                     </span>
                   )}
                 </button>
@@ -355,8 +364,8 @@ export default function AdminNavbar({ onMenuClick }) {
                   {/* Header */}
                   <div className="px-5 py-3.5 border-b border-neutral-100 flex items-center justify-between bg-slate-50/50">
                     <div>
-                      <p className="text-sm font-black text-slate-900">Notifications</p>
-                      <p className="text-[11px] font-medium text-slate-500">Latest approvals, handovers & support alerts</p>
+                      <p className="text-sm font-black text-slate-900">Notifications & Pending Tasks</p>
+                      <p className="text-[11px] font-medium text-slate-500">Approvals, handovers, withdrawals & support requests</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {notificationCount > 0 && (
@@ -383,7 +392,8 @@ export default function AdminNavbar({ onMenuClick }) {
                     {[
                       { id: "all", label: "All", count: adminNotifications.length },
                       { id: "handovers", label: "Handovers", count: handoverCount, alert: true },
-                      { id: "approvals", label: "Approvals", count: approvalCount },
+                      { id: "approvals", label: "Approvals", count: approvalCount, highlight: true },
+                      { id: "withdrawals", label: "Withdrawals", count: withdrawalCount },
                       { id: "support", label: "Support", count: supportCount },
                       { id: "compliance", label: "Compliance", count: complianceCount },
                     ].map((tab) => (
@@ -406,6 +416,8 @@ export default function AdminNavbar({ onMenuClick }) {
                               ? "bg-white/20 text-white"
                               : tab.alert
                               ? "bg-rose-100 text-rose-700 font-bold"
+                              : tab.highlight
+                              ? "bg-emerald-100 text-emerald-700 font-bold"
                               : "bg-slate-200 text-slate-700"
                           }`}>
                             {tab.count}
@@ -443,6 +455,9 @@ export default function AdminNavbar({ onMenuClick }) {
                         } else if (item?.category === "food_approval") {
                           badgeText = "FOOD";
                           badgeStyle = "bg-amber-50 text-amber-800 border border-amber-200 font-bold";
+                        } else if (item?.category === "withdrawals" || item?.category === "delivery_withdrawals") {
+                          badgeText = "WITHDRAWAL";
+                          badgeStyle = "bg-green-50 text-green-700 border border-green-200 font-bold";
                         } else if (isSupport) {
                           badgeText = "SUPPORT";
                           badgeStyle = "bg-purple-50 text-purple-700 border border-purple-200 font-bold";

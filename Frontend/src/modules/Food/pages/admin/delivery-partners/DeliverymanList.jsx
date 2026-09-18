@@ -4,6 +4,7 @@ import { adminAPI } from "@food/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
 import { exportDeliverymenToExcel, exportDeliverymenToPDF } from "@food/components/admin/deliveryman/deliverymanExportUtils"
+import DriverLiveLocationModal from "@food/components/admin/deliveryman/DriverLiveLocationModal"
 import { toast } from "sonner"
 const debugError = () => {}
 
@@ -133,6 +134,15 @@ export default function DeliverymanList() {
       setApprovingEmergencyId(null)
     }
   }
+
+  const [selectedLivePartner, setSelectedLivePartner] = useState(null)
+  const [liveModalOpen, setLiveModalOpen] = useState(false)
+
+  const handleOpenLiveLocation = (deliveryman) => {
+    setSelectedLivePartner(deliveryman)
+    setLiveModalOpen(true)
+  }
+
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
     name: true,
@@ -143,6 +153,7 @@ export default function DeliverymanList() {
     cashInHand: true,
     remainingCashLimit: true,
     availabilityStatus: true,
+    liveLocation: true,
     latestImage: true,
     actions: true,
   })
@@ -372,6 +383,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
       cashInHand: true,
       remainingCashLimit: true,
       availabilityStatus: true,
+      liveLocation: true,
       latestImage: true,
       actions: true,
     })
@@ -387,6 +399,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
     cashInHand: "Cash In Hand",
     remainingCashLimit: "Remaining Cash Limit",
     availabilityStatus: "Availability Status",
+    liveLocation: "Live Location",
     latestImage: "Latest Image",
     actions: "Actions",
   }
@@ -789,6 +802,13 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                         </div>
                       </th>
                     )}
+                    {visibleColumns.liveLocation && (
+                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>Live Location</span>
+                        </div>
+                      </th>
+                    )}
                     {visibleColumns.latestImage && (
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider min-w-[180px]">
                         <span>Latest Image</span>
@@ -935,6 +955,35 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                                 </div>
                               )}
                             </div>
+                          </td>
+                        )}
+                        {visibleColumns.liveLocation && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {dm.availabilityStatus === "online" || dm.status === "Online" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLiveLocation(dm)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 font-bold text-xs shadow-sm hover:shadow transition-all group cursor-pointer"
+                                title="Click to view real-time live location map"
+                              >
+                                <span className="relative flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </span>
+                                <MapPin className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                                <span>Live Location</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLiveLocation(dm)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 font-medium text-xs transition-all cursor-pointer"
+                                title="View last known location"
+                              >
+                                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                <span>View Map</span>
+                              </button>
+                            )}
                           </td>
                         )}
                         {visibleColumns.latestImage && (
@@ -1483,6 +1532,13 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Driver Live Location Real-time Modal */}
+      <DriverLiveLocationModal
+        deliveryman={selectedLivePartner}
+        isOpen={liveModalOpen}
+        onClose={() => setLiveModalOpen(false)}
+      />
     </div>
   )
 }

@@ -5,25 +5,45 @@ import { API_BASE_URL, resolveSocketOrigin } from "@food/api/config";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "admin_notifications_dismissed_v1";
+const REALTIME_KEY = "admin_realtime_notifications_v1";
 const UPDATE_EVENT = "adminNotificationsUpdated";
 
 const safeParse = (value, fallback) => {
   try {
-    return JSON.parse(value);
+    return value ? JSON.parse(value) : fallback;
   } catch {
     return fallback;
   }
 };
 
 const getDismissedIds = () => {
-  if (typeof localStorage === "undefined") return [];
-  const parsed = safeParse(localStorage.getItem(STORAGE_KEY) || "[]", []);
-  return Array.isArray(parsed) ? parsed : [];
+  if (typeof window === "undefined") return [];
+  return safeParse(localStorage.getItem(STORAGE_KEY), []);
 };
 
-const saveDismissedIds = (ids) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(ids) ? ids : []));
+const saveDismissedIds = (ids = []) => {
+  if (typeof window === "undefined") return;
+  try {
+    const unique = [...new Set(ids.filter(Boolean))];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
+  } catch (err) {
+    console.warn("Failed to save dismissed notification IDs", err);
+  }
+};
+
+const getStoredRealtimeNotifs = () => {
+  if (typeof window === "undefined") return [];
+  return safeParse(localStorage.getItem(REALTIME_KEY), []);
+};
+
+const saveStoredRealtimeNotifs = (items = []) => {
+  if (typeof window === "undefined") return;
+  try {
+    const uniqueItems = uniqueById(items).slice(0, 100);
+    localStorage.setItem(REALTIME_KEY, JSON.stringify(uniqueItems));
+  } catch (err) {
+    console.warn("Failed to save realtime notifications", err);
+  }
 };
 
 export const dispatchAdminNotificationsUpdated = () => {
@@ -59,16 +79,21 @@ const uniqueById = (items = []) => {
 
 const joinMeta = (...parts) => parts.filter(Boolean).join(" • ");
 
-const mapPendingHandovers = (response) => {
-  const rawData = response?.data?.data || response?.data || response;
-  const rows =
-    rawData?.orders ||
-    rawData?.items ||
-    (Array.isArray(rawData) ? rawData : []) ||
-    response?.orders ||
-    [];
+const extractRows = (res) => {
+  if (!res) return [];
+  const d = res?.data?.data ?? res?.data ?? res;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.items)) return d.items;
+  if (Array.isArray(d?.rows)) return d.rows;
+  if (Array.isArray(d?.requests)) return d.requests;
+  if (Array.isArray(d?.partners)) return d.partners;
+  if (Array.isArray(d?.restaurants)) return d.restaurants;
+  if (Array.isArray(d?.orders)) return d.orders;
+  return [];
+};
 
-  const list = Array.isArray(rows) ? rows : [];
+const mapPendingHandovers = (response) => {
+  const list = extractRows(response);
 
   return list.map((item) => {
     const requestedBy = item?.dispatch?.handoverRequest?.requestedBy;
@@ -136,73 +161,60 @@ const mapPendingHandovers = (response) => {
   });
 };
 
-const mapPendingRestaurants = (rows = []) =>
-  (Array.isArray(rows) ? rows : []).map((item) => ({
-    id: `approval-restaurant-${String(item?._id || item?.id || "")}`,
-    title: "Restaurant Approval Pending",
-    message: `${item?.restaurantName || "Restaurant"} submitted a restaurant approval request. Owner: ${item?.ownerName || "N/A"}. Contact: ${item?.ownerPhone || "N/A"}.`,
-    type: "approval",
-    category: "restaurant_approval",
-    path: "/admin/food/restaurants/joining-request",
-    createdAt: item?.createdAt || item?.updatedAt,
-    timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
-    metaLabel: joinMeta(item?.restaurantName, item?.ownerName, item?.ownerPhone),
-  }));
+const mapPendingRestaurants = (response) => {
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => !item?.status || String(item?.status).toLowerCase() === "pending")
+    .map((item) => ({
+      id: `approval-restaurant-${String(item?._id || item?.id || "")}`,
+      title: "Restaurant Approval Pending",
+      message: `${item?.restaurantName || "Restaurant"} submitted a restaurant approval request. Owner: ${item?.ownerName || "N/A"}. Contact: ${item?.ownerPhone || "N/A"}.`,
+      type: "approval",
+      category: "restaurant_approval",
+      path: "/admin/food/restaurants/joining-request",
+      createdAt: item?.createdAt || item?.updatedAt,
+      timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
+      metaLabel: joinMeta(item?.restaurantName, item?.ownerName, item?.ownerPhone),
+    }));
+};
 
 const mapDeliveryJoinRequests = (response) => {
-  const payload = response?.data?.data;
-  const rows =
-    payload?.partners ||
-    payload?.data ||
-    payload?.items ||
-    response?.data?.partners ||
-    [];
-
-  return (Array.isArray(rows) ? rows : []).map((item) => ({
-    id: `approval-delivery-${String(item?._id || item?.id || "")}`,
-    title: "Delivery Partner Approval Pending",
-    message: `${item?.name || "Delivery partner"} submitted a joining request. Phone: ${item?.phone || "N/A"}. Email: ${item?.email || "N/A"}.`,
-    type: "approval",
-    category: "delivery_approval",
-    path: "/admin/food/delivery-partners/join-request",
-    createdAt: item?.createdAt || item?.updatedAt,
-    timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
-    metaLabel: joinMeta(item?.name, item?.phone, item?.email),
-  }));
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => !item?.status || String(item?.status).toLowerCase() === "pending")
+    .map((item) => ({
+      id: `approval-delivery-${String(item?._id || item?.id || "")}`,
+      title: "Delivery Partner Approval Pending",
+      message: `${item?.name || "Delivery partner"} submitted a joining request. Phone: ${item?.phone || "N/A"}. Email: ${item?.email || "N/A"}.`,
+      type: "approval",
+      category: "delivery_approval",
+      path: "/admin/food/delivery-partners/join-request",
+      createdAt: item?.createdAt || item?.updatedAt,
+      timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
+      metaLabel: joinMeta(item?.name, item?.phone, item?.email),
+    }));
 };
 
 const mapFoodApprovals = (response) => {
-  const payload = response?.data?.data;
-  const rows =
-    payload?.requests ||
-    payload?.items ||
-    payload?.data ||
-    response?.data?.requests ||
-    [];
-
-  return (Array.isArray(rows) ? rows : []).map((item) => ({
-    id: `approval-food-${String(item?._id || item?.id || "")}`,
-    title: "Food Approval Pending",
-    message: `${item?.itemName || "Food item"} from ${item?.restaurantName || "Restaurant"} is waiting for review. Category: ${item?.category || item?.type || "N/A"}.`,
-    type: "approval",
-    category: "food_approval",
-    path: "/admin/food/food-approval",
-    createdAt: item?.requestedAt || item?.createdAt || item?.updatedAt,
-    timeLabel: toDateLabel(item?.requestedAt || item?.createdAt || item?.updatedAt),
-    metaLabel: joinMeta(item?.restaurantName, item?.itemName, item?.category || item?.type),
-  }));
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => !item?.approvalStatus || String(item?.approvalStatus).toLowerCase() === "pending")
+    .map((item) => ({
+      id: `approval-food-${String(item?._id || item?.id || "")}`,
+      title: "Food Approval Pending",
+      message: `${item?.itemName || "Food item"} from ${item?.restaurantName || "Restaurant"} is waiting for review. Category: ${item?.category || item?.type || "N/A"}.`,
+      type: "approval",
+      category: "food_approval",
+      path: "/admin/food/food-approval",
+      createdAt: item?.requestedAt || item?.createdAt || item?.updatedAt,
+      timeLabel: toDateLabel(item?.requestedAt || item?.createdAt || item?.updatedAt),
+      metaLabel: joinMeta(item?.restaurantName, item?.itemName, item?.category || item?.type),
+    }));
 };
 
 const mapUserRestaurantSupport = (response) => {
-  const payload = response?.data?.data;
-  const rows =
-    payload?.tickets ||
-    payload?.items ||
-    payload?.data ||
-    response?.data?.tickets ||
-    [];
-
-  return (Array.isArray(rows) ? rows : [])
+  const rows = extractRows(response);
+  return rows
     .filter((item) => !["resolved", "closed"].includes(String(item?.status || "").toLowerCase()))
     .map((item) => {
       const isRestaurantTicket = item?.source === "restaurant";
@@ -230,15 +242,8 @@ const mapUserRestaurantSupport = (response) => {
 };
 
 const mapDeliverySupport = (response) => {
-  const payload = response?.data?.data;
-  const rows =
-    payload?.tickets ||
-    payload?.items ||
-    payload?.data ||
-    response?.data?.tickets ||
-    [];
-
-  return (Array.isArray(rows) ? rows : [])
+  const rows = extractRows(response);
+  return rows
     .filter((item) => !["resolved", "closed"].includes(String(item?.status || "").toLowerCase()))
     .map((item) => ({
       id: `support-delivery-${String(item?._id || item?.id || "")}`,
@@ -254,10 +259,8 @@ const mapDeliverySupport = (response) => {
 };
 
 const mapExpiredFssai = (response) => {
-  const payload = response?.data?.data;
-  const rows = payload?.items || payload?.data || response?.data?.items || [];
-
-  return (Array.isArray(rows) ? rows : []).map((item) => ({
+  const rows = extractRows(response);
+  return rows.map((item) => ({
     id: String(item?.id || `fssai-expired-${item?.restaurantId || ""}`),
     title: item?.title || "FSSAI License Expired",
     message:
@@ -272,12 +275,48 @@ const mapExpiredFssai = (response) => {
   }));
 };
 
+const mapWithdrawalRequests = (response) => {
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => String(item?.status || "pending").toLowerCase() === "pending")
+    .map((item) => ({
+      id: `withdrawal-restaurant-${String(item?._id || item?.id || "")}`,
+      title: "💸 Restaurant Withdrawal Request",
+      message: `${item?.restaurantName || item?.restaurantId?.restaurantName || "Restaurant"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
+      type: "approval",
+      category: "withdrawals",
+      path: "/admin/food/restaurants/withdrawals",
+      createdAt: item?.createdAt || item?.updatedAt,
+      timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
+      metaLabel: joinMeta(item?.restaurantName || item?.restaurantId?.restaurantName, `₹${item?.amount || 0}`, item?.status || "pending"),
+    }));
+};
+
+const mapDeliveryWithdrawals = (response) => {
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => String(item?.status || "pending").toLowerCase() === "pending")
+    .map((item) => ({
+      id: `withdrawal-delivery-${String(item?._id || item?.id || "")}`,
+      title: "💸 Delivery Partner Withdrawal Request",
+      message: `${item?.deliveryPartner?.name || item?.deliveryPartnerName || "Delivery partner"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
+      type: "approval",
+      category: "delivery_withdrawals",
+      path: "/admin/food/delivery-partners/withdrawals",
+      createdAt: item?.createdAt || item?.updatedAt,
+      timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
+      metaLabel: joinMeta(item?.deliveryPartner?.name || item?.deliveryPartnerName, `₹${item?.amount || 0}`, item?.status || "pending"),
+    }));
+};
+
 export default function useAdminNotifications(options = {}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(Boolean(options?.autoload !== false));
 
   const loadNotifications = useCallback(async () => {
     const dismissed = new Set(getDismissedIds());
+    const storedRealtime = getStoredRealtimeNotifs();
+
     try {
       setLoading(true);
 
@@ -289,6 +328,8 @@ export default function useAdminNotifications(options = {}) {
         deliverySupportRes,
         fssaiExpiredRes,
         handoverRes,
+        withdrawalRes,
+        deliveryWithdrawalRes,
       ] = await Promise.all([
         adminAPI.getPendingRestaurants().catch(() => ({ data: { data: [] } })),
         adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
@@ -297,39 +338,32 @@ export default function useAdminNotifications(options = {}) {
         adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
         adminAPI.getExpiredFssaiNotifications().catch(() => ({ data: { data: [] } })),
         adminAPI.getPendingHandovers().catch(() => ({ data: { data: { orders: [] } } })),
+        adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
+        adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
       ]);
 
-      const restaurantRows =
-        restaurantsRes?.data?.data ||
-        restaurantsRes?.data?.restaurants ||
-        [];
-
-      const aggregated = uniqueById([
+      const fetchedPending = [
         ...mapPendingHandovers(handoverRes),
-        ...mapPendingRestaurants(restaurantRows),
+        ...mapPendingRestaurants(restaurantsRes),
         ...mapDeliveryJoinRequests(deliveryJoinRes),
         ...mapFoodApprovals(foodApprovalRes),
         ...mapUserRestaurantSupport(supportRes),
         ...mapDeliverySupport(deliverySupportRes),
+        ...mapWithdrawalRequests(withdrawalRes),
+        ...mapDeliveryWithdrawals(deliveryWithdrawalRes),
         ...mapExpiredFssai(fssaiExpiredRes),
+      ];
+
+      const aggregated = uniqueById([
+        ...storedRealtime,
+        ...fetchedPending,
       ])
-        .filter((item) => item?.category === "handover_approval" || !dismissed.has(item.id))
+        .filter((item) => item?.id && !dismissed.has(item.id))
         .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
-      setItems((prev) => {
-        // Keep active real-time handover requests until approved/rejected
-        const activeHandoverItems = (Array.isArray(prev) ? prev : []).filter(
-          (p) => p?.category === "handover_approval"
-        );
-        return uniqueById([
-          ...activeHandoverItems,
-          ...aggregated,
-        ])
-          .filter((item) => item?.category === "handover_approval" || !dismissed.has(item.id))
-          .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
-      });
+      setItems(aggregated);
     } catch {
-      setItems((prev) => (Array.isArray(prev) ? prev.filter(p => p?.category === "handover_approval" || !dismissed.has(p?.id)) : []));
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -374,8 +408,13 @@ export default function useAdminNotifications(options = {}) {
 
         toast.info(`🆕 ${title}: ${name}${phone ? ` (${phone})` : ''}`);
 
+        const rawId = String(data.id || data._id || Date.now());
+        const targetId = data.type === 'restaurant'
+          ? `approval-restaurant-${rawId}`
+          : `approval-delivery-${rawId}`;
+
         const item = {
-          id: `reg:${data.id || Date.now()}`,
+          id: targetId,
           title: `🆕 ${title}`,
           message: `${name}${phone ? ` (${phone})` : ''} registered and requires review.`,
           type: "approval",
@@ -386,9 +425,13 @@ export default function useAdminNotifications(options = {}) {
           metaLabel: joinMeta(name, phone, data.type),
         };
 
-        setItems((prev) => uniqueById([item, ...prev]));
+        // Un-dismiss if previously dismissed
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        // Persist real-time item
+        saveStoredRealtimeNotifs([item, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([item, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
-        loadNotifications();
       };
 
       socket.on("new_registration_alert", handleRegistrationAlert);
@@ -401,47 +444,37 @@ export default function useAdminNotifications(options = {}) {
 
         const orderDisplayId = payload?.orderId || payload?.orderMongoId || "Order";
         const orderMongoId = String(payload?.orderMongoId || payload?.orderId || "");
-        const reason = payload?.reason || "Emergency";
-        const partnerName = payload?.partnerName || "Delivery Partner";
-        const partnerPhone = payload?.partnerPhone || "";
-        const partnerVehicle = payload?.partnerVehicle || "";
-        const restaurantName = payload?.restaurantName || "Restaurant";
-        const zoneName = payload?.zoneName || "Zone";
-        const customerName = payload?.customerName || "Customer";
-        const customerPhone = payload?.customerPhone || "";
-        const customerAddress = payload?.customerAddress || "";
+        const targetId = `approval-handover-${orderMongoId || Date.now()}`;
 
         const realTimeItem = {
-          id: `approval-handover-${orderMongoId || Date.now()}`,
+          id: targetId,
           orderMongoId,
           orderId: orderDisplayId,
           title: "🚨 Order Handover Request",
-          message: payload?.message || `Driver ${partnerName}${partnerPhone ? ` (${partnerPhone})` : ""} requested handover for Order #${orderDisplayId} (${restaurantName}). Reason: ${reason}. Driver set Offline. Admin approval required.`,
+          message: payload?.message || `Driver ${payload?.partnerName || 'Driver'}${payload?.partnerPhone ? ` (${payload.partnerPhone})` : ""} requested handover for Order #${orderDisplayId} (${payload?.restaurantName || 'Restaurant'}). Reason: ${payload?.reason || 'Emergency'}. Driver set Offline. Admin approval required.`,
           type: "approval",
           category: "handover_approval",
           path: `/admin/food/delivery-partners/gigs?handoverId=${orderMongoId}`,
           createdAt: new Date().toISOString(),
           timeLabel: "Just now",
-          metaLabel: joinMeta(`Order #${orderDisplayId}`, partnerName, restaurantName, zoneName, reason),
-          partnerName,
-          partnerPhone,
-          partnerVehicle,
-          restaurantName,
-          zoneName,
-          customerName,
-          customerPhone,
-          customerAddress,
-          reason,
+          metaLabel: joinMeta(`Order #${orderDisplayId}`, payload?.partnerName, payload?.restaurantName, payload?.zoneName, payload?.reason),
+          partnerName: payload?.partnerName,
+          partnerPhone: payload?.partnerPhone,
+          partnerVehicle: payload?.partnerVehicle,
+          restaurantName: payload?.restaurantName,
+          zoneName: payload?.zoneName,
+          customerName: payload?.customerName,
+          customerPhone: payload?.customerPhone,
+          customerAddress: payload?.customerAddress,
+          reason: payload?.reason || "Emergency",
           note: payload?.note || "",
           rawOrder: payload,
         };
 
-        const targetId = `approval-handover-${orderMongoId}`;
-        if (targetId) {
-          saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
-        }
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
 
-        setItems((prev) => uniqueById([realTimeItem, ...prev]));
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
       });
 
@@ -455,6 +488,31 @@ export default function useAdminNotifications(options = {}) {
           description: data?.subject || data?.message || "A user or delivery partner raised a ticket.",
         });
         loadNotifications();
+        dispatchAdminNotificationsUpdated();
+      });
+
+      socket.on("withdrawal_request_created", (data) => {
+        toast.info("💸 New Withdrawal Request", {
+          description: `${data?.name || "Partner"} requested a withdrawal of ₹${data?.amount || 0}`,
+        });
+        loadNotifications();
+        dispatchAdminNotificationsUpdated();
+      });
+
+      socket.on("emergency_offline_request", (data) => {
+        toast.error("⚠️ Emergency Offline Request", {
+          description: `Driver ${data?.name || "Partner"} requested emergency offline.`,
+        });
+        loadNotifications();
+        dispatchAdminNotificationsUpdated();
+      });
+
+      socket.on("food_approval_requested", (data) => {
+        toast.info("🍕 New Food Item Approval Request", {
+          description: `${data?.itemName || "Food item"} uploaded for review.`,
+        });
+        loadNotifications();
+        dispatchAdminNotificationsUpdated();
       });
 
       return () => {
@@ -473,24 +531,34 @@ export default function useAdminNotifications(options = {}) {
   useEffect(() => {
     const timer = window.setInterval(() => {
       loadNotifications();
-    }, 30 * 1000); // 30 seconds refresh loop
+    }, 30 * 1000);
     return () => window.clearInterval(timer);
   }, [loadNotifications]);
 
   const dismissOne = useCallback((id) => {
     if (!id) return;
-    const dismissed = [...new Set([...getDismissedIds(), id])];
-    saveDismissedIds(dismissed);
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    const currentDismissed = getDismissedIds();
+    if (!currentDismissed.includes(id)) {
+      saveDismissedIds([...currentDismissed, id]);
+    }
+
+    const currentRealtime = getStoredRealtimeNotifs().filter((item) => item.id !== id);
+    saveStoredRealtimeNotifs(currentRealtime);
+
+    setItems((prev) => (Array.isArray(prev) ? prev : []).filter((item) => item.id !== id));
     dispatchAdminNotificationsUpdated();
   }, []);
 
   const clearAll = useCallback(() => {
-    const ids = items.map((item) => item.id).filter(Boolean);
-    saveDismissedIds([...new Set([...getDismissedIds(), ...ids])]);
-    setItems([]);
+    setItems((prev) => {
+      const currentIds = (Array.isArray(prev) ? prev : []).map((i) => i?.id).filter(Boolean);
+      const currentDismissed = getDismissedIds();
+      saveDismissedIds([...new Set([...currentDismissed, ...currentIds])]);
+      saveStoredRealtimeNotifs([]);
+      return [];
+    });
     dispatchAdminNotificationsUpdated();
-  }, [items]);
+  }, []);
 
   const approveHandover = useCallback(
     async (orderId) => {
@@ -499,13 +567,10 @@ export default function useAdminNotifications(options = {}) {
         const res = await adminAPI.approveHandover(orderId);
         if (res.data?.success) {
           toast.success(res.data?.message || "Handover approved! Order unassigned & driver set Offline.");
-          setItems((prev) => {
-            const target = (Array.isArray(prev) ? prev : []).find(i => i.orderMongoId === String(orderId) || i.orderId === String(orderId));
-            if (target?.id) {
-              saveDismissedIds([...new Set([...getDismissedIds(), target.id])]);
-            }
-            return (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId));
-          });
+          const targetId = `approval-handover-${String(orderId)}`;
+          saveDismissedIds([...new Set([...getDismissedIds(), targetId])]);
+          saveStoredRealtimeNotifs(getStoredRealtimeNotifs().filter((item) => item.id !== targetId));
+          setItems((prev) => (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId) && i.id !== targetId));
           dispatchAdminNotificationsUpdated();
           return true;
         } else {
@@ -526,13 +591,10 @@ export default function useAdminNotifications(options = {}) {
         const res = await adminAPI.rejectHandover(orderId, reason);
         if (res.data?.success) {
           toast.info(res.data?.message || "Handover request rejected.");
-          setItems((prev) => {
-            const target = (Array.isArray(prev) ? prev : []).find(i => i.orderMongoId === String(orderId) || i.orderId === String(orderId));
-            if (target?.id) {
-              saveDismissedIds([...new Set([...getDismissedIds(), target.id])]);
-            }
-            return (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId));
-          });
+          const targetId = `approval-handover-${String(orderId)}`;
+          saveDismissedIds([...new Set([...getDismissedIds(), targetId])]);
+          saveStoredRealtimeNotifs(getStoredRealtimeNotifs().filter((item) => item.id !== targetId));
+          setItems((prev) => (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId) && i.id !== targetId));
           dispatchAdminNotificationsUpdated();
           return true;
         } else {
@@ -560,3 +622,4 @@ export default function useAdminNotifications(options = {}) {
     [approveHandover, clearAll, dismissOne, items, loadNotifications, loading, rejectHandover]
   );
 }
+

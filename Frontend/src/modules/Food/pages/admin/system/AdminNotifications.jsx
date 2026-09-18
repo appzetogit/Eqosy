@@ -13,12 +13,14 @@ export default function AdminNotifications() {
 
   const handoverCount = useMemo(() => items.filter(i => i.category === "handover_approval").length, [items]);
   const approvalCount = useMemo(() => items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category)).length, [items]);
+  const withdrawalCount = useMemo(() => items.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category)).length, [items]);
   const supportCount = useMemo(() => items.filter(i => ["support", "delivery_support"].includes(i.category)).length, [items]);
   const complianceCount = useMemo(() => items.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [items]);
 
   const filteredItems = useMemo(() => {
     if (activeTab === "handovers") return items.filter(i => i.category === "handover_approval");
     if (activeTab === "approvals") return items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category));
+    if (activeTab === "withdrawals") return items.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category));
     if (activeTab === "support") return items.filter(i => ["support", "delivery_support"].includes(i.category));
     if (activeTab === "compliance") return items.filter(i => i.type === "compliance" || i.category === "fssai_expired");
     return items;
@@ -66,6 +68,7 @@ export default function AdminNotifications() {
             { id: "all", label: "All Notifications", count: items.length },
             { id: "handovers", label: "🚨 Handover Requests", count: handoverCount, alert: true },
             { id: "approvals", label: "Pending Approvals", count: approvalCount },
+            { id: "withdrawals", label: "💸 Withdrawal Requests", count: withdrawalCount },
             { id: "support", label: "Support Tickets", count: supportCount },
             { id: "compliance", label: "Compliance & FSSAI", count: complianceCount },
           ].map((tab) => (
@@ -130,6 +133,9 @@ export default function AdminNotifications() {
               } else if (item?.category === "food_approval") {
                 badgeText = "FOOD";
                 badgeStyle = "bg-amber-50 text-amber-800 border border-amber-200 font-bold";
+              } else if (item?.category === "withdrawals" || item?.category === "delivery_withdrawals") {
+                badgeText = "WITHDRAWAL";
+                badgeStyle = "bg-green-50 text-green-700 border border-green-200 font-bold";
               } else if (isUserSupport || isDeliverySupport) {
                 badgeText = "SUPPORT";
                 badgeStyle = "bg-purple-50 text-purple-700 border border-purple-200 font-bold";

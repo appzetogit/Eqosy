@@ -163,10 +163,29 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
 
     const allCompletedTx = (rawAllTransactions || []).filter(isCompletedTx);
 
-    const globalEstimatedPayout = allCompletedTx.reduce(
+    const txPayout = allCompletedTx.reduce(
         (sum, tx) => sum + (Number(resolveTxPayout(tx)) || 0),
         0
     );
+
+    // Backup query: count delivered orders directly from FoodOrder to ensure no delivered order earnings are missed
+    const deliveredOrders = await FoodOrder.find({
+        restaurantId: rid,
+        $or: [
+            { orderStatus: { $in: ['delivered', 'completed'] } },
+            { 'deliveryState.currentPhase': { $in: ['delivered', 'completed'] } }
+        ]
+    }).select('pricing orderStatus').lean();
+
+    const ordersPayout = (deliveredOrders || []).reduce((sum, order) => {
+        const subtotal = Number(order?.pricing?.subtotal) || 0;
+        const packagingFee = Number(order?.pricing?.packagingFee) || 0;
+        const commission = Number(order?.pricing?.restaurantCommission) || 0;
+        const share = Math.max(0, subtotal + packagingFee - commission);
+        return sum + share;
+    }, 0);
+
+    const globalEstimatedPayout = Math.max(txPayout, ordersPayout);
 
     // Subtract pending AND approved/completed/processing/settled withdrawals from available balance.
     // Rejected withdrawals are returned to available balance.

@@ -59,6 +59,8 @@ import { filterFoodSidebarMenu } from "@food/constants/foodAdminAccess"
 import { getCurrentUser } from "@food/utils/auth"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import quickSpicyLogo from "@food/assets/eqosy-logo.png"
+import { adminAPI } from "@food/api"
+import useAdminNotifications from "@food/hooks/useAdminNotifications"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -134,6 +136,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     })
   }
 
+  const { items: adminNotifications } = useAdminNotifications()
+
   useEffect(() => {
     const fetchBadges = async () => {
       try {
@@ -146,31 +150,76 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       }
     }
     fetchBadges()
-    const timer = setInterval(fetchBadges, 60000)
-    return () => clearInterval(timer)
+    const timer = setInterval(fetchBadges, 10000)
+
+    const handleUpdate = () => fetchBadges()
+    window.addEventListener("adminNotificationsUpdated", handleUpdate)
+
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener("adminNotificationsUpdated", handleUpdate)
+    }
   }, [])
 
-  const getBadgeCount = (label = "", path = "") => {
-    const l = label.toLowerCase()
-    const p = path?.toLowerCase() || ""
+  const unreadCountsByPath = useMemo(() => {
+    const counts = {}
 
-    if (l.includes("food approval")) return badges.foodApprovals
-    if (l === "foods") return badges.foods
-    if (l.includes("restaurant foods list")) return badges.foodApprovals
-    if (l.includes("restaurant addons list")) return badges.addons
-    if (l === "categories" || l === "category") return badges.categories
-    if (l === "restaurants" || l.includes("new joining request")) return badges.restaurants
-    if (l.includes("restaurant complaints")) return badges.restaurantComplaints
-    if (l === "orders") return (badges.orders || 0) + (badges.offlinePayments || 0)
-    if (p.includes("orders/pending")) return badges.orders
-    if (p.includes("offline-payments")) return badges.offlinePayments
-    if (l.includes("support tickets")) return l.includes("delivery") ? badges.deliverySupportTickets : badges.userSupportTickets
-    if (l.includes("withdrawal") || l.includes("withdraw")) return l.includes("delivery") ? badges.deliveryWithdrawals : badges.restaurantWithdrawals
-    if (l.includes("emergency help")) return badges.emergencyHelp
-    if (l.includes("earning addon history")) return badges.earningAddons
-    if (l.includes("safety emergency reports")) return badges.safetyReports
-    if (l === "deliveryman" && !p.includes("join-request")) return badges.deliveryPartners // expandable parent
-    if (l.includes("join-request") || l.includes("join request") || p.includes("join-request")) return badges.deliveryPartners
+    // Map API DB badge counts
+    counts["/admin/food/food-approval"] = Number(badges.foodApprovals || 0)
+    counts["/admin/food/foods"] = Number(badges.foodApprovals || 0)
+    counts["/admin/food/addons"] = Number(badges.addons || 0)
+    counts["/admin/food/categories"] = Number(badges.categories || 0)
+
+    counts["/admin/food/restaurants/joining-request"] = Number(badges.restaurants || 0)
+    counts["/admin/food/restaurants/complaints"] = Number(badges.restaurantComplaints || 0)
+
+    counts["/admin/food/orders/pending"] = Number(badges.orders || 0)
+    counts["/admin/food/orders/offline-payments"] = Number(badges.offlinePayments || 0)
+
+    counts["/admin/food/support-tickets"] = Number(badges.userSupportTickets || 0)
+    counts["/admin/food/contact-messages"] = Number(badges.userFeedback || 0)
+    counts["/admin/food/safety-emergency-reports"] = Number(badges.safetyReports || 0)
+
+    counts["/admin/food/delivery-withdrawal"] = Number(badges.deliveryWithdrawals || 0)
+    counts["/admin/food/delivery-emergency-help"] = Number(badges.emergencyHelp || 0)
+    counts["/admin/food/delivery-support-tickets"] = Number(badges.deliverySupportTickets || 0)
+
+    counts["/admin/food/delivery-partners/join-request"] = Number(badges.deliveryPartners || 0)
+    counts["/admin/food/delivery-partners"] = Number(badges.emergencyOffline || 0)
+    counts["/admin/food/delivery-partners/gigs"] = Number(badges.handovers || 0)
+    counts["/admin/food/delivery-partners/earning-addon-history"] = Number(badges.earningAddons || 0)
+
+    counts["/admin/food/restaurant-withdraws"] = Number(badges.restaurantWithdrawals || 0)
+
+    // Real-time overlay from useAdminNotifications
+    if (Array.isArray(adminNotifications)) {
+      const notifCategoryCounts = {}
+      adminNotifications.forEach((n) => {
+        if (!n?.path) return
+        const cleanPath = n.path.split("?")[0].toLowerCase().replace(/\/+$/, "")
+        notifCategoryCounts[cleanPath] = (notifCategoryCounts[cleanPath] || 0) + 1
+      })
+
+      Object.entries(notifCategoryCounts).forEach(([p, cnt]) => {
+        counts[p] = Math.max(counts[p] || 0, cnt)
+      })
+    }
+
+    return counts
+  }, [badges, adminNotifications])
+
+  const getSidebarItemCount = (item) => {
+    if (!item) return 0
+    if (item.path) {
+      const p = item.path.toLowerCase().replace(/\/+$/, "")
+      return Math.max(0, Number(unreadCountsByPath[p] || unreadCountsByPath[item.path] || 0))
+    }
+    if (Array.isArray(item.subItems)) {
+      return item.subItems.reduce((sum, child) => sum + getSidebarItemCount(child), 0)
+    }
+    if (Array.isArray(item.items)) {
+      return item.items.reduce((sum, child) => sum + getSidebarItemCount(child), 0)
+    }
     return 0
   }
   const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
@@ -474,9 +523,24 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     })
   }
 
+const SidebarBadge = ({ count, isActive = false }) => {
+  if (!count || count <= 0) return null
+  return (
+    <span
+      className={cn(
+        "ml-auto shrink-0 inline-flex min-w-[1.25rem] h-5 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-black tracking-tight text-white shadow-sm transition-transform duration-200 animate-pulse",
+        isActive ? "bg-rose-600 ring-1 ring-white/20" : "bg-rose-500 shadow-rose-500/30"
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
+
   const renderMenuItem = (item, index, isInSection = false) => {
     if (item.type === "link") {
       const Icon = iconMap[item.icon] || Utensils
+      const unreadCount = getSidebarItemCount(item)
       return (
         <Link
           key={index}
@@ -507,15 +571,11 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               <span className={cn("text-left truncate", isInSection ? "font-semibold" : "font-medium")}>
                 {item.label}
               </span>
-              {getBadgeCount(item.label, item.path) > 0 && (
-                <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
-                  {getBadgeCount(item.label, item.path) > 99 ? "99+" : getBadgeCount(item.label, item.path)}
-                </span>
-              )}
+              <SidebarBadge count={unreadCount} isActive={isActive(item.path)} />
             </div>
           )}
-          {isCollapsed && getBadgeCount(item.label, item.path) > 0 && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-neutral-950" />
+          {isCollapsed && unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-neutral-950 animate-pulse" />
           )}
         </Link>
       )
@@ -525,6 +585,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       const Icon = iconMap[item.icon] || Utensils
       const sectionKey = item.label.toLowerCase().replace(/\s+/g, "")
       const isExpanded = expandedSections[sectionKey] || false
+      const unreadCount = getSidebarItemCount(item)
 
       if (isCollapsed) {
         return (
@@ -539,8 +600,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             >
               <div className="relative">
                 <Icon className="w-4 h-4 shrink-0 text-neutral-300 transition-transform duration-300" />
-                {getBadgeCount(item.label, item.path) > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-neutral-950" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-neutral-950 animate-pulse" />
                 )}
               </div>
             </button>
@@ -560,19 +621,18 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             <div className="flex items-center gap-2.5 text-left flex-1 min-w-0">
               <Icon className="w-4 h-4 shrink-0 text-neutral-300 transition-transform duration-300" />
               <span className="font-medium text-left truncate">{item.label}</span>
-              {getBadgeCount(item.label, item.path) > 0 && (
-                <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
-                  {getBadgeCount(item.label, item.path) > 99 ? "99+" : getBadgeCount(item.label, item.path)}
-                </span>
-              )}
             </div>
-            <div className="transition-transform duration-300 shrink-0" style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-              <ChevronDown className="w-4 h-4 shrink-0 text-neutral-300" />
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <SidebarBadge count={unreadCount} isActive={isExpanded} />
+              <div className="transition-transform duration-300 shrink-0" style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                <ChevronDown className="w-4 h-4 shrink-0 text-neutral-300" />
+              </div>
             </div>
           </button>
           {isExpanded && item.subItems && (
             <div className="ml-5 mt-1 space-y-1 border-neutral-800/60 pl-3 submenu-animate overflow-hidden">
               {item.subItems.map((subItem, subIndex) => {
+                const subUnreadCount = getSidebarItemCount(subItem)
                 const allSubPaths = item.subItems.map(si => si.path)
                 return (
                   <Link
@@ -596,11 +656,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                       isActive(subItem.path, allSubPaths) ? "bg-white scale-125" : "bg-neutral-400"
                     )}></span>
                     <span className="text-left flex-1 truncate">{subItem.label}</span>
-                    {getBadgeCount(subItem.label, subItem.path) > 0 && (
-                      <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
-                        {getBadgeCount(subItem.label, subItem.path) > 99 ? "99+" : getBadgeCount(subItem.label, subItem.path)}
-                      </span>
-                    )}
+                    <SidebarBadge count={subUnreadCount} isActive={isActive(subItem.path, allSubPaths)} />
                   </Link>
                 )
               })}

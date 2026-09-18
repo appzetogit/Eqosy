@@ -930,30 +930,30 @@ export const getActiveEarningAddonsForPartner = async (deliveryPartnerId) => {
             };
 
             if (startDate && endDate) {
-                baseMatch['deliveryState.deliveredAt'] = { $gte: startDate, $lte: endDate };
+                baseMatch.$or = [
+                    { 'deliveryState.deliveredAt': { $gte: startDate, $lte: endDate } },
+                    { createdAt: { $gte: startDate, $lte: endDate } },
+                    { updatedAt: { $gte: startDate, $lte: endDate } }
+                ];
             }
 
-            const [currentOrders, earningsAgg] = await Promise.all([
-                FoodOrder.countDocuments(baseMatch),
-                FoodOrder.aggregate([
-                    { $match: baseMatch },
-                    {
-                        $group: {
-                            _id: null,
-                            total: { $sum: { $ifNull: ['$riderEarning', 0] } }
-                        }
-                    }
-                ])
-            ]);
+            const currentOrders = await FoodOrder.countDocuments(baseMatch);
+            const targetOrders = Number(addon.requiredOrders) || 0;
+            const targetAmount = Number(addon.earningAmount) || 0;
 
-            const currentEarnings = Number(earningsAgg?.[0]?.total) || 0;
+            // Proportional bonus calculation: Each completed order earns (targetAmount / targetOrders)
+            let currentEarnings = 0;
+            if (targetOrders > 0 && targetAmount > 0) {
+                const perOrderBonus = targetAmount / targetOrders;
+                currentEarnings = Math.min(targetAmount, Math.round((currentOrders * perOrderBonus) * 100) / 100);
+            }
 
             return {
                 id: addon._id,
                 title: addon.title || 'Earnings Guarantee',
                 description: addon.description || '',
-                targetAmount: Number(addon.earningAmount) || 0,
-                targetOrders: Number(addon.requiredOrders) || 0,
+                targetAmount,
+                targetOrders,
                 currentOrders: Number(currentOrders) || 0,
                 currentEarnings,
                 startDate,
@@ -1110,6 +1110,40 @@ export const approveEmergencyOfflineByAdmin = async (partnerId, adminId) => {
     };
 
     await partner.save();
+
+    // Send real-time socket events so delivery partner automatically switches to offline
+    try {
+        const { getIO, rooms } = await import('../../../../config/socket.js');
+        const io = getIO();
+        if (io) {
+            io.to(rooms.delivery(partner._id)).emit('delivery:status_changed', {
+                availabilityStatus: 'offline'
+            });
+            io.to(rooms.delivery(partner._id)).emit('emergency_offline_approved', {
+                availabilityStatus: 'offline',
+                message: 'Your emergency offline request has been approved by Admin. You are now offline.'
+            });
+        }
+    } catch (socketErr) {
+        logger.warn(`Socket notification failed for emergency offline approval: ${socketErr.message}`);
+    }
+
+    try {
+        const { notifyOwnerSafely } = await import('../../../../core/notifications/firebase.service.js');
+        await notifyOwnerSafely(
+            { ownerType: 'DELIVERY_PARTNER', ownerId: String(partner._id) },
+            {
+                title: 'Emergency Offline Approved 🛑',
+                body: 'Your request to go offline has been approved by Admin. You are now offline.',
+                data: {
+                    type: 'emergency_offline_approved',
+                    partnerId: String(partner._id)
+                }
+            }
+        );
+    } catch (pushErr) {
+        logger.warn(`Push notification failed for emergency offline approval: ${pushErr.message}`);
+    }
 
     return {
         success: true,

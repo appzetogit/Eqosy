@@ -2,18 +2,112 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Calendar, Clock, Plus, Users, CheckCircle2, AlertTriangle, XCircle,
-  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List, ShieldAlert
+  Search, Filter, Edit, Trash2, X, RefreshCcw, ShieldCheck, LayoutGrid, List, ShieldAlert, MapPin
 } from 'lucide-react';
 import { apiClient } from '@/services/api';
+import { adminAPI } from '@food/api';
 import { toast } from 'sonner';
 import useAdminNotifications from '@food/hooks/useAdminNotifications';
 import HandoverApprovalModal from '@food/components/admin/HandoverApprovalModal';
+import DriverLiveLocationModal from '@food/components/admin/deliveryman/DriverLiveLocationModal';
 
 export const GigsManagement = () => {
   const [searchParams] = useSearchParams();
   const handoverIdFromUrl = searchParams.get('handoverId');
-  const { items: adminNotifications, approveHandover, rejectHandover } = useAdminNotifications();
-  const pendingHandovers = adminNotifications.filter(it => it.category === "handover_approval");
+  const { items: adminNotifications, approveHandover: rawApproveHandover, rejectHandover: rawRejectHandover } = useAdminNotifications();
+  const [apiPendingHandovers, setApiPendingHandovers] = useState([]);
+
+  const fetchPendingHandovers = async () => {
+    try {
+      const res = await adminAPI.getPendingHandovers();
+      const rawData = res?.data?.data || res?.data || res;
+      const rows = rawData?.orders || rawData?.items || (Array.isArray(rawData) ? rawData : []) || [];
+      if (Array.isArray(rows)) {
+        const mapped = rows.map((item) => {
+          const requestedBy = item?.dispatch?.handoverRequest?.requestedBy;
+          const partnerName =
+            (typeof requestedBy === "object" ? (requestedBy?.name || requestedBy?.fullName) : null) ||
+            item?.deliveryPartnerName ||
+            item?.deliveryPartner?.fullName ||
+            item?.deliveryPartner?.name ||
+            "Delivery Partner";
+          const partnerPhone =
+            (typeof requestedBy === "object" ? requestedBy?.phone : null) ||
+            item?.deliveryPartnerPhone ||
+            item?.deliveryPartner?.phone ||
+            "N/A";
+          const partnerVehicle =
+            (typeof requestedBy === "object"
+              ? [requestedBy?.vehicleType, requestedBy?.vehicleNumber].filter(Boolean).join(" - ")
+              : null) || "";
+
+          const restaurantObj = typeof item?.restaurantId === "object" ? item.restaurantId : null;
+          const restaurantName = restaurantObj?.restaurantName || restaurantObj?.name || item?.restaurantName || "Restaurant";
+          const zoneName = (typeof restaurantObj?.zoneId === "object" ? restaurantObj.zoneId?.name : null) || restaurantObj?.area || item?.zoneName || "Zone";
+
+          const userObj = typeof item?.userId === "object" ? item.userId : null;
+          const customerName = userObj?.name || userObj?.fullName || item?.customerName || item?.deliveryAddress?.contactName || "Customer";
+          const customerPhone = userObj?.phone || item?.customerPhone || item?.deliveryAddress?.contactPhone || "N/A";
+          const customerAddress = item?.customerAddress || item?.deliveryAddress?.formattedAddress || [item?.deliveryAddress?.addressLine1, item?.deliveryAddress?.city].filter(Boolean).join(", ") || "N/A";
+
+          const reason = item?.dispatch?.handoverRequest?.reason || item?.reason || "Emergency";
+          const note = item?.dispatch?.handoverRequest?.note || item?.note || "";
+          const orderDisplayId = item?.order_id || item?.orderId || item?._id;
+          const orderMongoId = String(item?._id || item?.id || item?.orderMongoId || "");
+
+          return {
+            id: `approval-handover-${orderMongoId}`,
+            orderMongoId,
+            orderId: orderDisplayId,
+            title: `🚨 Order Handover Request`,
+            message: `Driver ${partnerName}${partnerPhone && partnerPhone !== "N/A" ? ` (${partnerPhone})` : ""} requested handover for Order #${orderDisplayId} (${restaurantName}). Reason: ${reason}${note ? ` (${note})` : ""}. Driver set Offline. Admin approval required.`,
+            type: "approval",
+            category: "handover_approval",
+            path: `/admin/food/delivery-partners/gigs?handoverId=${orderMongoId}`,
+            createdAt: item?.dispatch?.handoverRequest?.requestedAt || item?.updatedAt || item?.createdAt,
+            timeLabel: item?.dispatch?.handoverRequest?.requestedAt
+              ? new Date(item.dispatch.handoverRequest.requestedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })
+              : "Recently",
+            partnerName,
+            partnerPhone,
+            partnerVehicle,
+            restaurantName,
+            zoneName,
+            customerName,
+            customerPhone,
+            customerAddress,
+            reason,
+            note,
+            rawOrder: item,
+          };
+        });
+        setApiPendingHandovers(mapped);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch pending handovers:", err);
+    }
+  };
+
+  const handleApproveHandover = async (orderId) => {
+    const ok = await rawApproveHandover(orderId);
+    fetchPendingHandovers();
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("adminNotificationsUpdated"));
+    return ok;
+  };
+
+  const handleRejectHandover = async (orderId, reason) => {
+    const ok = await rawRejectHandover(orderId, reason);
+    fetchPendingHandovers();
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("adminNotificationsUpdated"));
+    return ok;
+  };
+
+  const combinedHandoversMap = new Map();
+  [...apiPendingHandovers, ...adminNotifications.filter(it => it.category === "handover_approval")].forEach(item => {
+    const key = String(item.orderMongoId || item.orderId || item.id);
+    if (key) combinedHandoversMap.set(key, item);
+  });
+  const pendingHandovers = Array.from(combinedHandoversMap.values());
 
   const [selectedHandoverItem, setSelectedHandoverItem] = useState(null);
   const [handoverModalOpen, setHandoverModalOpen] = useState(false);
@@ -58,6 +152,25 @@ export const GigsManagement = () => {
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('');
   const [selectedGigIdFilter, setSelectedGigIdFilter] = useState('');
   const [remindingBookingId, setRemindingBookingId] = useState(null);
+
+  const [selectedLivePartner, setSelectedLivePartner] = useState(null);
+  const [liveModalOpen, setLiveModalOpen] = useState(false);
+
+  const handleOpenLiveLocation = (booking) => {
+    setSelectedLivePartner({
+      _id: booking.partnerId || booking.partner_id || booking._id,
+      name: booking.partnerName,
+      phone: booking.partnerPhone,
+      profilePhoto: booking.profilePhoto,
+      vehicleType: booking.vehicleType || 'Bike',
+      vehicleNumber: booking.vehicleNumber || '',
+      availabilityStatus: booking.workStatus === 'Working / Online' ? 'online' : 'offline',
+      lastLat: booking.lastLat,
+      lastLng: booking.lastLng,
+      activeOrderId: booking.activeOrderId || null,
+    });
+    setLiveModalOpen(true);
+  };
 
   const handleRemindPartner = async (booking) => {
     const bookingId = booking._id || booking.bookingId;
@@ -147,6 +260,7 @@ export const GigsManagement = () => {
     fetchStats();
     fetchZones();
     fetchPartnerBookings();
+    fetchPendingHandovers();
   }, [selectedDate, statusFilter, partnerFilterTab, selectedZoneFilter, selectedGigIdFilter]);
 
   const handleCreateOrUpdateGig = async (e) => {
@@ -350,6 +464,23 @@ export const GigsManagement = () => {
                       className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors text-center shadow-sm"
                     >
                       Review & Approve Request
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApproveHandover(item.orderMongoId || item.orderId)}
+                      className="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const r = prompt("Reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                        handleRejectHandover(item.orderMongoId || item.orderId, r);
+                      }}
+                      className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
+                    >
+                      Reject
                     </button>
                     {partnerPhone && partnerPhone !== "N/A" && (
                       <a
@@ -593,80 +724,7 @@ export const GigsManagement = () => {
         </div>
       )}
 
-      {/* Pending Handover Requests Control Box */}
-      <div className="bg-gradient-to-r from-rose-50 via-amber-50/50 to-white p-6 rounded-3xl border border-rose-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-slate-900">Pending Delivery Handover Requests</h2>
-                <span className="bg-rose-600 text-white px-2.5 py-0.5 rounded-full text-xs font-black">
-                  {pendingHandovers.length}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Emergency handover requests submitted by delivery partners requiring admin authorization.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {pendingHandovers.length === 0 ? (
-          <div className="py-6 text-center text-xs font-medium text-slate-400 bg-white/60 rounded-2xl border border-dashed border-rose-200">
-            No active pending handover requests.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingHandovers.map((item) => (
-              <div key={item.id} className="bg-white p-4 rounded-2xl border border-rose-200 shadow-sm flex flex-col justify-between gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
-                      Order #{item.orderId}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">{item.timeLabel}</span>
-                  </div>
-                  <p className="text-xs font-bold text-slate-900">{item.title}</p>
-                  <p className="text-xs text-slate-600 mt-1 leading-snug">{item.message}</p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedHandoverItem(item);
-                      setHandoverModalOpen(true);
-                    }}
-                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all text-center"
-                  >
-                    Review Handover Box
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => approveHandover(item.orderMongoId || item.orderId)}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const r = prompt("Reason for rejection:", "Rejected by admin") || "Rejected by admin";
-                      rejectHandover(item.orderMongoId || item.orderId, r);
-                    }}
-                    className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* SECTION 5 & 9: Delivery Partner Workforce Status & Attendance Table */}
       <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-5">
@@ -837,6 +895,15 @@ export const GigsManagement = () => {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLiveLocation(b)}
+                          className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-black transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          title="Click to view real-time live location on map"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                          Live Location
+                        </button>
                         <a
                           href={`tel:${b.partnerPhone}`}
                           className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[11px] font-black transition-colors"
@@ -1161,8 +1228,14 @@ export const GigsManagement = () => {
         isOpen={handoverModalOpen}
         onClose={() => setHandoverModalOpen(false)}
         notification={selectedHandoverItem}
-        onApprove={approveHandover}
-        onReject={rejectHandover}
+        onApprove={handleApproveHandover}
+        onReject={handleRejectHandover}
+      />
+
+      <DriverLiveLocationModal
+        deliveryman={selectedLivePartner}
+        isOpen={liveModalOpen}
+        onClose={() => setLiveModalOpen(false)}
       />
     </div>
   );

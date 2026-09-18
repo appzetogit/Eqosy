@@ -984,6 +984,21 @@ export const useDeliveryNotifications = () => {
       });
     });
 
+    socketRef.current.on('delivery:status_changed', (statusData) => {
+      debugLog('⚡ delivery:status_changed received via socket:', statusData);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deliveryStatusChanged', { detail: statusData }));
+      }
+    });
+
+    socketRef.current.on('emergency_offline_approved', (data) => {
+      debugLog('🛑 emergency_offline_approved received via socket:', data);
+      toast.info(data?.message || 'Your emergency offline request has been approved by Admin. You are now offline.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deliveryStatusChanged', { detail: { availabilityStatus: 'offline', ...data } }));
+      }
+    });
+
     socketRef.current.on('order_deleted', (statusData) => {
       debugLog('?? Delivery order deleted event received via socket:', statusData);
       setOrderStatusUpdate({

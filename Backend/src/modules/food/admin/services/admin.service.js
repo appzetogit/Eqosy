@@ -5206,7 +5206,9 @@ export async function getSidebarBadges() {
             pendingEarningAddons,
             pendingSafetyReports,
             pendingEmergencyHelp,
-            pendingRestaurantComplaints
+            pendingRestaurantComplaints,
+            pendingEmergencyOffline,
+            pendingHandovers,
         ] = await Promise.all([
             FoodRestaurant.countDocuments({ status: 'pending' }),
             FoodDeliveryPartner.countDocuments({ status: 'pending' }),
@@ -5221,12 +5223,16 @@ export async function getSidebarBadges() {
             FoodEarningAddonHistory.countDocuments({ status: 'pending' }),
             FoodSafetyEmergencyReport.countDocuments({ status: 'pending' }),
             FoodDeliveryEmergencyHelp.countDocuments({ status: 'pending' }),
-            FoodSupportTicket.countDocuments({ status: 'open', restaurantId: { $exists: true } })
+            FoodSupportTicket.countDocuments({ status: 'open', restaurantId: { $exists: true } }),
+            FoodDeliveryPartner.countDocuments({ 'emergencyOfflineRequest.status': 'pending' }),
+            FoodOrder.countDocuments({ 'dispatch.handoverRequest.status': 'pending' }),
         ]);
 
         return {
             restaurants: pendingRestaurants,
             deliveryPartners: pendingDeliveryPartners,
+            emergencyOffline: pendingEmergencyOffline,
+            handovers: pendingHandovers,
             foods: pendingFoods + pendingAddons,
             foodApprovals: pendingFoods,
             orders: pendingOrders,

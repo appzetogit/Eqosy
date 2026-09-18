@@ -788,6 +788,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }
   };
 
+  // Listen for real-time status changes from socket (e.g. admin approves emergency offline or handover)
+  useEffect(() => {
+    const handleStatusChanged = (e) => {
+      const newStatus = e.detail?.availabilityStatus;
+      if (newStatus === 'offline') {
+        setOnline(false);
+      } else if (newStatus === 'online') {
+        setOnline(true);
+      }
+    };
+
+    window.addEventListener('deliveryStatusChanged', handleStatusChanged);
+    return () => window.removeEventListener('deliveryStatusChanged', handleStatusChanged);
+  }, [setOnline]);
+
   const handleDutyToggle = useCallback(async () => {
     if (isTogglingDuty) return;
 
