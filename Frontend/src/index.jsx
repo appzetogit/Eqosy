@@ -127,7 +127,9 @@ syncThemeForPath(getInitialPathname())
 
 const originalError = console.error
 console.error = (...args) => {
-  const errorStr = args.join(' ')
+  const errorStr = args
+    .map(arg => (arg instanceof Error ? `${arg.name}: ${arg.message} ${arg.stack || ''}` : String(arg)))
+    .join(' ')
 
   if (typeof args[0] === 'string' && (
     args[0].includes('chrome-extension://') ||
@@ -170,6 +172,8 @@ console.error = (...args) => {
     errorStr.includes('xhr poll error') ||
     errorStr.includes('[socket] connect_error') ||
     errorStr.includes('ERR_CONNECTION_REFUSED') ||
+    errorStr.includes('Failed to fetch dynamically imported module') ||
+    errorStr.includes('Importing a module script failed') ||
     errorStr.includes('Expected length, "undefined"') ||
     (errorStr.includes('attribute cx') && errorStr.includes('Expected length')) ||
     (errorStr.includes('attribute cy') && errorStr.includes('Expected length')) ||
