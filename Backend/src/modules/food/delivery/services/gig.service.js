@@ -457,27 +457,47 @@ export const cancelGigBooking = async (deliveryPartnerId, gigId) => {
 export const getActiveGigForPartner = async (deliveryPartnerId) => {
   const now = new Date();
   const nowMs = now.getTime();
+  const todayStr = now.toISOString().slice(0, 10);
   const { partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
-  // Find booking for a gig where current time falls within gig window (starts within 30 mins or currently running)
+  // Find booking for a gig where current time falls within gig window (starts within 30 mins or currently running + 30 mins grace period)
   const bookings = await FoodGigBooking.find({
     deliveryPartnerId: { $in: partnerIds },
     status: { $in: ['booked', 'completed'] }
   }).populate('gigId').lean();
 
   const THIRTY_MIN_BEFORE_MS = 30 * 60 * 1000; // Allow logging in online 30 minutes before gig start time
+  const THIRTY_MIN_AFTER_MS = 30 * 60 * 1000;  // 30 minute grace period after gig end time to complete work & wrap up
 
   const activeBooking = bookings.find(b => {
     if (!b.gigId || b.gigId.status !== 'active') return false;
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
 
-    // Rider can log in starting 30 minutes before gig start time up until gig end time
-    const isInTimeWindow = (nowMs >= startMs - THIRTY_MIN_BEFORE_MS) && (nowMs <= endMs);
+    // Rider can log in starting 30 minutes before gig start time up until 30 minutes after gig end time
+    const isInTimeWindow = (nowMs >= startMs - THIRTY_MIN_BEFORE_MS) && (nowMs <= endMs + THIRTY_MIN_AFTER_MS);
     return isInTimeWindow;
   });
 
-  return activeBooking ? activeBooking.gigId : null;
+  if (activeBooking) return activeBooking.gigId;
+
+  // Fallback: If partner has an active ongoing order right now, consider their shift active
+  try {
+    const { FoodOrder } = await import('../../orders/models/order.model.js');
+    const activeOrder = await FoodOrder.findOne({
+      'dispatch.deliveryPartnerId': { $in: partnerIds },
+      orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
+    }).select('_id').lean();
+
+    if (activeOrder) {
+      const latestTodayBooking = bookings.find(b => b.gigId && b.gigId.date === todayStr);
+      return latestTodayBooking ? latestTodayBooking.gigId : { title: 'Active Delivery Shift', _id: 'active_order_shift', status: 'active' };
+    }
+  } catch (err) {
+    // quiet fallback
+  }
+
+  return null;
 };
 
 export const getUpcomingGigLoginDetails = async (deliveryPartnerId) => {

@@ -9,6 +9,7 @@ export const ActionSlider = ({
   label = "Slide to Confirm", 
   onConfirm, 
   disabled = false,
+  disabledLabel,
   color = "bg-green-600",
   successLabel = "Confirmed ✓"
 }) => {
@@ -32,14 +33,18 @@ export const ActionSlider = ({
     const handleWidth = 56; // w-14
     const totalPath = containerWidth - handleWidth - 12; // p-1.5 = 6px each side
     
-    const currentProgress = Math.min(1, Math.max(0, (info.point.x - containerRef.current.getBoundingClientRect().left) / totalPath));
+    if (totalPath <= 0) return;
+
+    const clientX = info.point?.x ?? (event.touches?.[0]?.clientX || event.clientX || 0);
+    const containerLeft = containerRef.current?.getBoundingClientRect().left || 0;
+    const currentProgress = Math.min(1, Math.max(0, (clientX - containerLeft) / totalPath));
     setProgress(currentProgress);
   };
 
   const handleDragEnd = async (event, info) => {
     if (disabled || isSuccess) return;
 
-    if (progress > 0.8 || info.offset.x > 150) {
+    if (progress > 0.75 || (info.offset?.x || 0) > 130) {
       setIsSuccess(true);
       setProgress(1);
       if (onConfirm) {
@@ -57,10 +62,12 @@ export const ActionSlider = ({
     }
   };
 
+  const displayLabel = disabled ? (disabledLabel || 'Action Locked') : label;
+
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full h-[68px] rounded-full p-1.5 overflow-hidden transition-all duration-300 ${
+      className={`relative w-full h-[68px] rounded-full p-1.5 overflow-hidden transition-all duration-300 touch-none select-none ${
         'bg-gray-950 shadow-lg shadow-black/10'
       }`}
     >
@@ -68,7 +75,7 @@ export const ActionSlider = ({
       <div className={`absolute inset-y-0 left-[76px] right-5 flex items-center justify-center text-center font-bold text-[11px] uppercase tracking-[0.14em] leading-none whitespace-nowrap transition-opacity duration-300 ${
         isSuccess ? 'opacity-0' : disabled ? 'text-white/70' : 'text-white/88'
       }`}>
-        {disabled ? 'Action Locked' : label}
+        {displayLabel}
       </div>
 
       {/* Dynamic Progress Fill */}
@@ -100,7 +107,8 @@ export const ActionSlider = ({
       <motion.div
         drag={disabled || isSuccess ? false : "x"}
         dragConstraints={{ left: 0, right: containerRef.current?.offsetWidth ? containerRef.current.offsetWidth - 68 : 250 }}
-        dragElastic={0.1}
+        dragElastic={0.05}
+        dragMomentum={false}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
         animate={controls}

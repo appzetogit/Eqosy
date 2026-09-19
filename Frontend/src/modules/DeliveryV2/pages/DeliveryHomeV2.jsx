@@ -1030,6 +1030,48 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation]);
 
+  // 3.1 Auto-Recovery Effect: Automatically restore ONLINE status when GPS Location is re-enabled during a booked gig or active order!
+  useEffect(() => {
+    if (isOnline) return;
+
+    let isSubscribed = true;
+
+    const checkAndAutoRestoreOnline = () => {
+      if (typeof window === 'undefined' || !navigator.geolocation) return;
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          if (!isSubscribed) return;
+          try {
+            const gigRes = await deliveryAPI.getActiveGig();
+            const activeGigData = gigRes?.data?.data?.activeGig || gigRes?.data?.data?.order || gigRes?.data?.data;
+            if (activeGigData && typeof activeGigData === 'object' && Object.keys(activeGigData).length > 0) {
+              const { latitude: lat, longitude: lng } = pos.coords;
+              setRiderLocation({ lat, lng });
+              setShowGpsModal(false);
+              setGpsErrorMessage('');
+              await goOnline();
+              toast.success('GPS restored! You are back Online 🟢');
+            }
+          } catch (err) {
+            // quiet catch if no active gig or network error
+          }
+        },
+        () => {},
+        { enableHighAccuracy: false, maximumAge: 10000, timeout: 5000 }
+      );
+    };
+
+    // Check immediately on mount/offline transition and poll every 5 seconds
+    checkAndAutoRestoreOnline();
+    const interval = setInterval(checkAndAutoRestoreOnline, 5000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [isOnline, goOnline, setRiderLocation]);
+
   // 1-Hour Periodic Selfie Security Guard: Force re-verification every 60 minutes
   useEffect(() => {
     if (!isOnline) return;
@@ -1781,14 +1823,36 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         </div>
 
                         <div className="p-8 pt-0 pb-12 bg-white border-t border-gray-50">
-                          <div className="pt-6">
+                          <div className="pt-6 space-y-3">
                             <ActionSlider
                               label="Slide to Arrive"
+                              disabledLabel={
+                                distanceToTarget && distanceToTarget !== Infinity
+                                  ? `Location Locked (${(distanceToTarget / 1000).toFixed(1)} km away)`
+                                  : 'Reach Location to Arrive'
+                              }
                               successLabel="Arrived ✓"
                               disabled={!isWithinRange}
                               onConfirm={reachDrop}
                               color="bg-emerald-600"
                             />
+                            {!isWithinRange && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await reachDrop();
+                                    setShowVerification(true);
+                                    toast.success("Arrival confirmed");
+                                  } catch (e) {
+                                    toast.error("Failed to confirm arrival");
+                                  }
+                                }}
+                                className="w-full py-2.5 text-center text-[11px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-200/80 transition-all active:scale-95 shadow-sm"
+                              >
+                                📍 I&apos;m at Customer Location (Confirm Arrival)
+                              </button>
+                            )}
                           </div>
                         </div>
                       </motion.div>

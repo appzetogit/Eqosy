@@ -385,20 +385,41 @@ export const PickupActionModal = ({
         {/* Action Sliders (Sticky Bottom) */}
         <div className="p-8 pt-0 pb-12 space-y-6 bg-white border-t border-gray-50">
           {!isAtPickup ? (
-            <div className="pt-6">
-              <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-4 transition-colors ${
-                isWithinRange ? 'text-emerald-600' : 'text-orange-500 animate-pulse'
+            <div className="pt-6 space-y-3">
+              <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-2 transition-colors ${
+                isWithinRange ? 'text-emerald-600' : 'text-orange-500 font-bold'
               }`}>
-                {isWithinRange ? 'Ready - Swipe to confirm arrival' : 'Get closer to restaurant'}
+                {isWithinRange ? 'Ready - Swipe to confirm arrival' : `Restaurant is ${(distanceToTarget && distanceToTarget !== Infinity ? (distanceToTarget / 1000).toFixed(1) : '')} km away`}
               </p>
               <ActionSlider 
                 key="action-reach"
                 label="Slide to Reach" 
+                disabledLabel={
+                  distanceToTarget && distanceToTarget !== Infinity
+                    ? `Too Far from Restaurant (${(distanceToTarget / 1000).toFixed(1)} km)`
+                    : 'Get closer to restaurant'
+                }
                 successLabel="Reached!"
                 disabled={!isWithinRange}
                 onConfirm={onReachedPickup}
                 color="bg-emerald-600"
               />
+              {!isWithinRange && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await onReachedPickup();
+                      toast.success("Restaurant arrival confirmed");
+                    } catch (e) {
+                      toast.error("Failed to confirm arrival");
+                    }
+                  }}
+                  className="w-full py-2.5 text-center text-[11px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-200/80 transition-all active:scale-95 shadow-sm"
+                >
+                  🏪 I&apos;m at Restaurant (Confirm Arrival)
+                </button>
+              )}
             </div>
           ) : (
             <div className="pt-6 space-y-6">
