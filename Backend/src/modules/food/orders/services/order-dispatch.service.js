@@ -74,8 +74,7 @@ async function listNearbyOnlineDeliveryPartners(
     .select("_id status lastLat lastLng lastLocationAt name")
     .lean();
 
-  const allowedStatuses = process.env.NODE_ENV === 'production' ? ['approved'] : ['approved', 'pending'];
-  allOnline = allOnline.filter(p => allowedStatuses.includes(p.status));
+  allOnline = allOnline.filter(p => !p.status || p.status === 'approved' || p.status === 'pending');
 
   if (!restaurant?.location?.coordinates?.length) {
     let partners = allOnline;
@@ -105,29 +104,21 @@ async function listNearbyOnlineDeliveryPartners(
       if (Number.isFinite(calcD)) d = calcD;
     }
 
-    // Include if within distance or inside active zone
-    if (d <= maxKm || isInZone) {
-      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, isInZone });
+    // Include if within distance or inside active zone, or fallback
+    if (d <= maxKm || isInZone || p.lastLat == null) {
+      scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 0, status: p.status, isInZone });
     }
   }
 
   scored.sort((a, b) => a.distanceKm - b.distanceKm);
-  const picked = scored.slice(0, Math.max(1, limit));
+  let picked = scored.slice(0, Math.max(1, limit));
 
-  if (picked.length === 0) {
-    let fallback = allOnline;
-    if (hasActiveZones) {
-      const inZoneFallback = fallback.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
-      if (inZoneFallback.length > 0) fallback = inZoneFallback;
-    }
-
-    return {
-      partners: fallback.slice(0, limit).map((p) => ({
-        partnerId: p._id,
-        distanceKm: null,
-        status: p.status,
-      })),
-    };
+  if (picked.length === 0 && allOnline.length > 0) {
+    picked = allOnline.slice(0, limit).map((p) => ({
+      partnerId: p._id,
+      distanceKm: null,
+      status: p.status,
+    }));
   }
 
   return { partners: picked };
@@ -278,9 +269,11 @@ export async function tryAutoAssign(orderId, options = {}) {
   }
 
   try {
-    // Decoupling: Ensure order is marked ready by restaurant before dispatching to delivery boys
+    const forceRebroadcast = Boolean(options.forceRebroadcast);
+
+    // Decoupling: Ensure order is marked ready by restaurant before dispatching to delivery boys (unless manual forceRebroadcast)
     const DISPATCHABLE_STATUSES = ['ready_for_pickup', 'ready', 'reached_pickup', 'picked_up', 'reached_drop'];
-    if (!DISPATCHABLE_STATUSES.includes(order.orderStatus)) {
+    if (!forceRebroadcast && !DISPATCHABLE_STATUSES.includes(order.orderStatus)) {
       logger.info(`tryAutoAssign: Skip for ${orderId} (status ${order.orderStatus} not dispatchable yet).`);
       return order;
     }
@@ -336,11 +329,12 @@ export async function tryAutoAssign(orderId, options = {}) {
 
     const eligible = codEligibleOnlinePartners.filter(p => !offeredIds.includes(p.partnerId.toString()));
 
-    const forceRebroadcast = Boolean(options.forceRebroadcast);
-
     // If no eligible partners left
     if (eligible.length === 0) {
-      const targets = codEligibleOnlinePartners.filter(p => !excludedPartnerIds.has(p.partnerId.toString()));
+      let targets = codEligibleOnlinePartners.filter(p => !excludedPartnerIds.has(p.partnerId.toString()));
+      if (targets.length === 0 && forceRebroadcast) {
+        targets = codEligibleOnlinePartners.length > 0 ? codEligibleOnlinePartners : partners;
+      }
       if (targets.length === 0) {
         logger.info(`tryAutoAssign: No available online partners for order ${order._id}. Retrying in 15s...`);
         await addOrderJob({
@@ -351,7 +345,7 @@ export async function tryAutoAssign(orderId, options = {}) {
         }, { delay: 15000 });
         return order;
       }
-      // Pick closest available non-excluded partner
+      // Pick closest available partner
       eligible.push(targets[0]);
     }
 
@@ -465,7 +459,7 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
   order.dispatch.offeredTo = [];
   await order.save();
 
-  await tryAutoAssign(order._id);
+  await tryAutoAssign(order._id, { forceRebroadcast: true, attempt: 1 });
   const finalOrder = await FoodOrder.findById(order._id).select('dispatch.offeredTo').lean();
   const notifiedCount = finalOrder?.dispatch?.offeredTo?.length || 0;
   return { success: true, notifiedCount };

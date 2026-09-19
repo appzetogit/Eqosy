@@ -675,6 +675,42 @@ export const listGigBookingsForAdmin = async (query = {}) => {
     };
   });
 
+  // Ensure all currently online delivery partners appear in admin view even if they didn't book an explicit gig slot
+  const onlinePartners = await FoodDeliveryPartner.find({
+    availabilityStatus: 'online',
+    status: { $in: ['approved', 'pending'] }
+  })
+    .select('_id name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address updatedAt')
+    .lean();
+
+  const partnerIdsInEnriched = new Set(enriched.map(e => String(e.partnerId)));
+
+  for (const p of onlinePartners) {
+    if (!partnerIdsInEnriched.has(String(p._id))) {
+      enriched.unshift({
+        _id: `online-${p._id}`,
+        bookingId: `online-${p._id}`,
+        gigId: p._id,
+        gigTitle: 'Online Shift',
+        gigDate: date || new Date().toISOString().slice(0, 10),
+        gigTime: 'Active Now',
+        zoneName: p.zoneName || p.city || 'All Zones',
+        bookedAt: p.updatedAt || new Date(),
+        partnerId: p._id,
+        partnerName: p.name || 'Delivery Partner',
+        partnerPhone: p.phone || '',
+        partnerEmail: p.email || '',
+        profilePhoto: p.profilePhoto || p.onlineSelfie?.imageUrl || '',
+        availabilityStatus: 'online',
+        bookingStatus: 'booked',
+        workStatus: 'Working / Online',
+        isOnline: true,
+        lastActiveAt: p.updatedAt
+      });
+      partnerIdsInEnriched.add(String(p._id));
+    }
+  }
+
   // Calculate summary counts
   const totalBooked = enriched.length;
   const currentlyWorking = enriched.filter(b => b.workStatus === 'Working / Online').length;
