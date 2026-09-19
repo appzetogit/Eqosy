@@ -193,36 +193,9 @@ export default function CategoryPage() {
   }
 
   const fetchApprovedFoods = async () => {
-    if (Array.isArray(approvedFoodsCacheRef.current)) {
-      return approvedFoodsCacheRef.current
-    }
-
-    if (approvedFoodsInFlightRef.current) {
-      return approvedFoodsInFlightRef.current
-    }
-
-    approvedFoodsInFlightRef.current = (async () => {
-      try {
-        const response = await adminAPI.getFoods({ limit: 1000 })
-        const list = response?.data?.data?.foods || []
-        const approvedFoods = Array.isArray(list)
-          ? list.filter((food) =>
-            String(food?.approvalStatus || "").toLowerCase() === "approved" &&
-            food?.isAvailable !== false
-          )
-          : []
-
-        approvedFoodsCacheRef.current = approvedFoods
-        return approvedFoods
-      } catch {
-        approvedFoodsCacheRef.current = []
-        return []
-      } finally {
-        approvedFoodsInFlightRef.current = null
-      }
-    })()
-
-    return approvedFoodsInFlightRef.current
+    // Return empty array safely; public pages must not query admin-only endpoints (/food/admin/foods)
+    approvedFoodsCacheRef.current = []
+    return []
   }
 
   useEffect(() => {
