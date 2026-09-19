@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { userAPI, restaurantAPI, deliveryAPI, adminAPI } from "@food/api";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import fallbackNotificationSound from "@food/assets/audio/alert.mp3";
+import { playChatNotificationSound } from "@/shared/utils/chatNotificationSound";
 
 const pushNotificationSoundPath = "/zomato_sms.mp3";
 
@@ -244,14 +245,41 @@ async function triggerWebViewNativeNotification(payload = {}) {
 export function isPushRingEvent(payload = {}) {
   const data = payload?.data || {};
   const type = String(data.type || payload.type || payload.category || '').toLowerCase();
+  const chatType = String(data.chatType || payload.chatType || '').toLowerCase();
   const title = String(payload.title || payload.notification?.title || '').toLowerCase();
   const sound = String(payload.sound || data.sound || '').toLowerCase();
+
+  // 1. EXPLICIT GUARD: Chat messages must NEVER trigger loud order ringtone or alert loop
+  if (
+    type === 'chat_message' ||
+    type.includes('chat') ||
+    chatType.includes('chat') ||
+    title.includes('message') ||
+    Boolean(data.conversationId) ||
+    data.openChat === 'true'
+  ) {
+    return false;
+  }
+
+  // 2. EXPLICIT GUARD: Status updates (Order Completed, Delivered, Partner Arrived, Picked Up)
+  // must show notifications but NEVER play loud order ringtone
+  if (
+    type.includes('completed') ||
+    type.includes('delivered') ||
+    type.includes('partner_arrived') ||
+    type.includes('picked_up') ||
+    title.includes('completed') ||
+    title.includes('delivered') ||
+    title.includes('arrived')
+  ) {
+    return false;
+  }
 
   if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
     return true;
   }
 
-  // 1. Order aane par
+  // 3. New Order Ring Event (for Restaurant & User)
   if (
     type.includes('new_order') ||
     type.includes('order_created') ||
@@ -262,28 +290,19 @@ export function isPushRingEvent(payload = {}) {
     return true;
   }
 
-  // 2. Delivery boy ko order assign karne ke liye
-  if (
-    type.includes('order_assigned') ||
-    type.includes('order_assign') ||
-    type.includes('delivery_assigned') ||
-    type.includes('ring') ||
-    type.includes('gig_reminder') ||
-    title.includes('assigned')
-  ) {
-    return true;
-  }
-
-  // 3. Mark complete karne par
-  if (
-    type.includes('order_completed') ||
-    type.includes('delivered') ||
-    type.includes('mark_completed') ||
-    title.includes('completed') ||
-    title.includes('delivered') ||
-    title.includes('marked complete')
-  ) {
-    return true;
+  // 4. Delivery Partner Ring Event (when a new order is offered/assigned to driver)
+  const moduleName = normalizeModuleFromPath();
+  if (moduleName === 'delivery') {
+    if (
+      type.includes('order_assigned') ||
+      type.includes('order_assign') ||
+      type.includes('delivery_assigned') ||
+      type.includes('ring') ||
+      type.includes('gig_reminder') ||
+      title.includes('assigned')
+    ) {
+      return true;
+    }
   }
 
   return false;
@@ -297,6 +316,25 @@ async function playPushSound(payload = {}) {
       notificationPermission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
       payload,
     });
+
+    const data = payload?.data || {};
+    const type = String(data.type || payload.type || payload.category || '').toLowerCase();
+    const chatType = String(data.chatType || payload.chatType || '').toLowerCase();
+    const title = String(payload.title || payload.notification?.title || '').toLowerCase();
+
+    const isChat =
+      type === 'chat_message' ||
+      type.includes('chat') ||
+      chatType.includes('chat') ||
+      title.includes('message') ||
+      Boolean(data.conversationId) ||
+      data.openChat === 'true';
+
+    if (isChat) {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Push notification is a chat message, playing soft chat chime", { payload });
+      playChatNotificationSound();
+      return;
+    }
 
     if (!isPushRingEvent(payload)) {
       pushDebugLog(PUSH_DEBUG_PREFIX, "Push notification is a silent status update, skipping sound audio", { payload });
@@ -591,29 +629,51 @@ function showForegroundNotification(payload = {}) {
               vibrate: [200, 100, 200, 100, 300]
             });
           } else {
-            new Notification(title, {
+            const notif = new Notification(title, {
               body,
               icon: "/eqosy-logo.png",
               image,
               tag: notificationKey || undefined,
               requireInteraction: true
             });
+            notif.onclick = (event) => {
+              event.preventDefault();
+              window.focus();
+              const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
+              const target = link.startsWith("/restaurant") ? `/food${link}` : link;
+              window.location.href = target;
+            };
           }
         }).catch(() => {
-          new Notification(title, {
+          const notif = new Notification(title, {
             body,
             icon: "/eqosy-logo.png",
             image,
             tag: notificationKey || undefined,
+            requireInteraction: true
           });
+          notif.onclick = (event) => {
+            event.preventDefault();
+            window.focus();
+            const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
+            const target = link.startsWith("/restaurant") ? `/food${link}` : link;
+            window.location.href = target;
+          };
         });
       } else {
-        new Notification(title, {
+        const notif = new Notification(title, {
           body,
           icon: "/eqosy-logo.png",
           image,
           tag: notificationKey || undefined,
         });
+        notif.onclick = (event) => {
+          event.preventDefault();
+          window.focus();
+          const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
+          const target = link.startsWith("/restaurant") ? `/food${link}` : link;
+          window.location.href = target;
+        };
       }
     } catch (error) {
       pushDebugWarn(PUSH_DEBUG_PREFIX, "Browser notification creation failed", {

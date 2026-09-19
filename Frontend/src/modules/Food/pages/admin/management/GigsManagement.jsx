@@ -89,14 +89,34 @@ export const GigsManagement = () => {
   };
 
   const handleApproveHandover = async (orderId) => {
+    const strId = String(orderId || "").trim();
     const ok = await rawApproveHandover(orderId);
+    setApiPendingHandovers((prev) =>
+      (Array.isArray(prev) ? prev : []).filter(
+        (h) =>
+          String(h.orderMongoId) !== strId &&
+          String(h.orderId) !== strId &&
+          String(h.id) !== strId &&
+          String(h.id) !== `approval-handover-${strId}`
+      )
+    );
     fetchPendingHandovers();
     if (typeof window !== "undefined") window.dispatchEvent(new Event("adminNotificationsUpdated"));
     return ok;
   };
 
   const handleRejectHandover = async (orderId, reason) => {
+    const strId = String(orderId || "").trim();
     const ok = await rawRejectHandover(orderId, reason);
+    setApiPendingHandovers((prev) =>
+      (Array.isArray(prev) ? prev : []).filter(
+        (h) =>
+          String(h.orderMongoId) !== strId &&
+          String(h.orderId) !== strId &&
+          String(h.id) !== strId &&
+          String(h.id) !== `approval-handover-${strId}`
+      )
+    );
     fetchPendingHandovers();
     if (typeof window !== "undefined") window.dispatchEvent(new Event("adminNotificationsUpdated"));
     return ok;

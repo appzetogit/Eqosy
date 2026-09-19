@@ -560,6 +560,52 @@ export default function useAdminNotifications(options = {}) {
     dispatchAdminNotificationsUpdated();
   }, []);
 
+  const purgeHandoverNotification = useCallback((orderId) => {
+    if (!orderId) return;
+    const strId = String(orderId).trim();
+    const currentDismissed = getDismissedIds();
+    const currentRealtime = getStoredRealtimeNotifs();
+
+    const candidateIds = new Set([
+      strId,
+      `approval-handover-${strId}`
+    ]);
+
+    [...currentRealtime, ...(Array.isArray(items) ? items : [])].forEach((item) => {
+      if (
+        String(item.orderMongoId) === strId ||
+        String(item.orderId) === strId ||
+        item.id === strId ||
+        item.id === `approval-handover-${strId}`
+      ) {
+        if (item.id) candidateIds.add(item.id);
+        if (item.orderMongoId) candidateIds.add(`approval-handover-${item.orderMongoId}`);
+        if (item.orderId) candidateIds.add(`approval-handover-${item.orderId}`);
+      }
+    });
+
+    const newDismissed = [...new Set([...currentDismissed, ...candidateIds])];
+    saveDismissedIds(newDismissed);
+
+    const filteredRealtime = currentRealtime.filter((item) => {
+      const mId = String(item.orderMongoId || "");
+      const oId = String(item.orderId || "");
+      const id = String(item.id || "");
+      return !candidateIds.has(id) && mId !== strId && oId !== strId;
+    });
+    saveStoredRealtimeNotifs(filteredRealtime);
+
+    setItems((prev) =>
+      (Array.isArray(prev) ? prev : []).filter((item) => {
+        const mId = String(item.orderMongoId || "");
+        const oId = String(item.orderId || "");
+        const id = String(item.id || "");
+        return !candidateIds.has(id) && mId !== strId && oId !== strId;
+      })
+    );
+    dispatchAdminNotificationsUpdated();
+  }, [items]);
+
   const approveHandover = useCallback(
     async (orderId) => {
       if (!orderId) return false;
@@ -567,11 +613,7 @@ export default function useAdminNotifications(options = {}) {
         const res = await adminAPI.approveHandover(orderId);
         if (res.data?.success) {
           toast.success(res.data?.message || "Handover approved! Order unassigned & driver set Offline.");
-          const targetId = `approval-handover-${String(orderId)}`;
-          saveDismissedIds([...new Set([...getDismissedIds(), targetId])]);
-          saveStoredRealtimeNotifs(getStoredRealtimeNotifs().filter((item) => item.id !== targetId));
-          setItems((prev) => (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId) && i.id !== targetId));
-          dispatchAdminNotificationsUpdated();
+          purgeHandoverNotification(orderId);
           return true;
         } else {
           toast.error(res.data?.message || "Failed to approve handover");
@@ -581,7 +623,7 @@ export default function useAdminNotifications(options = {}) {
       }
       return false;
     },
-    []
+    [purgeHandoverNotification]
   );
 
   const rejectHandover = useCallback(
@@ -591,11 +633,7 @@ export default function useAdminNotifications(options = {}) {
         const res = await adminAPI.rejectHandover(orderId, reason);
         if (res.data?.success) {
           toast.info(res.data?.message || "Handover request rejected.");
-          const targetId = `approval-handover-${String(orderId)}`;
-          saveDismissedIds([...new Set([...getDismissedIds(), targetId])]);
-          saveStoredRealtimeNotifs(getStoredRealtimeNotifs().filter((item) => item.id !== targetId));
-          setItems((prev) => (Array.isArray(prev) ? prev : []).filter(i => i.orderMongoId !== String(orderId) && i.orderId !== String(orderId) && i.id !== targetId));
-          dispatchAdminNotificationsUpdated();
+          purgeHandoverNotification(orderId);
           return true;
         } else {
           toast.error(res.data?.message || "Failed to reject handover");
@@ -605,7 +643,7 @@ export default function useAdminNotifications(options = {}) {
       }
       return false;
     },
-    []
+    [purgeHandoverNotification]
   );
 
   return useMemo(

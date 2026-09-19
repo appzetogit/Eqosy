@@ -2080,6 +2080,7 @@ export async function approveOrderHandoverAdmin(orderId, adminId) {
       io.to(rooms.delivery(partnerId)).emit("order_handover_approved", socketPayload);
       io.to(rooms.user(order.userId)).emit("order_status_update", socketPayload);
       io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", socketPayload);
+      io.to("admin").emit("admin_notification", socketPayload);
     }
 
     await notifyOwnersSafely(
@@ -2118,14 +2119,23 @@ export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
   const partnerId = order.dispatch?.handoverRequest?.requestedBy || order.dispatch?.deliveryPartnerId;
   if (!partnerId) throw new ValidationError("No delivery partner associated with this handover request");
 
+  if (!order.dispatch) order.dispatch = {};
   if (!order.dispatch.handoverRequest) order.dispatch.handoverRequest = {};
+  
   order.dispatch.handoverRequest.status = 'rejected';
   order.dispatch.handoverRequest.rejectionReason = reason || 'Rejected by Admin';
+  order.dispatch.handoverRequest.rejectedAt = new Date();
+  order.dispatch.handoverRequest.rejectedBy = adminId;
+
+  // Revert orderStatus & dispatch.status back to active delivery state
+  const previousStatus = order.dispatch?.handoverRequest?.previousOrderStatus || 'picked_up';
+  order.dispatch.status = 'assigned';
+  order.orderStatus = (previousStatus && previousStatus !== 'handover_requested') ? previousStatus : 'picked_up';
 
   pushStatusHistory(order, {
     byRole: "ADMIN",
     byId: adminId,
-    from: order.dispatch?.status,
+    from: 'handover_requested',
     to: order.dispatch?.status,
     note: `Handover request rejected by Admin: ${reason || 'Rejected'}`
   });
@@ -2142,6 +2152,7 @@ export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
         message: `Handover request rejected by Admin: ${reason || 'Please continue trip'}`
       };
       io.to(rooms.delivery(partnerId)).emit("order_handover_rejected", socketPayload);
+      io.to("admin").emit("admin_notification", socketPayload);
     }
 
     await notifyOwnersSafely(
@@ -2165,15 +2176,8 @@ export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
 
 export async function listPendingHandoverRequestsAdmin() {
   const orders = await FoodOrder.find({
-    $or: [
-      { 'dispatch.handoverRequest.status': 'pending' },
-      { 'dispatch.status': 'handover_requested' },
-      { orderStatus: 'handover_requested' },
-      {
-        'dispatch.handoverRequest.requestedBy': { $exists: true, $ne: null },
-        'dispatch.handoverRequest.status': { $nin: ['approved', 'rejected'] }
-      }
-    ]
+    'dispatch.handoverRequest.status': 'pending',
+    'dispatch.status': { $ne: 'unassigned' }
   })
     .populate({
       path: 'restaurantId',

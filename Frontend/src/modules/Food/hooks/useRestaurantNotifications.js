@@ -27,12 +27,12 @@ const buildRestaurantOrderNotification = (orderData = {}) => {
   return {
     title: `New order #${orderId}`,
     body: itemCount > 0
-      ? `${itemCount} item${itemCount === 1 ? '' : 's'} - â‚¹${total.toFixed(2)}`
+      ? `${itemCount} item${itemCount === 1 ? '' : 's'} - ₹${total.toFixed(2)}`
       : 'A new order is waiting for review',
     tag: `restaurant-order-${orderId}`,
     data: {
       orderId,
-      targetUrl: `/restaurant/orders/${orderData.orderMongoId || orderData.orderId || ''}`,
+      targetUrl: `/food/restaurant`,
     },
   };
 }
@@ -45,7 +45,7 @@ const triggerWebViewNativeNotification = async (orderData = {}) => {
     body: `Order #${orderData?.orderId || orderData?.orderMongoId || orderData?.id || ''}`.trim(),
     orderId: orderData?.orderId || orderData?.order_id || '',
     orderMongoId: orderData?.orderMongoId || orderData?.order_mongo_id || '',
-    targetUrl: `/restaurant/orders/${orderData?.orderMongoId || orderData?.orderId || ''}`,
+    targetUrl: `/food/restaurant`,
   };
 
   try {
@@ -164,7 +164,7 @@ export const useRestaurantNotifications = () => {
         }
       }
 
-      new Notification(notificationOptions.title, {
+      const notif = new Notification(notificationOptions.title, {
         body: notificationOptions.body,
         tag: notificationOptions.tag,
         requireInteraction: true,
@@ -172,6 +172,12 @@ export const useRestaurantNotifications = () => {
         icon: '/eqosy-logo.png',
         data: notificationOptions.data,
       });
+      notif.onclick = (event) => {
+        event.preventDefault();
+        window.focus();
+        const target = notificationOptions.data?.targetUrl || '/food/restaurant';
+        window.location.href = target;
+      };
     } catch (error) {
       debugWarn('Error showing background restaurant notification:', error);
     }
@@ -223,6 +229,20 @@ export const useRestaurantNotifications = () => {
 
     if (currentRestaurantId && targetRestaurantId && targetRestaurantId !== currentRestaurantId) {
       debugLog(`[RestaurantNotification] Ignored order alert for restaurant ${targetRestaurantId} (current logged in: ${currentRestaurantId})`);
+      return;
+    }
+
+    const statusStr = String(orderData?.status || orderData?.orderStatus || '').toLowerCase();
+    if (
+      statusStr === 'preparing' ||
+      statusStr === 'ready_for_pickup' ||
+      statusStr === 'out_for_delivery' ||
+      statusStr === 'delivered' ||
+      statusStr === 'completed' ||
+      statusStr.includes('cancel')
+    ) {
+      stopAlertLoop();
+      activeOrderRef.current = null;
       return;
     }
 
@@ -551,12 +571,22 @@ export const useRestaurantNotifications = () => {
       debugLog('Order status update:', data);
       setLastOrderUpdate(data);
       const statusStr = String(data?.orderStatus || data?.status || '').toLowerCase();
-      if (statusStr.includes('cancel')) {
+      if (
+        statusStr.includes('cancel') ||
+        statusStr === 'confirmed' ||
+        statusStr === 'preparing' ||
+        statusStr === 'ready_for_pickup' ||
+        statusStr === 'out_for_delivery' ||
+        statusStr === 'delivered' ||
+        statusStr === 'completed'
+      ) {
         stopAlertLoop();
         setNewOrder(null);
         activeOrderRef.current = null;
-        const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
-        toast.error(`User cancelled order #${displayId}`);
+        if (statusStr.includes('cancel')) {
+          const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+          toast.error(`User cancelled order #${displayId}`);
+        }
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('restaurant_order_updated', { detail: data }));
@@ -681,6 +711,12 @@ export const useRestaurantNotifications = () => {
 
   const clearNewOrder = () => {
     stopAlertLoop();
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch (_) {}
+    }
     activeOrderRef.current = null;
     setNewOrder(null);
   };

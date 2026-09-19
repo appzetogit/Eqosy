@@ -426,6 +426,12 @@ export const useDeliveryNotifications = () => {
   }, []);
 
   const handleIncomingOrderAlert = useCallback((orderData = {}) => {
+    const dataType = String(orderData?.type || orderData?.data?.type || '').toLowerCase();
+    const chatType = String(orderData?.chatType || orderData?.data?.chatType || '').toLowerCase();
+    if (dataType.includes('chat') || chatType.includes('chat') || orderData?.openChat === 'true' || orderData?.conversationId) {
+      return;
+    }
+
     const currentPartnerId = String(deliveryPartnerId || '').trim();
     const assignedPartnerId = String(
       orderData?.dispatch?.deliveryPartnerId?._id ||

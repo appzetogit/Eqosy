@@ -212,16 +212,31 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   pushDebugLog(PUSH_DEBUG_PREFIX, "Notification click received", {
     data: event?.notification?.data || {},
+    tag: event?.notification?.tag || "",
   });
   event.notification.close();
   const notificationData = event?.notification?.data || {};
+  const notifTag = String(event?.notification?.tag || "");
   const rideId = notificationData.rideId || notificationData.ride_id || "";
   const orderId = notificationData.orderId || notificationData.order_id || "";
-  
+  const isRestaurantNotification =
+    notifTag.includes("restaurant") ||
+    notificationData.role === "restaurant" ||
+    notificationData.ownerType === "RESTAURANT" ||
+    Boolean(notificationData.targetUrl && String(notificationData.targetUrl).includes("restaurant"));
+
   let rawLink =
     notificationData.link ||
     notificationData.targetUrl ||
     (notificationData.click_action && String(notificationData.click_action).startsWith("/") ? notificationData.click_action : null);
+
+  if (rawLink && String(rawLink).startsWith("/restaurant")) {
+    rawLink = `/food${rawLink}`;
+  }
+
+  if (rawLink && (rawLink === "/food/restaurant/orders" || rawLink.startsWith("/food/restaurant/orders/"))) {
+    rawLink = "/food/restaurant";
+  }
 
   if (!rawLink || !rawLink.startsWith("/")) {
     if (notificationData.type === 'chat_message' || notificationData.chatType === 'food_order_chat' || notificationData.openChat === 'true') {
@@ -233,6 +248,8 @@ self.addEventListener("notificationclick", (event) => {
       }
     } else if (rideId) {
       rawLink = `/taxi/driver/home?rideId=${encodeURIComponent(rideId)}`;
+    } else if (isRestaurantNotification) {
+      rawLink = "/food/restaurant";
     } else {
       rawLink = "/";
     }
@@ -244,7 +261,15 @@ self.addEventListener("notificationclick", (event) => {
       const client = windowClients.find((c) => c.url.includes(self.location.origin));
       if (client) {
         client.focus();
-        return client.navigate(targetUrl);
+        try {
+          const clientUrl = new URL(client.url);
+          if (clientUrl.pathname !== targetUrl) {
+            return client.navigate(targetUrl);
+          }
+        } catch {
+          return client.navigate(targetUrl);
+        }
+        return;
       }
       return clients.openWindow(targetUrl);
     }),

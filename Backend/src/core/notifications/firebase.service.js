@@ -180,8 +180,21 @@ const normalizeDataMap = (data = {}) => {
 const isRingEvent = (payload = {}) => {
     const data = payload.data || {};
     const type = String(data.type || payload.type || payload.category || '').toLowerCase();
+    const chatType = String(data.chatType || payload.chatType || '').toLowerCase();
     const title = String(payload.title || payload.notification?.title || '').toLowerCase();
     const sound = String(payload.sound || data.sound || '').toLowerCase();
+
+    // Chat messages are NOT ring events
+    if (
+        type === 'chat_message' ||
+        type.includes('chat') ||
+        chatType.includes('chat') ||
+        title.includes('message') ||
+        data.conversationId ||
+        data.openChat === 'true'
+    ) {
+        return false;
+    }
 
     if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
         return true;
@@ -210,19 +223,22 @@ const isRingEvent = (payload = {}) => {
         return true;
     }
 
-    // 3. Mark complete karne par
+    // Status updates (Order completed, delivered, partner arrived, picked up) are text notifications, NOT ring events
     if (
         type.includes('order_completed') ||
         type.includes('delivered') ||
         type.includes('mark_completed') ||
+        type.includes('partner_arrived') ||
+        type.includes('picked_up') ||
         title.includes('completed') ||
         title.includes('delivered') ||
-        title.includes('marked complete')
+        title.includes('marked complete') ||
+        title.includes('arrived')
     ) {
-        return true;
+        return false;
     }
 
-    // Status updates like "delivery boy aarha hai", picked_up, reaching, etc. are silent
+    // Status updates like "delivery boy aarha hai", picked_up, reaching, etc. are silent status updates
     return false;
 };
 

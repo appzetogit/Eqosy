@@ -62,6 +62,15 @@ function getModuleFromUrl(url = "") {
 
   const normalized = u.toLowerCase();
 
+  // Public user app endpoints must NEVER trigger admin or restaurant auth redirects on error
+  if (
+    normalized.includes("/categories/public") ||
+    normalized.includes("/food/search/") ||
+    normalized.includes("/search/")
+  ) {
+    return "user";
+  }
+
   // Admin detection
   if (
     normalized.includes("/admin/") ||
