@@ -111,9 +111,8 @@ function UserLayoutWithSharedCard() {
 
 export default function UserRouter() {
   return (
-    <Suspense fallback={<Loader />}>
-      <Routes>
-        <Route element={<UserLayoutWithSharedCard />}>
+    <Routes>
+      <Route element={<UserLayoutWithSharedCard />}>
           {/* Home & Discovery */}
           <Route path="" element={<Home />} />
           <Route path="dining" element={<Dining />} />
@@ -360,6 +359,5 @@ export default function UserRouter() {
           />
         </Route>
       </Routes>
-    </Suspense>
   )
 }

@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react"
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, Navigate } from "react-router-dom"
 import ProtectedRoute from "@food/components/ProtectedRoute"
 import Loader from "@food/components/Loader"
 
@@ -51,9 +51,8 @@ const VerificationPending = lazy(() => import("@food/pages/restaurant/auth/Verif
 
 export default function RestaurantRouter() {
   return (
-    <Suspense fallback={<Loader />}>
-      <Routes>
-        {/* Auth Routes */}
+    <Routes>
+      {/* Auth Routes */}
         <Route path="welcome" element={<Welcome />} />
         <Route path="login" element={<Login />} />
         <Route path="otp" element={<OTP />} />
@@ -99,7 +98,8 @@ export default function RestaurantRouter() {
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><UpdateBankDetails /></ProtectedRoute>} path="update-bank-details" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><DiningReservations /></ProtectedRoute>} path="reservations" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><ZoneSetup /></ProtectedRoute>} path="zone-setup" />
+        {/* Fallback for unmatched restaurant sub-routes */}
+        <Route path="*" element={<Navigate to="/food/restaurant" replace />} />
       </Routes>
-    </Suspense>
   )
 }

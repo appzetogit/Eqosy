@@ -66,7 +66,10 @@ const SmartFallbackRedirect = () => {
   if (pathname.startsWith('/food/delivery') || pathname.startsWith('/delivery')) {
     return <Navigate to="/food/delivery" replace />
   }
-  if (pathname.startsWith('/food') || pathname.startsWith('/restaurant')) {
+  if (pathname.startsWith('/food/restaurant') || pathname.startsWith('/restaurant')) {
+    return <Navigate to="/food/restaurant" replace />
+  }
+  if (pathname.startsWith('/food/user') || pathname.startsWith('/food')) {
     return <Navigate to="/food/user" replace />
   }
   if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
@@ -85,6 +88,10 @@ const AppRoutes = () => {
       const role = String(event.detail?.role || 'user').toLowerCase()
       if (role === 'admin') {
         navigate('/admin/login', { replace: true })
+      } else if (role === 'delivery') {
+        navigate('/food/delivery/login', { replace: true })
+      } else if (role === 'restaurant') {
+        navigate('/food/restaurant/login', { replace: true })
       } else if (['driver', 'owner', 'bus_driver', 'service_center', 'service_center_staff'].includes(role)) {
         navigate(role === 'owner' ? '/taxi/owner/login' : '/taxi/driver/login', { replace: true })
       } else {

@@ -197,7 +197,12 @@ export default function DeliveryOTP() {
         window.dispatchEvent(new Event("deliveryAuthChanged"))
         setTimeout(() => navigate("/food/delivery", { replace: true }), 500)
       }
-    } catch (err) { setError(err?.response?.data?.message || "Invalid OTP."); setIsLoading(false); }
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.response?.data?.error || "Invalid OTP. Please try again.")
+      setOtp(["", "", "", ""])
+      setIsLoading(false)
+      setTimeout(() => inputRefs.current[0]?.focus(), 100)
+    }
   }
 
   const handleSubmitName = async () => {

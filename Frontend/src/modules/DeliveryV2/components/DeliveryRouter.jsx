@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react"
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, Navigate } from "react-router-dom"
 import DeliveryLayout from "./DeliveryLayout"
 import ProtectedRoute from "./ProtectedRoute"
 import Loader from "@food/components/Loader"
@@ -452,6 +452,8 @@ export default function DeliveryRouter() {
           }
           path="help/language"
         />
+        {/* Fallback for unmatched delivery sub-routes */}
+        <Route path="*" element={<Navigate to="/food/delivery" replace />} />
       </Routes>
     </Suspense>
   )

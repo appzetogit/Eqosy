@@ -3241,8 +3241,8 @@ export default function Home() {
 
       <AnimatePresence mode="wait">
         {zoneLoading && (
-          <div key="zone-loading" className="flex items-center justify-center min-h-[50vh]">
-            <Loader2 className="w-10 h-10 animate-spin text-primary-orange" />
+          <div key="zone-loading" className="px-4 py-6 max-w-7xl mx-auto space-y-6">
+            <RestaurantGridSkeleton />
           </div>
         )}
         {!zoneLoading && isOutOfService && Number.isFinite(effectiveLocation?.latitude) && Number.isFinite(effectiveLocation?.longitude) && (

@@ -233,6 +233,23 @@ apiClient.interceptors.response.use(
     if (err?.response?.status !== 401 || !original || original._retry) {
       return Promise.reject(err);
     }
+    
+    // Do NOT attempt token refresh or trigger onRefreshFailed for authentication endpoints
+    // (login, verify-otp, send-otp, signup, etc.) where 401 is a credential validation failure.
+    const reqUrl = String(original.url || "").toLowerCase();
+    const isAuthEndpoint =
+      reqUrl.includes("/auth/") ||
+      reqUrl.includes("/login") ||
+      reqUrl.includes("/verify-otp") ||
+      reqUrl.includes("/send-otp") ||
+      reqUrl.includes("/signup") ||
+      reqUrl.includes("/register") ||
+      reqUrl.includes("/forgot-password");
+
+    if (isAuthEndpoint) {
+      return Promise.reject(err);
+    }
+
     const module = original.contextModule || getModuleFromUrl(original.url);
     const refreshToken = getRefreshToken(module);
     if (!refreshToken) {

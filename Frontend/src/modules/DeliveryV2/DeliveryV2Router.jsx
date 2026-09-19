@@ -34,9 +34,8 @@ const FoodOrderChatScreen = lazy(() => import('@food/pages/user/orders/FoodOrder
 
 const DeliveryV2Router = () => {
   return (
-    <Suspense fallback={<Loader />}>
-      <Routes>
-        {/* Auth routes */}
+    <Routes>
+      {/* Auth routes */}
         <Route path="welcome" element={<Welcome />} />
         <Route path="login" element={<SignIn />} />
         <Route path="otp" element={<OTP />} />
@@ -77,7 +76,6 @@ const DeliveryV2Router = () => {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/food/delivery" replace />} />
       </Routes>
-    </Suspense>
   );
 };
 

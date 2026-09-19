@@ -29,7 +29,18 @@ class ErrorBoundary extends React.Component {
     } catch {
       // ignore
     }
-    window.location.href = '/food/user'
+    const pathname = String(window.location?.pathname || '').toLowerCase()
+    if (pathname.startsWith('/food/delivery') || pathname.startsWith('/delivery')) {
+      window.location.href = '/food/delivery'
+    } else if (pathname.startsWith('/food/restaurant') || pathname.startsWith('/restaurant')) {
+      window.location.href = '/food/restaurant'
+    } else if (pathname.startsWith('/admin')) {
+      window.location.href = '/admin'
+    } else if (pathname.startsWith('/taxi')) {
+      window.location.href = '/taxi/user'
+    } else {
+      window.location.href = '/food/user'
+    }
   }
 
   render() {
