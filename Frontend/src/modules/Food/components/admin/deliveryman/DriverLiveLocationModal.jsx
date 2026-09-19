@@ -32,7 +32,7 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
 
     const initialLat = Number(deliveryman?.lastLat ?? deliveryman?.currentLocation?.coordinates?.[1] ?? deliveryman?.availability?.currentLocation?.coordinates?.[1])
     const initialLng = Number(deliveryman?.lastLng ?? deliveryman?.currentLocation?.coordinates?.[0] ?? deliveryman?.availability?.currentLocation?.coordinates?.[0])
-    const isOnline = deliveryman?.availabilityStatus === "online" || deliveryman?.status === "Online" || deliveryman?.isOnline === true
+    const isOnline = deliveryman?.availabilityStatus === "online" || deliveryman?.status === "Online" || deliveryman?.isOnline === true || deliveryman?.workStatus === "Working / Online"
 
     setLocationData({
       lat: Number.isFinite(initialLat) ? initialLat : null,
@@ -101,14 +101,25 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
             version: "weekly",
             libraries: ["places", "geometry"],
           })
-          const google = await loader.load()
-          if (isMounted) initGoogleMap(google)
+          const google = await loader.load().catch((loaderErr) => {
+            console.warn("Google Maps API load error:", loaderErr)
+            return null
+          })
+          if (google && isMounted) {
+            initGoogleMap(google)
+          } else if (isMounted) {
+            setMapLoading(false)
+          }
         } else {
           if (isMounted) setMapLoading(false)
         }
       } catch (err) {
         console.error("Error loading Google Maps in modal:", err)
         if (isMounted) setMapLoading(false)
+      } finally {
+        if (isMounted) {
+          setTimeout(() => setMapLoading(false), 1500)
+        }
       }
     }
 

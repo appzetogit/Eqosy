@@ -561,42 +561,8 @@ export const processNoShows = async () => {
 };
 
 export const checkAndAutoOfflineExpiredGigs = async () => {
-  try {
-    const onlinePartners = await FoodDeliveryPartner.find({
-      availabilityStatus: 'online'
-    }).select('_id name availabilityStatus');
-
-    if (!onlinePartners || !onlinePartners.length) return { processed: 0 };
-
-    let offlinedCount = 0;
-    for (const partner of onlinePartners) {
-      const activeGig = await getActiveGigForPartner(partner._id);
-      if (!activeGig) {
-        partner.availabilityStatus = 'offline';
-        await partner.save();
-        offlinedCount++;
-
-        logger.info(
-          `[Gig Auto-Offline] Partner ${partner.name} (${partner._id}) set offline automatically because active gig ended with no next gig.`
-        );
-
-        const io = getIO();
-        if (io) {
-          io.to(rooms.delivery(partner._id)).emit('gig:auto_offline', {
-            reason: 'GIG_ENDED',
-            message: 'Your shift has ended and you have no upcoming active gig. You are now offline.'
-          });
-          io.to(rooms.delivery(partner._id)).emit('delivery:status_changed', {
-            availabilityStatus: 'offline'
-          });
-        }
-      }
-    }
-    return { processed: offlinedCount };
-  } catch (error) {
-    logger.error(`[Gig Auto-Offline Error] ${error.message}`);
-    return { processed: 0, error: error.message };
-  }
+  // Delivery partners remain online for on-demand orders.
+  return { processed: 0 };
 };
 
 export const listGigBookingsForAdmin = async (query = {}) => {
@@ -615,7 +581,7 @@ export const listGigBookingsForAdmin = async (query = {}) => {
     })
     .populate({
       path: 'deliveryPartnerId',
-      select: 'name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address updatedAt'
+      select: 'name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address lastLat lastLng updatedAt'
     })
     .sort({ bookedAt: -1 })
     .lean();
@@ -671,6 +637,8 @@ export const listGigBookingsForAdmin = async (query = {}) => {
       bookingStatus: b.status,
       workStatus,
       isOnline,
+      lastLat: partner.lastLat ?? null,
+      lastLng: partner.lastLng ?? null,
       lastActiveAt: partner.updatedAt
     };
   });
@@ -680,7 +648,7 @@ export const listGigBookingsForAdmin = async (query = {}) => {
     availabilityStatus: 'online',
     status: { $in: ['approved', 'pending'] }
   })
-    .select('_id name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address updatedAt')
+    .select('_id name phone email profilePhoto onlineSelfie availabilityStatus zoneName city address lastLat lastLng updatedAt')
     .lean();
 
   const partnerIdsInEnriched = new Set(enriched.map(e => String(e.partnerId)));
@@ -705,9 +673,20 @@ export const listGigBookingsForAdmin = async (query = {}) => {
         bookingStatus: 'booked',
         workStatus: 'Working / Online',
         isOnline: true,
+        lastLat: p.lastLat ?? null,
+        lastLng: p.lastLng ?? null,
         lastActiveAt: p.updatedAt
       });
       partnerIdsInEnriched.add(String(p._id));
+    } else {
+      const existing = enriched.find(e => String(e.partnerId) === String(p._id));
+      if (existing) {
+        existing.availabilityStatus = 'online';
+        existing.workStatus = 'Working / Online';
+        existing.isOnline = true;
+        if (p.lastLat != null) existing.lastLat = p.lastLat;
+        if (p.lastLng != null) existing.lastLng = p.lastLng;
+      }
     }
   }
 
