@@ -622,7 +622,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             targetTripStatus = 'PICKED_UP';
           } else if (currentPhase === 'at_pickup' || ['reached_pickup', 'REACHED_PICKUP'].includes(backendStatus)) {
             targetTripStatus = 'REACHED_PICKUP';
-          } else if (['confirmed', 'preparing', 'ready_for_pickup'].includes(backendStatus)) {
+          } else if (['confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(backendStatus)) {
             targetTripStatus = 'PICKING_UP';
           }
 
@@ -1208,7 +1208,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
           return (
             ['unassigned', 'assigned'].includes(dispatchStatus) &&
-            ['confirmed', 'preparing', 'ready_for_pickup'].includes(orderStatus)
+            ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(orderStatus)
           );
         });
 
@@ -1251,8 +1251,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       toast.success('Handover Approved by Admin. You are now Offline.');
     };
 
-    window.addEventListener('delivery_handover_approved', handleHandoverApproved);
-    return () => window.removeEventListener('delivery_handover_approved', handleHandoverApproved);
+    window.addEventListener('deliveryHandoverApproved', handleHandoverApproved);
+    return () => window.removeEventListener('deliveryHandoverApproved', handleHandoverApproved);
   }, [resetTrip, setOnline]);
 
   useEffect(() => {
@@ -1309,24 +1309,28 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   }, [orderStatusUpdate, activeOrder, setActiveOrder, resetTrip, clearOrderStatusUpdate]);
 
   useEffect(() => {
-    if (orderReady && activeOrder) {
-      setActiveOrder({
-        ...activeOrder,
-        ...orderReady,
-        orderStatus: 'ready_for_pickup',
-        isFoodReady: true,
-        deliveryState: {
-          ...(activeOrder.deliveryState || {}),
-          ...(orderReady.deliveryState || {}),
-          status: 'ready_for_pickup',
+    if (orderReady) {
+      if (activeOrder) {
+        setActiveOrder({
+          ...activeOrder,
+          ...orderReady,
+          orderStatus: 'ready_for_pickup',
           isFoodReady: true,
-          foodReadyAt: new Date()
-        }
-      });
-      toast.success('Food is ready for pickup! 🟢');
+          deliveryState: {
+            ...(activeOrder.deliveryState || {}),
+            ...(orderReady.deliveryState || {}),
+            status: 'ready_for_pickup',
+            isFoodReady: true,
+            foodReadyAt: new Date()
+          }
+        });
+        toast.success('Food is ready for pickup! 🟢');
+      } else if (isOnline) {
+        setIncomingOrder(orderReady);
+      }
       clearOrderReady();
     }
-  }, [orderReady, activeOrder, setActiveOrder, clearOrderReady]);
+  }, [orderReady, activeOrder, isOnline, setActiveOrder, clearOrderReady]);
 
   // Poller to sync active order status from server every 4s while an active trip is ongoing
   useEffect(() => {

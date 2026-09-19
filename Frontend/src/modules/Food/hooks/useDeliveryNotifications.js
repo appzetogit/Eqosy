@@ -509,7 +509,7 @@ export const useDeliveryNotifications = () => {
         const dispatchStatus = order?.dispatch?.status;
         return (
           ['unassigned', 'assigned'].includes(dispatchStatus) &&
-          ['preparing', 'ready_for_pickup'].includes(order?.orderStatus)
+          ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order?.orderStatus)
         );
       });
 

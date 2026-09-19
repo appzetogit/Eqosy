@@ -8,7 +8,7 @@ import bikeLogo from "@food/assets/bikelogo.png"
 import { toast } from "sonner"
 
 export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }) {
-  const mapRef = useRef(null)
+  const [mapElement, setMapElement] = useState(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
 
@@ -24,21 +24,41 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
     activeOrderId: null,
   })
 
+  const setMapRef = useCallback((node) => {
+    setMapElement(node)
+  }, [])
+
   const driverId = String(deliveryman?._id || deliveryman?.id || deliveryman?.deliveryId || "")
 
   // Initialize initial location state from prop
   useEffect(() => {
     if (!deliveryman) return
 
-    const initialLat = Number(deliveryman?.lastLat ?? deliveryman?.currentLocation?.coordinates?.[1] ?? deliveryman?.availability?.currentLocation?.coordinates?.[1])
-    const initialLng = Number(deliveryman?.lastLng ?? deliveryman?.currentLocation?.coordinates?.[0] ?? deliveryman?.availability?.currentLocation?.coordinates?.[0])
-    const isOnline = deliveryman?.availabilityStatus === "online" || deliveryman?.status === "Online" || deliveryman?.isOnline === true || deliveryman?.workStatus === "Working / Online"
+    const initialLat = Number(
+      deliveryman?.lastLat ??
+      deliveryman?.currentLocation?.coordinates?.[1] ??
+      deliveryman?.availability?.currentLocation?.coordinates?.[1] ??
+      deliveryman?.location?.coordinates?.[1] ??
+      deliveryman?.lat
+    )
+    const initialLng = Number(
+      deliveryman?.lastLng ??
+      deliveryman?.currentLocation?.coordinates?.[0] ??
+      deliveryman?.availability?.currentLocation?.coordinates?.[0] ??
+      deliveryman?.location?.coordinates?.[0] ??
+      deliveryman?.lng
+    )
+    const isOnline =
+      deliveryman?.availabilityStatus === "online" ||
+      deliveryman?.status === "Online" ||
+      deliveryman?.isOnline === true ||
+      deliveryman?.workStatus === "Working / Online"
 
     setLocationData({
       lat: Number.isFinite(initialLat) ? initialLat : null,
       lng: Number.isFinite(initialLng) ? initialLng : null,
-      heading: 0,
-      speed: 0,
+      heading: Number(deliveryman?.heading) || 0,
+      speed: Number(deliveryman?.speed) || 0,
       isOnline,
       lastUpdated: deliveryman?.lastLocationAt ? new Date(deliveryman.lastLocationAt).getTime() : Date.now(),
       activeOrderId: deliveryman?.activeOrderId || null,
@@ -79,9 +99,16 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
     }
   }, [isOpen, driverId])
 
-  // Load Google Maps
+  // Load Google Maps when modal is open and map element is mounted
   useEffect(() => {
-    if (!isOpen || !mapRef.current) return
+    if (!isOpen || !mapElement) {
+      if (!isOpen) {
+        mapInstanceRef.current = null
+        markerRef.current = null
+        setMapLoading(true)
+      }
+      return
+    }
 
     let isMounted = true
 
@@ -91,7 +118,7 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
         const apiKey = await getGoogleMapsApiKey()
 
         if (window.google && window.google.maps) {
-          if (isMounted) initGoogleMap(window.google)
+          if (isMounted) initGoogleMap(window.google, mapElement)
           return
         }
 
@@ -106,7 +133,7 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
             return null
           })
           if (google && isMounted) {
-            initGoogleMap(google)
+            initGoogleMap(google, mapElement)
           } else if (isMounted) {
             setMapLoading(false)
           }
@@ -116,10 +143,6 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
       } catch (err) {
         console.error("Error loading Google Maps in modal:", err)
         if (isMounted) setMapLoading(false)
-      } finally {
-        if (isMounted) {
-          setTimeout(() => setMapLoading(false), 1500)
-        }
       }
     }
 
@@ -128,40 +151,45 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
     return () => {
       isMounted = false
     }
-  }, [isOpen])
+  }, [isOpen, mapElement])
 
-  const initGoogleMap = (google) => {
-    if (!mapRef.current) return
+  const initGoogleMap = (google, container) => {
+    if (!container) return
 
-    const centerLat = locationData.lat ?? 20.5937
-    const centerLng = locationData.lng ?? 78.9629
+    try {
+      const centerLat = Number.isFinite(locationData.lat) ? locationData.lat : 20.5937
+      const centerLng = Number.isFinite(locationData.lng) ? locationData.lng : 78.9629
 
-    const map = new google.maps.Map(mapRef.current, {
-      center: { lat: centerLat, lng: centerLng },
-      zoom: locationData.lat ? 16 : 5,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: true,
-      zoomControl: true,
-    })
+      const map = new google.maps.Map(container, {
+        center: { lat: centerLat, lng: centerLng },
+        zoom: Number.isFinite(locationData.lat) && Number.isFinite(locationData.lng) ? 16 : 5,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        zoomControl: true,
+      })
 
-    mapInstanceRef.current = map
+      mapInstanceRef.current = map
 
-    if (locationData.lat && locationData.lng) {
-      updateMapMarker(google, map, locationData.lat, locationData.lng, locationData.heading)
+      if (Number.isFinite(locationData.lat) && Number.isFinite(locationData.lng)) {
+        updateMapMarker(google, map, locationData.lat, locationData.lng, locationData.heading)
+      }
+    } catch (err) {
+      console.error("Error initializing Google Map:", err)
+    } finally {
+      setMapLoading(false)
     }
-
-    setMapLoading(false)
   }
 
   // Update map marker when location changes
   useEffect(() => {
-    if (!mapInstanceRef.current || !window.google || !locationData.lat || !locationData.lng) return
+    if (!mapInstanceRef.current || !window.google || !Number.isFinite(locationData.lat) || !Number.isFinite(locationData.lng)) return
 
     updateMapMarker(window.google, mapInstanceRef.current, locationData.lat, locationData.lng, locationData.heading)
   }, [locationData.lat, locationData.lng, locationData.heading])
 
   const updateMapMarker = (google, map, lat, lng, heading = 0) => {
+    if (!map || !google || !google.maps) return
     const latLng = new google.maps.LatLng(lat, lng)
 
     const bikeIcon = {
@@ -324,7 +352,7 @@ export default function DriverLiveLocationModal({ deliveryman, isOpen, onClose }
 
         {/* Map Container */}
         <div className="relative w-full h-[450px] bg-slate-100">
-          <div ref={mapRef} className="w-full h-full" />
+          <div ref={setMapRef} className="w-full h-full" />
 
           {mapLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-100/90 backdrop-blur-sm z-10">
