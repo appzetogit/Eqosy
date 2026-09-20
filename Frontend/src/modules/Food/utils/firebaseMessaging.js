@@ -549,6 +549,11 @@ async function saveTokenByModule(moduleName, token, platform = "web") {
   }
   if (moduleName === "user") {
     await userAPI.saveFcmToken(token, { platform });
+    return;
+  }
+  if (moduleName === "admin") {
+    await adminAPI.saveFcmToken(token, platform);
+    return;
   }
 }
 
@@ -690,6 +695,52 @@ function showForegroundNotification(payload = {}) {
       toast.success(title);
     }
   }
+
+  // Persist notification for Admin module dropdown panel
+  if (typeof window !== "undefined" && normalizeModuleFromPath() === "admin") {
+    try {
+      const notifId =
+        payload?.data?.id ||
+        payload?.data?.notificationId ||
+        payload?.messageId ||
+        `fcm-admin-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      const targetCategory = payload?.data?.category || payload?.data?.type || "general";
+      const targetType = payload?.data?.type || (targetCategory.includes("approval") || targetCategory.includes("handover") ? "approval" : "info");
+
+      const item = {
+        id: String(notifId),
+        title: title || "New Notification",
+        message: body || "",
+        type: targetType,
+        category: targetCategory,
+        path: payload?.data?.targetUrl || payload?.data?.link || payload?.data?.path || "/admin/food",
+        createdAt: payload?.data?.createdAt || new Date().toISOString(),
+        timeLabel: "Just now",
+        metaLabel: [title, body].filter(Boolean).join(" • ") || "Admin Notification",
+      };
+
+      const rawRealtime = localStorage.getItem("admin_realtime_notifications_v1");
+      let currentRealtime = [];
+      try {
+        currentRealtime = rawRealtime ? JSON.parse(rawRealtime) : [];
+      } catch {}
+
+      const rawDismissed = localStorage.getItem("admin_notifications_dismissed_v1");
+      let currentDismissed = [];
+      try {
+        currentDismissed = rawDismissed ? JSON.parse(rawDismissed) : [];
+      } catch {}
+
+      if (!currentDismissed.includes(item.id)) {
+        const uniqueItems = [item, ...currentRealtime.filter((i) => i?.id !== item.id)].slice(0, 100);
+        localStorage.setItem("admin_realtime_notifications_v1", JSON.stringify(uniqueItems));
+        window.dispatchEvent(new Event("adminNotificationsUpdated"));
+      }
+    } catch (e) {
+      pushDebugWarn(PUSH_DEBUG_PREFIX, "Failed to persist FCM admin notification", { error: e?.message });
+    }
+  }
 }
 
 function attachServiceWorkerMessageListener() {
@@ -763,10 +814,6 @@ export function initPushNotificationClient() {
     soundEnabled: isPushSoundEnabled(),
   });
 
-  if (moduleName === "admin") {
-    return;
-  }
-
   if (isPushSoundEnabled()) {
     pushSoundUnlocked = true;
   }
@@ -796,7 +843,6 @@ async function attachForegroundListener(firebaseAppInstance) {
 
 export async function registerWebPushForCurrentModule(pathname = window.location.pathname) {
   const moduleName = normalizeModuleFromPath(pathname);
-  if (moduleName === "admin") return;
   initPushNotificationClient();
 
   const accessToken = localStorage.getItem(`${moduleName}_accessToken`);

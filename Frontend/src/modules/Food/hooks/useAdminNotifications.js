@@ -478,41 +478,160 @@ export default function useAdminNotifications(options = {}) {
         dispatchAdminNotificationsUpdated();
       });
 
-      socket.on("admin_notification", () => {
-        loadNotifications();
+      socket.on("admin_notification", (payload = {}) => {
+        const title = payload?.title || payload?.notification?.title || "Admin Notification";
+        const body = payload?.message || payload?.body || payload?.notification?.body || payload?.data?.message || "";
+
+        if (body) {
+          toast.info(`${title}: ${body}`);
+        } else {
+          toast.info(title);
+        }
+
+        const rawId = String(payload?.id || payload?._id || payload?.notificationId || Date.now());
+        const targetId = `admin-notif-${rawId}`;
+
+        const realTimeItem = {
+          id: targetId,
+          title,
+          message: body,
+          type: payload?.type || "info",
+          category: payload?.category || "general",
+          path: payload?.path || payload?.targetUrl || payload?.link || "/admin/food",
+          createdAt: payload?.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(title, body),
+        };
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
+        loadNotifications();
       });
 
-      socket.on("support_ticket_created", (data) => {
-        toast.info("🎫 New Support Ticket Raised", {
-          description: data?.subject || data?.message || "A user or delivery partner raised a ticket.",
-        });
-        loadNotifications();
+      socket.on("support_ticket_created", (data = {}) => {
+        const isDelivery = data?.source === "delivery" || data?.deliveryPartner;
+        const title = isDelivery ? "🎫 Delivery Support Ticket Raised" : "🎫 New Support Ticket Raised";
+        const body = data?.subject || data?.message || data?.issueType || "A ticket has been created.";
+
+        toast.info(title, { description: body });
+
+        const rawId = String(data?.id || data?._id || Date.now());
+        const targetId = isDelivery ? `support-delivery-${rawId}` : `support-main-${rawId}`;
+
+        const realTimeItem = {
+          id: targetId,
+          title,
+          message: body,
+          type: "support",
+          category: isDelivery ? "delivery_support" : "support",
+          path: isDelivery ? "/admin/food/delivery-support-tickets" : "/admin/food/support-tickets",
+          createdAt: data?.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(data?.userName || data?.restaurantName || data?.deliveryPartnerName || "Support Ticket", data?.subject || data?.issueType),
+        };
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
+        loadNotifications();
       });
 
-      socket.on("withdrawal_request_created", (data) => {
-        toast.info("💸 New Withdrawal Request", {
-          description: `${data?.name || "Partner"} requested a withdrawal of ₹${data?.amount || 0}`,
-        });
-        loadNotifications();
+      socket.on("withdrawal_request_created", (data = {}) => {
+        const isDelivery = data?.source === "delivery" || data?.type === "delivery" || Boolean(data?.deliveryPartner);
+        const partnerName = data?.name || data?.restaurantName || data?.deliveryPartnerName || (isDelivery ? "Delivery Partner" : "Restaurant");
+        const amount = data?.amount || 0;
+        const title = isDelivery ? "💸 Delivery Partner Withdrawal Request" : "💸 Restaurant Withdrawal Request";
+        const body = `${partnerName} requested a withdrawal of ₹${amount}.`;
+
+        toast.info(title, { description: body });
+
+        const rawId = String(data?.id || data?._id || Date.now());
+        const targetId = isDelivery ? `withdrawal-delivery-${rawId}` : `withdrawal-restaurant-${rawId}`;
+
+        const realTimeItem = {
+          id: targetId,
+          title,
+          message: body,
+          type: "approval",
+          category: isDelivery ? "delivery_withdrawals" : "withdrawals",
+          path: isDelivery ? "/admin/food/delivery-partners/withdrawals" : "/admin/food/restaurants/withdrawals",
+          createdAt: data?.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(partnerName, `₹${amount}`),
+        };
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
+        loadNotifications();
       });
 
-      socket.on("emergency_offline_request", (data) => {
-        toast.error("⚠️ Emergency Offline Request", {
-          description: `Driver ${data?.name || "Partner"} requested emergency offline.`,
-        });
-        loadNotifications();
+      socket.on("emergency_offline_request", (data = {}) => {
+        const driverName = data?.name || data?.driverName || "Delivery Partner";
+        const title = "⚠️ Emergency Offline Request";
+        const body = `Driver ${driverName} requested emergency offline.`;
+
+        toast.error(title, { description: body });
+
+        const rawId = String(data?.id || data?._id || Date.now());
+        const targetId = `emergency-offline-${rawId}`;
+
+        const realTimeItem = {
+          id: targetId,
+          title,
+          message: body,
+          type: "approval",
+          category: "handover_approval",
+          path: "/admin/food/delivery-partners/gigs",
+          createdAt: data?.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(driverName, "Emergency Offline"),
+        };
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
+        loadNotifications();
       });
 
-      socket.on("food_approval_requested", (data) => {
-        toast.info("🍕 New Food Item Approval Request", {
-          description: `${data?.itemName || "Food item"} uploaded for review.`,
-        });
-        loadNotifications();
+      socket.on("food_approval_requested", (data = {}) => {
+        const itemName = data?.itemName || "Food item";
+        const restaurantName = data?.restaurantName || "Restaurant";
+        const title = "🍕 Food Approval Pending";
+        const body = `${itemName} from ${restaurantName} is waiting for review.`;
+
+        toast.info(title, { description: body });
+
+        const rawId = String(data?.id || data?._id || Date.now());
+        const targetId = `approval-food-${rawId}`;
+
+        const realTimeItem = {
+          id: targetId,
+          title,
+          message: body,
+          type: "approval",
+          category: "food_approval",
+          path: "/admin/food/food-approval",
+          createdAt: data?.createdAt || new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(restaurantName, itemName),
+        };
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
         dispatchAdminNotificationsUpdated();
+        loadNotifications();
       });
 
       return () => {
@@ -521,6 +640,9 @@ export default function useAdminNotifications(options = {}) {
         socket.off("admin_handover_request");
         socket.off("admin_notification");
         socket.off("support_ticket_created");
+        socket.off("withdrawal_request_created");
+        socket.off("emergency_offline_request");
+        socket.off("food_approval_requested");
         socket.disconnect();
       };
     } catch (err) {
