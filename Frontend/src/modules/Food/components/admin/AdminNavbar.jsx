@@ -71,29 +71,25 @@ export default function AdminNavbar({ onMenuClick }) {
   const [adminData, setAdminData] = useState(null);
   const [businessSettings, setBusinessSettings] = useState(() => getCachedSettings() || null);
   const searchInputRef = useRef(null);
-  const { items: adminNotifications, dismissOne, clearAll, approveHandover, rejectHandover } = useAdminNotifications();
+  const { items: adminNotifications, dismissOne, clearAll, approveHandover, rejectHandover, approveEmergencyOffline } = useAdminNotifications();
 
-  const handoverCount = useMemo(() => adminNotifications.filter(i => i.category === "handover_approval").length, [adminNotifications]);
-  const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category)).length, [adminNotifications]);
+  const handoverCount = useMemo(() => adminNotifications.filter(i => i.category === "handover_approval" || i.isEmergencyOffline).length, [adminNotifications]);
+  const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline).length, [adminNotifications]);
   const withdrawalCount = useMemo(() => adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category)).length, [adminNotifications]);
   const supportCount = useMemo(() => adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category)).length, [adminNotifications]);
   const complianceCount = useMemo(() => adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [adminNotifications]);
 
   const filteredNotifications = useMemo(() => {
-    if (activeNotifTab === "handovers") return adminNotifications.filter(i => i.category === "handover_approval");
-    if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category));
+    if (activeNotifTab === "handovers") return adminNotifications.filter(i => i.category === "handover_approval" || i.isEmergencyOffline);
+    if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline);
     if (activeNotifTab === "withdrawals") return adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category));
     if (activeNotifTab === "support") return adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category));
     if (activeNotifTab === "compliance") return adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired");
     return adminNotifications;
   }, [activeNotifTab, adminNotifications]);
 
-  // Auto-reset active tab to "all" when notifications popover is opened
-  useEffect(() => {
-    if (notificationsOpen) {
-      setActiveNotifTab("all");
-    }
-  }, [notificationsOpen]);
+  // NOTE: We intentionally do NOT reset the tab when the popup opens,
+  // so the admin stays on "Handovers" or whichever tab they last selected.
 
   // Load business settings
   useEffect(() => {
@@ -468,7 +464,9 @@ export default function AdminNavbar({ onMenuClick }) {
 
                         const handleItemClick = () => {
                           setNotificationsOpen(false);
-                          if (isHandover) {
+                          if (item.isEmergencyOffline) {
+                            navigate("/admin/food/delivery-partners");
+                          } else if (isHandover) {
                             navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
                           } else if (item?.path) {
                             navigate(item.path);
@@ -511,7 +509,11 @@ export default function AdminNavbar({ onMenuClick }) {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setNotificationsOpen(false);
-                                    navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                                    if (item.isEmergencyOffline) {
+                                      navigate("/admin/food/delivery-partners");
+                                    } else {
+                                      navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                                    }
                                   }}
                                   className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all text-center"
                                 >
@@ -521,23 +523,29 @@ export default function AdminNavbar({ onMenuClick }) {
                                   type="button"
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    await approveHandover(item.orderMongoId || item.orderId);
+                                    if (item.isEmergencyOffline) {
+                                      await approveEmergencyOffline(item.deliveryPartnerId);
+                                    } else {
+                                      await approveHandover(item.orderMongoId || item.orderId);
+                                    }
                                   }}
                                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
                                 >
                                   Approve
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
-                                    await rejectHandover(item.orderMongoId || item.orderId, reason);
-                                  }}
-                                  className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
-                                >
-                                  Reject
-                                </button>
+                                {!item.isEmergencyOffline && (
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                                      await rejectHandover(item.orderMongoId || item.orderId, reason);
+                                    }}
+                                    className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
+                                  >
+                                    Reject
+                                  </button>
+                                )}
                               </div>
                             )}
 

@@ -6,6 +6,24 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, error: null }
   }
 
+  componentDidMount() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this.handleOnline)
+    }
+  }
+
+  componentWillUnmount() {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.handleOnline)
+    }
+  }
+
+  handleOnline = () => {
+    if (this.state.hasError) {
+      this.setState({ hasError: false, error: null })
+    }
+  }
+
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }

@@ -240,7 +240,12 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
         const fresh = response?.data?.data?.order || response?.data?.order || response?.data?.data || null;
         if (fresh) setActiveOrderOverride(fresh);
       } catch (error) {
-        if (error?.response?.status === 404 || error?.response?.status === 400) {
+        if (
+          error?.response?.status === 404 ||
+          error?.response?.status === 400 ||
+          error?.response?.status === 403 ||
+          error?.response?.status === 401
+        ) {
           setInvalidOrderIds((prev) => {
             const next = new Set(prev);
             next.add(incomingKey);
@@ -293,7 +298,12 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
       try {
         await orderAPI.getOrderDetails(key);
       } catch (error) {
-        if (error?.response?.status === 404 || error?.response?.status === 400) {
+        if (
+          error?.response?.status === 404 ||
+          error?.response?.status === 400 ||
+          error?.response?.status === 403 ||
+          error?.response?.status === 401
+        ) {
           setInvalidOrderIds((prev) => {
             const next = new Set(prev);
             next.add(key);

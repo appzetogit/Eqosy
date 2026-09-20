@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { adminAPI } from "@food/api";
+import { adminAPI, supportAPI } from "@food/api";
 import { io } from "socket.io-client";
 import { API_BASE_URL, resolveSocketOrigin } from "@food/api/config";
 import { toast } from "sonner";
@@ -81,21 +81,31 @@ const joinMeta = (...parts) => parts.filter(Boolean).join(" • ");
 
 const extractRows = (res) => {
   if (!res) return [];
-  const d = res?.data?.data ?? res?.data ?? res;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.items)) return d.items;
-  if (Array.isArray(d?.rows)) return d.rows;
-  if (Array.isArray(d?.requests)) return d.requests;
-  if (Array.isArray(d?.partners)) return d.partners;
-  if (Array.isArray(d?.restaurants)) return d.restaurants;
-  if (Array.isArray(d?.orders)) return d.orders;
+  // Axios wraps: res.data = { success, message, data: { ... } }
+  // So res.data.data is the actual payload object
+  const payload = res?.data?.data ?? res?.data ?? res;
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.requests)) return payload.requests;
+  if (Array.isArray(payload?.partners)) return payload.partners;
+  if (Array.isArray(payload?.deliveryPartners)) return payload.deliveryPartners;
+  if (Array.isArray(payload?.deliverymen)) return payload.deliverymen;
+  if (Array.isArray(payload?.restaurants)) return payload.restaurants;
+  if (Array.isArray(payload?.orders)) return payload.orders;
+  if (Array.isArray(payload?.tickets)) return payload.tickets;
+  if (Array.isArray(payload?.data)) return payload.data;
   return [];
 };
 
 const mapPendingHandovers = (response) => {
   const list = extractRows(response);
 
-  return list.map((item) => {
+  // Only show orders with PENDING handover request (backend already filters but double-check)
+  return list.filter((item) => {
+    const hrStatus = String(item?.dispatch?.handoverRequest?.status || "").toLowerCase();
+    return !hrStatus || hrStatus === "pending";
+  }).map((item) => {
     const requestedBy = item?.dispatch?.handoverRequest?.requestedBy;
     const partnerName =
       (typeof requestedBy === "object" ? (requestedBy?.name || requestedBy?.fullName) : null) ||
@@ -309,6 +319,33 @@ const mapDeliveryWithdrawals = (response) => {
     }));
 };
 
+const mapEmergencyOfflineRequests = (response) => {
+  const rows = extractRows(response);
+  return rows
+    .filter((item) => String(item?.emergencyOfflineRequest?.status || "").toLowerCase() === "pending")
+    .map((item) => {
+      const partnerName = item?.name || item?.fullName || "Delivery Partner";
+      const partnerPhone = item?.phone || "";
+      const reason = item?.emergencyOfflineRequest?.reason || "Emergency";
+      const rawId = String(item?._id || item?.id || "");
+
+      return {
+        id: `emergency-offline-${rawId}`,
+        deliveryPartnerId: rawId,
+        title: "⚠️ Emergency Offline Request",
+        message: `Driver ${partnerName}${partnerPhone ? ` (${partnerPhone})` : ""} requested emergency offline approval. Reason: "${reason}"`,
+        type: "approval",
+        category: "handover_approval",
+        path: "/admin/food/delivery-partners",
+        createdAt: item?.emergencyOfflineRequest?.requestedAt || item?.updatedAt || item?.createdAt,
+        timeLabel: toDateLabel(item?.emergencyOfflineRequest?.requestedAt || item?.updatedAt || item?.createdAt),
+        metaLabel: joinMeta(partnerName, partnerPhone, `Reason: ${reason}`),
+        isEmergencyOffline: true,
+        deliveryman: item,
+      };
+    });
+};
+
 export default function useAdminNotifications(options = {}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(Boolean(options?.autoload !== false));
@@ -320,6 +357,29 @@ export default function useAdminNotifications(options = {}) {
     try {
       setLoading(true);
 
+      const results = await Promise.allSettled([
+        adminAPI.getPendingRestaurants(),
+        adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }),
+        adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }),
+        supportAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }),
+        adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }),
+        adminAPI.getExpiredFssaiNotifications(),
+        adminAPI.getPendingHandovers(),
+        adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }),
+        adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }),
+        // Fetch ALL delivery partners (high limit) to catch emergency offline requests
+        adminAPI.getDeliveryPartners({ limit: 500, page: 1 }),
+      ]);
+
+      const safeGet = (idx) => {
+        const r = results[idx];
+        if (r.status === "rejected") {
+          console.warn(`[AdminNotif] API call ${idx} failed:`, r.reason?.response?.data || r.reason?.message || r.reason);
+          return { data: { data: [] } };
+        }
+        return r.value;
+      };
+
       const [
         restaurantsRes,
         deliveryJoinRes,
@@ -330,20 +390,17 @@ export default function useAdminNotifications(options = {}) {
         handoverRes,
         withdrawalRes,
         deliveryWithdrawalRes,
-      ] = await Promise.all([
-        adminAPI.getPendingRestaurants().catch(() => ({ data: { data: [] } })),
-        adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
-        adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
-        adminAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }).catch(() => ({ data: { data: [] } })),
-        adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
-        adminAPI.getExpiredFssaiNotifications().catch(() => ({ data: { data: [] } })),
-        adminAPI.getPendingHandovers().catch(() => ({ data: { data: { orders: [] } } })),
-        adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
-        adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }).catch(() => ({ data: { data: [] } })),
-      ]);
+        deliveryPartnersRes,
+      ] = results.map((_, i) => safeGet(i));
+
+      const handoverRows = mapPendingHandovers(handoverRes);
+      const emergencyRows = mapEmergencyOfflineRequests(deliveryPartnersRes);
+
+      console.debug("[AdminNotif] handoverRows:", handoverRows.length, "emergencyRows:", emergencyRows.length);
 
       const fetchedPending = [
-        ...mapPendingHandovers(handoverRes),
+        ...handoverRows,
+        ...emergencyRows,
         ...mapPendingRestaurants(restaurantsRes),
         ...mapDeliveryJoinRequests(deliveryJoinRes),
         ...mapFoodApprovals(foodApprovalRes),
@@ -354,15 +411,17 @@ export default function useAdminNotifications(options = {}) {
         ...mapExpiredFssai(fssaiExpiredRes),
       ];
 
+      // Live pending DB tasks from backend are always active while pending in DB.
+      // Realtime transient notifications respect dismissed IDs.
       const aggregated = uniqueById([
-        ...storedRealtime,
         ...fetchedPending,
+        ...storedRealtime.filter((item) => item?.id && !dismissed.has(item.id)),
       ])
-        .filter((item) => item?.id && !dismissed.has(item.id))
         .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
       setItems(aggregated);
-    } catch {
+    } catch (err) {
+      console.warn("[AdminNotif] loadNotifications unexpected error:", err);
       setItems([]);
     } finally {
       setLoading(false);
@@ -672,13 +731,9 @@ export default function useAdminNotifications(options = {}) {
   }, []);
 
   const clearAll = useCallback(() => {
-    setItems((prev) => {
-      const currentIds = (Array.isArray(prev) ? prev : []).map((i) => i?.id).filter(Boolean);
-      const currentDismissed = getDismissedIds();
-      saveDismissedIds([...new Set([...currentDismissed, ...currentIds])]);
-      saveStoredRealtimeNotifs([]);
-      return [];
-    });
+    saveStoredRealtimeNotifs([]);
+    saveDismissedIds([]);
+    setItems([]);
     dispatchAdminNotificationsUpdated();
   }, []);
 
@@ -768,6 +823,27 @@ export default function useAdminNotifications(options = {}) {
     [purgeHandoverNotification]
   );
 
+  const approveEmergencyOffline = useCallback(
+    async (deliveryPartnerId) => {
+      if (!deliveryPartnerId) return false;
+      try {
+        const res = await adminAPI.approveEmergencyOffline(deliveryPartnerId);
+        if (res.data?.success) {
+          toast.success(res.data?.message || "Emergency offline request approved.");
+          dismissOne(`emergency-offline-${deliveryPartnerId}`);
+          loadNotifications();
+          return true;
+        } else {
+          toast.error(res.data?.message || "Failed to approve emergency offline request");
+        }
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to approve emergency offline request");
+      }
+      return false;
+    },
+    [dismissOne, loadNotifications]
+  );
+
   return useMemo(
     () => ({
       items,
@@ -778,8 +854,9 @@ export default function useAdminNotifications(options = {}) {
       clearAll,
       approveHandover,
       rejectHandover,
+      approveEmergencyOffline,
     }),
-    [approveHandover, clearAll, dismissOne, items, loadNotifications, loading, rejectHandover]
+    [approveEmergencyOffline, approveHandover, clearAll, dismissOne, items, loadNotifications, loading, rejectHandover]
   );
 }
 

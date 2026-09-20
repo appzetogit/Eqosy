@@ -6,20 +6,20 @@ import HandoverApprovalModal from "@food/components/admin/HandoverApprovalModal"
 
 export default function AdminNotifications() {
   const navigate = useNavigate();
-  const { items, loading, clearAll, dismissOne, approveHandover, rejectHandover } = useAdminNotifications();
+  const { items, loading, clearAll, dismissOne, approveHandover, rejectHandover, approveEmergencyOffline } = useAdminNotifications();
   const [selectedHandoverItem, setSelectedHandoverItem] = useState(null);
   const [handoverModalOpen, setHandoverModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
-  const handoverCount = useMemo(() => items.filter(i => i.category === "handover_approval").length, [items]);
-  const approvalCount = useMemo(() => items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category)).length, [items]);
+  const handoverCount = useMemo(() => items.filter(i => i.category === "handover_approval" || i.isEmergencyOffline).length, [items]);
+  const approvalCount = useMemo(() => items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline).length, [items]);
   const withdrawalCount = useMemo(() => items.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category)).length, [items]);
   const supportCount = useMemo(() => items.filter(i => ["support", "delivery_support"].includes(i.category)).length, [items]);
   const complianceCount = useMemo(() => items.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [items]);
 
   const filteredItems = useMemo(() => {
-    if (activeTab === "handovers") return items.filter(i => i.category === "handover_approval");
-    if (activeTab === "approvals") return items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval"].includes(i.category));
+    if (activeTab === "handovers") return items.filter(i => i.category === "handover_approval" || i.isEmergencyOffline);
+    if (activeTab === "approvals") return items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline);
     if (activeTab === "withdrawals") return items.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category));
     if (activeTab === "support") return items.filter(i => ["support", "delivery_support"].includes(i.category));
     if (activeTab === "compliance") return items.filter(i => i.type === "compliance" || i.category === "fssai_expired");
@@ -27,7 +27,9 @@ export default function AdminNotifications() {
   }, [activeTab, items]);
 
   const handleItemClick = (item) => {
-    if (item?.category === "handover_approval") {
+    if (item?.isEmergencyOffline) {
+      navigate("/admin/food/delivery-partners");
+    } else if (item?.category === "handover_approval") {
       navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
     } else if (item?.path) {
       navigate(item.path);
@@ -181,7 +183,11 @@ export default function AdminNotifications() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                          if (item.isEmergencyOffline) {
+                            navigate("/admin/food/delivery-partners");
+                          } else {
+                            navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                          }
                         }}
                         className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all"
                       >
@@ -191,23 +197,29 @@ export default function AdminNotifications() {
                         type="button"
                         onClick={async (e) => {
                           e.stopPropagation();
-                          await approveHandover(item.orderMongoId || item.orderId);
+                          if (item.isEmergencyOffline) {
+                            await approveEmergencyOffline(item.deliveryPartnerId);
+                          } else {
+                            await approveHandover(item.orderMongoId || item.orderId);
+                          }
                         }}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all"
                       >
                         Approve
                       </button>
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
-                          await rejectHandover(item.orderMongoId || item.orderId, reason);
-                        }}
-                        className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-bold transition-all"
-                      >
-                        Reject
-                      </button>
+                      {!item.isEmergencyOffline && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                            await rejectHandover(item.orderMongoId || item.orderId, reason);
+                          }}
+                          className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-bold transition-all"
+                        >
+                          Reject
+                        </button>
+                      )}
                     </div>
                   )}
 

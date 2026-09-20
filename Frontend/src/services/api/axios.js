@@ -227,6 +227,17 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (err) => {
     const original = err?.config;
+
+    // Detect offline network connectivity errors explicitly (status 0 / ERR_NETWORK)
+    const isNetworkError =
+      !err.response &&
+      (err.code === "ERR_NETWORK" || err.message === "Network Error" || (typeof navigator !== "undefined" && !navigator.onLine));
+
+    if (isNetworkError) {
+      err.isOffline = true;
+      return Promise.reject(err);
+    }
+
     if (err?.response?.status === 429) {
       return Promise.reject(err);
     }

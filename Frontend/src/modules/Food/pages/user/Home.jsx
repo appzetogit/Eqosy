@@ -1153,9 +1153,21 @@ export default function Home() {
         setHeroBannerImages(images);
         setHeroBannersData(list);
         setCurrentBannerIndex(0);
+        try { localStorage.setItem("home_cached_hero_banners", JSON.stringify({ images, list })); } catch (_) {}
       } else {
-        setHeroBannerImages([]);
-        setHeroBannersData([]);
+        try {
+          const cached = JSON.parse(localStorage.getItem("home_cached_hero_banners") || "null");
+          if (cached?.images) {
+            setHeroBannerImages(cached.images);
+            setHeroBannersData(cached.list || []);
+          } else {
+            setHeroBannerImages([]);
+            setHeroBannersData([]);
+          }
+        } catch (_) {
+          setHeroBannerImages([]);
+          setHeroBannersData([]);
+        }
       }
       setLoadingBanners(false);
 
@@ -1163,28 +1175,42 @@ export default function Home() {
       if (exploreRes.status === "fulfilled" && exploreRes.value) {
         const exploreData = exploreRes.value?.data?.data;
         const items = Array.isArray(exploreData?.items) ? exploreData.items : Array.isArray(exploreData) ? exploreData : [];
-        setLandingExploreMore(
-          items.map((it) => ({
-            ...it,
-            imageUrl: it.imageUrl || it.iconUrl,
-            label: it.label || it.name,
-          })),
-        );
+        const mapped = items.map((it) => ({
+          ...it,
+          imageUrl: it.imageUrl || it.iconUrl,
+          label: it.label || it.name,
+        }));
+        setLandingExploreMore(mapped);
+        try { localStorage.setItem("home_cached_explore_icons", JSON.stringify(mapped)); } catch (_) {}
       } else {
-        setLandingExploreMore([]);
+        try {
+          const cached = JSON.parse(localStorage.getItem("home_cached_explore_icons") || "null");
+          setLandingExploreMore(Array.isArray(cached) ? cached : []);
+        } catch (_) {
+          setLandingExploreMore([]);
+        }
       }
 
       // 3. Landing Settings
       if (settingsRes.status === "fulfilled" && settingsRes.value) {
         const settings = settingsRes.value?.data?.data || {};
-        setExploreMoreHeading(settings.exploreMoreHeading || "Explore More");
-        setRecommendedRestaurantIds(settings.recommendedRestaurantIds || []);
-        setRecommendedRestaurantsFromSettings(
-          (settings.recommendedRestaurants || []).filter((restaurant) => restaurant?.isRestaurant !== false),
-        );
+        const heading = settings.exploreMoreHeading || "Explore More";
+        const recIds = settings.recommendedRestaurantIds || [];
+        const recRests = (settings.recommendedRestaurants || []).filter((restaurant) => restaurant?.isRestaurant !== false);
+        setExploreMoreHeading(heading);
+        setRecommendedRestaurantIds(recIds);
+        setRecommendedRestaurantsFromSettings(recRests);
+        try { localStorage.setItem("home_cached_landing_settings", JSON.stringify({ heading, recIds, recRests })); } catch (_) {}
       } else {
-        setExploreMoreHeading("Explore More");
-        setRecommendedRestaurantsFromSettings([]);
+        try {
+          const cached = JSON.parse(localStorage.getItem("home_cached_landing_settings") || "null");
+          setExploreMoreHeading(cached?.heading || "Explore More");
+          setRecommendedRestaurantIds(cached?.recIds || []);
+          setRecommendedRestaurantsFromSettings(cached?.recRests || []);
+        } catch (_) {
+          setExploreMoreHeading("Explore More");
+          setRecommendedRestaurantsFromSettings([]);
+        }
       }
       setLoadingLandingConfig(false);
 
@@ -1204,8 +1230,14 @@ export default function Home() {
           }))
           : [];
         setRealCategories(categories);
+        try { localStorage.setItem("home_cached_public_categories", JSON.stringify(categories)); } catch (_) {}
       } else {
-        setRealCategories([]);
+        try {
+          const cached = JSON.parse(localStorage.getItem("home_cached_public_categories") || "null");
+          setRealCategories(Array.isArray(cached) ? cached : []);
+        } catch (_) {
+          setRealCategories([]);
+        }
       }
       setLoadingRealCategories(false);
     });
@@ -2184,18 +2216,32 @@ export default function Home() {
             transformedRestaurants,
           );
           startTransition(() => {
-            setRestaurantsData(sortRestaurantsForDisplay(transformedRestaurants));
+            const sorted = sortRestaurantsForDisplay(transformedRestaurants);
+            setRestaurantsData(sorted);
+            try { localStorage.setItem("home_cached_restaurants", JSON.stringify(sorted)); } catch (_) {}
           });
         } else {
           debugWarn("Invalid API response structure:", response.data);
-          setRestaurantsData([]);
+          try {
+            const cached = JSON.parse(localStorage.getItem("home_cached_restaurants") || "null");
+            setRestaurantsData(Array.isArray(cached) ? cached : []);
+          } catch (_) {
+            setRestaurantsData([]);
+          }
         }
       } catch (error) {
         debugError("Error fetching restaurants:", error);
         debugError("Error details:", error.response?.data || error.message);
-        // Don't set hardcoded data here - let the useMemo fallback handle it
-        // This way, if API succeeds later, it will show the real data
-        setRestaurantsData([]);
+        try {
+          const cached = JSON.parse(localStorage.getItem("home_cached_restaurants") || "null");
+          if (Array.isArray(cached) && cached.length > 0) {
+            setRestaurantsData(cached);
+          } else {
+            setRestaurantsData([]);
+          }
+        } catch (_) {
+          setRestaurantsData([]);
+        }
       } finally {
         if (requestSeq === restaurantsRequestSeqRef.current) {
           setLoadingRestaurants(false);

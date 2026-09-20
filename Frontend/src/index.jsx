@@ -6,6 +6,15 @@ import { isModuleAuthenticated } from './modules/Food/utils/auth.js'
 import { syncThemeForPath } from './shared/utils/theme.js'
 import { NATIVE_LAST_ROUTE_KEY } from './shared/utils/activeModule.js'
 import './shared/styles/global.css'
+import { registerSW } from 'virtual:pwa-register'
+
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  registerSW({
+    immediate: true,
+    onNeedRefresh() {},
+    onOfflineReady() {}
+  })
+}
 
 // ─── Quick-spicy Food Module Initialization ───────────────────────────────────
 
