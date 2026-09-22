@@ -74,7 +74,8 @@ export const getPublicHomePromotionBannersController = async (req, res, next) =>
 
 export const getPublicGourmetController = async (req, res, next) => {
     try {
-        const docs = await getPublicGourmetRestaurants();
+        const { zoneId, lat, lng } = req.query;
+        const docs = await getPublicGourmetRestaurants(zoneId, lat, lng);
         const restaurants = (docs || []).map((d) => ({
             ...(d.restaurant || {}),
             _id: d.restaurant?._id || d.restaurantId,
