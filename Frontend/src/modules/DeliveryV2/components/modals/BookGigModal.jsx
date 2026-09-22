@@ -140,8 +140,8 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
                   key={opt.isoDate}
                   onClick={() => setSelectedDate(opt.isoDate)}
                   className={`px-4 py-2.5 rounded-2xl flex items-center gap-2 font-black text-xs transition-all shrink-0 active:scale-95 ${active
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                      : 'bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100/80'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                    : 'bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100/80'
                     }`}
                 >
                   <Calendar className="w-3.5 h-3.5" />
@@ -177,10 +177,10 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
                   <div
                     key={gig._id}
                     className={`p-4 sm:p-5 rounded-3xl border transition-all duration-200 ${isBooked
-                        ? 'bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-500/20 shadow-md shadow-emerald-500/5'
-                        : isExpired || isFull
-                          ? 'bg-slate-50/80 border-slate-200 opacity-75'
-                          : 'bg-white border-slate-200 hover:border-emerald-400 shadow-sm hover:shadow-md'
+                      ? 'bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-500/20 shadow-md shadow-emerald-500/5'
+                      : isExpired || isFull
+                        ? 'bg-slate-50/80 border-slate-200 opacity-75'
+                        : 'bg-white border-slate-200 hover:border-emerald-400 shadow-sm hover:shadow-md'
                       }`}
                   >
                     {/* Header Row */}
@@ -203,12 +203,12 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
                       {/* Status Badge */}
                       <span
                         className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shrink-0 ${isBooked
-                            ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
-                            : isFull
-                              ? 'bg-rose-50 text-rose-600 border-rose-200'
-                              : isExpired
-                                ? 'bg-slate-200 text-slate-600 border-slate-300'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm'
+                          : isFull
+                            ? 'bg-rose-50 text-rose-600 border-rose-200'
+                            : isExpired
+                              ? 'bg-slate-200 text-slate-600 border-slate-300'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}
                       >
                         {isBooked ? 'BOOKED ✓' : isFull ? 'FULL' : isExpired ? 'EXPIRED' : 'AVAILABLE'}

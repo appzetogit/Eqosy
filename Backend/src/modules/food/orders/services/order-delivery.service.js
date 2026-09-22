@@ -232,6 +232,11 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
   const partnerObjId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
+  // Fetch the delivery partner's zone info for filtering
+  const partner = await FoodDeliveryPartner.findById(partnerObjId)
+    .select('zoneId lastLat lastLng')
+    .lean();
+
   const filter = {
     // Exclude orders that the current driver has explicitly handed over or rejected
     'dispatch.offeredTo': {
@@ -280,19 +285,54 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
       .populate('userId', 'name phone email')
       .populate(
         'restaurantId',
-        'restaurantName name address phone ownerPhone location profileImage',
+        'restaurantName name address phone ownerPhone location profileImage zoneId',
       )
       .lean(),
     FoodOrder.countDocuments(filter),
   ]);
 
-  const orderIds = (docs || []).map((d) => d?._id).filter(Boolean);
+  // Zone-based filtering: only show orders from restaurants in the partner's zone
+  let filteredDocs = docs || [];
+  if (partner) {
+    const partnerZoneId = partner.zoneId ? String(partner.zoneId) : null;
+    const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
+    const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
+
+    if (partnerZoneId || (hasActiveZones && partner.lastLat != null && partner.lastLng != null)) {
+      // Determine which zone the partner is in
+      let partnerZoneIdResolved = partnerZoneId;
+      if (!partnerZoneIdResolved && hasActiveZones && partner.lastLat != null && partner.lastLng != null) {
+        // Find the zone the partner is physically inside
+        const matchedZone = activeZones.find(z =>
+          isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, z._id, activeZones)
+        );
+        if (matchedZone) partnerZoneIdResolved = matchedZone._id.toString();
+      }
+
+      if (partnerZoneIdResolved) {
+        const inZone = filteredDocs.filter(doc => {
+          // Orders already assigned to this partner always show
+          if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) {
+            return true;
+          }
+          const restZoneId = doc.restaurantId?.zoneId ? String(doc.restaurantId.zoneId) : null;
+          return restZoneId === partnerZoneIdResolved;
+        });
+        // Only apply zone filter if we have zone-matched orders; fallback to all if none
+        if (inZone.length > 0 || filteredDocs.length === 0) {
+          filteredDocs = inZone;
+        }
+      }
+    }
+  }
+
+  const orderIds = filteredDocs.map((d) => d?._id).filter(Boolean);
   const txRows = orderIds.length
     ? await FoodTransaction.find({ orderId: { $in: orderIds } }).lean()
     : [];
   const txByOrderId = new Map(txRows.map((t) => [String(t.orderId), t]));
 
-  const enriched = (docs || []).map((doc) => {
+  const enriched = filteredDocs.map((doc) => {
     const tx = txByOrderId.get(String(doc?._id)) || null;
     if (!tx) return doc;
     return {
@@ -305,7 +345,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     };
   });
 
-  return buildPaginatedResult({ docs: enriched, total, page, limit });
+  return buildPaginatedResult({ docs: enriched, total: filteredDocs.length, page, limit });
 }
 
 export async function acceptOrderDelivery(orderId, deliveryPartnerId) {

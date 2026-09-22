@@ -71,15 +71,95 @@ async function listNearbyOnlineDeliveryPartners(
   let allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
   })
-    .select("_id status lastLat lastLng lastLocationAt name")
+    .select("_id status lastLat lastLng lastLocationAt name zoneId")
     .lean();
 
   allOnline = allOnline.filter(p => !p.status || p.status === 'approved' || p.status === 'pending');
 
+  // Filter out partners with no GPS or stale GPS (no location update in 10+ minutes)
+  const GPS_STALE_MS = 10 * 60 * 1000;
+  const nowMs = Date.now();
+  allOnline = allOnline.filter(p => {
+    if (p.lastLat == null || p.lastLng == null) return false; // No GPS data at all
+    if (p.lastLocationAt) {
+      const lastLocMs = new Date(p.lastLocationAt).getTime();
+      if (nowMs - lastLocMs > GPS_STALE_MS) return false; // GPS stale > 10 minutes
+    }
+    return true;
+  });
+
+  // Filter: Only dispatch to partners with a valid active gig booking for TODAY's time window.
+  // This prevents partners who only have GPS active (but no gig) from receiving orders.
+  if (allOnline.length > 0) {
+    try {
+      const { FoodGigBooking } = await import('../../delivery/models/foodGigBooking.model.js');
+      const { FoodGig } = await import('../../delivery/models/foodGig.model.js');
+      const THIRTY_MIN_MS = 30 * 60 * 1000;
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+
+      const partnerObjectIds = allOnline
+        .map(p => mongoose.Types.ObjectId.isValid(p._id) ? new mongoose.Types.ObjectId(p._id) : null)
+        .filter(Boolean);
+
+      // Find all bookings for today where gig time window is active (±30 min grace)
+      const activeGigBookings = await FoodGigBooking.find({
+        deliveryPartnerId: { $in: partnerObjectIds },
+        status: { $in: ['booked', 'completed'] }
+      }).populate({
+        path: 'gigId',
+        select: 'startDateTime endDateTime status date'
+      }).lean();
+
+      // Build set of partnerIds who have an active gig right now
+      const partnersWithActiveGig = new Set();
+      for (const booking of activeGigBookings) {
+        if (!booking.gigId || booking.gigId.status !== 'active') continue;
+        // Only consider gigs for today
+        if (booking.gigId.date && booking.gigId.date !== todayStr) continue;
+        const startMs = new Date(booking.gigId.startDateTime).getTime();
+        const endMs = new Date(booking.gigId.endDateTime).getTime();
+        const isInWindow = (nowMs >= startMs - THIRTY_MIN_MS) && (nowMs <= endMs + THIRTY_MIN_MS);
+        if (isInWindow) {
+          partnersWithActiveGig.add(String(booking.deliveryPartnerId));
+        }
+      }
+
+      // Also allow partners who have an active order in progress (even if gig expired)
+      const { FoodOrder } = await import('../models/order.model.js');
+      const partnerIdsArray = allOnline.map(p => String(p._id));
+      const activeOrderDocs = await FoodOrder.find({
+        'dispatch.deliveryPartnerId': { $in: partnerObjectIds },
+        orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
+      }).select('dispatch.deliveryPartnerId').lean();
+      for (const od of activeOrderDocs) {
+        partnersWithActiveGig.add(String(od.dispatch?.deliveryPartnerId));
+      }
+
+      allOnline = allOnline.filter(p => partnersWithActiveGig.has(String(p._id)));
+      logger.info(`[DeliveryDispatch] Gig filter: ${allOnline.length} partner(s) have active gig today.`);
+    } catch (gigErr) {
+      logger.warn(`[DeliveryDispatch] Gig validity check failed (skipping filter): ${gigErr.message}`);
+    }
+  }
+
+  // Helper: check if partner belongs to the restaurant's zone (via GPS polygon OR matching zoneId)
+  const isPartnerInTargetZone = (p) => {
+    // Match by zoneId field on delivery partner profile
+    if (targetZoneId && p.zoneId) {
+      if (String(p.zoneId) === String(targetZoneId)) return true;
+    }
+    // Match by GPS polygon check
+    if (hasActiveZones && p.lastLat != null && p.lastLng != null) {
+      return isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
+    }
+    return false;
+  };
+
   if (!restaurant?.location?.coordinates?.length) {
     let partners = allOnline;
-    if (hasActiveZones) {
-      const inZone = partners.filter((p) => isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones));
+    if (hasActiveZones || targetZoneId) {
+      const inZone = partners.filter((p) => isPartnerInTargetZone(p));
       if (inZone.length > 0) partners = inZone;
     }
 
@@ -90,13 +170,11 @@ async function listNearbyOnlineDeliveryPartners(
   }
 
   const [rLng, rLat] = restaurant.location.coordinates;
-  const scored = [];
 
+  // Score all online partners with distance and zone membership
+  const scored = [];
   for (const p of allOnline) {
-    let isInZone = true;
-    if (hasActiveZones && p.lastLat != null && p.lastLng != null) {
-      isInZone = isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
-    }
+    const inZone = isPartnerInTargetZone(p);
 
     let d = 999;
     if (p.lastLat != null && p.lastLng != null) {
@@ -104,21 +182,33 @@ async function listNearbyOnlineDeliveryPartners(
       if (Number.isFinite(calcD)) d = calcD;
     }
 
-    // Include if within distance or inside active zone, or fallback
-    if (d <= maxKm || isInZone || p.lastLat == null) {
-      scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 0, status: p.status, isInZone });
-    }
+    scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 999, status: p.status, isInZone: inZone });
   }
 
-  scored.sort((a, b) => a.distanceKm - b.distanceKm);
-  let picked = scored.slice(0, Math.max(1, limit));
+  // STRICT ZONE FILTERING: Only pick partners who are in the restaurant's zone
+  const zonePartners = scored.filter(p => p.isInZone);
 
-  if (picked.length === 0 && allOnline.length > 0) {
-    picked = allOnline.slice(0, limit).map((p) => ({
-      partnerId: p._id,
-      distanceKm: null,
-      status: p.status,
-    }));
+  let picked;
+  if (zonePartners.length > 0) {
+    // Sort zone partners by distance (closest first)
+    zonePartners.sort((a, b) => a.distanceKm - b.distanceKm);
+    picked = zonePartners.slice(0, Math.max(1, limit));
+    logger.info(`[DeliveryDispatch] Found ${zonePartners.length} delivery partner(s) in restaurant zone ${targetZoneId || 'unknown'}.`);
+  } else {
+    // FALLBACK: No zone partners found — fall back to distance-based search
+    logger.info(`[DeliveryDispatch] No partners in restaurant zone ${targetZoneId || 'unknown'}. Falling back to distance-based search (maxKm=${maxKm}).`);
+    const distancePartners = scored.filter(p => p.distanceKm <= maxKm);
+    distancePartners.sort((a, b) => a.distanceKm - b.distanceKm);
+    picked = distancePartners.slice(0, Math.max(1, limit));
+
+    // Last resort: grab any online partner
+    if (picked.length === 0 && allOnline.length > 0) {
+      picked = allOnline.slice(0, limit).map((p) => ({
+        partnerId: p._id,
+        distanceKm: null,
+        status: p.status,
+      }));
+    }
   }
 
   return { partners: picked };

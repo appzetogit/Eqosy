@@ -400,6 +400,7 @@ export const initSocket = async (server) => {
                     currentRole: socket.user?.role,
                 });
 
+                // Emit to order-chat room ONLY (not tracking room — that's for location/status, not chat)
                 const room = roomNames.orderChat(data.orderId);
                 io.to(room).emit('new-order-chat-message', {
                     orderId: String(data.orderId),

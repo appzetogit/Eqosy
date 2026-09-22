@@ -218,6 +218,18 @@ export const useRestaurantNotifications = () => {
   };
 
   const handleIncomingOrderAlert = (orderData) => {
+    // GUARD: Never ring for chat-related events
+    const rawType = String(orderData?.type || orderData?.data?.type || orderData?.chatType || '').toLowerCase();
+    if (
+      rawType === 'chat_message' ||
+      rawType.includes('chat') ||
+      Boolean(orderData?.conversationId) ||
+      orderData?.openChat === 'true'
+    ) {
+      debugLog('[RestaurantNotification] Blocked chat payload from order ring:', orderData);
+      return;
+    }
+
     // Ensure order belongs strictly to the currently logged in restaurant
     const targetRestaurantId = String(
       orderData?.restaurantId?._id ||
@@ -543,14 +555,29 @@ export const useRestaurantNotifications = () => {
     // NOTE: This event is only sent to delivery rooms by the backend (admin assignment).
     // The restaurant socket should NOT receive this. But if it does, guard carefully.
     socketRef.current.on('play_notification_sound', (data) => {
-      debugLog('?? Sound notification received (unexpected on restaurant socket):', data);
+      debugLog('🔊 Sound notification received (unexpected on restaurant socket):', data);
+      // CRITICAL GUARD: Block all chat-related sound events on the restaurant socket.
+      // Chat messages must NEVER trigger the restaurant order ring.
+      const eventType = String(data?.type || data?.data?.type || '').toLowerCase();
+      const isChatEvent = (
+        eventType === 'chat_message' ||
+        eventType.includes('chat') ||
+        Boolean(data?.conversationId) ||
+        Boolean(data?.data?.conversationId) ||
+        data?.openChat === 'true' ||
+        data?.data?.openChat === 'true' ||
+        String(data?.chatType || data?.data?.chatType || '').includes('chat')
+      );
+      if (isChatEvent) {
+        debugLog('🚫 Blocked chat sound from restaurant order ring (play_notification_sound)');
+        return;
+      }
       const normalizedData = {
         orderId: data?.orderId || data?.order_id,
         orderMongoId: data?.orderMongoId || data?.order_mongo_id,
         ...data
       };
       // Only ring if this is genuinely a NEW order event (type check).
-      const eventType = String(data?.type || data?.data?.type || '').toLowerCase();
       const isNewOrderEvent = eventType.includes('new_order') || eventType.includes('order_created');
       if (isNewOrderEvent) {
         handleIncomingOrderAlert(normalizedData);

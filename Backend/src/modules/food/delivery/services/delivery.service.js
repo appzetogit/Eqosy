@@ -338,6 +338,15 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     const todayKey = new Date().toISOString().slice(0, 10);
 
     if (validStatus === 'online' && !forceBypassForDev) {
+        // Step 0: Enforce GPS Location Check (Must have valid GPS coordinates to go online)
+        const numLatCheck = Number(latitude);
+        const numLngCheck = Number(longitude);
+        if (!Number.isFinite(numLatCheck) || !Number.isFinite(numLngCheck)) {
+            const err = new ValidationError('GPS location is required to go online. Please turn on your GPS/Location and try again.');
+            err.code = 'GPS_REQUIRED';
+            throw err;
+        }
+
         // Step 1: Enforce Active Gig Check (Online status allowed 15-30 mins before gig start)
         const { getActiveGigForPartner, getUpcomingGigLoginDetails } = await import('./gig.service.js');
         const activeGig = await getActiveGigForPartner(partner._id);

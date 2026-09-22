@@ -471,6 +471,8 @@ export const getActiveGigForPartner = async (deliveryPartnerId) => {
 
   const activeBooking = bookings.find(b => {
     if (!b.gigId || b.gigId.status !== 'active') return false;
+    // CRITICAL: Only count gigs scheduled for TODAY — daily re-booking is mandatory
+    if (b.gigId.date && b.gigId.date !== todayStr) return false;
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
 
@@ -503,6 +505,7 @@ export const getActiveGigForPartner = async (deliveryPartnerId) => {
 export const getUpcomingGigLoginDetails = async (deliveryPartnerId) => {
   const now = new Date();
   const nowMs = now.getTime();
+  const todayStr = now.toISOString().slice(0, 10);
   const { partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
   const bookings = await FoodGigBooking.find({
@@ -512,6 +515,8 @@ export const getUpcomingGigLoginDetails = async (deliveryPartnerId) => {
 
   for (const b of bookings) {
     if (!b.gigId || b.gigId.status !== 'active') continue;
+    // Only show upcoming gigs for TODAY — tomorrow's gig is irrelevant, partner must re-book daily
+    if (b.gigId.date && b.gigId.date !== todayStr) continue;
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
 
@@ -581,8 +586,111 @@ export const processNoShows = async () => {
 };
 
 export const checkAndAutoOfflineExpiredGigs = async () => {
-  // Delivery partners remain online for on-demand orders.
-  return { processed: 0 };
+  const now = new Date();
+  const nowMs = now.getTime();
+  const THIRTY_MIN_GRACE_MS = 30 * 60 * 1000;
+  const GPS_STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes — if no GPS update in 10 mins, consider GPS inactive
+
+  // Find all online delivery partners
+  const onlinePartners = await FoodDeliveryPartner.find({
+    availabilityStatus: 'online',
+  })
+    .select('_id name lastLat lastLng lastLocationAt')
+    .lean();
+
+  if (!onlinePartners.length) return { processed: 0 };
+
+  let processedCount = 0;
+
+  for (const partner of onlinePartners) {
+    const partnerIds = [partner._id, partner._id.toString()];
+
+    // Check 1: Does this partner have an active gig booking right now?
+    const bookings = await FoodGigBooking.find({
+      deliveryPartnerId: { $in: partnerIds },
+      status: { $in: ['booked', 'completed'] }
+    }).populate('gigId').lean();
+
+    const hasActiveGig = bookings.some(b => {
+      if (!b.gigId || b.gigId.status !== 'active') return false;
+      // CRITICAL: Only count gigs for TODAY — each day requires a fresh booking
+      if (b.gigId.date && b.gigId.date !== now.toISOString().slice(0, 10)) return false;
+      const startMs = new Date(b.gigId.startDateTime).getTime();
+      const endMs = new Date(b.gigId.endDateTime).getTime();
+      return (nowMs >= startMs - THIRTY_MIN_GRACE_MS) && (nowMs <= endMs + THIRTY_MIN_GRACE_MS);
+    });
+
+    if (hasActiveGig) {
+      // Check 2: GPS still active? If location is stale > 10 minutes, auto-offline
+      const lastLocationAt = partner.lastLocationAt ? new Date(partner.lastLocationAt).getTime() : 0;
+      const hasValidGps = partner.lastLat != null && partner.lastLng != null;
+      const isGpsStale = !hasValidGps || (nowMs - lastLocationAt > GPS_STALE_THRESHOLD_MS);
+
+      if (isGpsStale) {
+        // GPS is stale but gig is active — skip auto-offline for now (gig is still valid)
+        // The GPS check on dispatch will handle filtering them out anyway
+        continue;
+      }
+      continue; // Active gig + GPS active = keep online
+    }
+
+    // No active gig — check if partner has an active order in progress
+    try {
+      const { FoodOrder } = await import('../../orders/models/order.model.js');
+      const activeOrder = await FoodOrder.findOne({
+        'dispatch.deliveryPartnerId': { $in: partnerIds },
+        orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
+      }).select('_id').lean();
+
+      if (activeOrder) continue; // Has active order, keep online until delivery completes
+    } catch (err) {
+      logger.warn(`[AutoOffline] Error checking active orders for partner ${partner._id}: ${err.message}`);
+      continue;
+    }
+
+    // No active gig AND no active order — auto-offline this partner
+    try {
+      await FoodDeliveryPartner.updateOne(
+        { _id: partner._id },
+        { $set: { availabilityStatus: 'offline' } }
+      );
+      processedCount++;
+
+      logger.info(`[AutoOffline] Partner ${partner.name || partner._id} auto-offlined (gig expired, no active orders).`);
+
+      // Notify partner via socket
+      try {
+        const io = getIO();
+        if (io) {
+          io.to(rooms.delivery(partner._id)).emit('availability_status_changed', {
+            availabilityStatus: 'offline',
+            reason: 'gig_expired',
+            message: 'Aapki shift khatam ho gayi hai. Dubara online aane ke liye nayi gig book karein.'
+          });
+        }
+      } catch (socketErr) {
+        // ignore socket errors
+      }
+
+      // Push notification
+      try {
+        await notifyOwnerSafely(
+          { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
+          {
+            title: 'Shift Ended — You are now Offline ⏰',
+            body: 'Your gig shift has ended. To go online again, please book a new gig slot.',
+            data: { type: 'auto_offline', reason: 'gig_expired' }
+          }
+        );
+      } catch (pushErr) {
+        // ignore push errors
+      }
+    } catch (updateErr) {
+      logger.warn(`[AutoOffline] Failed to auto-offline partner ${partner._id}: ${updateErr.message}`);
+    }
+  }
+
+  return { processed: processedCount };
 };
 
 export const listGigBookingsForAdmin = async (query = {}) => {
@@ -615,8 +723,8 @@ export const listGigBookingsForAdmin = async (query = {}) => {
 
   // Zone filter
   if (zoneId) {
-    filtered = filtered.filter(b => 
-      String(b.gigId.zoneId || '') === String(zoneId) || 
+    filtered = filtered.filter(b =>
+      String(b.gigId.zoneId || '') === String(zoneId) ||
       String(b.gigId.zoneName || '').toLowerCase().includes(String(zoneId).toLowerCase())
     );
   }

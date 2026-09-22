@@ -263,11 +263,14 @@ export const sendOrderChatMessage = async ({ orderId, text, messageType = 'text'
         displayOrderId: conversation.displayOrderId || order?.order_id || order?.orderId,
       };
 
-      // 1. Emit to order-chat room & tracking room for active chat/tracking screens
+      // 1. Emit to order-chat room for active chat screens ONLY
+      // NOTE: Do NOT emit to tracking room — tracking room is for location/status updates,
+      // not chat messages. Emitting chat messages there causes restaurant sockets (which
+      // join tracking rooms) to accidentally trigger order ring sounds.
       io.to(roomName).emit('new-order-chat-message', payload);
       io.to(roomName).emit('order_chat_message', payload);
       io.to(roomName).emit('new_message', payload);
-      io.to(trackingRoom).emit('new-order-chat-message', payload);
+      // io.to(trackingRoom).emit('new-order-chat-message', payload); // REMOVED: tracking room must not receive chat messages
 
       // 2. Format rich notification payload for user & delivery partner
       const notificationPayload = {

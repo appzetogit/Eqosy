@@ -506,7 +506,7 @@ export const useDeliveryNotifications = () => {
             : [];
 
       const recoverableOrder = availableOrders.find((order) => {
-        const dispatchStatus = order?.dispatch?.status;
+        const dispatchStatus = or9der?.dispatch?.status;
         return (
           ['unassigned', 'assigned'].includes(dispatchStatus) &&
           ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order?.orderStatus)
@@ -994,6 +994,23 @@ export const useDeliveryNotifications = () => {
       debugLog('⚡ delivery:status_changed received via socket:', statusData);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('deliveryStatusChanged', { detail: statusData }));
+      }
+    });
+
+    socketRef.current.on('availability_status_changed', (data) => {
+      debugLog('⚡ availability_status_changed received via socket:', data);
+      if (data?.availabilityStatus === 'offline') {
+        const reason = data?.reason || '';
+        const message = data?.message || 'You have been set to offline.';
+        toast.info(message);
+        // Update local gig store
+        try {
+          const { useGigStore } = require('../store/gigStore');
+          useGigStore.getState().goOffline();
+        } catch (_) {}
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('deliveryStatusChanged', { detail: { availabilityStatus: 'offline', reason, ...data } }));
+        }
       }
     });
 
