@@ -545,44 +545,28 @@ export const useRestaurantNotifications = () => {
 
     // Listen for new order notifications
     socketRef.current.on('new_order', (orderData) => {
-      debugLog('?? New order received:', orderData);
-      setNewOrder(orderData);
+      debugLog('🍕 New order received:', orderData);
 
+      // Guard: If restaurantId not yet loaded, skip to avoid false alerts
+      // (the restaurantId check inside handleIncomingOrderAlert would be bypassed)
+      if (!restaurantId) {
+        debugLog('[RestaurantNotification] Skipped new_order — restaurantId not loaded yet');
+        return;
+      }
+
+      setNewOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
 
-    // Listen for sound notification event
-    // NOTE: This event is only sent to delivery rooms by the backend (admin assignment).
-    // The restaurant socket should NOT receive this. But if it does, guard carefully.
+    // NOTE: This event is only sent to delivery rooms by the backend (auto-dispatch).
+    // The restaurant socket should NEVER ring on this event — it's for delivery partners only.
     socketRef.current.on('play_notification_sound', (data) => {
       debugLog('🔊 Sound notification received (unexpected on restaurant socket):', data);
-      // CRITICAL GUARD: Block all chat-related sound events on the restaurant socket.
-      // Chat messages must NEVER trigger the restaurant order ring.
-      const eventType = String(data?.type || data?.data?.type || '').toLowerCase();
-      const isChatEvent = (
-        eventType === 'chat_message' ||
-        eventType.includes('chat') ||
-        Boolean(data?.conversationId) ||
-        Boolean(data?.data?.conversationId) ||
-        data?.openChat === 'true' ||
-        data?.data?.openChat === 'true' ||
-        String(data?.chatType || data?.data?.chatType || '').includes('chat')
-      );
-      if (isChatEvent) {
-        debugLog('🚫 Blocked chat sound from restaurant order ring (play_notification_sound)');
-        return;
-      }
-      const normalizedData = {
-        orderId: data?.orderId || data?.order_id,
-        orderMongoId: data?.orderMongoId || data?.order_mongo_id,
-        ...data
-      };
-      // Only ring if this is genuinely a NEW order event (type check).
-      const isNewOrderEvent = eventType.includes('new_order') || eventType.includes('order_created');
-      if (isNewOrderEvent) {
-        handleIncomingOrderAlert(normalizedData);
-      }
-      // Do NOT start alert loop or play sound for arbitrary play_notification_sound events.
+      // CRITICAL GUARD: Never ring the restaurant alert on this event.
+      // This event is emitted ONLY to delivery:xxx rooms, never to restaurant:xxx rooms.
+      // If somehow received, it means a cross-room leak — always block it.
+      debugLog('🚫 Blocked play_notification_sound on restaurant socket (delivery-only event)');
+      // Do NOT call handleIncomingOrderAlert here under any circumstances.
     });
 
     // Listen for order cancellation events

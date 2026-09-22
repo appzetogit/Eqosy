@@ -57,6 +57,9 @@ function emitOrderUpdate(order, deliveryPartnerId) {
         orderMongoId: order._id?.toString?.(),
         orderId: order.order_id || order._id.toString(),
         orderStatus: order.orderStatus,
+        // Explicitly include delivery sub-status so restaurant frontend can detect
+        // picked_up / reached_drop / delivered and stop its alert loop.
+        status: order.deliveryState?.status || order.orderStatus,
         deliveryState: order.deliveryState,
         deliveryVerification: dv,
         dispatch: order.dispatch,

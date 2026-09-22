@@ -1391,8 +1391,21 @@ export async function updateOrderStatusRestaurant(
           }
         } else {
           try {
-            await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 }, $set: { 'dispatch.status': 'unassigned', 'dispatch.deliveryPartnerId': null } });
-            await tryAutoAssign(order._id, { forceRebroadcast: true });
+            // Reset dispatch completely so tryAutoAssign treats this as a fresh search.
+            // Clearing offeredTo is critical — if any partners were offered before (and timed out),
+            // they would be excluded from the eligible list causing a silent 15s retry loop.
+            await FoodOrder.updateOne(
+              { _id: order._id },
+              {
+                $unset: { 'dispatch.dispatchingAt': 1 },
+                $set: {
+                  'dispatch.status': 'unassigned',
+                  'dispatch.deliveryPartnerId': null,
+                  'dispatch.offeredTo': [],
+                },
+              }
+            );
+            await tryAutoAssign(order._id, { forceRebroadcast: true, attempt: 1 });
           } catch (err) {
             logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
           }
