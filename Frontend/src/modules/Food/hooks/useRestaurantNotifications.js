@@ -117,7 +117,9 @@ export const useRestaurantNotifications = () => {
 
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
-    if (!key) return true;
+    // IMPORTANT: If there is no order ID, this is NOT a new order alert (e.g. a status update
+    // broadcast, admin notification, or delivery event). Never ring for unidentified payloads.
+    if (!key) return false;
     if (alertedOrderIdsRef.current.has(key)) {
       return false; // Order has already been alerted; do NOT ring again for this order!
     }
@@ -233,7 +235,9 @@ export const useRestaurantNotifications = () => {
     }
 
     const statusStr = String(orderData?.status || orderData?.orderStatus || '').toLowerCase();
+    // Stop the ring as soon as the restaurant accepts (confirmed) or progresses the order further.
     if (
+      statusStr === 'confirmed' ||
       statusStr === 'preparing' ||
       statusStr === 'ready_for_pickup' ||
       statusStr === 'out_for_delivery' ||
@@ -294,37 +298,38 @@ export const useRestaurantNotifications = () => {
           response?.data?.data?.data?.orders ||
           [];
 
-        const confirmed = (rows || [])
-          .filter((o) => String(o?.status || "").toLowerCase() === "confirmed")
+        // Only ring for NEW orders that the restaurant has NOT yet reviewed/accepted.
+        // "created" = new order awaiting restaurant acceptance.
+        // "confirmed" means restaurant already accepted → do NOT ring again.
+        const newPendingOrders = (rows || [])
+          .filter((o) => String(o?.status || o?.orderStatus || "").toLowerCase() === "created")
           .sort((a, b) => {
             const at = a?.updatedAt || a?.createdAt || 0;
             const bt = b?.updatedAt || b?.createdAt || 0;
             return new Date(bt).getTime() - new Date(at).getTime();
           });
 
+        // On first poll: seed the alerted set with ALL pending orders older than 60s
+        // so we don't ring for old unactioned orders on page load.
         if (isFirstPollRef.current) {
           isFirstPollRef.current = false;
-          // Seed alerted set with existing orders on initial page load
-          // Only alert if created in the last 60 seconds
           const now = Date.now();
-          confirmed.forEach((o) => {
+          newPendingOrders.forEach((o) => {
             const key = getOrderAlertKey(o);
             const createdAtMs = new Date(o.createdAt || o.updatedAt || 0).getTime();
-            if (key) {
-              if (now - createdAtMs > 60000) {
-                alertedOrderIdsRef.current.add(key);
-              }
+            if (key && now - createdAtMs > 60000) {
+              alertedOrderIdsRef.current.add(key);
             }
           });
         }
 
-        if (confirmed.length > 0) {
-          // Trigger alerts ONLY for unalerted confirmed orders
-          const newConfirmed = confirmed.filter((o) => {
+        if (newPendingOrders.length > 0) {
+          // Trigger alerts ONLY for unalerted new pending orders
+          const freshOrders = newPendingOrders.filter((o) => {
             const key = getOrderAlertKey(o);
             return key && !alertedOrderIdsRef.current.has(key);
           });
-          newConfirmed.slice(0, 5).forEach((o) => handleIncomingOrderAlert(o));
+          freshOrders.slice(0, 5).forEach((o) => handleIncomingOrderAlert(o));
         }
       } catch (error) {
         // Non-blocking: keep polling.
@@ -535,21 +540,22 @@ export const useRestaurantNotifications = () => {
     });
 
     // Listen for sound notification event
+    // NOTE: This event is only sent to delivery rooms by the backend (admin assignment).
+    // The restaurant socket should NOT receive this. But if it does, guard carefully.
     socketRef.current.on('play_notification_sound', (data) => {
-      debugLog('?? Sound notification:', data);
+      debugLog('?? Sound notification received (unexpected on restaurant socket):', data);
       const normalizedData = {
         orderId: data?.orderId || data?.order_id,
         orderMongoId: data?.orderMongoId || data?.order_mongo_id,
         ...data
       };
-      // Force immediate buzz for notification events, even if dedupe would skip.
-      activeOrderRef.current = normalizedData || { id: Date.now() };
-      playNotificationSound(normalizedData);
-      startAlertLoop();
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        showBackgroundOrderNotification(normalizedData);
+      // Only ring if this is genuinely a NEW order event (type check).
+      const eventType = String(data?.type || data?.data?.type || '').toLowerCase();
+      const isNewOrderEvent = eventType.includes('new_order') || eventType.includes('order_created');
+      if (isNewOrderEvent) {
+        handleIncomingOrderAlert(normalizedData);
       }
-      handleIncomingOrderAlert(normalizedData);
+      // Do NOT start alert loop or play sound for arbitrary play_notification_sound events.
     });
 
     // Listen for order cancellation events
@@ -570,16 +576,28 @@ export const useRestaurantNotifications = () => {
     socketRef.current.on('order_status_update', (data) => {
       debugLog('Order status update:', data);
       setLastOrderUpdate(data);
-      const statusStr = String(data?.orderStatus || data?.status || '').toLowerCase();
-      if (
-        statusStr.includes('cancel') ||
+      // Check both orderStatus (main) and deliveryState.status (delivery sub-status)
+      const statusStr = String(
+        data?.orderStatus || data?.status || data?.deliveryState?.status || ''
+      ).toLowerCase();
+      // Stop the ring for any status beyond 'created'.
+      // This covers restaurant-side updates AND delivery partner progression events
+      // (reached_pickup, picked_up, reached_drop, delivered) which also emit to restaurant room.
+      const shouldStop =
         statusStr === 'confirmed' ||
         statusStr === 'preparing' ||
         statusStr === 'ready_for_pickup' ||
+        statusStr === 'ready' ||
+        statusStr === 'reached_pickup' ||
+        statusStr === 'picked_up' ||
         statusStr === 'out_for_delivery' ||
+        statusStr === 'reached_drop' ||
+        statusStr === 'at_drop' ||
         statusStr === 'delivered' ||
-        statusStr === 'completed'
-      ) {
+        statusStr === 'completed' ||
+        statusStr.includes('cancel');
+
+      if (shouldStop) {
         stopAlertLoop();
         setNewOrder(null);
         activeOrderRef.current = null;
