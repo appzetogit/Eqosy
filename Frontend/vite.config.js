@@ -49,7 +49,6 @@ export default defineConfig({
         ]
       },
       workbox: {
-        suppressWarnings: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         skipWaiting: true,
