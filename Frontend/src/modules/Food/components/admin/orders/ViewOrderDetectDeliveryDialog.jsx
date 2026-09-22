@@ -301,7 +301,7 @@ export default function ViewOrderDetectDeliveryDialog({ isOpen, onOpenChange, or
                   <Truck className="w-5 h-5 text-orange-500" />
                   Assign Delivery Partner
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Select a driver from this zone for Order #{order.orderId}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Showing drivers from the same zone as the restaurant for Order #{order.orderId}</p>
               </div>
               <button
                 type="button"
@@ -342,7 +342,7 @@ export default function ViewOrderDetectDeliveryDialog({ isOpen, onOpenChange, or
                     : "bg-slate-50 text-slate-600 border-slate-200"
                 }`}
               >
-                <span>{onlyOnlineFilter ? "🟢 Online Drivers Only" : "⚪ All Zone Drivers"}</span>
+                <span>{onlyOnlineFilter ? "🟢 Online Only" : "⚪ All Drivers (Zone)"}</span>
               </button>
             </div>
 

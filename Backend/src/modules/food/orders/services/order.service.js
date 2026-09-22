@@ -1787,17 +1787,16 @@ export async function listAvailableDeliveryPartnersForOrder(orderId, options = {
     filter.availabilityStatus = "online";
   }
 
+  // Zone-strict filtering: only show drivers from the SAME zone as the restaurant.
+  // If the order/restaurant has a resolved zone, filter strictly by that zone only.
+  // Do NOT include null-zone or zone-less drivers – they may belong to a different city entirely.
   if (resolvedZoneId) {
     const zoneIdStr = String(resolvedZoneId);
     const validObjectIds = [zoneIdStr];
     if (mongoose.Types.ObjectId.isValid(zoneIdStr)) {
       validObjectIds.push(new mongoose.Types.ObjectId(zoneIdStr));
     }
-    filter.$or = [
-      { zoneId: { $in: validObjectIds } },
-      { zoneId: null },
-      { zoneId: { $exists: false } }
-    ];
+    filter.zoneId = { $in: validObjectIds };
   }
 
   const partners = await FoodDeliveryPartner.find(filter)
@@ -1826,16 +1825,6 @@ export async function listAvailableDeliveryPartnersForOrder(orderId, options = {
     countMap[item._id.toString()] = item.count;
   }
 
-  // Sort partners so exact zone matches appear first
-  if (resolvedZoneId) {
-    const targetStr = String(resolvedZoneId);
-    partners.sort((a, b) => {
-      const aMatch = a.zoneId && String(a.zoneId) === targetStr ? 1 : 0;
-      const bMatch = b.zoneId && String(b.zoneId) === targetStr ? 1 : 0;
-      return bMatch - aMatch;
-    });
-  }
-
   return partners.map(p => ({
     _id: p._id.toString(),
     name: p.name || "Delivery Partner",
@@ -1848,6 +1837,7 @@ export async function listAvailableDeliveryPartnersForOrder(orderId, options = {
     totalRatings: p.totalRatings || 0,
     activeOrdersCount: countMap[p._id.toString()] || 0,
     profilePhoto: p.profilePhoto || null,
+    zoneId: p.zoneId ? String(p.zoneId) : null,
   }));
 }
 
