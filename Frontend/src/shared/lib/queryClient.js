@@ -29,19 +29,19 @@ export const queryClient = new QueryClient({
 export const idbPersister = {
   persistClient: async (client) => {
     try {
-      await set('RAYDO_QUERY_CACHE', client)
+      await set('EQOSY_QUERY_CACHE', client)
     } catch (_) {}
   },
   restoreClient: async () => {
     try {
-      return await get('RAYDO_QUERY_CACHE')
+      return await get('EQOSY_QUERY_CACHE')
     } catch (_) {
       return undefined
     }
   },
   removeClient: async () => {
     try {
-      await del('RAYDO_QUERY_CACHE')
+      await del('EQOSY_QUERY_CACHE')
     } catch (_) {}
   },
 }

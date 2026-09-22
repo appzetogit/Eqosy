@@ -25,9 +25,9 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'robots.txt'],
       manifest: {
-        name: 'Raydo Super App',
-        short_name: 'Raydo',
-        description: 'Raydo Food & Taxi Mobile Web App',
+        name: 'Eqosy Super App',
+        short_name: 'Eqosy',
+        description: 'Eqosy Food & Taxi Mobile Web App',
         theme_color: '#FACC15',
         background_color: '#18181B',
         display: 'standalone',
