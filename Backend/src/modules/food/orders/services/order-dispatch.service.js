@@ -497,7 +497,11 @@ export async function tryAutoAssign(orderId, options = {}) {
             type: 'new_order',
             orderId: order._id.toString(),
             order_id: order.order_id || order.orderId || order._id.toString(),
-            displayOrderId: order.order_id || order.orderId || order._id.toString()
+            displayOrderId: order.order_id || order.orderId || order._id.toString(),
+            targetUrl: '/food/delivery/feed',
+            link: '/food/delivery/feed',
+            click_action: '/food/delivery/feed',
+            role: 'delivery',
           },
         }
       );
@@ -563,10 +567,21 @@ export async function processDispatchTimeout(orderId, partnerId) {
 
 export async function resendDeliveryNotificationRestaurant(orderId, restaurantId) {
   const identity = buildOrderIdentityFilter(orderId);
-  const order = await FoodOrder.findOne({
-    ...identity,
-    restaurantId: new mongoose.Types.ObjectId(restaurantId),
-  });
+
+  // Try finding order with restaurant filter if provided, or fallback to identity lookup
+  let order = null;
+  if (restaurantId && mongoose.Types.ObjectId.isValid(restaurantId)) {
+    order = await FoodOrder.findOne({
+      ...identity,
+      restaurantId: new mongoose.Types.ObjectId(restaurantId),
+    }).populate(['restaurantId', 'userId']);
+  }
+
+  if (!order) {
+    order = await FoodOrder.findOne({
+      ...identity,
+    }).populate(['restaurantId', 'userId']);
+  }
 
   if (!order) throw new NotFoundError('Order not found');
 
@@ -595,3 +610,4 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
   const notifiedCount = finalOrder?.dispatch?.offeredTo?.length || 0;
   return { success: true, notifiedCount };
 }
+
