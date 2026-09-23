@@ -199,7 +199,9 @@ const buildDeliveryOrderNotification = (orderData = {}) => {
     tag: `delivery-order-${orderId}`,
     data: {
       orderId,
-      targetUrl: '/delivery',
+      targetUrl: '/food/delivery/feed',
+      link: '/food/delivery/feed',
+      role: 'delivery',
     },
   };
 }

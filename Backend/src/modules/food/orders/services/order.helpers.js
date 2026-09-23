@@ -409,7 +409,11 @@ export function isStatusAdvance(current, next) {
  */
 export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
   const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc || {};
-  const restaurant = restaurantDoc || order?.restaurantId || null;
+  let restaurant = restaurantDoc?.toObject ? restaurantDoc.toObject() : (restaurantDoc || order?.restaurantId || null);
+  if (restaurant && typeof restaurant === 'object' && mongoose.isValidObjectId(restaurant)) {
+    restaurant = null;
+  }
+
   const missingFields = [];
 
   // 1. Verify Restaurant Info
@@ -421,7 +425,9 @@ export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
   const restLoc = restaurant?.location || order?.restaurantLocation || {};
   const hasRestCoords = Array.isArray(restLoc.coordinates) && restLoc.coordinates.length >= 2 &&
     Number.isFinite(Number(restLoc.coordinates[0])) && Number.isFinite(Number(restLoc.coordinates[1]));
-  const hasRestAddress = Boolean(restLoc.address || restLoc.formattedAddress || restaurant?.addressLine1 || restaurant?.area || restaurant?.city || order?.restaurantAddress);
+  const hasRestAddress = Boolean(
+    restLoc.address || restLoc.formattedAddress || restaurant?.addressLine1 || restaurant?.area || restaurant?.city || order?.restaurantAddress
+  );
 
   if (!hasRestCoords && !hasRestAddress) {
     missingFields.push('restaurantLocation');
@@ -442,7 +448,7 @@ export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
 
   // 3. Verify Customer Phone / Contact Details
   const customerPhone = String(
-    order?.customerPhone || delAddr.phone || delAddr.contactPhone || order?.userId?.phone || ''
+    order?.customerPhone || delAddr.phone || delAddr.contactPhone || order?.userId?.phone || order?.userPhone || ''
   ).trim();
 
   if (!customerPhone) {
@@ -458,4 +464,5 @@ export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
     reason,
   };
 }
+
 

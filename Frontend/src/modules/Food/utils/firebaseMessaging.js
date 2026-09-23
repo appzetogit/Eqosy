@@ -648,27 +648,61 @@ function showForegroundNotification(payload = {}) {
 
   playPushSound(payload);
 
-  // Force system notification even when the tab is in focus
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-    try {
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page", {
-        title,
-        body,
-        image,
-        notificationKey,
-      });
-      // Use service worker to show native system notification to ensure it bypasses focus checks
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then(registration => {
-          if (registration) {
-            registration.showNotification(title, {
-              body,
-              icon: "/eqosy-logo.png",
-              image,
-              tag: notificationKey || undefined,
-              data: payload?.data || {},
-              requireInteraction: true,
-              vibrate: [200, 100, 200, 100, 300]
+      // Force system notification even when the tab is in focus
+      const resolveClickTarget = () => {
+        const defaultLink = normalizeModuleFromPath() === 'delivery' || payload?.data?.type === 'new_order' || payload?.data?.role === 'delivery' ? '/food/delivery/feed' : '/food/restaurant';
+        const link = payload?.data?.targetUrl || payload?.data?.link || defaultLink;
+        return link.startsWith("/restaurant") ? `/food${link}` : link;
+      };
+
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        try {
+          pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page", {
+            title,
+            body,
+            image,
+            notificationKey,
+          });
+          // Use service worker to show native system notification to ensure it bypasses focus checks
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+              if (registration) {
+                registration.showNotification(title, {
+                  body,
+                  icon: "/eqosy-logo.png",
+                  image,
+                  tag: notificationKey || undefined,
+                  data: payload?.data || {},
+                  requireInteraction: true,
+                  vibrate: [200, 100, 200, 100, 300]
+                });
+              } else {
+                const notif = new Notification(title, {
+                  body,
+                  icon: "/eqosy-logo.png",
+                  image,
+                  tag: notificationKey || undefined,
+                  requireInteraction: true
+                });
+                notif.onclick = (event) => {
+                  event.preventDefault();
+                  window.focus();
+                  window.location.href = resolveClickTarget();
+                };
+              }
+            }).catch(() => {
+              const notif = new Notification(title, {
+                body,
+                icon: "/eqosy-logo.png",
+                image,
+                tag: notificationKey || undefined,
+                requireInteraction: true
+              });
+              notif.onclick = (event) => {
+                event.preventDefault();
+                window.focus();
+                window.location.href = resolveClickTarget();
+              };
             });
           } else {
             const notif = new Notification(title, {
@@ -676,53 +710,19 @@ function showForegroundNotification(payload = {}) {
               icon: "/eqosy-logo.png",
               image,
               tag: notificationKey || undefined,
-              requireInteraction: true
             });
             notif.onclick = (event) => {
               event.preventDefault();
               window.focus();
-              const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
-              const target = link.startsWith("/restaurant") ? `/food${link}` : link;
-              window.location.href = target;
+              window.location.href = resolveClickTarget();
             };
           }
-        }).catch(() => {
-          const notif = new Notification(title, {
-            body,
-            icon: "/eqosy-logo.png",
-            image,
-            tag: notificationKey || undefined,
-            requireInteraction: true
+        } catch (error) {
+          pushDebugWarn(PUSH_DEBUG_PREFIX, "Browser notification creation failed", {
+            error: error?.message || error,
           });
-          notif.onclick = (event) => {
-            event.preventDefault();
-            window.focus();
-            const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
-            const target = link.startsWith("/restaurant") ? `/food${link}` : link;
-            window.location.href = target;
-          };
-        });
-      } else {
-        const notif = new Notification(title, {
-          body,
-          icon: "/eqosy-logo.png",
-          image,
-          tag: notificationKey || undefined,
-        });
-        notif.onclick = (event) => {
-          event.preventDefault();
-          window.focus();
-          const link = payload?.data?.targetUrl || payload?.data?.link || "/food/restaurant";
-          const target = link.startsWith("/restaurant") ? `/food${link}` : link;
-          window.location.href = target;
-        };
+        }
       }
-    } catch (error) {
-      pushDebugWarn(PUSH_DEBUG_PREFIX, "Browser notification creation failed", {
-        error: error?.message || error,
-      });
-    }
-  }
 
   // Still show in-app toast for immediate context if we are in focus
   if (typeof document !== "undefined" && document.visibilityState === "visible") {

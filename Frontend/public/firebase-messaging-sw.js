@@ -225,6 +225,13 @@ self.addEventListener("notificationclick", (event) => {
     notificationData.ownerType === "RESTAURANT" ||
     Boolean(notificationData.targetUrl && String(notificationData.targetUrl).includes("restaurant"));
 
+  const isDeliveryNotification =
+    notifTag.includes("delivery") ||
+    notificationData.role === "delivery" ||
+    notificationData.ownerType === "DELIVERY_PARTNER" ||
+    notificationData.type === "new_order" ||
+    Boolean(notificationData.targetUrl && String(notificationData.targetUrl).includes("delivery"));
+
   let rawLink =
     notificationData.link ||
     notificationData.targetUrl ||
@@ -250,6 +257,8 @@ self.addEventListener("notificationclick", (event) => {
       rawLink = `/taxi/driver/home?rideId=${encodeURIComponent(rideId)}`;
     } else if (isRestaurantNotification) {
       rawLink = "/food/restaurant";
+    } else if (isDeliveryNotification) {
+      rawLink = "/food/delivery/feed";
     } else {
       rawLink = "/";
     }
