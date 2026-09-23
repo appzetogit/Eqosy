@@ -1360,55 +1360,60 @@ export async function updateOrderStatusRestaurant(
 
   // Real-time: delivery request / ready notifications.
   try {
-    const io = getIO();
-    if (io) {
-      // When ready for pickup (Mark Ready) -> trigger auto-assign dispatch to closest delivery partner.
-      if (['ready_for_pickup', 'ready'].includes(String(orderStatus)) && !['ready_for_pickup', 'ready'].includes(String(from))) {
-        const assignedId = order.dispatch?.deliveryPartnerId?.toString?.() || order.dispatch?.deliveryPartnerId;
-        const isAccepted = order.dispatch?.status === 'accepted';
-        if (assignedId && isAccepted) {
-          const restaurant = await FoodRestaurant.findById(order.restaurantId).select('restaurantName location addressLine1 area city state').lean();
-          const payload = buildDeliverySocketPayload(order, restaurant);
-          logger.info(
-            `[DeliveryDispatch] Emitting order_ready to ${rooms.delivery(assignedId)} for order ${order._id.toString()}`,
-          );
+    // When ready for pickup (Mark Ready) -> trigger auto-assign dispatch to closest delivery partner.
+    // NOTE: This must run REGARDLESS of socket.io availability — dispatch cannot depend on io.
+    if (['ready_for_pickup', 'ready'].includes(String(orderStatus)) && !['ready_for_pickup', 'ready'].includes(String(from))) {
+      const io = getIO();
+      const assignedId = order.dispatch?.deliveryPartnerId?.toString?.() || order.dispatch?.deliveryPartnerId;
+      const isAccepted = order.dispatch?.status === 'accepted';
+
+      if (assignedId && isAccepted) {
+        // Partner already accepted — just notify them food is ready
+        const restaurant = await FoodRestaurant.findById(order.restaurantId).select('restaurantName location addressLine1 area city state').lean();
+        const payload = buildDeliverySocketPayload(order, restaurant);
+        logger.info(
+          `[DeliveryDispatch] Emitting order_ready to ${rooms.delivery(assignedId)} for order ${order._id.toString()}`,
+        );
+        if (io) {
           io.to(rooms.delivery(assignedId)).emit('order_ready', payload);
-          try {
-            await notifyOwnersSafely(
-              [{ ownerType: 'DELIVERY_PARTNER', ownerId: assignedId }],
-              {
-                title: 'Order is Ready for Pickup! 🛍️',
-                body: `Order #${order.order_id || order._id} is prepared and ready to be picked up at ${restaurant?.restaurantName || 'the restaurant'}.`,
-                data: {
-                  type: 'order_ready',
-                  orderId: order._id.toString(),
-                  orderMongoId: order._id?.toString?.() || '',
-                },
-              }
-            );
-          } catch (pErr) {
-            logger.warn(`Push notification on order_ready failed: ${pErr.message}`);
-          }
-        } else {
-          try {
-            // Reset dispatch completely so tryAutoAssign treats this as a fresh search.
-            // Clearing offeredTo is critical — if any partners were offered before (and timed out),
-            // they would be excluded from the eligible list causing a silent 15s retry loop.
-            await FoodOrder.updateOne(
-              { _id: order._id },
-              {
-                $unset: { 'dispatch.dispatchingAt': 1 },
-                $set: {
-                  'dispatch.status': 'unassigned',
-                  'dispatch.deliveryPartnerId': null,
-                  'dispatch.offeredTo': [],
-                },
-              }
-            );
-            await tryAutoAssign(order._id, { forceRebroadcast: true, attempt: 1 });
-          } catch (err) {
-            logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
-          }
+        }
+        try {
+          await notifyOwnersSafely(
+            [{ ownerType: 'DELIVERY_PARTNER', ownerId: assignedId }],
+            {
+              title: 'Order is Ready for Pickup! 🛍️',
+              body: `Order #${order.order_id || order._id} is prepared and ready to be picked up at ${restaurant?.restaurantName || 'the restaurant'}.`,
+              data: {
+                type: 'order_ready',
+                orderId: order._id.toString(),
+                orderMongoId: order._id?.toString?.() || '',
+              },
+            }
+          );
+        } catch (pErr) {
+          logger.warn(`Push notification on order_ready failed: ${pErr.message}`);
+        }
+      } else {
+        // No partner accepted yet — reset dispatch and find the nearest available partner
+        try {
+          logger.info(`[DeliveryDispatch] Mark Ready triggered — resetting dispatch and searching for nearest partner. Order: ${order._id}`);
+          // Reset dispatch completely so tryAutoAssign treats this as a fresh search.
+          // Clearing offeredTo is critical — if any partners were offered before (and timed out),
+          // they would be excluded from the eligible list causing a silent 15s retry loop.
+          await FoodOrder.updateOne(
+            { _id: order._id },
+            {
+              $unset: { 'dispatch.dispatchingAt': 1 },
+              $set: {
+                'dispatch.status': 'unassigned',
+                'dispatch.deliveryPartnerId': null,
+                'dispatch.offeredTo': [],
+              },
+            }
+          );
+          await tryAutoAssign(order._id, { forceRebroadcast: true, attempt: 1 });
+        } catch (err) {
+          logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
         }
       }
     }

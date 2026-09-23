@@ -247,7 +247,9 @@ export function isPushRingEvent(payload = {}) {
   const type = String(data.type || payload.type || payload.category || '').toLowerCase();
   const chatType = String(data.chatType || payload.chatType || '').toLowerCase();
   const title = String(payload.title || payload.notification?.title || '').toLowerCase();
+  const body = String(payload.body || payload.notification?.body || '').toLowerCase();
   const sound = String(payload.sound || data.sound || '').toLowerCase();
+  const moduleName = normalizeModuleFromPath();
 
   // 1. EXPLICIT GUARD: Chat messages must NEVER trigger loud order ringtone or alert loop
   if (
@@ -261,71 +263,83 @@ export function isPushRingEvent(payload = {}) {
     return false;
   }
 
-  // 2. EXPLICIT GUARD: Status updates (Order Completed, Delivered, Partner Arrived, Picked Up)
-  // must show notifications but NEVER play loud order ringtone
+  // 2. EXPLICIT GUARD: Status updates (Order Status Update, Food Ready, Preparing, Pickup, Arrived, Delivered, Cancelled)
+  // must show notifications but NEVER play loud order ringtone!
   if (
+    type.includes('order_status_update') ||
+    type.includes('status_update') ||
+    type.includes('order_ready') ||
+    type.includes('ready_for_pickup') ||
     type.includes('completed') ||
     type.includes('delivered') ||
     type.includes('partner_arrived') ||
     type.includes('picked_up') ||
+    type.includes('cancel') ||
+    title.includes('ready') ||
+    title.includes('prepared') ||
     title.includes('completed') ||
     title.includes('delivered') ||
-    title.includes('arrived')
+    title.includes('arrived') ||
+    title.includes('cancelled') ||
+    title.includes('updated')
   ) {
     return false;
   }
 
-  if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
+  // 3. EXPLICIT GUARD: Delivery Partner dispatch/request pushes (e.g. "New order request! 🛵")
+  const isDeliveryRequest =
+    title.includes('request') ||
+    title.includes('nearby') ||
+    body.includes('accept now') ||
+    type.includes('order_assigned') ||
+    type.includes('order_assign') ||
+    type.includes('delivery_assigned') ||
+    type.includes('gig_reminder');
+
+  if (isDeliveryRequest) {
+    // Delivery requests should ONLY ring when the app is currently in the delivery module!
+    if (moduleName !== 'delivery') {
+      return false;
+    }
+
+    // Extra guard for gig_reminder: check if partner already dismissed it
+    if (type.includes('gig_reminder')) {
+      const gigId = data?.bookingId || data?.gigId || '';
+      const GIG_DISMISS_PREFIX = 'gig_reminder_dismissed_';
+      if (gigId) {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(GIG_DISMISS_PREFIX) && k.includes(String(gigId))) {
+              const val = localStorage.getItem(k);
+              if (val) {
+                const ts = new Date(val).getTime();
+                if (!isNaN(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000) {
+                  return false;
+                }
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      }
+    }
     return true;
   }
 
-  // 3. New Order Ring Event (for Restaurant & User)
-  if (
+  // 4. Restaurant / User New Order Ring Event (when a customer places a new order)
+  const isRestaurantNewOrder =
     type.includes('new_order') ||
     type.includes('order_created') ||
     type.includes('place_order') ||
     title.includes('new order') ||
-    title.includes('order received')
-  ) {
-    return true;
-  }
+    title.includes('order received');
 
-  // 4. Delivery Partner Ring Event (when a new order is offered/assigned to driver)
-  const moduleName = normalizeModuleFromPath();
-  if (moduleName === 'delivery') {
-    if (
-      type.includes('order_assigned') ||
-      type.includes('order_assign') ||
-      type.includes('delivery_assigned') ||
-      type.includes('ring') ||
-      type.includes('gig_reminder') ||
-      title.includes('assigned')
-    ) {
-      // Extra guard for gig_reminder: check if partner already dismissed it
-      if (type.includes('gig_reminder')) {
-        const gigId = data?.bookingId || data?.gigId || '';
-        const GIG_DISMISS_PREFIX = 'gig_reminder_dismissed_';
-        if (gigId) {
-          try {
-            // Try all localStorage keys for this gigId
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k && k.startsWith(GIG_DISMISS_PREFIX) && k.includes(String(gigId))) {
-                const val = localStorage.getItem(k);
-                if (val) {
-                  const ts = new Date(val).getTime();
-                  if (!isNaN(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000) {
-                    // Dismissed within 24h — block the ring
-                    return false;
-                  }
-                }
-              }
-            }
-          } catch { /* ignore */ }
-        }
-      }
-      return true;
+  if (isRestaurantNewOrder) {
+    // If we're currently in the delivery module, restaurant new order should NOT ring the driver!
+    if (moduleName === 'delivery') {
+      return false;
     }
+    return true;
   }
 
   return false;

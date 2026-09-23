@@ -1,5 +1,5 @@
-import { AppShellSkeleton } from "@food/components/ui/loading-skeletons"
+import SmartRouteSkeleton from '@/shared/components/skeletons/SmartRouteSkeleton';
 
 export default function Loader() {
-  return <AppShellSkeleton />
+  return <SmartRouteSkeleton />;
 }

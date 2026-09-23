@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
 import { toast } from 'sonner'
-import { AppShellSkeleton } from '@food/components/ui/loading-skeletons'
+import SmartRouteSkeleton from '../shared/components/skeletons/SmartRouteSkeleton'
 import {
   NATIVE_LAST_ROUTE_KEY,
   syncActiveModule,
@@ -13,7 +13,7 @@ const FoodApp = lazyWithRetry(() => import('../modules/Food/routes'))
 const TaxiApp = lazyWithRetry(() => import('../modules/Taxi/TaxiApp'))
 const AuthApp = lazyWithRetry(() => import('../modules/auth/routes'))
 
-const PageLoader = () => <AppShellSkeleton />
+const PageLoader = () => <SmartRouteSkeleton />
 
 const FoodAppWrapper = () => {
   const location = useLocation()

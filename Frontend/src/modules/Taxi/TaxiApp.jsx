@@ -19,6 +19,7 @@ import { installBrowserFcmRegistration } from './shared/push/browserFcmRegistrat
 import { installNativeFcmBridge } from './shared/push/nativeFcmBridge';
 import { POOLING_ENABLED, RENTAL_ENABLED } from './shared/featureFlags';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
+import { TaxiAppSkeleton } from '@/shared/components/skeletons/ModuleSkeletons';
 import './App.css';
 
 
@@ -708,12 +709,7 @@ function TaxiApp() {
         <UserAccountInvalidationListener />
         <UserUpcomingRideReminderBootstrap />
         <MainLayout>
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center min-h-screen bg-white">
-                <span className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-              </div>
-            }>
+          <Suspense fallback={<TaxiAppSkeleton />}>
             <Toaster position="top-right" closeButton />
             <Routes>
               {/* Static / Public routes */}

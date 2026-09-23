@@ -20,6 +20,36 @@ import {
 
 import { FoodZone } from '../../admin/models/zone.model.js';
 
+/**
+ * Schedule a dispatch retry job — uses BullMQ queue if available,
+ * falls back to in-process setTimeout when Redis/BullMQ is disabled.
+ * This ensures dispatch retries ALWAYS fire even without Redis.
+ */
+async function scheduleDispatchRetry(data, delayMs = 30000) {
+  try {
+    const job = await addOrderJob(data, { delay: delayMs });
+    if (job) return; // BullMQ handled it
+  } catch (queueErr) {
+    logger.warn(`[Dispatch] BullMQ job failed, using setTimeout fallback: ${queueErr?.message}`);
+  }
+
+  // Fallback: in-process timer (no Redis required)
+  logger.info(`[Dispatch] Scheduling in-process dispatch retry in ${delayMs}ms for order ${data?.orderMongoId || data?.orderId}`);
+  setTimeout(async () => {
+    try {
+      const { tryAutoAssign, processDispatchTimeout } = await import('./order.service.js');
+      if (data.action === 'DISPATCH_TIMEOUT_CHECK' && data.partnerId) {
+        await processDispatchTimeout(data.orderMongoId || data.orderId, data.partnerId);
+      } else {
+        await tryAutoAssign(data.orderMongoId || data.orderId, { attempt: data.attempt || 1 });
+      }
+    } catch (err) {
+      logger.warn(`[Dispatch] In-process retry failed: ${err?.message}`);
+    }
+  }, delayMs);
+}
+
+
 function isPointInPolygon(lat, lng, polygon = []) {
   if (!Array.isArray(polygon) || polygon.length < 3) return false;
   let inside = false;
@@ -427,12 +457,12 @@ export async function tryAutoAssign(orderId, options = {}) {
       }
       if (targets.length === 0) {
         logger.info(`tryAutoAssign: No available online partners for order ${order._id}. Retrying in 15s...`);
-        await addOrderJob({
+        await scheduleDispatchRetry({
           action: 'DISPATCH_TIMEOUT_CHECK',
           orderMongoId: order._id.toString(),
           orderId: order._id.toString(),
           attempt: attempt + 1
-        }, { delay: 15000 });
+        }, 15000);
         return order;
       }
       // Pick closest available partner
@@ -480,13 +510,13 @@ export async function tryAutoAssign(orderId, options = {}) {
     await order.save();
 
     // Schedule 30-second timeout check for this driver. If they don't accept in 30s, dispatch to the next closest driver!
-    await addOrderJob({
+    await scheduleDispatchRetry({
       action: 'DISPATCH_TIMEOUT_CHECK',
       orderMongoId: order._id.toString(),
       orderId: order._id.toString(),
       partnerId: targetPartner.partnerId.toString(),
       attempt: attempt + 1
-    }, { delay: 30000 });
+    }, 30000);
 
     return order;
   } finally {
