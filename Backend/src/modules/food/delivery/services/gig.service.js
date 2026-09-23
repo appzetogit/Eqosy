@@ -7,6 +7,16 @@ import { getIO, rooms } from '../../../../config/socket.js';
 import { logger } from '../../../../utils/logger.js';
 import { notifyOwnerSafely } from '../../../../core/notifications/firebase.service.js';
 
+/**
+ * Server-side gig reminder dedup tracker.
+ * Key: `${bookingId}_${partnerId}` → Value: timestamp when last reminded
+ * Prevents the SAME partner from being rung more than once per gig per session.
+ * Auto-expires after 6 hours so legitimate re-sends (next day) still work.
+ */
+const gigReminderSentMap = new Map();
+const GIG_REMINDER_DEDUP_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+
 const parseDateTime = (dateStr, timeStr) => {
   // dateStr: YYYY-MM-DD, timeStr: HH:mm
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -218,9 +228,10 @@ const resolvePartnerAndIds = async (deliveryPartnerId) => {
   let partner = null;
   if (mongoose.Types.ObjectId.isValid(deliveryPartnerId)) {
     const objId = new mongoose.Types.ObjectId(deliveryPartnerId);
-    partner = await FoodDeliveryPartner.findOne({
-      $or: [{ _id: objId }, { userId: objId }]
-    });
+    partner = await FoodDeliveryPartner.findById(objId).lean();
+    if (!partner) {
+      partner = await FoodDeliveryPartner.findOne({ userId: objId }).lean();
+    }
   }
   const partnerIds = partner
     ? [partner._id, partner._id.toString(), partner.userId, partner.userId?.toString()].filter(Boolean)
@@ -362,17 +373,25 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
     throw new ValidationError('This gig is already FULL');
   }
 
-  // Overlap Check: Find all active bookings of this partner and check for overlapping time range
+  // Overlap Check: Find all active 'booked' bookings of this partner and check for overlapping time range
   const activeBookings = await FoodGigBooking.find({
     deliveryPartnerId: { $in: partnerIds },
-    status: { $in: ['booked', 'completed'] }
-  }).populate('gigId').lean();
+    status: 'booked'
+  }).populate({
+    path: 'gigId',
+    select: 'startDateTime endDateTime startTime endTime date status'
+  }).lean();
 
   const targetStart = new Date(gig.startDateTime).getTime();
   const targetEnd = new Date(gig.endDateTime).getTime();
 
   for (const booking of activeBookings) {
     if (!booking.gigId || booking.gigId.status !== 'active') continue;
+    // Skip past-date gigs — they don't block new bookings (daily re-booking is mandatory)
+    const bookingGigDate = booking.gigId.date || '';
+    const nowDateStr = new Date().toISOString().slice(0, 10);
+    if (bookingGigDate && bookingGigDate < nowDateStr) continue;
+
     const bStart = new Date(booking.gigId.startDateTime).getTime();
     const bEnd = new Date(booking.gigId.endDateTime).getTime();
 
@@ -567,23 +586,37 @@ export const getGigAttendanceStats = async () => {
 
 export const processNoShows = async () => {
   const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
 
-  // Find expired bookings that are still marked as 'booked'
+  // Find all bookings that are still 'booked' (not yet expired/cancelled)
   const expiredBookings = await FoodGigBooking.find({
     status: 'booked'
   }).populate('gigId');
 
   let updatedCount = 0;
   for (const b of expiredBookings) {
-    if (b.gigId && new Date(b.gigId.endDateTime) < now) {
+    if (!b.gigId) continue;
+
+    const gigDate = b.gigId.date || '';
+    const gigEndMs = new Date(b.gigId.endDateTime).getTime();
+
+    // Expire if:
+    //   (a) gig's endDateTime has already passed (gig ended today but time has elapsed)
+    //   (b) OR gig's date is strictly a PAST date (yesterday or older) — mandatory daily re-booking
+    const isPastDate = gigDate && gigDate < todayStr;
+    const isEndTimeReached = gigEndMs < now.getTime();
+
+    if (isPastDate || isEndTimeReached) {
       b.status = 'no_show';
       await b.save();
       updatedCount++;
+      logger.info(`[ProcessNoShows] Booking ${b._id} marked no_show (gigDate=${gigDate}, isPastDate=${isPastDate}, isEndTimeReached=${isEndTimeReached})`);
     }
   }
 
   return { processed: updatedCount };
 };
+
 
 export const checkAndAutoOfflineExpiredGigs = async () => {
   const now = new Date();
@@ -892,6 +925,34 @@ export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
   const gigTitle = gig?.title || 'Shift';
   const gigTime = gig?.startTime && gig?.endTime ? `${gig.startTime} - ${gig.endTime}` : '';
 
+  // ── Server-side dedup: one ring per partner per gig per session ──────────────────
+  const dedupKey = `${String(bookingId || bodyPartnerId)}_${String(targetPartnerId)}`;
+  const lastSentAt = gigReminderSentMap.get(dedupKey) || 0;
+  const now = Date.now();
+
+  if (now - lastSentAt < GIG_REMINDER_DEDUP_MS) {
+    const minutesAgo = Math.floor((now - lastSentAt) / 60000);
+    logger.info(`[GigReminder] Duplicate reminder blocked for partner ${partnerName} (last sent ${minutesAgo}m ago). Key: ${dedupKey}`);
+    return {
+      success: false,
+      alreadySent: true,
+      message: `Reminder already sent to ${partnerName} ${minutesAgo} minute(s) ago. Duplicate blocked.`,
+      partnerName,
+      partnerId: targetPartnerId
+    };
+  }
+
+  // Mark as sent BEFORE dispatching to prevent race conditions
+  gigReminderSentMap.set(dedupKey, now);
+
+  // Purge expired entries from the map to prevent memory leaks
+  for (const [key, ts] of gigReminderSentMap.entries()) {
+    if (now - ts > GIG_REMINDER_DEDUP_MS) {
+      gigReminderSentMap.delete(key);
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const notifTitle = `🔔 Shift Reminder: ${gigTitle}`;
   const notifBody = customMessage?.trim() || `Hi ${partnerName}, reminder for your booked gig shift (${gigTime || 'today'}). Please log in and go online!`;
 
@@ -905,6 +966,7 @@ export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
         data: {
           type: 'gig_reminder',
           bookingId: String(bookingId || ''),
+          gigId: String(gig?._id || bookingId || ''),
           link: '/food/delivery',
           targetUrl: '/food/delivery'
         }
@@ -914,7 +976,7 @@ export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
     logger.warn(`FCM push for gig reminder failed: ${pushErr?.message || pushErr}`);
   }
 
-  // 2. Realtime Socket Notification
+  // 2. Realtime Socket Notification (includes bookingId + gigId for frontend dismiss logic)
   try {
     const io = getIO();
     if (io) {
@@ -923,7 +985,12 @@ export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
         title: notifTitle,
         message: notifBody,
         type: 'gig_reminder',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        data: {
+          type: 'gig_reminder',
+          bookingId: String(bookingId || ''),
+          gigId: String(gig?._id || bookingId || '')
+        }
       });
     }
   } catch (socketErr) {
@@ -937,3 +1004,4 @@ export const remindGigBookingForAdmin = async (bookingId, payload = {}) => {
     partnerId: targetPartnerId
   };
 };
+

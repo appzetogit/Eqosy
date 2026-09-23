@@ -301,6 +301,29 @@ export function isPushRingEvent(payload = {}) {
       type.includes('gig_reminder') ||
       title.includes('assigned')
     ) {
+      // Extra guard for gig_reminder: check if partner already dismissed it
+      if (type.includes('gig_reminder')) {
+        const gigId = data?.bookingId || data?.gigId || '';
+        const GIG_DISMISS_PREFIX = 'gig_reminder_dismissed_';
+        if (gigId) {
+          try {
+            // Try all localStorage keys for this gigId
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith(GIG_DISMISS_PREFIX) && k.includes(String(gigId))) {
+                const val = localStorage.getItem(k);
+                if (val) {
+                  const ts = new Date(val).getTime();
+                  if (!isNaN(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000) {
+                    // Dismissed within 24h — block the ring
+                    return false;
+                  }
+                }
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
       return true;
     }
   }

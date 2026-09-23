@@ -57,6 +57,79 @@ const safeReadJson = (key) => {
   }
 };
 
+// ─── Gig Reminder Dismiss Logic ───────────────────────────────────────────────
+// Key format: gig_reminder_dismissed_{gigId}_{partnerId}
+// Value: ISO timestamp when dismissed
+// Once dismissed → ring never fires again for same gig+partner (until key expires)
+
+const GIG_REMINDER_DISMISS_PREFIX = 'gig_reminder_dismissed_';
+
+/**
+ * Returns the localStorage key for a gig reminder dismiss record.
+ */
+const getGigReminderDismissKey = (gigId, partnerId) => {
+  if (!gigId) return null;
+  return `${GIG_REMINDER_DISMISS_PREFIX}${String(gigId)}_${String(partnerId || 'anon')}`;
+};
+
+/**
+ * Check if this gig reminder has been dismissed by this partner.
+ * Also purges expired (>24h old) dismiss records to prevent localStorage bloat.
+ */
+const isGigReminderDismissed = (gigId, partnerId) => {
+  try {
+    const key = getGigReminderDismissKey(gigId, partnerId);
+    if (!key) return false;
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const dismissedAt = new Date(raw).getTime();
+    if (isNaN(dismissedAt)) {
+      localStorage.removeItem(key);
+      return false;
+    }
+    // Auto-expire: dismiss record valid for 24 hours (covers the gig day)
+    const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
+    if (Date.now() - dismissedAt > TWENTY_FOUR_H) {
+      localStorage.removeItem(key);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Mark a gig reminder as dismissed. Ring will never fire again for this gig+partner.
+ */
+const markGigReminderDismissed = (gigId, partnerId) => {
+  try {
+    const key = getGigReminderDismissKey(gigId, partnerId);
+    if (!key) return;
+    localStorage.setItem(key, new Date().toISOString());
+    // Also purge any old dismiss keys (keep localStorage clean)
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(GIG_REMINDER_DISMISS_PREFIX) && k !== key) {
+          const val = localStorage.getItem(k);
+          if (val) {
+            const ts = new Date(val).getTime();
+            if (!isNaN(ts) && Date.now() - ts > 24 * 60 * 60 * 1000) {
+              keysToRemove.push(k);
+            }
+          }
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore cleanup errors */ }
+  } catch {
+    // ignore
+  }
+};
+// ──────────────────────────────────────────────────────────────────────────────
+
 const decodeJwtPayload = (token) => {
   try {
     const parts = String(token || '').split('.');
@@ -358,7 +431,7 @@ export const useDeliveryNotifications = () => {
         // Initialize audio if not exists
         audioRef.current = new Audio();
         audioRef.current.src = soundFile;
-        audioRef.current.preload = 'auto';
+        audioRef.current.preload = 'metadata';
         audioRef.current.volume = 0.9;
         audioRef.current.load();
         debugLog('?? Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Eqosy Tone', 'Source:', soundFile);
@@ -645,7 +718,7 @@ export const useDeliveryNotifications = () => {
 
       if (!audioRef.current) {
         audioRef.current = new Audio(soundFile);
-        audioRef.current.preload = 'auto';
+        audioRef.current.preload = 'metadata';
         audioRef.current.volume = 0.7;
       }
 
@@ -710,7 +783,7 @@ export const useDeliveryNotifications = () => {
 
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
-      audioRef.current.preload = 'auto';
+      audioRef.current.preload = 'metadata';
       audioRef.current.volume = 0.7;
       debugLog('?? Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Eqosy Tone');
     } else {
@@ -1129,6 +1202,39 @@ export const useDeliveryNotifications = () => {
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('Admin broadcast received via socket', payload);
       dispatchNotificationInboxRefresh();
+
+      // ── Gig Reminder special handling ──────────────────────────────────────
+      // If this is a gig_reminder notification, check if the partner already
+      // dismissed it. If dismissed → silently drop the ring. If not dismissed
+      // → dispatch a custom event so the UI can show a Dismiss/Stop button.
+      const notifType = String(payload?.type || payload?.data?.type || '').toLowerCase();
+      if (notifType.includes('gig_reminder')) {
+        const gigId = payload?.data?.bookingId || payload?.data?.gigId || payload?.gigId || '';
+        const currentPartnerId = String(deliveryPartnerId || '').trim();
+
+        if (gigId && isGigReminderDismissed(gigId, currentPartnerId)) {
+          // Already dismissed by this partner — drop silently, no ring
+          debugLog('[GigReminder] Already dismissed by partner — skipping ring', { gigId, currentPartnerId });
+          return;
+        }
+
+        // Not yet dismissed — dispatch event so UI can show Dismiss button
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gigReminderReceived', {
+            detail: {
+              gigId,
+              partnerId: currentPartnerId,
+              title: payload?.title || payload?.data?.title || '🔔 Shift Reminder',
+              message: payload?.message || payload?.data?.body || 'Aapki gig shift shuru hone wali hai!',
+              onDismiss: () => {
+                markGigReminderDismissed(gigId, currentPartnerId);
+                debugLog('[GigReminder] Partner dismissed reminder — future rings blocked', { gigId, currentPartnerId });
+              }
+            }
+          }));
+        }
+      }
+      // ───────────────────────────────────────────────────────────────────────
     });
 
     // Auth change/refresh listeners

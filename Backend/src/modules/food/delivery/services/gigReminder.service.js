@@ -21,8 +21,11 @@ export const checkAndSendGigReminders = async () => {
 
     const now = new Date();
     const nowMs = now.getTime();
+    const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD (today only)
 
-    // Fetch active bookings with status 'booked'
+    // Fetch ONLY active bookings for TODAY's gigs.
+    // Bookings from previous days are NEVER processed here — daily re-booking is mandatory.
+    // We join via gigId and filter by gig.date === todayStr inside the loop.
     const activeBookings = await FoodGigBooking.find({
       status: 'booked'
     })
@@ -36,6 +39,11 @@ export const checkAndSendGigReminders = async () => {
       const partner = booking.deliveryPartnerId;
 
       if (!gig || gig.status !== 'active' || !partner) continue;
+
+      // ✅ STRICT: Only process bookings for TODAY's gig.
+      // If partner booked yesterday's gig, it should NOT carry over to today.
+      // processNoShows() will mark those old bookings as no_show.
+      if (gig.date && gig.date !== todayStr) continue;
 
       const startMs = new Date(gig.startDateTime).getTime();
       const endMs = new Date(gig.endDateTime).getTime();

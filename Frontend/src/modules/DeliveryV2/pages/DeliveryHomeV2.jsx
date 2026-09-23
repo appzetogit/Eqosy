@@ -1975,9 +1975,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       <BookGigModal
         isOpen={showBookGigModal}
         onClose={() => setShowBookGigModal(false)}
-        onGigBooked={() => {
+        onGigBooked={(bookedData) => {
           setShowBookGigModal(false);
-          setShowSelfieVerificationModal(true);
+          const gig = bookedData?.gig || bookedData;
+          const nowMs = Date.now();
+          const startMs = gig?.startDateTime ? new Date(gig.startDateTime).getTime() : 0;
+          const endMs = gig?.endDateTime ? new Date(gig.endDateTime).getTime() : 0;
+          const THIRTY_MIN_MS = 30 * 60 * 1000;
+          const isImminentOrActive = startMs && endMs && (nowMs >= startMs - THIRTY_MIN_MS) && (nowMs <= endMs);
+
+          if (isImminentOrActive) {
+            setShowSelfieVerificationModal(true);
+          } else {
+            const timeRangeStr = gig?.startTime ? ` (${gig.startTime} - ${gig.endTime})` : '';
+            toast.success(`Gig shift booked successfully${timeRangeStr}! Aap shift start hone ke 30 min pehle online aa sakte hain.`, { duration: 5000 });
+          }
         }}
       />
 
