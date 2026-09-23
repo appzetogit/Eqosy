@@ -32,7 +32,7 @@ import {
   Bell, HelpCircle, AlertTriangle,
   Wallet, History, User as UserIcon, LayoutGrid,
   Plus, Minus, Navigation2, Navigation, Target, Play, CheckCircle2, Clock, ChevronDown, Phone,
-  Contact, Package, Camera, MessageCircle, Compass, RefreshCw, MapPin
+  Contact, Package, Camera, MessageCircle, Compass, RefreshCw, MapPin, Info, Calendar, X
 } from 'lucide-react';
 
 import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
@@ -269,8 +269,22 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [selfieError, setSelfieError] = useState('');
   const [onlineSelfie, setOnlineSelfie] = useState(null);
   const [showEmergencyOfflineModal, setShowEmergencyOfflineModal] = useState(false);
+  const [showOfflineReasonModal, setShowOfflineReasonModal] = useState(false);
+  const [activeGigState, setActiveGigState] = useState(null);
   const [emergencyOfflineReason, setEmergencyOfflineReason] = useState('');
   const [isSubmittingEmergencyOffline, setIsSubmittingEmergencyOffline] = useState(false);
+
+  // Fetch active gig status whenever offline reason modal is opened for dynamic diagnosis
+  useEffect(() => {
+    if (showOfflineReasonModal) {
+      deliveryAPI.getActiveGig()
+        .then((res) => {
+          const gig = res?.data?.data?.activeGig || res?.data?.activeGig || null;
+          setActiveGigState(gig);
+        })
+        .catch(() => setActiveGigState(null));
+    }
+  }, [showOfflineReasonModal]);
   const [isTogglingDuty, setIsTogglingDuty] = useState(false);
   const [emergencyNumbers, setEmergencyNumbers] = useState({
     medicalEmergency: "",
@@ -1521,22 +1535,51 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white/5 rounded-2xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm backdrop-blur-md">
+                  <div
+                    onClick={() => !isOnline && setShowOfflineReasonModal(true)}
+                    className={`rounded-2xl p-3.5 flex items-center justify-between border shadow-sm backdrop-blur-md transition-all ${!isOnline ? 'bg-white/10 hover:bg-white/15 border-white/20 cursor-pointer active:scale-[0.99]' : 'bg-white/5 border-white/5'}`}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-green-500/10 rounded-full flex items-center justify-center">
-                        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isOnline ? 'bg-green-500/10' : 'bg-red-500/20 border border-red-500/40'}`}>
+                        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`} />
                       </div>
                       <div>
-                        <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-1">{isOnline ? 'System Online' : 'System Offline'}</h3>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase tracking-tight">{isOnline ? 'Waiting for order requests' : 'Book a shift to start working'}</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-0.5">{isOnline ? 'System Online' : 'System Offline'}</h3>
+                          {!isOnline && (
+                            <span className="bg-amber-500/30 text-amber-200 text-[8px] font-black px-1.5 py-0.5 rounded-md border border-amber-400/40 uppercase tracking-wider">
+                              Why Offline? Click
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-300 text-[10px] font-bold tracking-tight">
+                          {isOnline ? 'Waiting for order requests' : 'Tap to see reasons why you are offline & fix'}
+                        </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setShowBookGigModal(true)}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all shadow-lg active:scale-95 shrink-0 border border-emerald-400/30"
-                    >
-                      Book Gig
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isOnline && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowOfflineReasonModal(true);
+                          }}
+                          className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all shadow-lg active:scale-95 shrink-0 border border-amber-400/30 flex items-center gap-1"
+                        >
+                          <Info className="w-3.5 h-3.5" />
+                          Reasons
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowBookGigModal(true);
+                        }}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all shadow-lg active:scale-95 shrink-0 border border-emerald-400/30"
+                      >
+                        Book Gig
+                      </button>
+                    </div>
                   </div>
                 )}
               </motion.div>
@@ -2082,6 +2125,153 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Offline Reason Diagnostic Modal */}
+      <AnimatePresence>
+        {showOfflineReasonModal && (
+          <div className="fixed inset-0 z-[650] flex items-end justify-center p-0 md:p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setShowOfflineReasonModal(false)}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="relative w-full max-w-md bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] p-6 shadow-2xl z-10 border border-gray-100 max-h-[90vh] overflow-y-auto no-scrollbar"
+            >
+              <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
+
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-gray-900 text-base leading-tight">Why Are You Offline?</h3>
+                    <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Status Diagnostics & Fixes</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowOfflineReasonModal(false)}
+                  className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                {/* 1. Gig Shift Check */}
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-gray-700 tracking-wider flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-emerald-600" /> 1. Gig Shift Requirement
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${activeGigState ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {activeGigState ? 'Shift Booked ✓' : 'No Active Shift ✗'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-snug">
+                    {activeGigState
+                      ? 'You have an active shift booked for this time slot.'
+                      : 'You do not have an active gig shift booked right now. An active shift is required to go online.'}
+                  </p>
+                  {!activeGigState && (
+                    <button
+                      onClick={() => {
+                        setShowOfflineReasonModal(false);
+                        setShowBookGigModal(true);
+                      }}
+                      className="mt-1 w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                    >
+                      📅 Book Gig Shift Now
+                    </button>
+                  )}
+                </div>
+
+                {/* 2. GPS Location Check */}
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-gray-700 tracking-wider flex items-center gap-2">
+                      <Navigation2 className="w-4 h-4 text-blue-600" /> 2. Device Location / GPS
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${!gpsErrorMessage ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {!gpsErrorMessage ? 'GPS Active ✓' : 'GPS Error ✗'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-snug">
+                    {!gpsErrorMessage
+                      ? 'GPS location is available on your device.'
+                      : gpsErrorMessage || 'GPS location is turned OFF or unavailable.'}
+                  </p>
+                  {gpsErrorMessage && (
+                    <button
+                      onClick={() => {
+                        setShowOfflineReasonModal(false);
+                        setShowGpsModal(true);
+                      }}
+                      className="mt-1 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                    >
+                      📍 Turn ON Device GPS
+                    </button>
+                  )}
+                </div>
+
+                {/* 3. Daily Selfie Check */}
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase text-gray-700 tracking-wider flex items-center gap-2">
+                      <UserIcon className="w-4 h-4 text-purple-600" /> 3. Today's Selfie Verification
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${hasSelfieForToday(onlineSelfie) ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {hasSelfieForToday(onlineSelfie) ? 'Verified ✓' : 'Pending ⚠️'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-snug">
+                    {hasSelfieForToday(onlineSelfie)
+                      ? 'Today selfie verification is complete.'
+                      : 'Daily selfie verification is required before going online today.'}
+                  </p>
+                  {!hasSelfieForToday(onlineSelfie) && (
+                    <button
+                      onClick={() => {
+                        setShowOfflineReasonModal(false);
+                        setShowSelfieVerificationModal(true);
+                      }}
+                      className="mt-1 w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                    >
+                      📸 Complete Selfie Verification
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="flex gap-3 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => setShowOfflineReasonModal(false)}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-2xl text-xs font-bold text-gray-700 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowOfflineReasonModal(false);
+                    await handleDutyToggle();
+                  }}
+                  className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  ⚡ Try Going Online
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

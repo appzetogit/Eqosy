@@ -722,9 +722,49 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
           {/* Table */}
           <div className="overflow-x-auto">
             {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                <span className="ml-3 text-sm text-slate-600">Loading delivery partners...</span>
+              <div className="w-full animate-pulse">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-6" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-24" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-16" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-24" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-24" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-28" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                      <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-16" /></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <tr key={idx}>
+                        <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-4" /></td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-slate-200 shrink-0" />
+                            <div className="space-y-1.5">
+                              <div className="h-3.5 bg-slate-200 rounded w-28" />
+                              <div className="h-2.5 bg-slate-150 rounded w-20" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-24" /></td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-16" /></td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-12" /></td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-16" /></td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-16" /></td>
+                        <td className="px-6 py-4"><div className="h-3.5 bg-slate-200 rounded w-20" /></td>
+                        <td className="px-6 py-4"><div className="h-5 bg-slate-200 rounded-full w-20" /></td>
+                        <td className="px-6 py-4"><div className="h-8 bg-slate-200 rounded-xl w-24" /></td>
+                        <td className="px-6 py-4"><div className="h-8 bg-slate-200 rounded-lg w-16" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <table className="w-full">

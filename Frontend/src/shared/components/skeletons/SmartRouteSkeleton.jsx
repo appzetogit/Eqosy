@@ -12,8 +12,8 @@ import {
 export function getSkeletonForPath(pathStr = '') {
   const p = String(pathStr || '').toLowerCase();
 
-  if (p.includes('/taxi')) {
-    return <TaxiAppSkeleton />;
+  if (p.includes('/admin')) {
+    return <AdminAppSkeleton />;
   }
   if (p.includes('/delivery') || p.includes('/food/delivery')) {
     return <DeliveryAppSkeleton />;
@@ -21,8 +21,8 @@ export function getSkeletonForPath(pathStr = '') {
   if (p.includes('/restaurant') || p.includes('/food/restaurant')) {
     return <RestaurantAppSkeleton />;
   }
-  if (p.includes('/admin')) {
-    return <AdminAppSkeleton />;
+  if (p.includes('/taxi')) {
+    return <TaxiAppSkeleton />;
   }
   if (p.includes('/login') || p.includes('/auth')) {
     return <AuthAppSkeleton />;

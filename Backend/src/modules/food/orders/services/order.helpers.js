@@ -403,3 +403,59 @@ export function isStatusAdvance(current, next) {
 
   return nextPrio > currentPrio;
 }
+
+/**
+ * Validates whether an order contains all required delivery information before dispatching to delivery partners.
+ */
+export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
+  const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc || {};
+  const restaurant = restaurantDoc || order?.restaurantId || null;
+  const missingFields = [];
+
+  // 1. Verify Restaurant Info
+  const restName = restaurant?.restaurantName || restaurant?.name || order?.restaurantName;
+  if (!restName) {
+    missingFields.push('restaurantName');
+  }
+
+  const restLoc = restaurant?.location || order?.restaurantLocation || {};
+  const hasRestCoords = Array.isArray(restLoc.coordinates) && restLoc.coordinates.length >= 2 &&
+    Number.isFinite(Number(restLoc.coordinates[0])) && Number.isFinite(Number(restLoc.coordinates[1]));
+  const hasRestAddress = Boolean(restLoc.address || restLoc.formattedAddress || restaurant?.addressLine1 || restaurant?.area || restaurant?.city || order?.restaurantAddress);
+
+  if (!hasRestCoords && !hasRestAddress) {
+    missingFields.push('restaurantLocation');
+  }
+
+  // 2. Verify Delivery Address & Location
+  const delAddr = order?.deliveryAddress || {};
+  const hasAddrString = Boolean(
+    delAddr.street || delAddr.additionalDetails || delAddr.city || delAddr.formattedAddress || delAddr.addressLine1 || order?.customerAddress || order?.address
+  );
+  const delCoords = delAddr.location?.coordinates || [];
+  const hasDelCoords = Array.isArray(delCoords) && delCoords.length >= 2 &&
+    Number.isFinite(Number(delCoords[0])) && Number.isFinite(Number(delCoords[1]));
+
+  if (!hasAddrString && !hasDelCoords) {
+    missingFields.push('deliveryAddress');
+  }
+
+  // 3. Verify Customer Phone / Contact Details
+  const customerPhone = String(
+    order?.customerPhone || delAddr.phone || delAddr.contactPhone || order?.userId?.phone || ''
+  ).trim();
+
+  if (!customerPhone) {
+    missingFields.push('customerPhone');
+  }
+
+  const isValid = missingFields.length === 0;
+  const reason = isValid ? '' : `Missing required fields: ${missingFields.join(', ')}`;
+
+  return {
+    isValid,
+    missingFields,
+    reason,
+  };
+}
+

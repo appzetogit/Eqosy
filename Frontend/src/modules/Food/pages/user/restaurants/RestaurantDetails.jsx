@@ -271,10 +271,12 @@ function RestaurantDetailsContent() {
 
     const fetchRestaurant = async () => {
       try {
-
         const cleanSlug = String(slug || '').trim()
         const normalizedTargetSlug = cleanSlug.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
         const encodedSlug = encodeURIComponent(cleanSlug)
+
+        // Pre-fetch menu in parallel with restaurant details to eliminate sequential loading delay
+        const initialMenuPromise = restaurantAPI.getMenuByRestaurantId(encodedSlug).catch(() => null)
 
         debugLog('Fetching restaurant with slug:', cleanSlug, 'normalized:', normalizedTargetSlug)
         let response = null
@@ -320,7 +322,7 @@ function RestaurantDetailsContent() {
 
               for (const searchParams of searchVariants) {
                 try {
-                  const searchResponse = await restaurantAPI.getRestaurants(searchParams, { noCache: true })
+                  const searchResponse = await restaurantAPI.getRestaurants(searchParams)
                   const restaurants = searchResponse?.data?.data?.restaurants || searchResponse?.data?.data || []
 
                   // Try to find by normalized slug match or name match
@@ -651,7 +653,7 @@ function RestaurantDetailsContent() {
           try {
             const outletRestaurantId = transformedRestaurant.mongoId || actualRestaurant?._id || apiRestaurant?._id
             if (outletRestaurantId) {
-              const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(outletRestaurantId, { noCache: true })
+              const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(outletRestaurantId)
               const outletTimingsData = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings
               if (outletTimingsData) {
                 resolvedOutletTimings = outletTimingsData
@@ -724,82 +726,29 @@ function RestaurantDetailsContent() {
 
           setLoadingMenuItems(true)
           if (normalizedLookupIds.length > 0) {
-            let hasPreviousOrderForRestaurant = false
-            if (isModuleAuthenticated('user')) {
-              try {
-                const normalize = (value) => (value ? String(value).trim().toLowerCase() : "")
-                const targetRestaurantName = normalize(transformedRestaurant.name)
-                const targetRestaurantIds = new Set(
-                  [
-                    ...normalizedLookupIds,
-                    transformedRestaurant.id,
-                    transformedRestaurant.restaurantId,
-                    apiRestaurant?.restaurantId,
-                    apiRestaurant?._id,
-                    actualRestaurant?.restaurantId,
-                    actualRestaurant?._id,
-                  ].map(normalize).filter(Boolean)
-                )
-
-                // Single lightweight page — only used to decide "Recommended for you".
-                const firstResponse = await orderAPI.getOrders({ limit: 30, page: 1 })
-                let allOrders = []
-
-                if (firstResponse?.data?.success && firstResponse?.data?.data?.orders) {
-                  allOrders = firstResponse.data.data.orders || []
-                } else if (firstResponse?.data?.orders) {
-                  allOrders = firstResponse.data.orders || []
-                } else if (Array.isArray(firstResponse?.data?.data)) {
-                  allOrders = firstResponse.data.data || []
-                }
-
-                hasPreviousOrderForRestaurant = allOrders.some((order) => {
-                  const orderRestaurantField = order?.restaurantId
-                  const candidateIds = [
-                    order?.restaurantId,
-                    orderRestaurantField?._id,
-                    orderRestaurantField?.id,
-                    orderRestaurantField?.restaurantId,
-                    order?.restaurant,
-                    order?.restaurant_id,
-                  ].map(normalize).filter(Boolean)
-
-                  if (candidateIds.some((id) => targetRestaurantIds.has(id))) {
-                    return true
-                  }
-
-                  const candidateNames = [
-                    order?.restaurantName,
-                    orderRestaurantField?.name,
-                    order?.restaurant?.name,
-                  ].map(normalize).filter(Boolean)
-
-                  return !!targetRestaurantName && candidateNames.includes(targetRestaurantName)
-                })
-              } catch (orderCheckError) {
-                debugWarn("Could not verify previous orders for recommendation section:", orderCheckError)
-              }
-            }
-
             try {
               debugLog('? Fetching menu for restaurant ID:', restaurantIdForMenu)
-              let menuResponse = null
-              let resolvedMenuLookupId = null
-              for (const lookupId of normalizedLookupIds) {
-                try {
-                  debugLog('? Fetching menu for restaurant lookup ID:', lookupId)
-                  const response = await restaurantAPI.getMenuByRestaurantId(lookupId, { noCache: true })
-                  if (response?.data?.success) {
-                    menuResponse = response
-                    resolvedMenuLookupId = lookupId
-                    break
-                  }
-                } catch (lookupError) {
-                  if (lookupError?.response?.status !== 404) {
-                    throw lookupError
+              let menuResponse = await initialMenuPromise
+              let resolvedMenuLookupId = encodedSlug
+
+              if (!menuResponse || !menuResponse.data?.success) {
+                for (const lookupId of normalizedLookupIds) {
+                  try {
+                    debugLog('? Fetching menu for restaurant lookup ID:', lookupId)
+                    const response = await restaurantAPI.getMenuByRestaurantId(lookupId)
+                    if (response?.data?.success) {
+                      menuResponse = response
+                      resolvedMenuLookupId = lookupId
+                      break
+                    }
+                  } catch (lookupError) {
+                    if (lookupError?.response?.status !== 404) {
+                      throw lookupError
+                    }
                   }
                 }
               }
+
               if (!menuResponse) {
                 throw Object.assign(new Error('Menu not found'), { response: { status: 404 } })
               }

@@ -210,9 +210,33 @@ export default function DeliveryWithdrawal() {
           </div>
 
           {loading ? (
-            <div className="py-20 text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-4" />
-              <p className="text-slate-600">Loading withdrawal requests…</p>
+            <div className="w-full animate-pulse overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-6" /></th>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-28" /></th>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-16" /></th>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-24" /></th>
+                    <th className="px-6 py-4 text-left"><div className="h-3 bg-slate-200 rounded w-20" /></th>
+                    <th className="px-6 py-4 text-center"><div className="h-3 bg-slate-200 rounded w-16 mx-auto" /></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-4" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-20" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-32" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-16" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-24" /></td>
+                      <td className="px-6 py-4"><div className="h-5 bg-slate-200 rounded-full w-20" /></td>
+                      <td className="px-6 py-4"><div className="h-8 bg-slate-200 rounded-lg w-20 mx-auto" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="overflow-x-auto">

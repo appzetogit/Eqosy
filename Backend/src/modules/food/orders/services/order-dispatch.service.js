@@ -16,6 +16,7 @@ import {
   notifyOwnerSafely,
   notifyOwnersSafely,
   notifyAdminsSafely,
+  validateOrderDeliveryInfo,
 } from './order.helpers.js';
 
 import { FoodZone } from '../../admin/models/zone.model.js';
@@ -106,26 +107,19 @@ async function listNearbyOnlineDeliveryPartners(
 
   allOnline = allOnline.filter(p => !p.status || p.status === 'approved' || p.status === 'pending');
 
-  // Filter out partners with no GPS or stale GPS (no location update in 10+ minutes)
-  const GPS_STALE_MS = 10 * 60 * 1000;
-  const nowMs = Date.now();
-  allOnline = allOnline.filter(p => {
-    if (p.lastLat == null || p.lastLng == null) return false; // No GPS data at all
-    if (p.lastLocationAt) {
-      const lastLocMs = new Date(p.lastLocationAt).getTime();
-      if (nowMs - lastLocMs > GPS_STALE_MS) return false; // GPS stale > 10 minutes
-    }
-    return true;
-  });
+  // Do NOT filter out online partners whose GPS location is off or stale —
+  // Requirement: immediate notifications and order requests MUST still be sent to online delivery partners even if location is OFF.
+  logger.info(`[DeliveryDispatch] Found ${allOnline.length} online partner(s) before location/gig filtering.`);
 
-  // Filter: Only dispatch to partners with a valid active gig booking for TODAY's time window.
-  // This prevents partners who only have GPS active (but no gig) from receiving orders.
+  // Filter: Only dispatch to partners with a valid active gig booking for TODAY's time window (if gig filter is active).
+  // This prevents partners who logged out or have no gig from receiving orders.
   if (allOnline.length > 0) {
     try {
       const { FoodGigBooking } = await import('../../delivery/models/foodGigBooking.model.js');
       const { FoodGig } = await import('../../delivery/models/foodGig.model.js');
       const THIRTY_MIN_MS = 30 * 60 * 1000;
       const now = new Date();
+      const nowMs = now.getTime();
       const todayStr = now.toISOString().slice(0, 10);
 
       const partnerObjectIds = allOnline
@@ -157,7 +151,6 @@ async function listNearbyOnlineDeliveryPartners(
 
       // Also allow partners who have an active order in progress (even if gig expired)
       const { FoodOrder } = await import('../models/order.model.js');
-      const partnerIdsArray = allOnline.map(p => String(p._id));
       const activeOrderDocs = await FoodOrder.find({
         'dispatch.deliveryPartnerId': { $in: partnerObjectIds },
         orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
@@ -166,23 +159,27 @@ async function listNearbyOnlineDeliveryPartners(
         partnersWithActiveGig.add(String(od.dispatch?.deliveryPartnerId));
       }
 
-      allOnline = allOnline.filter(p => partnersWithActiveGig.has(String(p._id)));
-      logger.info(`[DeliveryDispatch] Gig filter: ${allOnline.length} partner(s) have active gig today.`);
+      if (partnersWithActiveGig.size > 0) {
+        allOnline = allOnline.filter(p => partnersWithActiveGig.has(String(p._id)));
+      }
+      logger.info(`[DeliveryDispatch] Gig filter: ${allOnline.length} partner(s) available for order assignment.`);
     } catch (gigErr) {
       logger.warn(`[DeliveryDispatch] Gig validity check failed (skipping filter): ${gigErr.message}`);
     }
   }
 
-  // Helper: check if partner belongs to the restaurant's zone (via GPS polygon OR matching zoneId)
+  // Helper: check if partner belongs to the restaurant's zone (via matching zoneId, GPS polygon, or fallback)
   const isPartnerInTargetZone = (p) => {
     // Match by zoneId field on delivery partner profile
     if (targetZoneId && p.zoneId) {
       if (String(p.zoneId) === String(targetZoneId)) return true;
     }
-    // Match by GPS polygon check
+    // Match by GPS polygon check if coordinates are present
     if (hasActiveZones && p.lastLat != null && p.lastLng != null) {
       return isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
     }
+    // If no targetZoneId or partner has no specific zone, include partner
+    if (!targetZoneId || !p.zoneId) return true;
     return false;
   };
 
@@ -215,19 +212,19 @@ async function listNearbyOnlineDeliveryPartners(
     scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 999, status: p.status, isInZone: inZone });
   }
 
-  // STRICT ZONE FILTERING: Only pick partners who are in the restaurant's zone
+  // Zone filtering: pick partners in restaurant's zone first
   const zonePartners = scored.filter(p => p.isInZone);
 
   let picked;
   if (zonePartners.length > 0) {
-    // Sort zone partners by distance (closest first)
+    // Sort zone partners by distance (closest first, unknown distance 999 last)
     zonePartners.sort((a, b) => a.distanceKm - b.distanceKm);
     picked = zonePartners.slice(0, Math.max(1, limit));
     logger.info(`[DeliveryDispatch] Found ${zonePartners.length} delivery partner(s) in restaurant zone ${targetZoneId || 'unknown'}.`);
   } else {
-    // FALLBACK: No zone partners found — fall back to distance-based search
-    logger.info(`[DeliveryDispatch] No partners in restaurant zone ${targetZoneId || 'unknown'}. Falling back to distance-based search (maxKm=${maxKm}).`);
-    const distancePartners = scored.filter(p => p.distanceKm <= maxKm);
+    // FALLBACK: No zone partners found — fall back to distance-based or available search
+    logger.info(`[DeliveryDispatch] No partners in restaurant zone ${targetZoneId || 'unknown'}. Falling back to general online partners.`);
+    const distancePartners = scored.filter(p => p.distanceKm <= maxKm || p.distanceKm === 999);
     distancePartners.sort((a, b) => a.distanceKm - b.distanceKm);
     picked = distancePartners.slice(0, Math.max(1, limit));
 
@@ -397,6 +394,14 @@ export async function tryAutoAssign(orderId, options = {}) {
       logger.info(`tryAutoAssign: Skip for ${orderId} (status ${order.orderStatus} not dispatchable yet).`);
       return order;
     }
+
+    // Verify complete delivery information (address, customer contact, restaurant location) before searching/notifying riders
+    const deliveryValidation = validateOrderDeliveryInfo(order, order.restaurantId);
+    if (!deliveryValidation.isValid) {
+      logger.warn(`[DeliveryDispatch] Cannot dispatch order ${order._id}: ${deliveryValidation.reason}`);
+      return order;
+    }
+
     const offeredIds = (order.dispatch?.offeredTo || []).map(o => o.partnerId.toString());
 
     // RADIUS EXPANSION LOGIC
@@ -572,6 +577,12 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
 
   if (order.dispatch?.status === 'accepted') {
     throw new ValidationError('A delivery partner has already accepted this order.');
+  }
+
+  // Validate complete delivery information before allowing manual resend
+  const deliveryValidation = validateOrderDeliveryInfo(order, order.restaurantId);
+  if (!deliveryValidation.isValid) {
+    throw new ValidationError(`Cannot resend delivery notification: ${deliveryValidation.reason}`);
   }
 
   order.dispatch.status = 'unassigned';

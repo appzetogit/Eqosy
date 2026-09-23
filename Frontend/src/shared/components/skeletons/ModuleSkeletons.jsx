@@ -80,31 +80,31 @@ export function TaxiAppSkeleton() {
  */
 export function DeliveryAppSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 max-w-md mx-auto space-y-4 select-none">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 max-w-md mx-auto space-y-4 select-none">
       {/* Top Header */}
-      <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 p-4 rounded-3xl">
+      <div className="flex items-center justify-between bg-white border border-slate-200/80 p-4 rounded-3xl shadow-sm">
         <div className="flex items-center gap-3">
-          <SkeletonPulse className="w-12 h-12 rounded-2xl !bg-slate-800" />
+          <SkeletonPulse className="w-12 h-12 rounded-2xl !bg-slate-200" />
           <div className="space-y-2">
-            <SkeletonPulse className="w-28 h-4 !bg-slate-800" />
-            <SkeletonPulse className="w-20 h-3 !bg-emerald-500/30" />
+            <SkeletonPulse className="w-28 h-4 !bg-slate-200" />
+            <SkeletonPulse className="w-20 h-3 !bg-emerald-500/20" />
           </div>
         </div>
-        <SkeletonPulse className="w-16 h-8 rounded-full !bg-emerald-600/40" />
+        <SkeletonPulse className="w-16 h-8 rounded-full !bg-emerald-500/20" />
       </div>
 
       {/* Duty Earnings Summary Card */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 p-5 rounded-3xl space-y-4 shadow-lg">
+      <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-5 rounded-3xl space-y-4 shadow-md">
         <div className="flex justify-between items-center">
-          <SkeletonPulse className="w-24 h-4 !bg-slate-700" />
-          <SkeletonPulse className="w-16 h-4 !bg-slate-700" />
+          <SkeletonPulse className="w-24 h-4 !bg-white/30" />
+          <SkeletonPulse className="w-16 h-4 !bg-white/30" />
         </div>
-        <SkeletonPulse className="w-36 h-9 !bg-emerald-400/30 rounded-xl" />
-        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-700/40">
+        <SkeletonPulse className="w-36 h-9 !bg-white/40 rounded-xl" />
+        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/20">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="space-y-1.5 text-center">
-              <SkeletonPulse className="w-12 h-3 mx-auto !bg-slate-700" />
-              <SkeletonPulse className="w-14 h-4 mx-auto !bg-slate-600" />
+              <SkeletonPulse className="w-12 h-3 mx-auto !bg-white/30" />
+              <SkeletonPulse className="w-14 h-4 mx-auto !bg-white/40" />
             </div>
           ))}
         </div>
@@ -112,23 +112,23 @@ export function DeliveryAppSkeleton() {
 
       {/* Orders List Header */}
       <div className="flex justify-between items-center px-1">
-        <SkeletonPulse className="w-32 h-5 !bg-slate-800" />
-        <SkeletonPulse className="w-12 h-4 !bg-slate-800" />
+        <SkeletonPulse className="w-32 h-5 !bg-slate-200" />
+        <SkeletonPulse className="w-12 h-4 !bg-slate-200" />
       </div>
 
       {/* Order Cards */}
       <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl space-y-3">
+          <div key={i} className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-3 shadow-sm">
             <div className="flex justify-between items-center">
-              <SkeletonPulse className="w-24 h-4 !bg-slate-800" />
+              <SkeletonPulse className="w-24 h-4 !bg-slate-200" />
               <SkeletonPulse className="w-16 h-6 rounded-full !bg-amber-500/20" />
             </div>
-            <SkeletonPulse className="w-full h-3 !bg-slate-800" />
-            <SkeletonPulse className="w-3/4 h-3 !bg-slate-800" />
+            <SkeletonPulse className="w-full h-3 !bg-slate-200" />
+            <SkeletonPulse className="w-3/4 h-3 !bg-slate-200" />
             <div className="flex justify-between items-center pt-2">
-              <SkeletonPulse className="w-20 h-5 !bg-slate-800" />
-              <SkeletonPulse className="w-24 h-8 rounded-xl !bg-emerald-600/40" />
+              <SkeletonPulse className="w-20 h-5 !bg-slate-200" />
+              <SkeletonPulse className="w-24 h-8 rounded-xl !bg-emerald-500/20" />
             </div>
           </div>
         ))}
@@ -201,45 +201,45 @@ export function RestaurantAppSkeleton() {
  */
 export function AdminAppSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 md:p-6 space-y-6 select-none">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-6 space-y-6 select-none">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
         <div className="space-y-2">
-          <SkeletonPulse className="w-48 h-6 !bg-slate-800" />
-          <SkeletonPulse className="w-32 h-3 !bg-slate-800" />
+          <SkeletonPulse className="w-48 h-6 !bg-slate-200" />
+          <SkeletonPulse className="w-32 h-3 !bg-slate-200" />
         </div>
         <div className="flex items-center gap-3">
-          <SkeletonPulse className="w-40 h-10 rounded-xl !bg-slate-800" />
-          <SkeletonPulse className="w-10 h-10 rounded-full !bg-slate-800" />
+          <SkeletonPulse className="w-40 h-10 rounded-xl !bg-slate-200" />
+          <SkeletonPulse className="w-10 h-10 rounded-full !bg-slate-200" />
         </div>
       </div>
 
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-slate-800/80 border border-slate-700/50 p-5 rounded-2xl space-y-3">
+          <div key={i} className="bg-white border border-slate-200 shadow-sm p-5 rounded-2xl space-y-3">
             <div className="flex justify-between items-center">
-              <SkeletonPulse className="w-24 h-4 !bg-slate-700" />
-              <SkeletonPulse className="w-8 h-8 rounded-xl !bg-slate-700" />
+              <SkeletonPulse className="w-24 h-4 !bg-slate-200" />
+              <SkeletonPulse className="w-8 h-8 rounded-xl !bg-slate-200" />
             </div>
-            <SkeletonPulse className="w-32 h-7 !bg-slate-600" />
-            <SkeletonPulse className="w-20 h-3 !bg-emerald-500/30" />
+            <SkeletonPulse className="w-32 h-7 !bg-slate-300" />
+            <SkeletonPulse className="w-20 h-3 !bg-emerald-500/20" />
           </div>
         ))}
       </div>
 
       {/* Data Table */}
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden space-y-3 p-4">
-        <div className="flex justify-between items-center pb-3 border-b border-slate-700/50">
-          <SkeletonPulse className="w-36 h-5 !bg-slate-700" />
-          <SkeletonPulse className="w-28 h-8 rounded-xl !bg-slate-700" />
+      <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden space-y-3 p-4">
+        <div className="flex justify-between items-center pb-3 border-b border-slate-200">
+          <SkeletonPulse className="w-36 h-5 !bg-slate-200" />
+          <SkeletonPulse className="w-28 h-8 rounded-xl !bg-slate-200" />
         </div>
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex justify-between items-center py-2.5 border-b border-slate-700/30">
-            <SkeletonPulse className="w-1/4 h-4 !bg-slate-700" />
-            <SkeletonPulse className="w-1/5 h-4 !bg-slate-700" />
-            <SkeletonPulse className="w-1/6 h-4 !bg-slate-700" />
-            <SkeletonPulse className="w-16 h-6 rounded-full !bg-slate-700" />
+          <div key={i} className="flex justify-between items-center py-2.5 border-b border-slate-100">
+            <SkeletonPulse className="w-1/4 h-4 !bg-slate-200" />
+            <SkeletonPulse className="w-1/5 h-4 !bg-slate-200" />
+            <SkeletonPulse className="w-1/6 h-4 !bg-slate-200" />
+            <SkeletonPulse className="w-16 h-6 rounded-full !bg-slate-200" />
           </div>
         ))}
       </div>
