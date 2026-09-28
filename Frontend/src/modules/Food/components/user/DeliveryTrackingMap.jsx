@@ -106,10 +106,13 @@ function normalizeBackendSocketUrl() {
 
 function pathPointToLatLng(point) {
   if (!point) return null;
-  const lat = typeof point.lat === 'function' ? point.lat() : point.lat;
-  const lng = typeof point.lng === 'function' ? point.lng() : point.lng;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+  const rawLat = typeof point.lat === 'function' ? point.lat() : point.lat;
+  const rawLng = typeof point.lng === 'function' ? point.lng() : point.lng;
+  if (!Number.isFinite(rawLat) || !Number.isFinite(rawLng)) return null;
+  if (Math.abs(rawLat) > 50 && Math.abs(rawLng) <= 50) {
+    return { lat: rawLng, lng: rawLat };
+  }
+  return { lat: rawLat, lng: rawLng };
 }
 
 function ensurePathEndsAt(path, endpoint) {

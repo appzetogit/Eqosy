@@ -21,7 +21,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       devOptions: {
-        enabled: true
+        enabled: true,
+        suppressWarnings: true
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'robots.txt'],
       manifest: {
@@ -49,13 +50,13 @@ export default defineConfig({
         ]
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        // Precache only critical app shell assets (JS, CSS, HTML, Web Fonts, core SVG icons)
-        // Images and dynamic assets are cached on-demand via runtimeCaching
-        globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}'],
+        // Precache only critical app shell assets (JS, CSS, HTML, core SVG/ico)
+        // Heavy images and dynamic assets are cached on-demand via runtimeCaching
+        globPatterns: ['**/*.{js,css,html,ico,svg}'],
         globIgnores: ['**/assets/*.{png,jpg,jpeg,gif,webp,avif,mp4,webm}'],
         // Exclude API dynamic endpoints and socket connection routes from Service Worker HTML fallback
         navigateFallbackDenylist: [/^\/api\//, /^\/socket\.io\//],

@@ -46,7 +46,7 @@ const WithdrawalRequestOwnerDetail = () => {
               hour: '2-digit',
               minute: '2-digit',
             }),
-            amount: `${withdrawal.requested_currency || 'INR'} ${withdrawal.amount}`,
+            amount: `${withdrawal.requested_currency || 'INR'} ${(Math.round((Number(withdrawal.amount || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}`,
             status: withdrawal.status,
           }));
           setHistory(mapped);

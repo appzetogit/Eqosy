@@ -3,13 +3,21 @@ import { Bell, Clock, Loader2, Trash2, X, ShieldAlert, Bike, MessageSquare, Chec
 import { useNavigate } from "react-router-dom";
 import useAdminNotifications from "@food/hooks/useAdminNotifications";
 import HandoverApprovalModal from "@food/components/admin/HandoverApprovalModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@food/components/ui/dialog";
 
 export default function AdminNotifications() {
   const navigate = useNavigate();
-  const { items, loading, clearAll, dismissOne, approveHandover, rejectHandover, approveEmergencyOffline } = useAdminNotifications();
+  const { items, loading, clearAll, dismissOne, dismissMultiple, approveHandover, rejectHandover, approveEmergencyOffline } = useAdminNotifications();
   const [selectedHandoverItem, setSelectedHandoverItem] = useState(null);
   const [handoverModalOpen, setHandoverModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [selectedNotifIds, setSelectedNotifIds] = useState([]);
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false, type: null, targetId: null, targetCount: 0 });
 
   const handoverCount = useMemo(() => items.filter(i => i.category === "handover_approval" || i.isEmergencyOffline).length, [items]);
   const approvalCount = useMemo(() => items.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline).length, [items]);
@@ -26,11 +34,34 @@ export default function AdminNotifications() {
     return items;
   }, [activeTab, items]);
 
+  const allFilteredSelected = useMemo(() => {
+    return filteredItems.length > 0 && filteredItems.every((i) => selectedNotifIds.includes(i.id));
+  }, [filteredItems, selectedNotifIds]);
+
+  const toggleSelectAllNotifs = () => {
+    const filteredIds = filteredItems.map((i) => i.id);
+    if (allFilteredSelected) {
+      setSelectedNotifIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedNotifIds((prev) => [...new Set([...prev, ...filteredIds])]);
+    }
+  };
+
+  const toggleSelectOneNotif = (id) => {
+    setSelectedNotifIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
   const handleItemClick = (item) => {
     if (item?.isEmergencyOffline) {
       navigate("/admin/food/delivery-partners");
     } else if (item?.category === "handover_approval") {
       navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+    } else if (item?.category === "withdrawals") {
+      navigate("/admin/food/restaurant-withdraws");
+    } else if (item?.category === "delivery_withdrawals") {
+      navigate("/admin/food/delivery-withdrawal");
     } else if (item?.path) {
       navigate(item.path);
     }
@@ -52,16 +83,42 @@ export default function AdminNotifications() {
               </p>
             </div>
           </div>
-          {items.length > 0 && (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/50 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition-all"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear all ({items.length})
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedNotifIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmModal({
+                    isOpen: true,
+                    type: "bulk",
+                    targetId: null,
+                    targetCount: selectedNotifIds.length,
+                  });
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition-all shadow-md shadow-rose-500/20"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete selected ({selectedNotifIds.length})
+              </button>
+            )}
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmModal({
+                    isOpen: true,
+                    type: "all",
+                    targetId: null,
+                    targetCount: items.length,
+                  });
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/50 px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear all ({items.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Category Tabs (Matching Taxi Admin) */}
@@ -101,6 +158,26 @@ export default function AdminNotifications() {
             </button>
           ))}
         </div>
+
+        {/* Select All Toolbar */}
+        {filteredItems.length > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs font-bold text-slate-700">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAllNotifs}
+                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer"
+              />
+              <span>Select All Notifications ({filteredItems.length})</span>
+            </label>
+            {selectedNotifIds.length > 0 && (
+              <span className="text-xs font-bold text-rose-600">
+                {selectedNotifIds.length} item(s) selected
+              </span>
+            )}
+          </div>
+        )}
 
         {/* List Body */}
         {loading ? (
@@ -149,99 +226,114 @@ export default function AdminNotifications() {
               return (
                 <div
                   key={item?.id}
-                  className={`relative rounded-3xl border p-5 transition-all shadow-xs group cursor-pointer ${
+                  className={`relative rounded-3xl border p-5 transition-all shadow-xs group cursor-pointer flex items-start gap-4 ${
                     isHandover
                       ? "border-rose-200 bg-rose-50/40 hover:bg-rose-50/80"
                       : "border-slate-200 bg-white hover:bg-slate-50/70 hover:border-emerald-200"
                   }`}
                   onClick={() => handleItemClick(item)}
                 >
-                  <div className="flex items-start justify-between gap-3 pr-8">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${badgeStyle}`}>
-                          {badgeText}
-                        </span>
-                      </div>
-                      <p className="text-base font-black text-slate-900 leading-snug">
-                        {item?.title || "Notification"}
-                      </p>
-                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                        {item?.message || "-"}
-                      </p>
-                      {item?.metaLabel && (
-                        <p className="text-xs text-slate-400 font-medium pt-1">
-                          📞 {item.metaLabel}
-                        </p>
-                      )}
-                    </div>
+                  <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedNotifIds.includes(item?.id)}
+                      onChange={() => toggleSelectOneNotif(item?.id)}
+                      className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer"
+                    />
                   </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-start justify-between gap-3 pr-8">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${badgeStyle}`}>
+                            {badgeText}
+                          </span>
+                        </div>
+                        <p className="text-base font-black text-slate-900 leading-snug">
+                          {item?.title || "Notification"}
+                        </p>
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          {item?.message || "-"}
+                        </p>
+                        {item?.metaLabel && (
+                          <p className="text-xs text-slate-400 font-medium pt-1">
+                            📞 {item.metaLabel}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-                  {isHandover && (
-                    <div className="flex items-center gap-3 mt-4 pt-3 border-t border-rose-200/80">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (item.isEmergencyOffline) {
-                            navigate("/admin/food/delivery-partners");
-                          } else {
-                            navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
-                          }
-                        }}
-                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all"
-                      >
-                        Review & Approve in List
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (item.isEmergencyOffline) {
-                            await approveEmergencyOffline(item.deliveryPartnerId);
-                          } else {
-                            await approveHandover(item.orderMongoId || item.orderId);
-                          }
-                        }}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all"
-                      >
-                        Approve
-                      </button>
-                      {!item.isEmergencyOffline && (
+                    {isHandover && (
+                      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-rose-200/80">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (item.isEmergencyOffline) {
+                              navigate("/admin/food/delivery-partners");
+                            } else {
+                              navigate(`/admin/food/delivery-partners/gigs?handoverId=${item.orderMongoId || item.orderId}`);
+                            }
+                          }}
+                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all"
+                        >
+                          Review & Approve in List
+                        </button>
                         <button
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
-                            const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
-                            await rejectHandover(item.orderMongoId || item.orderId, reason);
+                            if (item.isEmergencyOffline) {
+                              await approveEmergencyOffline(item.deliveryPartnerId);
+                            } else {
+                              await approveHandover(item.orderMongoId || item.orderId);
+                            }
                           }}
-                          className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-bold transition-all"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 transition-all"
                         >
-                          Reject
+                          Approve
                         </button>
-                      )}
-                    </div>
-                  )}
+                        {!item.isEmergencyOffline && (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const reason = prompt("Enter reason for rejection:", "Rejected by admin") || "Rejected by admin";
+                              await rejectHandover(item.orderMongoId || item.orderId, reason);
+                            }}
+                            className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded-2xl text-xs font-bold transition-all"
+                          >
+                            Reject
+                          </button>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-400 pt-2 border-t border-slate-100">
-                    <span className="text-emerald-600 hover:underline flex items-center gap-1 font-bold">
-                      Tap to inspect →
-                    </span>
-                    <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{item?.timeLabel || "N/A"}</span>
+                    <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-400 pt-2 border-t border-slate-100">
+                      <span className="text-emerald-600 hover:underline flex items-center gap-1 font-bold">
+                        Tap to inspect →
+                      </span>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{item?.timeLabel || "N/A"}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Dismiss button */}
+                  {/* Dismiss / Delete button */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      dismissOne(item?.id);
+                      setDeleteConfirmModal({
+                        isOpen: true,
+                        type: "single",
+                        targetId: item?.id,
+                        targetCount: 1,
+                      });
                     }}
                     className="absolute right-4 top-4 rounded-xl p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                    aria-label="Dismiss notification"
+                    aria-label="Delete notification"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -259,6 +351,61 @@ export default function AdminNotifications() {
         onApprove={approveHandover}
         onReject={rejectHandover}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={deleteConfirmModal.isOpen}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmModal({ isOpen: false, type: null, targetId: null, targetCount: 0 });
+        }}
+      >
+        <DialogContent className="max-w-md p-6 bg-white border border-slate-200 rounded-3xl shadow-2xl">
+          <DialogHeader className="pb-2 border-b border-slate-100">
+            <DialogTitle className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-rose-600" />
+              Confirm Deletion
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm font-bold text-slate-800 leading-relaxed">
+              {deleteConfirmModal.type === "single" && "Are you sure you want to delete this notification?"}
+              {deleteConfirmModal.type === "bulk" && `Are you sure you want to delete the ${deleteConfirmModal.targetCount} selected notification(s)?`}
+              {deleteConfirmModal.type === "all" && "Are you sure you want to delete all notifications?"}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              This action will remove the selected notification(s) from your list.
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmModal({ isOpen: false, type: null, targetId: null, targetCount: 0 })}
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (deleteConfirmModal.type === "single" && deleteConfirmModal.targetId) {
+                  dismissOne(deleteConfirmModal.targetId);
+                  setSelectedNotifIds((prev) => prev.filter((id) => id !== deleteConfirmModal.targetId));
+                } else if (deleteConfirmModal.type === "bulk") {
+                  dismissMultiple(selectedNotifIds);
+                  setSelectedNotifIds([]);
+                } else if (deleteConfirmModal.type === "all") {
+                  clearAll();
+                  setSelectedNotifIds([]);
+                }
+                setDeleteConfirmModal({ isOpen: false, type: null, targetId: null, targetCount: 0 });
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md shadow-rose-500/20 transition-all"
+            >
+              Delete
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

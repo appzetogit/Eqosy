@@ -39,15 +39,31 @@ export default function DeliveryBoyViewMap() {
       (deliveryNode) => {
         const nextDeliveryBoys = Object.entries(deliveryNode || {})
           .map(([deliveryId, payload]) => {
-            const location = payload?.location || {}
-            const lat = Number(location?.lat)
-            const lng = Number(location?.lng)
-            const isOnline =
-              location?.isOnline === true ||
-              location?.status === "online" ||
-              location?.status === "busy"
+            const location = payload?.location || payload?.availability?.currentLocation || payload || {}
+            let lat = Number(location?.lat ?? location?.latitude ?? payload?.lat)
+            let lng = Number(location?.lng ?? location?.longitude ?? payload?.lng)
 
-            if (!isOnline || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+            const coords = location?.coordinates || payload?.coordinates || payload?.availability?.currentLocation?.coordinates
+            if ((!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) && Array.isArray(coords) && coords.length >= 2) {
+              const v0 = Number(coords[0])
+              const v1 = Number(coords[1])
+              if (Math.abs(v0) > 50 && Math.abs(v1) <= 50) {
+                lng = v0
+                lat = v1
+              } else if (Math.abs(v0) <= 50 && Math.abs(v1) > 50) {
+                lat = v0
+                lng = v1
+              } else {
+                lng = v0
+                lat = v1
+              }
+            } else if (Math.abs(lat) > 50 && Math.abs(lng) <= 50) {
+              const temp = lat
+              lat = lng
+              lng = temp
+            }
+
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
               return null
             }
 
@@ -55,25 +71,27 @@ export default function DeliveryBoyViewMap() {
 
             return {
               _id: String(deliveryId),
-              name: meta.name || meta.fullName || "Delivery Partner",
-              phone: meta.phone || "N/A",
+              name: meta.name || meta.fullName || payload?.name || "Delivery Partner",
+              phone: meta.phone || payload?.phone || "N/A",
               availability: {
                 isOnline: true,
                 currentLocation: {
                   type: "Point",
                   coordinates: [lng, lat],
-                  heading: Number(location?.heading) || 0,
-                  speed: Number(location?.speed) || 0,
-                  lastUpdate: Number(location?.timestamp || location?.last_updated) || Date.now()
+                  heading: Number(location?.heading ?? payload?.heading) || 0,
+                  speed: Number(location?.speed ?? payload?.speed) || 0,
+                  lastUpdate: Number(location?.timestamp || location?.last_updated || payload?.last_updated) || Date.now()
                 },
-                lastLocationUpdate: Number(location?.timestamp || location?.last_updated) || Date.now()
+                lastLocationUpdate: Number(location?.timestamp || location?.last_updated || payload?.last_updated) || Date.now()
               }
             }
           })
           .filter(Boolean)
 
-        setDeliveryBoys(nextDeliveryBoys)
-        setLoading(false)
+        if (nextDeliveryBoys.length > 0) {
+          setDeliveryBoys(nextDeliveryBoys)
+          setLoading(false)
+        }
       },
       (error) => {
         debugError("Firebase delivery listener failed:", error)
@@ -142,11 +160,13 @@ export default function DeliveryBoyViewMap() {
         limit: 1000,
         status: "approved",
         isActive: true,
-        includeAvailability: false
+        includeAvailability: true
       })
 
       if (response.data?.success && response.data.data?.deliveryPartners) {
         const nextMap = new Map()
+        const initialBoys = []
+
         response.data.data.deliveryPartners.forEach((boy) => {
           const boyId =
             boy?._id ||
@@ -157,13 +177,53 @@ export default function DeliveryBoyViewMap() {
 
           if (!boyId) return
 
-          nextMap.set(String(boyId), {
-            name: boy?.name || boy?.fullData?.name || "Delivery Partner",
-            fullName: boy?.fullName || boy?.fullData?.fullName || "",
-            phone: boy?.phone || boy?.fullData?.phone || "N/A"
-          })
+          const name = boy?.name || boy?.fullName || boy?.fullData?.name || "Delivery Partner"
+          const phone = boy?.phone || boy?.fullData?.phone || "N/A"
+
+          nextMap.set(String(boyId), { name, fullName: name, phone })
+
+          const avail = boy?.availability || boy?.fullData?.availability
+          const loc = avail?.currentLocation
+          const coords = loc?.coordinates
+          let lat = Number(loc?.latitude ?? loc?.lat)
+          let lng = Number(loc?.longitude ?? loc?.lng)
+
+          if ((!Number.isFinite(lat) || !Number.isFinite(lng)) && Array.isArray(coords) && coords.length >= 2) {
+            const v0 = Number(coords[0])
+            const v1 = Number(coords[1])
+            if (Math.abs(v0) > 50 && Math.abs(v1) <= 50) {
+              lng = v0; lat = v1
+            } else if (Math.abs(v0) <= 50 && Math.abs(v1) > 50) {
+              lat = v0; lng = v1
+            } else {
+              lng = v0; lat = v1
+            }
+          }
+
+          if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+            initialBoys.push({
+              _id: String(boyId),
+              name,
+              phone,
+              availability: {
+                isOnline: avail?.isOnline ?? true,
+                currentLocation: {
+                  type: "Point",
+                  coordinates: [lng, lat],
+                  heading: Number(loc?.heading) || 0,
+                  speed: Number(loc?.speed) || 0,
+                  lastUpdate: Number(avail?.lastLocationUpdate || loc?.lastUpdate) || Date.now()
+                },
+                lastLocationUpdate: Number(avail?.lastLocationUpdate || loc?.lastUpdate) || Date.now()
+              }
+            })
+          }
         })
+
         deliveryMetaByIdRef.current = nextMap
+        if (initialBoys.length > 0) {
+          setDeliveryBoys(prev => prev.length === 0 ? initialBoys : prev)
+        }
       }
     } catch (error) {
       debugError("Error fetching delivery partner directory:", error)
@@ -433,22 +493,33 @@ export default function DeliveryBoyViewMap() {
         continue
       }
 
-      const coords = currentLocation.coordinates
-      // Handle both [lng, lat] and [lat, lng] formats
-      let lat, lng
-      if (Array.isArray(coords) && coords.length >= 2) {
-        // Try [lng, lat] format first (GeoJSON standard)
-        if (coords[0] > -180 && coords[0] < 180 && coords[1] > -90 && coords[1] < 90) {
-          lng = coords[0]
-          lat = coords[1]
-        } else {
-          // Try [lat, lng] format
-          lat = coords[0]
-          lng = coords[1]
+      const coords = currentLocation.coordinates || currentLocation
+      let lat = null, lng = null
+
+      if (typeof coords === 'object' && !Array.isArray(coords)) {
+        const rawLat = Number(coords.lat ?? coords.latitude)
+        const rawLng = Number(coords.lng ?? coords.longitude)
+        if (Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+          if (Math.abs(rawLat) > 50 && Math.abs(rawLng) <= 50) {
+            lat = rawLng; lng = rawLat
+          } else {
+            lat = rawLat; lng = rawLng
+          }
         }
-      } else {
-        debugWarn("?? Invalid coordinates format:", coords)
-        continue
+      }
+
+      if ((!lat || !lng) && Array.isArray(coords) && coords.length >= 2) {
+        const v0 = Number(coords[0])
+        const v1 = Number(coords[1])
+        if (Number.isFinite(v0) && Number.isFinite(v1) && (v0 !== 0 || v1 !== 0)) {
+          if (Math.abs(v0) > 50 && Math.abs(v1) <= 50) {
+            lng = v0; lat = v1
+          } else if (Math.abs(v0) <= 50 && Math.abs(v1) > 50) {
+            lat = v0; lng = v1
+          } else {
+            lng = v0; lat = v1
+          }
+        }
       }
 
       if (!lat || !lng || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {

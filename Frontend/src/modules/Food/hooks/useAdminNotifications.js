@@ -295,7 +295,7 @@ const mapWithdrawalRequests = (response) => {
       message: `${item?.restaurantName || item?.restaurantId?.restaurantName || "Restaurant"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
       type: "approval",
       category: "withdrawals",
-      path: "/admin/food/restaurants/withdrawals",
+      path: "/admin/food/restaurant-withdraws",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
       metaLabel: joinMeta(item?.restaurantName || item?.restaurantId?.restaurantName, `₹${item?.amount || 0}`, item?.status || "pending"),
@@ -312,7 +312,7 @@ const mapDeliveryWithdrawals = (response) => {
       message: `${item?.deliveryPartner?.name || item?.deliveryPartnerName || "Delivery partner"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
       type: "approval",
       category: "delivery_withdrawals",
-      path: "/admin/food/delivery-partners/withdrawals",
+      path: "/admin/food/delivery-withdrawal",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
       metaLabel: joinMeta(item?.deliveryPartner?.name || item?.deliveryPartnerName, `₹${item?.amount || 0}`, item?.status || "pending"),
@@ -411,10 +411,9 @@ export default function useAdminNotifications(options = {}) {
         ...mapExpiredFssai(fssaiExpiredRes),
       ];
 
-      // Live pending DB tasks from backend are always active while pending in DB.
-      // Realtime transient notifications respect dismissed IDs.
+      // Live pending DB tasks from backend and Realtime transient notifications respect dismissed IDs.
       const aggregated = uniqueById([
-        ...fetchedPending,
+        ...fetchedPending.filter((item) => item?.id && !dismissed.has(item.id)),
         ...storedRealtime.filter((item) => item?.id && !dismissed.has(item.id)),
       ])
         .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
@@ -618,7 +617,7 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: "approval",
           category: isDelivery ? "delivery_withdrawals" : "withdrawals",
-          path: isDelivery ? "/admin/food/delivery-partners/withdrawals" : "/admin/food/restaurants/withdrawals",
+          path: isDelivery ? "/admin/food/delivery-withdrawal" : "/admin/food/restaurant-withdraws",
           createdAt: data?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(partnerName, `₹${amount}`),
@@ -730,11 +729,31 @@ export default function useAdminNotifications(options = {}) {
     dispatchAdminNotificationsUpdated();
   }, []);
 
-  const clearAll = useCallback(() => {
-    saveStoredRealtimeNotifs([]);
-    saveDismissedIds([]);
-    setItems([]);
+  const dismissMultiple = useCallback((idsToDismiss = []) => {
+    if (!Array.isArray(idsToDismiss) || idsToDismiss.length === 0) return;
+    const idsSet = new Set(idsToDismiss.filter(Boolean));
+    if (idsSet.size === 0) return;
+
+    const currentDismissed = getDismissedIds();
+    saveDismissedIds([...new Set([...currentDismissed, ...idsSet])]);
+
+    const currentRealtime = getStoredRealtimeNotifs().filter((item) => !idsSet.has(item.id));
+    saveStoredRealtimeNotifs(currentRealtime);
+
+    setItems((prev) => (Array.isArray(prev) ? prev : []).filter((item) => !idsSet.has(item.id)));
     dispatchAdminNotificationsUpdated();
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setItems((prev) => {
+      const currentItems = Array.isArray(prev) ? prev : [];
+      const allIds = currentItems.map((item) => item.id).filter(Boolean);
+      const currentDismissed = getDismissedIds();
+      saveDismissedIds([...new Set([...currentDismissed, ...allIds])]);
+      saveStoredRealtimeNotifs([]);
+      dispatchAdminNotificationsUpdated();
+      return [];
+    });
   }, []);
 
   const purgeHandoverNotification = useCallback((orderId) => {
@@ -851,12 +870,13 @@ export default function useAdminNotifications(options = {}) {
       unreadCount: items.length,
       refresh: loadNotifications,
       dismissOne,
+      dismissMultiple,
       clearAll,
       approveHandover,
       rejectHandover,
       approveEmergencyOffline,
     }),
-    [approveEmergencyOffline, approveHandover, clearAll, dismissOne, items, loadNotifications, loading, rejectHandover]
+    [approveEmergencyOffline, approveHandover, clearAll, dismissMultiple, dismissOne, items, loadNotifications, loading, rejectHandover]
   );
 }
 

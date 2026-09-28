@@ -1,14 +1,20 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   BadgeCheck,
+  Building2,
+  Compass,
   Download,
+  Filter,
   Globe,
+  Layers,
   Loader2,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
+  Store,
   Trash2,
   Upload,
   X,
@@ -60,11 +66,20 @@ export default function Category() {
   const [editingCategory, setEditingCategory] = useState(null)
   const [zones, setZones] = useState([])
   const [zonesLoading, setZonesLoading] = useState(false)
+  const [restaurants, setRestaurants] = useState([])
+  const [restaurantsLoading, setRestaurantsLoading] = useState(false)
   const [formData, setFormData] = useState(defaultFormData)
   const [selectedImageFile, setSelectedImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Granular Filters
+  const [scopeFilter, setScopeFilter] = useState("all") // "all" | "global" | "restaurant"
+  const [approvalFilter, setApprovalFilter] = useState("all") // "all" | "pending" | "approved" | "rejected"
+  const [selectedZoneId, setSelectedZoneId] = useState("all")
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState("all")
+  const [selectedArea, setSelectedArea] = useState("all")
 
   useEffect(() => {
     const adminToken = localStorage.getItem("admin_accessToken")
@@ -76,6 +91,7 @@ export default function Category() {
     fetchCategories()
   }, [])
 
+  // Load Zones
   useEffect(() => {
     let cancelled = false
     setZonesLoading(true)
@@ -101,6 +117,32 @@ export default function Category() {
     }
   }, [])
 
+  // Load Restaurants
+  useEffect(() => {
+    let cancelled = false
+    setRestaurantsLoading(true)
+    adminAPI
+      .getRestaurants({ limit: 1000 })
+      .then((res) => {
+        const list =
+          res?.data?.data?.restaurants ||
+          res?.data?.restaurants ||
+          res?.data?.data ||
+          []
+        if (!cancelled) setRestaurants(Array.isArray(list) ? list : [])
+      })
+      .catch(() => {
+        if (!cancelled) setRestaurants([])
+      })
+      .finally(() => {
+        if (!cancelled) setRestaurantsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       fetchCategories()
@@ -108,19 +150,120 @@ export default function Category() {
     return () => window.clearTimeout(timer)
   }, [searchQuery, showPendingOnly])
 
-  const filteredCategories = useMemo(() => {
-    const query = String(searchQuery || "").trim().toLowerCase()
-    if (!query) return categories
-    return categories.filter((category) => {
-      const creator = category?.createdByRestaurant?.name || category?.restaurant?.name || ""
-      return (
-        String(category?.name || "").toLowerCase().includes(query) ||
-        String(category?.foodTypeScope || "").toLowerCase().includes(query) ||
-        String(creator || "").toLowerCase().includes(query) ||
-        String(category?.id || "").toLowerCase().includes(query)
-      )
+  // Extract unique areas from zones & restaurants
+  const availableAreas = useMemo(() => {
+    const areasSet = new Set()
+    zones.forEach((z) => {
+      if (z.name) areasSet.add(z.name)
+      if (z.zoneName) areasSet.add(z.zoneName)
+      if (z.area) areasSet.add(z.area)
+      if (z.serviceLocation) areasSet.add(z.serviceLocation)
     })
-  }, [categories, searchQuery])
+    restaurants.forEach((r) => {
+      if (r.area) areasSet.add(r.area)
+      if (r.address?.area) areasSet.add(r.address.area)
+      if (r.zoneName) areasSet.add(r.zoneName)
+      if (r.city) areasSet.add(r.city)
+    })
+    return Array.from(areasSet).filter(Boolean).sort()
+  }, [zones, restaurants])
+
+  // Advanced Filtering
+  const filteredCategories = useMemo(() => {
+    return categories.filter((category) => {
+      // 1. Search Query Filter
+      const query = String(searchQuery || "").trim().toLowerCase()
+      if (query) {
+        const creator = category?.createdByRestaurant?.name || category?.restaurant?.name || ""
+        const zoneTextStr = zoneLabel(category?.zoneId)
+        const matchesSearch =
+          String(category?.name || "").toLowerCase().includes(query) ||
+          String(category?.foodTypeScope || "").toLowerCase().includes(query) ||
+          String(creator || "").toLowerCase().includes(query) ||
+          String(zoneTextStr || "").toLowerCase().includes(query) ||
+          String(category?.id || "").toLowerCase().includes(query)
+        if (!matchesSearch) return false
+      }
+
+      // 2. Global vs Restaurant Scope Filter
+      const isGlobalCategory = Boolean(category?.isGlobal) || (!category?.createdByRestaurantId && !category?.restaurantId && !category?.createdByRestaurant && !category?.restaurant)
+      const isRestaurantCategory = Boolean(category?.createdByRestaurantId || category?.restaurantId || category?.createdByRestaurant || category?.restaurant) && !category?.isGlobal
+
+      if (scopeFilter === "global" && !isGlobalCategory) return false
+      if (scopeFilter === "restaurant" && !isRestaurantCategory) return false
+
+      // 3. Approval Status Filter
+      if (approvalFilter !== "all") {
+        const status = String(category?.approvalStatus || "pending").toLowerCase()
+        if (status !== approvalFilter) return false
+      }
+
+      // 4. Zone Filter
+      if (selectedZoneId !== "all") {
+        const catZone = category?.zoneId
+        const catZoneIdStr = typeof catZone === "string" ? catZone : catZone?._id || catZone?.id || ""
+        const catZoneName = zoneLabel(catZone).toLowerCase()
+
+        if (selectedZoneId === "global_zone") {
+          if (catZoneIdStr && catZoneIdStr !== "global" && catZoneName !== "global") return false
+        } else {
+          const targetZoneObj = zones.find((z) => String(z._id || z.id) === selectedZoneId)
+          const targetZoneName = (targetZoneObj?.name || targetZoneObj?.zoneName || targetZoneObj?.serviceLocation || "").toLowerCase()
+
+          const matchesId = catZoneIdStr === selectedZoneId
+          const matchesName = targetZoneName && catZoneName.includes(targetZoneName)
+
+          if (!matchesId && !matchesName) return false
+        }
+      }
+
+      // 5. Restaurant Filter
+      if (selectedRestaurantId !== "all") {
+        const restObj = category?.createdByRestaurant || category?.restaurant
+        const catRestId = String(category?.createdByRestaurantId || category?.restaurantId || restObj?._id || restObj?.id || "")
+        const creatorName = String(restObj?.name || category?.restaurantName || "").toLowerCase()
+
+        const targetRest = restaurants.find((r) => String(r._id || r.id) === selectedRestaurantId)
+        const targetRestName = String(targetRest?.name || targetRest?.restaurantName || "").toLowerCase()
+
+        const matchesRestId = catRestId === selectedRestaurantId
+        const matchesRestName = targetRestName && creatorName.includes(targetRestName)
+
+        if (!matchesRestId && !matchesRestName) return false
+      }
+
+      // 6. Area Filter
+      if (selectedArea !== "all") {
+        const areaLower = selectedArea.toLowerCase()
+        const catZoneName = zoneLabel(category?.zoneId).toLowerCase()
+        const restObj = category?.createdByRestaurant || category?.restaurant
+        const restArea = String(restObj?.area || restObj?.address?.area || restObj?.city || "").toLowerCase()
+
+        const matchesArea = catZoneName.includes(areaLower) || restArea.includes(areaLower)
+        if (!matchesArea) return false
+      }
+
+      return true
+    })
+  }, [categories, searchQuery, scopeFilter, approvalFilter, selectedZoneId, selectedRestaurantId, selectedArea, zones, restaurants])
+
+  const hasActiveFilters =
+    searchQuery !== "" ||
+    scopeFilter !== "all" ||
+    approvalFilter !== "all" ||
+    selectedZoneId !== "all" ||
+    selectedRestaurantId !== "all" ||
+    selectedArea !== "all"
+
+  const resetAllFilters = () => {
+    setSearchQuery("")
+    setScopeFilter("all")
+    setApprovalFilter("all")
+    setSelectedZoneId("all")
+    setSelectedRestaurantId("all")
+    setSelectedArea("all")
+    setShowPendingOnly(false)
+  }
 
   const fetchCategories = async () => {
     try {
@@ -369,49 +512,27 @@ export default function Category() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-6">
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        {/* Top Header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Categories</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-900">Categories</h1>
+              <span className="rounded-full bg-blue-50 border border-blue-200 px-3 py-0.5 text-xs font-bold text-blue-700">
+                {filteredCategories.length} {filteredCategories.length === 1 ? "category" : "categories"}
+              </span>
+            </div>
+            <p className="mt-1.5 max-w-2xl text-sm text-slate-500 font-medium">
               Restaurant-created categories now move through approval, rejection, and optional globalization before every
               restaurant can use them.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 p-1">
-              <button
-                type="button"
-                onClick={() => setShowPendingOnly(false)}
-                className={`rounded-full px-3 py-2 text-xs font-semibold ${!showPendingOnly ? "bg-slate-900 text-white" : "text-slate-600"}`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPendingOnly(true)}
-                className={`rounded-full px-3 py-2 text-xs font-semibold ${showPendingOnly ? "bg-amber-600 text-white" : "text-slate-600"}`}
-              >
-                Pending
-              </button>
-            </div>
-
-            <div className="relative min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search categories"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none focus:border-slate-900"
-              />
-            </div>
-
             <button
               onClick={handleExportPDF}
               disabled={filteredCategories.length === 0}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 transition-all"
             >
               <Download className="h-4 w-4" />
               Export
@@ -419,13 +540,230 @@ export default function Category() {
 
             <button
               onClick={handleAddNew}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-all"
             >
               <Plus className="h-4 w-4" />
               Add Category
             </button>
           </div>
         </div>
+
+        {/* Filter Row 1: Scope & Approval Tab Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          {/* Global vs Restaurant Scope Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5" /> Type:
+            </span>
+            {[
+              { id: "all", label: "All Categories" },
+              { id: "global", label: "🌐 Global Categories" },
+              { id: "restaurant", label: "🏪 Restaurant Categories" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setScopeFilter(tab.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  scopeFilter === tab.id
+                    ? tab.id === "global"
+                      ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                      : tab.id === "restaurant"
+                      ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                      : "bg-slate-900 text-white border-slate-900 shadow-sm"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Approval Status Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" /> Approval:
+            </span>
+            {[
+              { id: "all", label: "All Status" },
+              { id: "pending", label: "Pending" },
+              { id: "approved", label: "Approved" },
+              { id: "rejected", label: "Rejected" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setApprovalFilter(tab.id)
+                  setShowPendingOnly(tab.id === "pending")
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  approvalFilter === tab.id
+                    ? tab.id === "pending"
+                      ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                      : tab.id === "approved"
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : tab.id === "rejected"
+                      ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                      : "bg-slate-800 text-white border-slate-800 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Filter Row 2: Zone, Restaurant, Area Dropdowns & Search */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+          {/* Zone Dropdown Filter */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5 text-blue-600" /> Zone Filter
+            </label>
+            <select
+              value={selectedZoneId}
+              onChange={(e) => setSelectedZoneId(e.target.value)}
+              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
+                selectedZoneId !== "all" ? "border-blue-500 bg-blue-50/50 text-blue-900 font-bold" : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              <option value="all">📍 All Zones</option>
+              <option value="global_zone">🌐 Global (All Zones)</option>
+              {zonesLoading && <option disabled>Loading zones...</option>}
+              {zones.map((zone) => {
+                const zId = String(zone._id || zone.id || "")
+                const zName = zone.name || zone.zoneName || zone.serviceLocation || zId
+                return (
+                  <option key={zId} value={zId}>
+                    📍 {zName}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          {/* Restaurant Dropdown Filter */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+              <Store className="w-3.5 h-3.5 text-amber-600" /> Restaurant Filter
+            </label>
+            <select
+              value={selectedRestaurantId}
+              onChange={(e) => setSelectedRestaurantId(e.target.value)}
+              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
+                selectedRestaurantId !== "all" ? "border-amber-500 bg-amber-50/50 text-amber-900 font-bold" : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              <option value="all">🏪 All Restaurants</option>
+              {restaurantsLoading && <option disabled>Loading restaurants...</option>}
+              {restaurants.map((rest) => {
+                const rId = String(rest._id || rest.id || "")
+                const rName = rest.name || rest.restaurantName || rId
+                return (
+                  <option key={rId} value={rId}>
+                    🏪 {rName}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          {/* Area Dropdown Filter */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+              <Compass className="w-3.5 h-3.5 text-emerald-600" /> Area Filter
+            </label>
+            <select
+              value={selectedArea}
+              onChange={(e) => setSelectedArea(e.target.value)}
+              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
+                selectedArea !== "all" ? "border-emerald-500 bg-emerald-50/50 text-emerald-900 font-bold" : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              <option value="all">🌆 All Areas</option>
+              {availableAreas.map((area, idx) => (
+                <option key={idx} value={area}>
+                  🌆 {area}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search Input & Reset Button */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-slate-600" /> Search Category
+            </label>
+            <div className="relative flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search name, owner..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-slate-900"
+                />
+              </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="shrink-0 px-3 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 text-xs font-bold transition-all flex items-center gap-1"
+                  title="Clear all filters"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filters Badges Indicator */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+            <span className="font-bold text-slate-500">Active Filters:</span>
+            {scopeFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-800 font-semibold">
+                Type: {scopeFilter === "global" ? "🌐 Global Only" : "🏪 Restaurant Only"}
+                <X className="w-3 h-3 cursor-pointer text-slate-500 hover:text-slate-900" onClick={() => setScopeFilter("all")} />
+              </span>
+            )}
+            {selectedZoneId !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold">
+                Zone: {selectedZoneId === "global_zone" ? "Global" : zones.find((z) => String(z._id || z.id) === selectedZoneId)?.name || selectedZoneId}
+                <X className="w-3 h-3 cursor-pointer text-blue-500 hover:text-blue-900" onClick={() => setSelectedZoneId("all")} />
+              </span>
+            )}
+            {selectedRestaurantId !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-semibold">
+                Restaurant: {restaurants.find((r) => String(r._id || r.id) === selectedRestaurantId)?.name || selectedRestaurantId}
+                <X className="w-3 h-3 cursor-pointer text-amber-500 hover:text-amber-900" onClick={() => setSelectedRestaurantId("all")} />
+              </span>
+            )}
+            {selectedArea !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold">
+                Area: {selectedArea}
+                <X className="w-3 h-3 cursor-pointer text-emerald-500 hover:text-emerald-900" onClick={() => setSelectedArea("all")} />
+              </span>
+            )}
+            {approvalFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-800 font-semibold">
+                Approval: {approvalFilter}
+                <X className="w-3 h-3 cursor-pointer text-purple-500 hover:text-purple-900" onClick={() => { setApprovalFilter("all"); setShowPendingOnly(false); }} />
+              </span>
+            )}
+            {searchQuery && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-800 font-semibold">
+                Search: "{searchQuery}"
+                <X className="w-3 h-3 cursor-pointer text-slate-500 hover:text-slate-900" onClick={() => setSearchQuery("")} />
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -454,7 +792,18 @@ export default function Category() {
                 <tr>
                   <td colSpan={7} className="px-6 py-20 text-center">
                     <p className="text-lg font-semibold text-slate-700">No categories found</p>
-                    <p className="mt-1 text-sm text-slate-500">Try a different search or create a new category.</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {hasActiveFilters ? "Try clearing active filters." : "Try a different search or create a new category."}
+                    </p>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={resetAllFilters}
+                        className="mt-3 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Reset All Filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -468,7 +817,7 @@ export default function Category() {
                     <tr key={category.id} className="align-top hover:bg-slate-50/80">
                       <td className="px-5 py-5">
                         <div className="flex items-start gap-3">
-                          <div className="h-11 w-11 overflow-hidden rounded-2xl bg-slate-100">
+                          <div className="h-11 w-11 overflow-hidden rounded-2xl bg-slate-100 shrink-0">
                             {category?.image ? (
                               <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
                             ) : (
@@ -481,7 +830,7 @@ export default function Category() {
                             <p className="truncate text-lg font-semibold leading-6 text-slate-900">{category?.name || "-"}</p>
                             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                               <span>{category?.type || "No type"}</span>
-                              <span className="text-slate-300">â€¢</span>
+                              <span className="text-slate-300">•</span>
                               <span>Items linked: {category?.itemCount || 0}</span>
                             </div>
                           </div>
@@ -742,4 +1091,3 @@ export default function Category() {
     </div>
   )
 }
-
