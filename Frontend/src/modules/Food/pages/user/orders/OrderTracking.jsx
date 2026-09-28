@@ -148,11 +148,35 @@ class MapErrorBoundary extends React.Component {
 // Real Delivery Map Component with User Live Location
 const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoords = null, userLiveCoords = null, userLocationAccuracy = null, onEtaUpdate = null }) => {
   const toPointFromGeoJSON = (coords) => {
-    if (!Array.isArray(coords) || coords.length < 2) return null;
-    const lng = Number(coords[0]);
-    const lat = Number(coords[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
+    if (!coords) return null;
+
+    if (typeof coords === 'object' && !Array.isArray(coords)) {
+      const rawLat = Number(coords.lat ?? coords.latitude);
+      const rawLng = Number(coords.lng ?? coords.longitude);
+      if (!Number.isFinite(rawLat) || !Number.isFinite(rawLng) || (rawLat === 0 && rawLng === 0)) return null;
+      if (Math.abs(rawLat) > 50 && Math.abs(rawLng) <= 50) {
+        return { lat: rawLng, lng: rawLat };
+      }
+      return { lat: rawLat, lng: rawLng };
+    }
+
+    if (Array.isArray(coords) && coords.length >= 2) {
+      const val0 = Number(coords[0]);
+      const val1 = Number(coords[1]);
+      if (!Number.isFinite(val0) || !Number.isFinite(val1) || (val0 === 0 && val1 === 0)) return null;
+
+      // In GeoJSON [lng, lat]: for India longitude is > 50, latitude is <= 50
+      if (Math.abs(val0) > 50 && Math.abs(val1) <= 50) {
+        return { lat: val1, lng: val0 };
+      }
+      // In legacy [lat, lng]: for India latitude is <= 50, longitude is > 50
+      if (Math.abs(val0) <= 50 && Math.abs(val1) > 50) {
+        return { lat: val0, lng: val1 };
+      }
+      return { lat: val1, lng: val0 };
+    }
+
+    return null;
   };
 
   // Memoize coordinates to prevent re-calculating on every parent render
@@ -161,18 +185,15 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
     const fromCoords = toPointFromGeoJSON(coords);
     if (fromCoords) return fromCoords;
 
-    const lat = Number(order?.address?.latitude ?? order?.address?.location?.latitude);
-    const lng = Number(order?.address?.longitude ?? order?.address?.location?.longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
-      return { lat, lng };
-    }
+    const fromObj = toPointFromGeoJSON(order?.address || order?.address?.location);
+    if (fromObj) return fromObj;
 
     if (
       fallbackCustomerCoords &&
       Number.isFinite(fallbackCustomerCoords.lat) &&
       Number.isFinite(fallbackCustomerCoords.lng)
     ) {
-      return fallbackCustomerCoords;
+      return toPointFromGeoJSON(fallbackCustomerCoords) || fallbackCustomerCoords;
     }
 
     if (
@@ -180,7 +201,7 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
       Number.isFinite(userLiveCoords.lat) &&
       Number.isFinite(userLiveCoords.lng)
     ) {
-      return userLiveCoords;
+      return toPointFromGeoJSON(userLiveCoords) || userLiveCoords;
     }
 
     return null;
@@ -192,12 +213,10 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
       order?.restaurantId?.location?.coordinates ||
       order?.restaurant?.location?.coordinates ||
       order?.restaurant?.coordinates ||
-      (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude
-        ? [order.restaurantId.location.longitude, order.restaurantId.location.latitude]
-        : null) ||
-      (order?.restaurant?.location?.latitude && order?.restaurant?.location?.longitude
-        ? [order.restaurant.location.longitude, order.restaurant.location.latitude]
-        : null);
+      order?.restaurantLocation ||
+      order?.restaurantId?.location ||
+      order?.restaurant?.location ||
+      order?.restaurant;
 
     const fromCoords = toPointFromGeoJSON(coords);
     if (fromCoords) return fromCoords;
@@ -215,7 +234,7 @@ const DeliveryMap = React.memo(({ orderId, order, isVisible, fallbackCustomerCoo
       order?.restaurantLocation?.longitude
     );
     if (Number.isFinite(fallbackLat) && Number.isFinite(fallbackLng) && (fallbackLat !== 0 || fallbackLng !== 0)) {
-      return { lat: fallbackLat, lng: fallbackLng };
+      return toPointFromGeoJSON({ lat: fallbackLat, lng: fallbackLng });
     }
 
     if (customerCoords) {

@@ -64,17 +64,43 @@ export function subscribeDeliveryLocation(deliveryId, onChange, onError) {
 export function subscribeAllDeliveryLocations(onChange, onError) {
   if (typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: true, enableGoogleProvider: false, enableRealtimeDb: true });
-  const path = 'delivery';
-  const unsub = onValue(
-    ref(firebaseRealtimeDb, path),
+
+  let boysMap = {};
+  let deliveryMap = {};
+
+  const emitMerged = (path) => {
+    const merged = { ...deliveryMap, ...boysMap };
+    onChange(merged, path);
+  };
+
+  const unsub1 = onValue(
+    ref(firebaseRealtimeDb, 'delivery_boys'),
     (snapshot) => {
-      onChange(snapshot.val() || {}, path);
+      boysMap = snapshot.val() || {};
+      emitMerged('delivery_boys');
     },
     (error) => {
-      if (typeof onError === 'function') onError(error, path);
+      if (typeof onError === 'function') onError(error, 'delivery_boys');
     },
   );
-  return unsub;
+
+  const unsub2 = onValue(
+    ref(firebaseRealtimeDb, 'delivery'),
+    (snapshot) => {
+      if (snapshot.exists()) {
+        deliveryMap = snapshot.val() || {};
+        emitMerged('delivery');
+      }
+    },
+    (error) => {
+      if (typeof onError === 'function') onError(error, 'delivery');
+    },
+  );
+
+  return () => {
+    if (typeof unsub1 === 'function') unsub1();
+    if (typeof unsub2 === 'function') unsub2();
+  };
 }
 
 export function subscribeRestaurantLocation(restaurantId, onChange, onError) {

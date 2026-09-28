@@ -138,7 +138,7 @@ export const PayoutV2 = () => {
                         </span>
                       </div>
                       <p className="text-gray-900 text-xl font-bold mb-1">
-                        ₹{withdrawal.amount}
+                        ₹{(Math.round((Number(withdrawal.amount || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
                       </p>
                       <p className="text-gray-500 text-[11px] font-medium">
                         Requested: {withdrawal.date}
