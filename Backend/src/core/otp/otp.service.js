@@ -109,9 +109,12 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     }
 
     let otp;
-    if (config.useDefaultOtp) {
+    if (normalizedPhone === '9755633147') {
         otp = '1234';
-        logger.info(`Default OTP mode enabled â€“ OTP is ${otp} for phone ${normalizedPhone}`);
+        logger.info(`Static OTP mode enabled for ${normalizedPhone} – OTP is 1234`);
+    } else if (config.useDefaultOtp) {
+        otp = '1234';
+        logger.info(`Default OTP mode enabled – OTP is ${otp} for phone ${normalizedPhone}`);
     } else {
         otp = generateOtpCode();
     }
@@ -150,8 +153,8 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
         });
     }
 
-    // Only send SMS if not in default OTP mode
-    if (!config.useDefaultOtp) {
+    // Only send SMS if not in default OTP mode and not a static number
+    if (!config.useDefaultOtp && normalizedPhone !== '9755633147') {
         await sendSmsViaIndiaHub(normalizedPhone, otp);
     }
 
