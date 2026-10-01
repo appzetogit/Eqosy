@@ -2168,9 +2168,9 @@ const SelectVehicle = () => {
               const canSelectVehicle = !isUnavailable || rideMode === 'schedule';
               const compactEta = Math.max(
                 1,
-                availability.closestDriverEtaMinutes || tripMetrics.durationMinutes || 1,
+                availability.closestDriverEtaMinutes || 3,
               );
-              const personCapacity = v.capacity || getCapacity(v);
+              const personCapacity = v.pricingRule?.capacity || v.capacity || getCapacity(v);
               const totalDurationMinutes = compactEta + (tripMetrics.durationMinutes || 15);
               const estimatedDropTimeLabel = getDropTime(totalDurationMinutes);
               const closestDriverDistanceLabel = availability.closestDriverDistanceMeters ? formatDistanceLabel(availability.closestDriverDistanceMeters) : null;
@@ -2514,7 +2514,7 @@ const SelectVehicle = () => {
                   <p className="mt-1 text-[17px] font-extrabold text-slate-900">
                     {bookingTab === 'parcel' || String(previewVehicle.transport_type || '').toLowerCase() === 'delivery'
                       ? getParcelWeightCapacity(previewVehicle)
-                      : `${previewVehicle.capacity || getCapacity(previewVehicle)} Persons`}
+                      : `${previewVehicle.pricingRule?.capacity || previewVehicle.capacity || getCapacity(previewVehicle)} Persons`}
                   </p>
                 </div>
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">

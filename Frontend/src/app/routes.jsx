@@ -12,6 +12,8 @@ import lazyWithRetry from '../shared/utils/lazyWithRetry.js'
 const FoodApp = lazyWithRetry(() => import('../modules/Food/routes'))
 const TaxiApp = lazyWithRetry(() => import('../modules/Taxi/TaxiApp'))
 const AuthApp = lazyWithRetry(() => import('../modules/auth/routes'))
+const GlobalTerms = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Terms'))
+const GlobalPrivacy = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Privacy'))
 
 const PageLoader = () => <SmartRouteSkeleton />
 
@@ -164,6 +166,8 @@ const AppRoutes = () => {
       <Route path="/" element={<Navigate to="/food/user" replace />} />
       <Route path="/landing" element={<Navigate to="/food/user" replace />} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
+      <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
+      <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
       <Route

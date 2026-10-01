@@ -91,8 +91,11 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     }
     const now = new Date();
 
+    const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+    const isStaticNumber = staticNumbers.includes(normalizedPhone);
+
     // Rate Limiting Logic
-    if (existing) {
+    if (existing && !isStaticNumber) {
         const windowMs = (config.otpRateWindow || 600) * 1000;
         const isInWindow = now - existing.lastRequestAt < windowMs;
 
@@ -109,7 +112,7 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     }
 
     let otp;
-    if (normalizedPhone === '9755633147') {
+    if (isStaticNumber) {
         otp = '1234';
         logger.info(`Static OTP mode enabled for ${normalizedPhone} – OTP is 1234`);
     } else if (config.useDefaultOtp) {
@@ -154,7 +157,7 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     }
 
     // Only send SMS if not in default OTP mode and not a static number
-    if (!config.useDefaultOtp && normalizedPhone !== '9755633147') {
+    if (!config.useDefaultOtp && !staticNumbers.includes(normalizedPhone)) {
         await sendSmsViaIndiaHub(normalizedPhone, otp);
     }
 
@@ -166,6 +169,11 @@ export const verifyOtp = async (phone, otp, scope = 'default') => {
     const normalizedScope = normalizeOtpScope(scope);
     if (!normalizedPhone || normalizedPhone.length < 8) {
         return { valid: false, reason: 'Invalid phone format' };
+    }
+
+    const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+    if (staticNumbers.includes(normalizedPhone) && otp === '1234') {
+        return { valid: true };
     }
 
     const record = await FoodOtp.findOne({

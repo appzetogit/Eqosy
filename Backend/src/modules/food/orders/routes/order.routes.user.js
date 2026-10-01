@@ -9,7 +9,9 @@ import {
     cancelOrderController,
     submitOrderRatingsController,
     getOrderDropOtpUserController,
-    updateOrderInstructionsController
+    updateOrderInstructionsController,
+    getUnratedOrderUserController,
+    skipOrderRatingController
 } from '../controllers/order.controller.js';
 import { getOrderPublic } from '../services/order.service.js';
 import { sendResponse } from '../../../../utils/response.js';
@@ -31,9 +33,11 @@ router.post('/verify-payment', verifyPaymentController);
 router.get('/', listOrdersUserController);
 router.get('/:orderId/payments', getOrderPaymentsUserController);
 router.get('/:orderId/drop-otp', getOrderDropOtpUserController);
+router.get('/unrated', getUnratedOrderUserController);
 router.get('/:orderId', getOrderByIdUserController);
 router.patch('/:orderId/cancel', cancelOrderController);
 router.patch('/:orderId/ratings', submitOrderRatingsController);
+router.patch('/:orderId/skip-rating', skipOrderRatingController);
 router.patch('/:orderId/instructions', updateOrderInstructionsController);
 
 export default router;

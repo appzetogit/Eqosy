@@ -218,6 +218,13 @@ export default function RestaurantsList() {
               ? body.restaurants
               : []
 
+        const getZoneIdString = (restaurant) => {
+          const zid = restaurant?.zoneId
+          return typeof zid === "string"
+            ? zid
+            : (zid?._id || zid?.id || "")
+        }
+
         const zoneLabelFromRestaurant = (restaurant) => {
           const zid = restaurant?.zoneId
           const zoneName =
@@ -225,10 +232,7 @@ export default function RestaurantsList() {
             ""
           if (zoneName) return zoneName
 
-          const zoneIdString =
-            typeof zid === "string"
-              ? zid
-              : (zid?._id || zid?.id || "")
+          const zoneIdString = getZoneIdString(restaurant)
           if (zoneIdString && Array.isArray(zones) && zones.length > 0) {
             const match = zones.find((z) => (z?._id || z?.id) === zoneIdString)
             const label = match?.name || match?.zoneName
@@ -253,6 +257,7 @@ export default function RestaurantsList() {
             ownerName: restaurant.ownerName || "N/A",
             ownerPhone: restaurant.ownerPhone || restaurant.phone || "N/A",
             zone: zoneLabelFromRestaurant(restaurant),
+            zoneId: getZoneIdString(restaurant),
             approvalStatus: normalizeApprovalStatus(restaurant),
             isActive: restaurant.isActive !== false,
             isRestaurant: restaurant.isRestaurant !== false,
@@ -329,7 +334,7 @@ export default function RestaurantsList() {
     }
 
     if (filters.zone) {
-      result = result.filter(restaurant => restaurant.zone === filters.zone)
+      result = result.filter(restaurant => restaurant.zoneId === filters.zone)
     }
 
     // Apply Sorting
@@ -692,13 +697,6 @@ export default function RestaurantsList() {
   }
 
   useEffect(() => {
-    if (!isEditingLocation || !selectedRestaurant) return
-
-    const sourceRestaurant = restaurantDetails || selectedRestaurant?.originalData || selectedRestaurant
-    const initialForm = normalizeLocationFormFromRestaurant(sourceRestaurant)
-    setLocationForm(initialForm)
-    setLocationEditError("")
-
     setZonesLoading(true)
     adminAPI.getZones({ limit: 1000 })
       .then((res) => {
@@ -707,6 +705,15 @@ export default function RestaurantsList() {
       })
       .catch(() => setZones([]))
       .finally(() => setZonesLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!isEditingLocation || !selectedRestaurant) return
+
+    const sourceRestaurant = restaurantDetails || selectedRestaurant?.originalData || selectedRestaurant
+    const initialForm = normalizeLocationFormFromRestaurant(sourceRestaurant)
+    setLocationForm(initialForm)
+    setLocationEditError("")
 
     // Init dropdown autocomplete after mount.
     requestAnimationFrame(() => initPlacesAutocomplete())
@@ -1146,6 +1153,21 @@ export default function RestaurantsList() {
                   className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
+
+              <div className="relative flex-1 sm:flex-initial min-w-[200px]">
+                <select
+                  value={filters.zone || ""}
+                  onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                  className="w-full px-4 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Zones</option>
+                  {zones.map((z) => (
+                    <option key={z._id || z.id} value={z._id || z.id}>
+                      {z.name || z.zoneName || "Zone"}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <DropdownMenu>

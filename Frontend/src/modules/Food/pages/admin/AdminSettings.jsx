@@ -336,7 +336,133 @@ export default function AdminSettings() {
           </form>
         </CardContent>
       </Card>
+      {/* Dispatch Settings Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Truck className="w-5 h-5 text-neutral-700" />
+            <CardTitle>Delivery Dispatch Limits</CardTitle>
+          </div>
+          <CardDescription>
+            Configure maximum distance limits for different vehicle types when assigning orders
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DispatchSettingsForm />
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function DispatchSettingsForm() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState({
+    maxDistanceCycle: 5,
+    maxDistanceElectricScooter: 10,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSettings = async () => {
+      try {
+        const res = await adminAPI.getDispatchSettings();
+        if (!cancelled && res.data?.data) {
+          setSettings({
+            maxDistanceCycle: res.data.data.maxDistanceCycle ?? 5,
+            maxDistanceElectricScooter: res.data.data.maxDistanceElectricScooter ?? 10,
+          });
+        }
+      } catch (err) {
+        debugError("Failed to fetch dispatch settings:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await adminAPI.updateDispatchSettings({
+        maxDistanceCycle: Number(settings.maxDistanceCycle),
+        maxDistanceElectricScooter: Number(settings.maxDistanceElectricScooter),
+      });
+      toast.success("Dispatch limits updated successfully");
+    } catch (err) {
+      debugError("Failed to update dispatch limits:", err);
+      toast.error(err?.response?.data?.message || "Failed to update dispatch limits");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <Loader2 className="w-6 h-6 animate-spin text-neutral-500" />
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSave} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label htmlFor="maxDistanceCycle">Max Distance for Cycle (km)</Label>
+          <Input
+            id="maxDistanceCycle"
+            type="number"
+            min="0"
+            step="0.1"
+            value={settings.maxDistanceCycle}
+            onChange={(e) => setSettings(prev => ({ ...prev, maxDistanceCycle: e.target.value }))}
+            disabled={saving}
+            required
+          />
+          <p className="text-xs text-neutral-500">Maximum distance to assign orders to cycle partners.</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="maxDistanceElectricScooter">Max Distance for Electric Scooter (km)</Label>
+          <Input
+            id="maxDistanceElectricScooter"
+            type="number"
+            min="0"
+            step="0.1"
+            value={settings.maxDistanceElectricScooter}
+            onChange={(e) => setSettings(prev => ({ ...prev, maxDistanceElectricScooter: e.target.value }))}
+            disabled={saving}
+            required
+          />
+          <p className="text-xs text-neutral-500">Maximum distance to assign orders to electric scooter partners.</p>
+        </div>
+      </div>
+      <div className="flex justify-end pt-4 border-t border-neutral-200">
+        <Button
+          type="submit"
+          disabled={saving}
+          className="bg-black text-white hover:bg-neutral-900 h-11 px-8"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Limits
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }
 

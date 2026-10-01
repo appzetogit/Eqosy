@@ -1086,6 +1086,43 @@ export async function submitOrderRatings(orderId, userId, dto) {
   });
 }
 
+export async function getUnratedOrderUser(userId) {
+  if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
+    return { order: null };
+  }
+  
+  const order = await FoodOrder.findOne({
+    userId: new mongoose.Types.ObjectId(userId),
+    orderStatus: "delivered",
+    "ratings.isSkipped": { $ne: true },
+    "ratings.restaurant.rating": { $exists: false }
+  })
+    .populate("restaurantId", "restaurantName profileImage")
+    .populate("dispatch.deliveryPartnerId", "name profileImage avatar")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!order) return { order: null };
+  
+  return { order: normalizeOrderForClient(order) };
+}
+
+export async function skipOrderRating(orderId, userId) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne({
+    ...identity,
+    userId: new mongoose.Types.ObjectId(userId),
+  });
+  if (!order) throw new NotFoundError("Order not found");
+  
+  order.ratings = order.ratings || {};
+  order.ratings.isSkipped = true;
+  await order.save();
+  return normalizeOrderForClient(order);
+}
+
 export async function updateOrderInstructions(orderId, userId, instructions) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");

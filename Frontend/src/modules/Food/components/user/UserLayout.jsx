@@ -12,6 +12,7 @@ import SearchOverlay from "./SearchOverlay"
 import BottomNavigation from "./BottomNavigation"
 import DesktopNavbar from "./DesktopNavbar"
 import { useUserNotifications } from "../../hooks/useUserNotifications"
+import UnratedOrderPopup from "./UnratedOrderPopup"
 
 // Create SearchOverlay context with default value
 const SearchOverlayContext = createContext({
@@ -150,6 +151,7 @@ export default function UserLayout() {
                   {showBottomNav && <DesktopNavbar showLogo={!isUnder250} />}
                 </div>
                 <LocationPrompt />
+                <UnratedOrderPopup />
                 <main className={showBottomNav ? "md:pt-40" : ""}>
                   <Outlet />
                 </main>

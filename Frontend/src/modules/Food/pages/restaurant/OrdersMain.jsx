@@ -80,6 +80,7 @@ const transformOrderForList = (order) => {
   }
 
   return {
+    fullOrder: order,
     orderId: order.orderId || order._id,
     mongoId: order._id,
     status: normalizedStatus,
@@ -137,6 +138,7 @@ function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
           });
 
           const transformedOrders = completedOrders.map((order) => ({
+            fullOrder: order,
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: order.status || "delivered",
@@ -346,6 +348,7 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
           );
 
           const transformedOrders = cancelledOrders.map((order) => ({
+            fullOrder: order,
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: order.status || "cancelled",
@@ -2940,7 +2943,133 @@ export default function OrdersMain() {
 
 
 // Order Card Component
+const printOrderBill = async (order) => {
+  if (!order) return;
+  
+  // Open window synchronously to bypass popup blockers
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write('<div style="font-family: sans-serif; padding: 20px;">Generating bill...</div>');
+  }
+
+  let restaurantName = order.restaurantName || order.restaurant?.name || "Restaurant";
+  let restaurantAddress = "";
+
+  try {
+    const res = await restaurantAPI.getCurrentRestaurant();
+    const data = res?.data?.data?.restaurant || res?.data?.restaurant || res?.data?.user || res?.data?.data?.user;
+    if (data) {
+      if (data.name) restaurantName = data.name;
+      
+      if (data.location?.formattedAddress && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(data.location.formattedAddress)) {
+        restaurantAddress = data.location.formattedAddress;
+      } else if (data.location?.address) {
+        restaurantAddress = data.location.address;
+      } else if (data.address) {
+        restaurantAddress = data.address;
+      }
+    }
+  } catch (err) {
+    // silently continue
+  }
+
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [80, 200]
+  });
+  
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text(restaurantName, 40, 10, { align: "center" });
+  
+  let y = 16;
+  if (restaurantAddress) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    const splitAddress = doc.splitTextToSize(restaurantAddress, 70);
+    doc.text(splitAddress, 40, y, { align: "center" });
+    y += (splitAddress.length * 3.5) + 2;
+  }
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Order Bill", 40, y, { align: "center" });
+  y += 8;
+
+  doc.setFontSize(9);
+  doc.text(`Order ID: ${order.orderId || order._id || 'N/A'}`, 5, y);
+  y += 5;
+  doc.text(`Date: ${new Date(order.createdAt || Date.now()).toLocaleString()}`, 5, y);
+  y += 5;
+  doc.text(`Customer: ${order.userId?.name || order.customerName || "Customer"}`, 5, y);
+  y += 4;
+  
+  doc.setLineWidth(0.5);
+  doc.line(5, y, 75, y);
+  y += 5;
+
+  // Items
+  doc.setFont("helvetica", "bold");
+  doc.text("Item", 5, y);
+  doc.text("Qty", 55, y);
+  doc.text("Price", 65, y);
+  y += 2;
+
+  doc.line(5, y, 75, y);
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
+  let foodTotal = 0;
+
+  (order.items || []).forEach(item => {
+    const itemName = doc.splitTextToSize(item.name || 'Item', 45);
+    doc.text(itemName, 5, y);
+    doc.text(String(item.quantity || 1), 55, y);
+    const itemPrice = Number(item.price || 0);
+    const itemQty = Number(item.quantity || 1);
+    const itemTotal = itemPrice * itemQty;
+    doc.text(`Rs ${itemTotal.toFixed(2)}`, 65, y);
+    foodTotal += itemTotal;
+    y += (itemName.length * 4) + 2;
+  });
+
+  doc.line(5, y, 75, y);
+  y += 5;
+
+  // Totals
+  doc.setFont("helvetica", "bold");
+  doc.text("Food Charges", 25, y);
+  doc.text(`Rs ${foodTotal.toFixed(2)}`, 65, y);
+  
+  y += 5;
+  const tax = Number(order.pricing?.tax || order.pricing?.restaurantTax || 0);
+  const packaging = Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
+
+  doc.line(5, y, 75, y);
+  y += 5;
+
+  const grandTotal = Number(order.pricing?.total || (foodTotal + tax + packaging));
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Total Amount", 25, y);
+  doc.text(`Rs ${grandTotal.toFixed(2)}`, 65, y);
+
+  y += 10;
+  doc.setFont("helvetica", "normal");
+  doc.text("Thank you!", 40, y, { align: "center" });
+
+  doc.autoPrint();
+  const blobUrl = doc.output('bloburl');
+  
+  if (printWindow) {
+    printWindow.location.href = blobUrl;
+  } else {
+    window.open(blobUrl, '_blank');
+  }
+};
+
 function OrderCard({
+  fullOrder,
   orderId,
   mongoId,
   status,
@@ -3134,6 +3263,16 @@ function OrderCard({
               {isMarkingReady ? "Marking…" : "Mark Ready"}
             </button>
           )}
+          {(isReady || isPreparing || normalizedStatus === "confirmed") && fullOrder && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); printOrderBill(fullOrder); }}
+              className="h-8 w-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-700 active:bg-gray-200 transition-colors border border-gray-200 shadow-sm"
+              title="Print Bill"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+          )}
           {!isReady && eta && (
             <div className="flex items-baseline gap-0.5">
               <span className="text-[10px] text-gray-400">ETA</span>
@@ -3183,6 +3322,7 @@ function PreparingOrders({
               : new Date(order.createdAt); // Fallback to createdAt if preparing timestamp not available
 
             return {
+              fullOrder: order,
               orderId: order.orderId || order._id,
               mongoId: order._id,
               status: order.status || "preparing",
@@ -3443,6 +3583,7 @@ function PreparingOrders({
             return (
               <OrderCard
                 key={order.orderId || order.mongoId}
+                fullOrder={order.fullOrder}
                 orderId={order.orderId}
                 mongoId={order.mongoId}
                 status={order.status}
@@ -3495,6 +3636,7 @@ function ReadyOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
           });
 
           const transformedOrders = readyOrders.map((order) => ({
+            fullOrder: order,
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: order.status || "ready",
@@ -3621,6 +3763,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, refreshToken = 0 }) => {
           );
 
           const transformedOrders = outForDeliveryOrders.map((order) => ({
+            fullOrder: order,
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: order.status || order.orderStatus || "out_for_delivery",

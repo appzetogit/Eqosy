@@ -5,6 +5,9 @@ const { ObjectId } = mongoose.Schema.Types;
 const VEHICLE_ICON_TYPES = [
   'car',
   'bike',
+  'cycle',
+  'electric_scooty',
+  'scooter',
   'auto',
   'truck',
   'ehcb',

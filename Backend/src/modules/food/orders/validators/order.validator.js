@@ -190,7 +190,9 @@ export function validateAssignDeliveryDto(body) {
 
 export function validateDispatchSettingsDto(body) {
     const schema = z.object({
-        dispatchMode: z.enum(['auto', 'manual'])
+        dispatchMode: z.enum(['auto', 'manual']).optional(),
+        maxDistanceCycle: z.number().min(0).optional(),
+        maxDistanceElectricScooter: z.number().min(0).optional()
     });
     const result = schema.safeParse(body);
     if (!result.success) {

@@ -209,12 +209,11 @@ export async function calculateOrderPricing(userId, dto) {
     let excessDistanceKm = 0;
 
     if (isBaseSlab) {
-      // Base slab (user): DB base pay + per-km × full distance
-      const distanceLeg = Math.round(Math.max(0, perKmRate * Number(distanceKm || 0)) * 100) / 100;
-      deliveryFee = Math.round(Math.max(0, fixedPayout + distanceLeg) * 100) / 100;
+      // Base slab (user): DB base pay only (flat fee for base distance)
+      deliveryFee = fixedPayout;
       baseSlabFlatFee = fixedPayout;
       baseSlabMaxKm = distanceRule.maxDistance == null ? null : Number(distanceRule.maxDistance);
-      excessDistanceKm = Math.round(Number(distanceKm || 0) * 100) / 100;
+      excessDistanceKm = 0;
     } else {
       // Non-base (Option A): base slab user per-km rate as flat + matched per-km × excess beyond base max
       const baseSlab = await resolveBaseDistanceSlab();

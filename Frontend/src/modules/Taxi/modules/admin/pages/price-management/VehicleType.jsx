@@ -41,6 +41,9 @@ const labelClass = 'mb-2 block text-[12px] font-bold text-slate-700';
 const iconMap = {
   car: CarIcon,
   bike: BikeIcon,
+  cycle: BikeIcon,
+  electric_scooty: BikeIcon,
+  scooter: BikeIcon,
   auto: AutoIcon,
   truck: TruckIcon,
   ehcb: EhcvIcon,
@@ -706,6 +709,9 @@ const VehicleType = ({ mode: propMode }) => {
                 if (!['delivery', 'both'].includes(normalizeTransportType(nextTransportType))) {
                   updateForm('delivery_category', '');
                   updateForm('delivery_distance_pricing', normalizeDeliveryDistancePricing());
+                  if (['cycle', 'electric_scooty', 'scooter'].includes(formData.icon_types)) {
+                    updateForm('icon_types', 'bike');
+                  }
                 }
               }}
               className={inputClass}
@@ -723,7 +729,13 @@ const VehicleType = ({ mode: propMode }) => {
           <div>
             <label className={labelClass}>Icon Type *</label>
             <select value={formData.icon_types} onChange={(e) => updateForm('icon_types', e.target.value)} className={inputClass}>
-              {Object.keys(iconMap).map((key) => (
+              {Object.keys(iconMap)
+                .filter(key => {
+                  const isDeliveryOnlyIcon = ['cycle', 'electric_scooty', 'scooter'].includes(key);
+                  const isDeliveryTransport = ['delivery', 'both'].includes(normalizeTransportType(formData.transport_type));
+                  return isDeliveryOnlyIcon ? isDeliveryTransport : true;
+                })
+                .map((key) => (
                 <option key={key} value={key}>{key}</option>
               ))}
             </select>

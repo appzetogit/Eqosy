@@ -41,6 +41,7 @@ const statusConfig = {
 export default function OrdersPage({ statusKey = "all" }) {
   const config = statusConfig[statusKey] || statusConfig["all"]
   const [orders, setOrders] = useState([])
+  const [zones, setZones] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [processingRefund, setProcessingRefund] = useState(null)
   const [processingActionOrderId, setProcessingActionOrderId] = useState(null)
@@ -58,6 +59,22 @@ export default function OrdersPage({ statusKey = "all" }) {
   const recentRealtimeOrderRef = useRef(new Map())
   const activeOrderAlertRef = useRef(null)
   const alertLoopTimerRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    adminAPI
+      .getZones({ limit: 1000 })
+      .then((res) => {
+        const list = res?.data?.data?.zones || res?.data?.data?.data?.zones || res?.data?.data || []
+        if (!cancelled) setZones(Array.isArray(list) ? list : [])
+      })
+      .catch(() => {
+        if (!cancelled) setZones([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const alertLoopStartedAtRef = useRef(0)
   const ALERT_LOOP_INTERVAL_MS = 4500
   const ALERT_LOOP_MAX_MS = 120000
@@ -526,7 +543,8 @@ export default function OrdersPage({ statusKey = "all" }) {
         deliveryType: order.deliveryType || "Home Delivery",
         orderOtp: order.deliveryOtp,
         address: order.address || order.customerAddress || order.deliveryAddress,
-        refundStatus: order.payment?.refund?.status || (order.payment?.status === 'refunded' ? 'processed' : null)
+        refundStatus: order.payment?.refund?.status || (order.payment?.status === 'refunded' ? 'processed' : null),
+        zoneId: order.zoneId?._id || order.zoneId?.id || order.zoneId || order.restaurantId?.zoneId?._id || "",
       }
     })
   }, [orders])
@@ -950,6 +968,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         onApply={handleApplyFilters}
         onReset={handleResetFilters}
         restaurants={restaurants}
+        zones={zones}
       />
       <SettingsDialog
         isOpen={isSettingsOpen}

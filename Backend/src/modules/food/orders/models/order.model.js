@@ -194,7 +194,8 @@ const orderEntityRatingSchema = new mongoose.Schema(
 const orderRatingsSchema = new mongoose.Schema(
     {
         restaurant: { type: orderEntityRatingSchema, default: undefined },
-        deliveryPartner: { type: orderEntityRatingSchema, default: undefined }
+        deliveryPartner: { type: orderEntityRatingSchema, default: undefined },
+        isSkipped: { type: Boolean, default: false }
     },
     { _id: false }
 );
@@ -374,6 +375,8 @@ const settingsSchema = new mongoose.Schema(
     {
         key: { type: String, required: true, unique: true, trim: true },
         dispatchMode: { type: String, enum: ['auto'], default: 'auto' },
+        maxDistanceCycle: { type: Number, default: 5 }, // default 5km
+        maxDistanceElectricScooter: { type: Number, default: 10 }, // default 10km
         updatedBy: {
             role: { type: String },
             adminId: { type: mongoose.Schema.Types.ObjectId },

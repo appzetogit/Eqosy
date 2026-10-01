@@ -1537,27 +1537,27 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 ) : (
                   <div
                     onClick={() => !isOnline && setShowOfflineReasonModal(true)}
-                    className={`rounded-2xl p-3.5 flex items-center justify-between border shadow-sm backdrop-blur-md transition-all ${!isOnline ? 'bg-white/10 hover:bg-white/15 border-white/20 cursor-pointer active:scale-[0.99]' : 'bg-white/5 border-white/5'}`}
+                    className={`rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border shadow-sm backdrop-blur-md transition-all ${!isOnline ? 'bg-white/10 hover:bg-white/15 border-white/20 cursor-pointer active:scale-[0.99]' : 'bg-white/5 border-white/5'}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${isOnline ? 'bg-green-500/10' : 'bg-red-500/20 border border-red-500/40'}`}>
+                    <div className="flex items-start sm:items-center gap-3">
+                      <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${isOnline ? 'bg-green-500/10' : 'bg-red-500/20 border border-red-500/40'}`}>
                         <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`} />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-0.5">{isOnline ? 'System Online' : 'System Offline'}</h3>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                          <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none">{isOnline ? 'System Online' : 'System Offline'}</h3>
                           {!isOnline && (
-                            <span className="bg-amber-500/30 text-amber-200 text-[8px] font-black px-1.5 py-0.5 rounded-md border border-amber-400/40 uppercase tracking-wider">
+                            <span className="bg-amber-500/30 text-amber-200 text-[8px] font-black px-1.5 py-0.5 rounded-md border border-amber-400/40 uppercase tracking-wider shrink-0 mt-0.5 sm:mt-0">
                               Why Offline? Click
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-300 text-[10px] font-bold tracking-tight">
+                        <p className="text-gray-300 text-[10px] font-bold tracking-tight line-clamp-2">
                           {isOnline ? 'Waiting for order requests' : 'Tap to see reasons why you are offline & fix'}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 mt-1 sm:mt-0">
                       {!isOnline && (
                         <button
                           onClick={(e) => {

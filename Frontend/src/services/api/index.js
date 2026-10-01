@@ -610,6 +610,14 @@ export const adminAPI = {
       { params, contextModule: "admin" },
     ),
   /** Dispatch settings – auto vs manual assign (global) */
+  getDispatchSettings: () =>
+    apiClient.get("/food/admin/orders/dispatch-settings", {
+      contextModule: "admin",
+    }),
+  updateDispatchSettings: (body) =>
+    apiClient.patch("/food/admin/orders/dispatch-settings", body ?? {}, {
+      contextModule: "admin",
+    }),
   /** Create restaurant (admin). Single API: POST /food/admin/restaurants. Body: JSON with image URLs. */
   createRestaurant: (body) =>
     apiClient.post("/food/admin/restaurants", body ?? {}, {

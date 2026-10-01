@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { exportToCSV, exportToExcel, exportToPDF, exportToJSON } from "./ordersExportUtils"
 import quickSpicyLogo from "@food/assets/eqosy-logo.png"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
@@ -102,6 +102,7 @@ export function useOrdersManagement(orders, statusKey, title) {
     fromDate: "",
     toDate: "",
     restaurant: "",
+    zone: "",
   })
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
@@ -197,6 +198,10 @@ export function useOrdersManagement(orders, statusKey, title) {
       result = result.filter(order => order.restaurant === filters.restaurant)
     }
 
+    if (filters.zone) {
+      result = result.filter(order => String(order.zoneId || "") === filters.zone)
+    }
+
     // Helper function to parse date format "16 JUL 2025"
     const parseOrderDate = (dateStr) => {
       const months = {
@@ -253,6 +258,7 @@ export function useOrdersManagement(orders, statusKey, title) {
       fromDate: "",
       toDate: "",
       restaurant: "",
+      zone: "",
     })
   }
 

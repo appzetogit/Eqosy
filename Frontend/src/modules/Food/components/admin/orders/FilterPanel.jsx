@@ -1,6 +1,6 @@
 import { X } from "lucide-react"
 
-export default function FilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset, restaurants = [] }) {
+export default function FilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset, restaurants = [], zones = [] }) {
   if (!isOpen) return null
 
   return (
@@ -117,6 +117,29 @@ export default function FilterPanel({ isOpen, onClose, filters, setFilters, onAp
               />
             </div>
           </div>
+
+          {/* Zone Filter */}
+          {zones.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Zone
+              </label>
+              <select
+                value={filters.zone || ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All Zones</option>
+                {zones.map((zone) => {
+                  const zId = String(zone._id || zone.id || "")
+                  const zName = zone.name || zone.zoneName || zone.serviceLocation || zId
+                  return (
+                    <option key={zId} value={zId}>{zName}</option>
+                  )
+                })}
+              </select>
+            </div>
+          )}
 
           {/* Restaurant Filter */}
           {restaurants.length > 0 && (

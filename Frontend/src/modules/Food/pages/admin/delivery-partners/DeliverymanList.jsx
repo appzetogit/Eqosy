@@ -293,8 +293,9 @@ availableCashLimit: wallet?.availableCashLimit || 0,
     // Zone / area filter
     if (zoneFilter && zoneFilter !== "all") {
       result = result.filter((dm) => {
-        const dmZone = String(dm.zone || dm.zoneId || "").toLowerCase().trim()
-        return dmZone === zoneFilter.toLowerCase().trim()
+        const zid = dm.zoneId || dm.zone
+        const dmZoneId = typeof zid === "string" ? zid : (zid?._id || zid?.id || "")
+        return dmZoneId === zoneFilter
       })
     }
 
@@ -603,9 +604,9 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                 onChange={(e) => setZoneFilter(e.target.value)}
                 className="text-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
               >
-                <option value="all">All Areas</option>
+                <option value="all">All Zones</option>
                 {zones.map((z) => (
-                  <option key={z._id} value={z.name || z.zoneName}>
+                  <option key={z._id || z.id} value={z._id || z.id}>
                     {z.name || z.zoneName}
                   </option>
                 ))}

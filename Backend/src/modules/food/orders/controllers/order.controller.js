@@ -113,6 +113,27 @@ export async function submitOrderRatingsController(req, res, next) {
     }
 }
 
+export async function getUnratedOrderUserController(req, res, next) {
+    try {
+        const userId = req.user?.userId;
+        const result = await orderService.getUnratedOrderUser(userId);
+        return sendResponse(res, 200, 'Unrated order retrieved', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function skipOrderRatingController(req, res, next) {
+    try {
+        const userId = req.user?.userId;
+        const orderId = req.params.orderId;
+        const order = await orderService.skipOrderRating(orderId, userId);
+        return sendResponse(res, 200, 'Rating skipped successfully', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function updateOrderInstructionsController(req, res, next) {
     try {
         const userId = req.user?.userId;
@@ -138,7 +159,7 @@ export async function updateDispatchSettingsController(req, res, next) {
     try {
         const adminId = req.user?.userId;
         const dto = validateDispatchSettingsDto(req.body);
-        const result = await orderService.updateDispatchSettings(dto.dispatchMode, adminId);
+        const result = await orderService.updateDispatchSettings(dto, adminId);
         return sendResponse(res, 200, 'Dispatch settings updated', result);
     } catch (err) {
         next(err);

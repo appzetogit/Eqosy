@@ -88,7 +88,7 @@ export function isPartnerInActiveZoneSync(lat, lng, targetZoneId, activeZones = 
 
 async function listNearbyOnlineDeliveryPartners(
   restaurantId,
-  { maxKm = 15, limit = 25 } = {},
+  { maxKm = 15, limit = 25, orderDeliveryDistance = 0 } = {},
 ) {
   const rId = (restaurantId?._id || restaurantId).toString();
   const restaurant = await FoodRestaurant.findById(rId)
@@ -99,10 +99,14 @@ async function listNearbyOnlineDeliveryPartners(
   const activeZones = await FoodZone.find({ isActive: true }).select("_id coordinates").lean();
   const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
 
+  const dispatchSettings = await getDispatchSettings();
+  const maxCycle = dispatchSettings.maxDistanceCycle ?? 5;
+  const maxElectric = dispatchSettings.maxDistanceElectricScooter ?? 10;
+
   let allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
   })
-    .select("_id status lastLat lastLng lastLocationAt name zoneId")
+    .select("_id status lastLat lastLng lastLocationAt name zoneId vehicleType")
     .lean();
 
   allOnline = allOnline.filter(p => !p.status || p.status === 'approved' || p.status === 'pending');
@@ -208,6 +212,11 @@ async function listNearbyOnlineDeliveryPartners(
       const calcD = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
       if (Number.isFinite(calcD)) d = calcD;
     }
+
+    // Vehicle distance limits
+    const totalDist = (d === 999 ? 0 : d) + orderDeliveryDistance;
+    if (p.vehicleType === 'cycle' && totalDist > maxCycle) continue;
+    if (p.vehicleType === 'electric_scooter' && totalDist > maxElectric) continue;
 
     scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 999, status: p.status, isInZone: inZone });
   }
@@ -331,19 +340,26 @@ async function filterPartnersByCodCashLimit(partners = [], order = null) {
 }
 
 export async function getDispatchSettings() {
-  return { dispatchMode: "auto" };
+  const settings = await FoodSettings.findOne({ key: "dispatch" }).lean();
+  return { 
+    dispatchMode: settings?.dispatchMode || "auto",
+    maxDistanceCycle: settings?.maxDistanceCycle ?? 5,
+    maxDistanceElectricScooter: settings?.maxDistanceElectricScooter ?? 10
+  };
 }
 
-export async function updateDispatchSettings(dispatchMode, adminId) {
+export async function updateDispatchSettings(payload, adminId) {
   // Always set to auto
+  const updateData = {
+    dispatchMode: "auto",
+    updatedBy: { role: "ADMIN", adminId, at: new Date() },
+  };
+  if (payload.maxDistanceCycle !== undefined) updateData.maxDistanceCycle = payload.maxDistanceCycle;
+  if (payload.maxDistanceElectricScooter !== undefined) updateData.maxDistanceElectricScooter = payload.maxDistanceElectricScooter;
+  
   await FoodSettings.findOneAndUpdate(
     { key: "dispatch" },
-    {
-      $set: {
-        dispatchMode: "auto",
-        updatedBy: { role: "ADMIN", adminId, at: new Date() },
-      },
-    },
+    { $set: updateData },
     { upsert: true, new: true },
   );
   return getDispatchSettings();
@@ -411,7 +427,14 @@ export async function tryAutoAssign(orderId, options = {}) {
     if (attempt === 3) maxKm = 40;
     if (attempt >= 4) maxKm = 60;
 
-    const searchOptions = { maxKm, limit: 15 };
+    let orderDeliveryDistance = 0;
+    if (order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+      const [rLng, rLat] = order.restaurantId.location.coordinates;
+      const [cLng, cLat] = order.address.location.coordinates;
+      orderDeliveryDistance = haversineKm(rLat, rLng, cLat, cLng);
+    }
+
+    const searchOptions = { maxKm, limit: 15, orderDeliveryDistance };
     const { partners } = await listNearbyOnlineDeliveryPartners(order.restaurantId, searchOptions);
 
     // TIERED ALERT LOGIC

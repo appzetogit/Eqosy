@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import useDeliveryBackNavigation from "../../hooks/useDeliveryBackNavigation"
+import api from "@food/api"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -45,13 +46,20 @@ export default function SignupStep1() {
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const [vehicleTypes, setVehicleTypes] = useState([
+    { id: 'bike', name: 'Bike' },
+    { id: 'electric_scooter', name: 'Electric Scooter' },
+    { id: 'cycle', name: 'Cycle' },
+    { id: 'scooter', name: 'Scooter' },
+    { id: 'car', name: 'Car' }
+  ])
+
   useEffect(() => {
     const fetchZones = async () => {
       setZonesLoading(true)
       try {
-        const res = await fetch("/api/v1/taxi/user/service-locations")
-        const data = await res.json()
-        const list = data?.data?.results || data?.results || []
+        const res = await api.get("/food/zones/public")
+        const list = res.data?.data?.zones || res.data?.zones || res.data?.data?.results || []
         setZones(list)
       } catch (e) {
         debugError("Error loading service locations:", e)
@@ -59,7 +67,37 @@ export default function SignupStep1() {
         setZonesLoading(false)
       }
     }
+    const fetchVehicles = async () => {
+      try {
+        const res = await api.get("/taxi/users/vehicle-types")
+        const data = res.data
+        const list = data?.data?.results || data?.results || data?.vehicle_types || []
+        if (list.length > 0) {
+          const deliveryVehicles = list.filter(v => 
+            v.transport_type === 'delivery' || 
+            v.transport_type === 'both' || 
+            !v.transport_type
+          ).map(v => ({
+            id: v.name.toLowerCase().replace(/\s+/g, '_'),
+            name: v.name
+          }))
+          if (deliveryVehicles.length > 0) {
+            setVehicleTypes(deliveryVehicles)
+            // Ensure selected vehicleType is valid
+            setFormData(prev => {
+              if (!deliveryVehicles.find(v => v.id === prev.vehicleType)) {
+                return { ...prev, vehicleType: deliveryVehicles[0].id }
+              }
+              return prev
+            })
+          }
+        }
+      } catch (e) {
+        debugError("Error loading vehicle types:", e)
+      }
+    }
     fetchZones()
+    fetchVehicles()
   }, [])
 
   const sanitizeLocationValue = (value) =>
@@ -155,7 +193,8 @@ export default function SignupStep1() {
         [name]: ""
       }))
     }
-    if (name === "vehicleType" && updatedValue === "bicycle") {
+    const isNoLicenseVehicleType = updatedValue === "cycle" || updatedValue === "electric_scooter"
+    if (name === "vehicleType" && isNoLicenseVehicleType) {
       setErrors(prev => ({
         ...prev,
         vehicleNumber: "",
@@ -193,7 +232,9 @@ export default function SignupStep1() {
       newErrors.state = "State can contain letters only"
     }
 
-    if (formData.vehicleType !== "bicycle") {
+    const isNoLicenseVehicle = formData.vehicleType === "cycle" || formData.vehicleType === "electric_scooter"
+
+    if (!isNoLicenseVehicle) {
       if (!formData.vehicleNumber.trim()) {
         newErrors.vehicleNumber = "Vehicle number is required"
       } else if (!/^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/.test(formData.vehicleNumber)) {
@@ -247,8 +288,8 @@ export default function SignupStep1() {
         zoneName: formData.zoneName || "",
         vehicleType: formData.vehicleType || "bike",
         vehicleName: formData.vehicleName?.trim() || "",
-        vehicleNumber: formData.vehicleType === "bicycle" ? "" : formData.vehicleNumber.trim(),
-        drivingLicenseNumber: formData.vehicleType === "bicycle" ? "" : formData.drivingLicenseNumber.trim().toUpperCase(),
+        vehicleNumber: formData.vehicleType === "cycle" ? "" : formData.vehicleNumber.trim(),
+        drivingLicenseNumber: formData.vehicleType === "cycle" ? "" : formData.drivingLicenseNumber.trim().toUpperCase(),
         panNumber: formData.panNumber.trim().toUpperCase(),
         aadharNumber: formData.aadharNumber.replace(/\s/g, "")
       }
@@ -262,6 +303,7 @@ export default function SignupStep1() {
       setIsSubmitting(false)
     }
   }
+  const isNoLicenseVehicle = formData.vehicleType === "cycle" || formData.vehicleType === "electric_scooter"
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -379,19 +421,24 @@ export default function SignupStep1() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Select Operating Zone / Service Area
             </label>
-            <select
-              name="zoneId"
-              value={formData.zoneId || ""}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A]"
-            >
-              <option value="">-- Select Existing Zone (Optional) --</option>
-              {zones.map((zone) => (
-                <option key={zone._id || zone.id} value={zone._id || zone.id}>
-                  {zone.name || zone.service_location_name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                name="zoneId"
+                value={formData.zoneId || ""}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
+              >
+                <option value="">Select Zone (Optional)</option>
+                {zones.map((zone) => (
+                  <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                    {zone.name || zone.service_location_name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
           </div>
 
           {/* Vehicle Type */}
@@ -399,17 +446,21 @@ export default function SignupStep1() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Vehicle Type <span className="text-red-500">*</span>
             </label>
-            <select
-              name="vehicleType"
-              value={formData.vehicleType}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A]"
-            >
-              <option value="bike">Bike</option>
-              <option value="scooter">Scooter</option>
-              <option value="bicycle">Bicycle</option>
-              <option value="car">Car</option>
-            </select>
+            <div className="relative">
+              <select
+                name="vehicleType"
+                value={formData.vehicleType}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
+              >
+                {vehicleTypes.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
           </div>
 
           {/* Vehicle Name */}
@@ -428,7 +479,7 @@ export default function SignupStep1() {
           </div>
 
           {/* Vehicle Number */}
-          {formData.vehicleType !== "bicycle" && (
+          {!isNoLicenseVehicle && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Vehicle Number <span className="text-red-500">*</span>
@@ -448,7 +499,7 @@ export default function SignupStep1() {
           )}
 
           {/* Driving License Number */}
-          {formData.vehicleType !== "bicycle" && (
+          {!isNoLicenseVehicle && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Driving License Number <span className="text-red-500">*</span>
