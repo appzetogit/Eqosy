@@ -81,7 +81,7 @@ const TEST_LOGIN_OTP_PHONE = '6268423925';
 const TEST_LOGIN_OTP_CODE = '0000';
 const getStaticDriverOtpConfig = (phone) => {
   const normalizedPhone = normalizePhone(phone);
-  const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+  const staticNumbers = ['9755633147', '7974161582', '9641119590', '7354126134'];
   if (staticNumbers.includes(normalizedPhone)) {
     return { phone: normalizedPhone, otp: '1234' };
   }
@@ -240,29 +240,28 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
   const account =
     normalizedRole === 'owner'
       ? await Owner.findOne({
-          $or: ownerPhoneOr,
-        })
+        $or: ownerPhoneOr,
+      })
       : normalizedRole === 'service_center'
         ? await ServiceStore.findOne({ $or: buildPhoneMatcher('owner_phone', phone) })
-      : normalizedRole === 'service_center_staff'
-        ? await ServiceCenterStaff.findOne({ $or: buildPhoneMatcher('phone', phone) })
-      : normalizedRole === 'bus_driver'
-        ? await BusDriver.findOne({ $or: buildPhoneMatcher('phone', phone) })
-        : await Driver.findOne({ $or: buildPhoneMatcher('phone', phone) });
+        : normalizedRole === 'service_center_staff'
+          ? await ServiceCenterStaff.findOne({ $or: buildPhoneMatcher('phone', phone) })
+          : normalizedRole === 'bus_driver'
+            ? await BusDriver.findOne({ $or: buildPhoneMatcher('phone', phone) })
+            : await Driver.findOne({ $or: buildPhoneMatcher('phone', phone) });
 
   if (!account) {
     throw new ApiError(
       404,
-      `${
-        normalizedRole === 'owner'
-          ? 'Owner'
-          : normalizedRole === 'service_center'
-            ? 'Service center'
+      `${normalizedRole === 'owner'
+        ? 'Owner'
+        : normalizedRole === 'service_center'
+          ? 'Service center'
           : normalizedRole === 'service_center_staff'
             ? 'Service center staff'
-          : normalizedRole === 'bus_driver'
-            ? 'Bus driver'
-            : 'Driver'
+            : normalizedRole === 'bus_driver'
+              ? 'Bus driver'
+              : 'Driver'
       } account not found`,
     );
   }
@@ -310,14 +309,14 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
 
   const smsDispatch = isStatic
     ? {
-        mode: 'static',
-        message: 'Static OTP enabled',
-      }
+      mode: 'static',
+      message: 'Static OTP enabled',
+    }
     : await sendOtpSms({
-        phone: normalizedPhone,
-        otp,
-        purpose: 'driver login OTP',
-      });
+      phone: normalizedPhone,
+      otp,
+      purpose: 'driver login OTP',
+    });
   const debugOtp = getVisibleOtp(otp);
 
   if (debugOtp) {
@@ -332,7 +331,7 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
 
 export const verifyDriverLoginOtp = async ({ phone, otp }) => {
   const normalizedPhone = normalizePhone(phone);
-  const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+  const staticNumbers = ['9755633147', '7974161582', '9641119590', '7354126134'];
   const isStaticBypass = staticNumbers.includes(normalizedPhone) && otp === '1234';
 
   const session = await getSession(phone);
@@ -357,25 +356,24 @@ export const verifyDriverLoginOtp = async ({ phone, otp }) => {
       ? await Owner.findById(session.driverId)
       : normalizedRole === 'service_center'
         ? await ServiceStore.findById(session.driverId)
-      : normalizedRole === 'service_center_staff'
-        ? await ServiceCenterStaff.findById(session.driverId)
-      : normalizedRole === 'bus_driver'
-        ? await BusDriver.findById(session.driverId)
-        : await Driver.findById(session.driverId);
+        : normalizedRole === 'service_center_staff'
+          ? await ServiceCenterStaff.findById(session.driverId)
+          : normalizedRole === 'bus_driver'
+            ? await BusDriver.findById(session.driverId)
+            : await Driver.findById(session.driverId);
 
   if (!account) {
     throw new ApiError(
       404,
-      `${
-        normalizedRole === 'owner'
-          ? 'Owner'
-          : normalizedRole === 'service_center'
-            ? 'Service center'
+      `${normalizedRole === 'owner'
+        ? 'Owner'
+        : normalizedRole === 'service_center'
+          ? 'Service center'
           : normalizedRole === 'service_center_staff'
             ? 'Service center staff'
-          : normalizedRole === 'bus_driver'
-            ? 'Bus driver'
-            : 'Driver'
+            : normalizedRole === 'bus_driver'
+              ? 'Bus driver'
+              : 'Driver'
       } account not found`,
     );
   }
@@ -424,8 +422,8 @@ export const verifyDriverLoginOtp = async ({ phone, otp }) => {
           ? publicServiceCenterPayload(account)
           : normalizedRole === 'service_center_staff'
             ? publicServiceCenterStaffPayload(account)
-        : normalizedRole === 'bus_driver'
-          ? publicBusDriverPayload(account)
-          : publicDriverPayload(account),
+            : normalizedRole === 'bus_driver'
+              ? publicBusDriverPayload(account)
+              : publicDriverPayload(account),
   };
 };
