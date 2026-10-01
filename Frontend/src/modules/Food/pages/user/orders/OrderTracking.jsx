@@ -716,12 +716,9 @@ export default function OrderTracking({ isSharedView = false }) {
         const response = await api.get(API_ENDPOINTS.ADMIN.CANCELLATION_PUBLIC)
         const contentData = response?.data?.data?.content || response?.data?.content
         if (contentData) {
-          const raw = contentData
-          const cleaned = typeof document !== 'undefined'
-            ? (new DOMParser().parseFromString(raw, 'text/html').body.textContent || '')
-            : raw.replace(/<[^>]*>?/gm, '')
-          if (cleaned.trim()) {
-            setCancellationPolicyText(cleaned.trim())
+          const raw = String(contentData).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+          if (raw.trim()) {
+            setCancellationPolicyText(raw.trim())
           }
         }
       } catch (error) {
@@ -2209,7 +2206,7 @@ export default function OrderTracking({ isSharedView = false }) {
               )}
 
               {/* Predefined Reasons Radio Pills */}
-              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+              <div className="space-y-2 pb-2">
                 {CANCELLATION_REASONS.map((reason) => {
                   const isSelected = cancellationReason === reason;
                   return (
