@@ -69,6 +69,349 @@ const getAllOrdersTimestamp = (order) =>
   order?.createdAt ||
   new Date().toISOString();
 
+// Universal Helper Function to Print Receipt/Bill for Any Order
+export const printOrderInvoice = (order) => {
+  if (!order) {
+    toast.error("No order data available to print");
+    return;
+  }
+
+  // Restaurant details from order object or fallbacks
+  const restaurantName =
+    order.restaurantName ||
+    order.restaurant?.name ||
+    order.restaurantId?.name ||
+    localStorage.getItem("restaurant_name") ||
+    localStorage.getItem("restaurantName") ||
+    "Eqosy Demo Restaurant";
+
+  let restaurantAddress = "";
+  const rAddr =
+    order.restaurantAddress ||
+    order.restaurant?.location?.formattedAddress ||
+    order.restaurant?.address ||
+    order.restaurantId?.location?.formattedAddress ||
+    order.restaurantId?.address ||
+    localStorage.getItem("restaurant_address") ||
+    localStorage.getItem("restaurantAddress") ||
+    "";
+
+  if (typeof rAddr === "string") {
+    restaurantAddress = rAddr;
+  } else if (rAddr && typeof rAddr === "object") {
+    restaurantAddress = [
+      rAddr.addressLine1 || rAddr.street || rAddr.address,
+      rAddr.area,
+      rAddr.city,
+      rAddr.state
+    ].filter(Boolean).join(", ") || rAddr.formattedAddress || "";
+  }
+
+  const restaurantPhone =
+    order.restaurantPhone ||
+    order.restaurant?.phone ||
+    order.restaurant?.contactNumber ||
+    order.restaurantId?.phone ||
+    "";
+
+  // Customer details
+  const customerName = order.customerName || order.userId?.name || order.user?.name || "Customer";
+
+  let customerAddress = "";
+  const cAddr = order.customerAddress || order.deliveryAddress || order.address;
+  if (typeof cAddr === "string") {
+    customerAddress = cAddr;
+  } else if (cAddr && typeof cAddr === "object") {
+    customerAddress = [
+      cAddr.street || cAddr.streetAddress || cAddr.houseNo || cAddr.flatNo,
+      cAddr.area || cAddr.landmark,
+      cAddr.city,
+      cAddr.state,
+      cAddr.pincode || cAddr.zipCode,
+      cAddr.formattedAddress
+    ].filter(Boolean).join(", ");
+  }
+
+  const customerPhone = order.customerPhone || order.userId?.phone || order.user?.phone || order.phone || "";
+
+  const orderId = order.orderId || order._id || "N/A";
+  const orderDate = order.createdAt
+    ? new Date(order.createdAt).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    })
+    : new Date().toLocaleString("en-IN");
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  let foodTotal = 0;
+
+  const itemRows = items.map((item) => {
+    const qty = item.quantity || item.qty || 1;
+    const price = isNaN(Number(item.price)) ? 0 : Number(item.price || 0);
+    const lineTotal = price * qty;
+    foodTotal += lineTotal;
+
+    const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+    const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
+
+    return `
+      <tr style="border-bottom: 1px dashed #cccccc;">
+        <td style="padding: 7px 4px; text-align: left; font-size: 13px; color: #000000;">
+          <div style="font-weight: 700;">${nameWithVariant}</div>
+          ${item.notes ? `<div style="font-size: 10px; color: #444444; font-style: italic;">Note: ${item.notes}</div>` : ''}
+          ${Array.isArray(item.addons) && item.addons.length > 0 ? `
+            <div style="font-size: 10px; color: #444444;">
+              Addons: ${item.addons.map(a => a.name || a.title || a).join(', ')}
+            </div>
+          ` : ''}
+        </td>
+        <td style="padding: 7px 4px; text-align: center; font-size: 13px; font-weight: 800; color: #000000;">${qty}</td>
+        <td style="padding: 7px 4px; text-align: right; font-size: 13px; color: #000000;">₹${price.toFixed(2)}</td>
+        <td style="padding: 7px 4px; text-align: right; font-size: 13px; font-weight: 800; color: #000000;">₹${lineTotal.toFixed(2)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const packaging = isNaN(Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges)) ? 0 : Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
+  const rawTotal = order.total || order.pricing?.total || (foodTotal + packaging);
+  const grandTotal = isNaN(Number(rawTotal)) ? (foodTotal + packaging) : Number(rawTotal);
+
+  const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Order Receipt #${orderId}</title>
+  <style>
+    @media print {
+      @page { size: 80mm auto; margin: 3mm; }
+      body { width: 100%; margin: 0; padding: 0; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      max-width: 380px;
+      margin: 0 auto;
+      padding: 12px;
+      color: #000000;
+      background: #ffffff;
+      font-size: 12px;
+    }
+    .text-center { text-align: center; }
+    .restaurant-name {
+      font-size: 19px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #000000;
+      margin-bottom: 3px;
+    }
+    .restaurant-sub {
+      font-size: 11px;
+      color: #222222;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .divider {
+      border-top: 1.5px dashed #000000;
+      margin: 10px 0;
+    }
+    .divider-solid {
+      border-top: 2px solid #000000;
+      margin: 10px 0;
+    }
+    .box {
+      background: #ffffff;
+      border: 1.5px solid #111111;
+      border-radius: 8px;
+      padding: 9px 12px;
+      margin-bottom: 10px;
+    }
+    .box-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #000000;
+      margin-bottom: 5px;
+      letter-spacing: 0.6px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+    .info-label { color: #333333; font-weight: 600; }
+    .info-val { font-weight: 800; color: #000000; }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+    }
+    .items-table th {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      padding: 6px 4px;
+      border-bottom: 2px solid #000000;
+      color: #000000;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: #111111;
+    }
+    .grand-total {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 16px;
+      font-weight: 900;
+      border-top: 2px solid #000000;
+      margin-top: 6px;
+      color: #000000;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 11px;
+      color: #333333;
+    }
+  </style>
+</head>
+<body>
+  <div class="text-center">
+    <div class="restaurant-name">${restaurantName}</div>
+    ${restaurantAddress ? `<div class="restaurant-sub">${restaurantAddress}</div>` : ''}
+    ${restaurantPhone ? `<div class="restaurant-sub">Ph: ${restaurantPhone}</div>` : ''}
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="box">
+    <div class="info-row">
+      <span class="info-label">Order ID:</span>
+      <span class="info-val">#${orderId}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Date:</span>
+      <span class="info-val">${orderDate}</span>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="box-title">CUSTOMER DETAILS</div>
+    <div style="font-size: 13px; font-weight: 800; color: #000000;">${customerName}</div>
+    ${customerPhone ? `<div style="color: #222222; font-weight: 600; margin-top: 2px;">📞 ${customerPhone}</div>` : ''}
+    ${customerAddress ? `<div style="color: #222222; font-weight: 500; margin-top: 3px; line-height: 1.3;">📍 ${customerAddress}</div>` : ''}
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="text-align: left;">ITEM</th>
+        <th style="text-align: center;">QTY</th>
+        <th style="text-align: right;">PRICE</th>
+        <th style="text-align: right;">AMOUNT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemRows}
+    </tbody>
+  </table>
+
+  <div class="divider-solid"></div>
+
+  <div>
+    <div class="summary-row">
+      <span>Items Total</span>
+      <span>₹${foodTotal.toFixed(2)}</span>
+    </div>
+    ${packaging > 0 ? `<div class="summary-row"><span>Packaging</span><span>₹${packaging.toFixed(2)}</span></div>` : ''}
+    <div class="grand-total">
+      <span>TOTAL BILL</span>
+      <span>₹${grandTotal.toFixed(2)}</span>
+    </div>
+  </div>
+
+  ${order.sendCutlery !== undefined ? `
+    <div style="font-size: 11px; margin-top: 10px; padding: 7px; background: #fffbe6; border: 1.5px solid #ffe58f; border-radius: 6px; text-align: center; font-weight: 800; color: #000000;">
+      ${order.sendCutlery === false ? "🚫 Cutlery Not Requested" : "🍴 Cutlery Requested"}
+    </div>
+  ` : ''}
+
+  ${order.note ? `
+    <div style="font-size: 11px; margin-top: 8px; padding: 7px; background: #e6f7ff; border: 1.5px solid #91d5ff; border-radius: 6px; color: #000000; font-weight: 600;">
+      <strong>Note:</strong> ${order.note}
+    </div>
+  ` : ''}
+
+  <div class="footer">
+    <div style="font-weight: 700;">Thank You For Your Order!</div>
+    <div style="font-size: 9px; margin-top: 2px; color: #555555;">Powered by Eqosy</div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 300);
+    };
+  </script>
+</body>
+</html>`;
+
+  try {
+    let iframe = document.getElementById("restaurant-bill-print-frame");
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = "restaurant-bill-print-frame";
+      iframe.style.position = "fixed";
+      iframe.style.right = "-9999px";
+      iframe.style.bottom = "-9999px";
+      iframe.style.width = "0px";
+      iframe.style.height = "0px";
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        const blob = new Blob([htmlContent], { type: "text/html" });
+        const blobUrl = URL.createObjectURL(blob);
+        const printWin = window.open(blobUrl, "_blank");
+        if (!printWin) {
+          toast.error("Popup blocked! Please allow popups to print the bill.");
+        } else {
+          printWin.focus();
+        }
+      }
+    }, 250);
+  } catch (err) {
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const blobUrl = URL.createObjectURL(blob);
+    const printWin = window.open(blobUrl, "_blank");
+    if (!printWin) {
+      toast.error("Popup blocked! Please allow popups to print the bill.");
+    } else {
+      printWin.focus();
+    }
+  }
+};
+
 const transformOrderForList = (order) => {
   const rawStatus = String(order.status || order.orderStatus || "pending").toLowerCase();
   const dpId = order.deliveryPartnerId || order.dispatch?.deliveryPartnerId || null;
@@ -1585,6 +1928,16 @@ export default function OrdersMain() {
     // No need to manually refresh here as the component polls every 10 seconds
   };
 
+  // Handle print bill for popup modal
+  const handlePrint = () => {
+    const orderToPrint = popupOrder || newOrder;
+    if (!orderToPrint) {
+      toast.error("No order data available to print");
+      return;
+    }
+    printOrderInvoice(orderToPrint);
+  };
+
   // Handle reject order
   const handleRejectClick = () => {
     setShowRejectPopup(true);
@@ -1697,174 +2050,7 @@ export default function OrdersMain() {
     }
   };
 
-  // Handle PDF download
-  const handlePrint = async () => {
-    if (!newOrder) {
-      debugWarn("No order data available for PDF generation");
-      return;
-    }
 
-    try {
-      // Create new PDF document
-      const doc = new jsPDF();
-
-      // Set font
-      doc.setFont("helvetica", "bold");
-
-      // Header
-      doc.setFontSize(20);
-      doc.text("Order Receipt", 105, 20, { align: "center" });
-
-      // Restaurant name
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "normal");
-      doc.text(orderToPrint.restaurantName || "Restaurant", 105, 30, {
-        align: "center",
-      });
-
-      // Order details
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Order ID: ${orderToPrint.orderId || "N/A"}`, 20, 45);
-      doc.setFont("helvetica", "normal");
-
-      const orderDate = orderToPrint.createdAt
-        ? new Date(orderToPrint.createdAt).toLocaleString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-        : new Date().toLocaleString("en-GB");
-
-      doc.text(`Date: ${orderDate}`, 20, 52);
-
-      // Customer address
-      if (orderToPrint.customerAddress) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Delivery Address:", 20, 62);
-        doc.setFont("helvetica", "normal");
-        const addressText =
-          [
-            orderToPrint.customerAddress.street,
-            orderToPrint.customerAddress.city,
-            orderToPrint.customerAddress.state,
-          ]
-            .filter(Boolean)
-            .join(", ") || "Address not available";
-        const addressLines = doc.splitTextToSize(addressText, 170);
-        doc.text(addressLines, 20, 69);
-      }
-
-      // Items table
-      let yPos = 85;
-      if (orderToPrint.items && orderToPrint.items.length > 0) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Items:", 20, yPos);
-        yPos += 8;
-
-        // Prepare table data
-        const tableData = orderToPrint.items.map((item) => {
-          const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
-          const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
-          return [
-            nameWithVariant,
-            item.quantity || 1,
-            `₹${(item.price || 0).toFixed(2)}`,
-            `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`,
-          ];
-        });
-
-        autoTable(doc, {
-          startY: yPos,
-          head: [["Item", "Qty", "Price", "Total"]],
-          body: tableData,
-          theme: "striped",
-          headStyles: {
-            fillColor: [0, 0, 0],
-            textColor: 255,
-            fontStyle: "bold",
-          },
-          styles: { fontSize: 9 },
-          columnStyles: {
-            0: { cellWidth: 80 },
-            1: { cellWidth: 30, halign: "center" },
-            2: { cellWidth: 35, halign: "right" },
-            3: { cellWidth: 35, halign: "right" },
-          },
-        });
-
-        yPos = doc.lastAutoTable.finalY + 10;
-      }
-
-      // Total
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos);
-
-      // Payment status
-      yPos += 10;
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text(
-        `Payment Status: ${orderToPrint.status === "confirmed" ? "Paid" : "Pending"}`,
-        20,
-        yPos,
-      );
-
-      // Estimated delivery time
-      if (orderToPrint.estimatedDeliveryTime) {
-        yPos += 8;
-        doc.text(
-          `Estimated Delivery: ${orderToPrint.estimatedDeliveryTime} minutes`,
-          20,
-          yPos,
-        );
-      }
-
-      // Notes
-      if (orderToPrint.note) {
-        yPos += 10;
-        doc.setFont("helvetica", "bold");
-        doc.text("Note:", 20, yPos);
-        doc.setFont("helvetica", "normal");
-        const noteLines = doc.splitTextToSize(orderToPrint.note, 170);
-        doc.text(noteLines, 20, yPos + 7);
-      }
-
-      // Cutlery preference
-      yPos += 15;
-      doc.setFont("helvetica", "normal");
-      doc.text(
-        orderToPrint.sendCutlery === false
-          ? "? Don't send cutlery"
-          : "? Send cutlery requested",
-        20,
-        yPos,
-      );
-
-      // Footer
-      const pageHeight = doc.internal.pageSize.height;
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "italic");
-      doc.text(
-        `Generated on ${new Date().toLocaleString("en-GB")}`,
-        105,
-        pageHeight - 10,
-        { align: "center" },
-      );
-
-      // Download PDF
-      const fileName = `Order-${orderToPrint.orderId || "Receipt"}-${Date.now()}.pdf`;
-      doc.save(fileName);
-
-      debugLog("? PDF generated successfully:", fileName);
-    } catch (error) {
-      debugError("? Error generating PDF:", error);
-      alert("Failed to generate PDF. Please try again.");
-    }
-  };
 
   // Handle swipe gestures with smooth animations
   const handleTouchStart = (e) => {
@@ -2941,135 +3127,15 @@ export default function OrdersMain() {
   );
 }
 
-
 // Order Card Component
-const printOrderBill = async (order) => {
+const printOrderBill = (order) => {
   if (!order) return;
-  
-  // Open window synchronously to bypass popup blockers
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write('<div style="font-family: sans-serif; padding: 20px;">Generating bill...</div>');
-  }
-
-  let restaurantName = order.restaurantName || order.restaurant?.name || "Restaurant";
-  let restaurantAddress = "";
-
-  try {
-    const res = await restaurantAPI.getCurrentRestaurant();
-    const data = res?.data?.data?.restaurant || res?.data?.restaurant || res?.data?.user || res?.data?.data?.user;
-    if (data) {
-      if (data.name) restaurantName = data.name;
-      
-      if (data.location?.formattedAddress && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(data.location.formattedAddress)) {
-        restaurantAddress = data.location.formattedAddress;
-      } else if (data.location?.address) {
-        restaurantAddress = data.location.address;
-      } else if (data.address) {
-        restaurantAddress = data.address;
-      }
-    }
-  } catch (err) {
-    // silently continue
-  }
-
-  const doc = new jsPDF({
-    unit: 'mm',
-    format: [80, 200]
-  });
-  
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(restaurantName, 40, 10, { align: "center" });
-  
-  let y = 16;
-  if (restaurantAddress) {
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    const splitAddress = doc.splitTextToSize(restaurantAddress, 70);
-    doc.text(splitAddress, 40, y, { align: "center" });
-    y += (splitAddress.length * 3.5) + 2;
-  }
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Order Bill", 40, y, { align: "center" });
-  y += 8;
-
-  doc.setFontSize(9);
-  doc.text(`Order ID: ${order.orderId || order._id || 'N/A'}`, 5, y);
-  y += 5;
-  doc.text(`Date: ${new Date(order.createdAt || Date.now()).toLocaleString()}`, 5, y);
-  y += 5;
-  doc.text(`Customer: ${order.userId?.name || order.customerName || "Customer"}`, 5, y);
-  y += 4;
-  
-  doc.setLineWidth(0.5);
-  doc.line(5, y, 75, y);
-  y += 5;
-
-  // Items
-  doc.setFont("helvetica", "bold");
-  doc.text("Item", 5, y);
-  doc.text("Qty", 55, y);
-  doc.text("Price", 65, y);
-  y += 2;
-
-  doc.line(5, y, 75, y);
-  y += 5;
-
-  doc.setFont("helvetica", "normal");
-  let foodTotal = 0;
-
-  (order.items || []).forEach(item => {
-    const itemName = doc.splitTextToSize(item.name || 'Item', 45);
-    doc.text(itemName, 5, y);
-    doc.text(String(item.quantity || 1), 55, y);
-    const itemPrice = Number(item.price || 0);
-    const itemQty = Number(item.quantity || 1);
-    const itemTotal = itemPrice * itemQty;
-    doc.text(`Rs ${itemTotal.toFixed(2)}`, 65, y);
-    foodTotal += itemTotal;
-    y += (itemName.length * 4) + 2;
-  });
-
-  doc.line(5, y, 75, y);
-  y += 5;
-
-  // Totals
-  doc.setFont("helvetica", "bold");
-  doc.text("Food Charges", 25, y);
-  doc.text(`Rs ${foodTotal.toFixed(2)}`, 65, y);
-  
-  y += 5;
-  const tax = Number(order.pricing?.tax || order.pricing?.restaurantTax || 0);
-  const packaging = Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
-
-  doc.line(5, y, 75, y);
-  y += 5;
-
-  const grandTotal = Number(order.pricing?.total || (foodTotal + tax + packaging));
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Total Amount", 25, y);
-  doc.text(`Rs ${grandTotal.toFixed(2)}`, 65, y);
-
-  y += 10;
-  doc.setFont("helvetica", "normal");
-  doc.text("Thank you!", 40, y, { align: "center" });
-
-  doc.autoPrint();
-  const blobUrl = doc.output('bloburl');
-  
-  if (printWindow) {
-    printWindow.location.href = blobUrl;
-  } else {
-    window.open(blobUrl, '_blank');
-  }
+  printOrderInvoice(order);
 };
 
 function OrderCard({
   fullOrder,
+
   orderId,
   mongoId,
   status,

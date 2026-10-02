@@ -44,7 +44,7 @@ export default function Checkout() {
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
   const deliveryFee = 2.99 * 83
-  const tax = subtotal * 0.08
+  const tax = 0
   const total = subtotal + deliveryFee + tax
 
   const handlePlaceOrder = async () => {

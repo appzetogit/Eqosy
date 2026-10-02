@@ -674,13 +674,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     }
   }, []);
 
-  const goOnline = useCallback(async (selfieImageUrl = '') => {
+  const goOnline = useCallback(async (selfieImageUrl = '', options = {}) => {
+    const { isUserInitiated = true } = options;
     setIsTogglingDuty(true);
     try {
       if (typeof window === 'undefined' || !navigator.geolocation) {
         const errorMsg = 'GPS Location services are not supported on this device or browser.';
-        setGpsErrorMessage(errorMsg);
-        setShowGpsModal(true);
+        if (isUserInitiated) {
+          setGpsErrorMessage(errorMsg);
+          setShowGpsModal(true);
+        }
         throw new Error(errorMsg);
       }
 
@@ -705,17 +708,19 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         } catch (geoError) {
           setOnline(false);
           setIsTogglingDuty(false);
-          let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
-          if (geoError.code === 1) {
-            errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
-          } else if (geoError.code === 2) {
-            errorMsg = 'Your mobile GPS / Location is turned OFF. Please turn ON location services on your phone to go online and accept delivery orders.';
-          } else if (geoError.code === 3) {
-            errorMsg = 'GPS signal request timed out. Please make sure location / GPS is turned ON and try again.';
+          if (isUserInitiated) {
+            let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
+            if (geoError.code === 1) {
+              errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
+            } else if (geoError.code === 2) {
+              errorMsg = 'Your mobile GPS / Location is turned OFF. Please turn ON location services on your phone to go online and accept delivery orders.';
+            } else if (geoError.code === 3) {
+              errorMsg = 'GPS signal request timed out. Please make sure location / GPS is turned ON and try again.';
+            }
+            setGpsErrorMessage(errorMsg);
+            setShowGpsModal(true);
+            toast.error(errorMsg);
           }
-          setGpsErrorMessage(errorMsg);
-          setShowGpsModal(true);
-          toast.error(errorMsg);
           return;
         }
       }
@@ -731,8 +736,10 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         setOnlineSelfie(data.onlineSelfie);
       }
       setOnline(true);
-      setShowGpsModal(false);
-      toast.success('You are now online');
+      if (isUserInitiated) {
+        setShowGpsModal(false);
+        toast.success('You are now online');
+      }
     } catch (error) {
       setOnline(false);
       const data = error?.response?.data;
@@ -740,21 +747,23 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       const details = data?.details;
       const message = data?.message || data?.error || error?.message || 'Failed to go online';
 
-      if (errCode === 'GIG_LOGIN_TOO_EARLY' || String(message).includes('30 minute pehle') || String(message).includes('scheduled time')) {
-        setGigEarlyLoginInfo({
-          isOpen: true,
-          startTime: details?.startTime || 'upcoming shift',
-          message,
-        });
-      } else if (errCode === 'NO_ACTIVE_GIG' || String(message).includes('active gig nahi') || String(message).includes('gig book')) {
-        setShowBookGigModal(true);
-        toast.warning(message);
-      } else {
-        toast.error(message);
-      }
+      if (isUserInitiated) {
+        if (errCode === 'GIG_LOGIN_TOO_EARLY' || String(message).includes('30 minute pehle') || String(message).includes('scheduled time')) {
+          setGigEarlyLoginInfo({
+            isOpen: true,
+            startTime: details?.startTime || 'upcoming shift',
+            message,
+          });
+        } else if (errCode === 'NO_ACTIVE_GIG' || String(message).includes('active gig nahi') || String(message).includes('gig book')) {
+          setShowBookGigModal(true);
+          toast.warning(message);
+        } else {
+          toast.error(message);
+        }
 
-      if (String(message).toLowerCase().includes('selfie')) {
-        setShowOnlineSelfiePrompt(true);
+        if (String(message).toLowerCase().includes('selfie')) {
+          setShowOnlineSelfiePrompt(true);
+        }
       }
     } finally {
       setIsTogglingDuty(false);
@@ -1044,9 +1053,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation]);
 
-  // 3.1 Auto-Recovery Effect: Automatically restore ONLINE status when GPS Location is re-enabled during a booked gig or active order!
+  // 3.1 Auto-Recovery Effect: Automatically restore ONLINE status ONLY during an active delivery order!
   useEffect(() => {
-    if (isOnline) return;
+    if (isOnline || !activeOrder) return;
 
     let isSubscribed = true;
 
@@ -1057,18 +1066,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         async (pos) => {
           if (!isSubscribed) return;
           try {
-            const gigRes = await deliveryAPI.getActiveGig();
-            const activeGigData = gigRes?.data?.data?.activeGig || gigRes?.data?.data?.order || gigRes?.data?.data;
-            if (activeGigData && typeof activeGigData === 'object' && Object.keys(activeGigData).length > 0) {
-              const { latitude: lat, longitude: lng } = pos.coords;
-              setRiderLocation({ lat, lng });
-              setShowGpsModal(false);
-              setGpsErrorMessage('');
-              await goOnline();
-              toast.success('GPS restored! You are back Online 🟢');
-            }
+            const { latitude: lat, longitude: lng } = pos.coords;
+            setRiderLocation({ lat, lng });
+            setShowGpsModal(false);
+            setGpsErrorMessage('');
+            await goOnline('', { isUserInitiated: false });
           } catch (err) {
-            // quiet catch if no active gig or network error
+            // quiet catch if network error
           }
         },
         () => {},
@@ -1076,15 +1080,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       );
     };
 
-    // Check immediately on mount/offline transition and poll every 5 seconds
     checkAndAutoRestoreOnline();
-    const interval = setInterval(checkAndAutoRestoreOnline, 5000);
+    const interval = setInterval(checkAndAutoRestoreOnline, 10000);
 
     return () => {
       isSubscribed = false;
       clearInterval(interval);
     };
-  }, [isOnline, goOnline, setRiderLocation]);
+  }, [isOnline, activeOrder, goOnline, setRiderLocation]);
 
   // 1-Hour Periodic Selfie Security Guard: Force re-verification every 60 minutes
   useEffect(() => {

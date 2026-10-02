@@ -1078,66 +1078,152 @@ export async function getRestaurantReport(query = {}) {
 }
 
 export async function getTaxReport(query = {}) {
-    const { fromDate, toDate, search } = query;
+    const { fromDate, toDate, dateRangeType, groupBy = 'restaurant', search } = query;
     const match = {
-        orderStatus: 'delivered' // Typically tax is reported on delivered/completed orders
+        orderStatus: 'delivered'
     };
 
-    if (fromDate && toDate) {
-        match.createdAt = { $gte: new Date(fromDate), $lte: new Date(toDate) };
+    const now = new Date();
+
+    if (dateRangeType === 'Today') {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'Yesterday') {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
+        const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'This Week') {
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'Last Week') {
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7;
+        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'This Month') {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'Last Month') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (dateRangeType === 'This Year') {
+        const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        match.createdAt = { $gte: start, $lte: end };
+    } else if (fromDate || toDate) {
+        match.createdAt = {};
+        if (fromDate) match.createdAt.$gte = new Date(fromDate);
+        if (toDate) match.createdAt.$lte = new Date(toDate);
     }
 
-    if (search) {
-        // Search by order ID if provided
-        match.orderId = { $regex: search, $options: 'i' };
+    if (search && String(search).trim()) {
+        const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        match.orderId = { $regex: escaped, $options: 'i' };
     }
 
-    // Aggregate tax by income source (Restaurants, Delivery, Platform)
-    // For now, we'll group by Restaurant as the primary income source
-    const taxData = await FoodOrder.aggregate([
-        { $match: match },
-        {
-            $group: {
-                _id: '$restaurantId',
-                totalIncome: { $sum: { $ifNull: ['$pricing.total', 0] } },
-                totalTax: { $sum: { $ifNull: ['$pricing.tax', 0] } },
-                orderCount: { $sum: 1 }
-            }
-        },
-        {
-            $lookup: {
-                from: 'food_restaurants',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'restaurant'
-            }
-        },
-        { $unwind: { path: '$restaurant', preserveNullAndEmptyArrays: true } },
-        {
-            $project: {
-                incomeSource: { $ifNull: ['$restaurant.restaurantName', 'Unknown Restaurant'] },
-                totalIncome: 1,
-                totalTax: 1,
-                orderCount: 1
-            }
-        },
-        { $sort: { totalTax: -1 } }
-    ]);
+    let pipeline = [];
 
-    const stats = {
-        totalIncome: 0,
-        totalTax: 0
-    };
+    if (groupBy === 'day') {
+        pipeline = [
+            { $match: match },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "+05:30" } },
+                    totalIncome: { $sum: { $ifNull: ['$pricing.total', 0] } },
+                    totalTax: { $sum: { $ifNull: ['$pricing.tax', 0] } },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: -1 } }
+        ];
+    } else if (groupBy === 'month') {
+        pipeline = [
+            { $match: match },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m", date: "$createdAt", timezone: "+05:30" } },
+                    totalIncome: { $sum: { $ifNull: ['$pricing.total', 0] } },
+                    totalTax: { $sum: { $ifNull: ['$pricing.tax', 0] } },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: -1 } }
+        ];
+    } else {
+        pipeline = [
+            { $match: match },
+            {
+                $group: {
+                    _id: '$restaurantId',
+                    totalIncome: { $sum: { $ifNull: ['$pricing.total', 0] } },
+                    totalTax: { $sum: { $ifNull: ['$pricing.tax', 0] } },
+                    orderCount: { $sum: 1 }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'food_restaurants',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'restaurant'
+                }
+            },
+            { $unwind: { path: '$restaurant', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    incomeSource: { $ifNull: ['$restaurant.restaurantName', 'Unknown Restaurant'] },
+                    totalIncome: 1,
+                    totalTax: 1,
+                    orderCount: 1
+                }
+            },
+            { $sort: { totalTax: -1 } }
+        ];
+    }
+
+    const taxData = await FoodOrder.aggregate(pipeline);
+
+    let totalIncomeSum = 0;
+    let totalTaxSum = 0;
+    let totalOrderCountSum = 0;
 
     const reports = taxData.map((item, index) => {
-        stats.totalIncome += item.totalIncome;
-        stats.totalTax += item.totalTax;
+        totalIncomeSum += Number(item.totalIncome || 0);
+        totalTaxSum += Number(item.totalTax || 0);
+        totalOrderCountSum += Number(item.orderCount || 0);
+
+        let incomeSourceStr = item.incomeSource;
+        if (groupBy === 'day') {
+            const d = new Date(item._id);
+            incomeSourceStr = !isNaN(d.getTime())
+                ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) + ` (${item._id})`
+                : String(item._id);
+        } else if (groupBy === 'month') {
+            const [yr, mo] = String(item._id).split('-');
+            const d = new Date(Number(yr), Number(mo) - 1, 1);
+            incomeSourceStr = !isNaN(d.getTime())
+                ? d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+                : String(item._id);
+        }
+
         return {
             sl: index + 1,
-            id: item._id,
-            incomeSource: item.incomeSource,
-            totalIncome: `\u20B9${item.totalIncome.toFixed(2)}`,
-            totalTax: `\u20B9${item.totalTax.toFixed(2)}`,
+            id: String(item._id),
+            incomeSource: incomeSourceStr,
+            rawKey: item._id,
+            totalIncome: `\u20B9${Number(item.totalIncome || 0).toFixed(2)}`,
+            totalTax: `\u20B9${Number(item.totalTax || 0).toFixed(2)}`,
+            rawTax: Number(item.totalTax || 0),
+            rawIncome: Number(item.totalIncome || 0),
             orderCount: item.orderCount
         };
     });
@@ -1145,20 +1231,20 @@ export async function getTaxReport(query = {}) {
     return {
         reports,
         stats: {
-            totalIncome: `\u20B9${stats.totalIncome.toFixed(2)}`,
-            totalTax: `\u20B9${stats.totalTax.toFixed(2)}`
+            totalIncome: `\u20B9${totalIncomeSum.toFixed(2)}`,
+            totalTax: `\u20B9${totalTaxSum.toFixed(2)}`,
+            totalOrders: totalOrderCountSum
         }
     };
 }
 
-export async function getTaxReportDetail(restaurantId, query = {}) {
-    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
-        throw new ValidationError('Invalid restaurant ID');
+export async function getTaxReportDetail(reportId, query = {}) {
+    if (!reportId) {
+        throw new ValidationError('Report ID or key required');
     }
 
-    const { fromDate, toDate } = query;
+    const { fromDate, toDate, groupBy = 'restaurant' } = query;
     const match = {
-        restaurantId: new mongoose.Types.ObjectId(restaurantId),
         orderStatus: 'delivered'
     };
 
@@ -1166,18 +1252,39 @@ export async function getTaxReportDetail(restaurantId, query = {}) {
         match.createdAt = { $gte: new Date(fromDate), $lte: new Date(toDate) };
     }
 
+    let sourceTitle = 'Tax Details';
+
+    if (groupBy === 'day' || /^\d{4}-\d{2}-\d{2}$/.test(reportId)) {
+        const dayStr = reportId;
+        const dayStart = new Date(`${dayStr}T00:00:00.000+05:30`);
+        const dayEnd = new Date(`${dayStr}T23:59:59.999+05:30`);
+        match.createdAt = { $gte: dayStart, $lte: dayEnd };
+        sourceTitle = `Tax Details for Date: ${dayStr}`;
+    } else if (groupBy === 'month' || /^\d{4}-\d{2}$/.test(reportId)) {
+        const [yr, mo] = reportId.split('-').map(Number);
+        const monthStart = new Date(yr, mo - 1, 1, 0, 0, 0, 0);
+        const monthEnd = new Date(yr, mo, 0, 23, 59, 59, 999);
+        match.createdAt = { $gte: monthStart, $lte: monthEnd };
+        const d = new Date(yr, mo - 1, 1);
+        sourceTitle = `Tax Details for Month: ${d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`;
+    } else if (mongoose.Types.ObjectId.isValid(reportId)) {
+        match.restaurantId = new mongoose.Types.ObjectId(reportId);
+        const restaurant = await FoodRestaurant.findById(reportId).select('restaurantName').lean();
+        sourceTitle = `Tax Details: ${restaurant?.restaurantName || 'Restaurant'}`;
+    }
+
     const orders = await FoodOrder.find(match)
-        .select('orderId pricing createdAt orderStatus')
+        .select('orderId pricing createdAt orderStatus restaurantId')
+        .populate('restaurantId', 'restaurantName')
         .sort({ createdAt: -1 })
         .lean();
 
-    const restaurant = await FoodRestaurant.findById(restaurantId).select('restaurantName').lean();
-
     return {
-        restaurantName: restaurant?.restaurantName || 'Unknown Restaurant',
+        restaurantName: sourceTitle,
         orders: orders.map(o => ({
             id: o._id,
             orderId: o.orderId,
+            restaurantName: o.restaurantId?.restaurantName || 'Restaurant',
             totalAmount: `\u20B9${(o.pricing?.total || 0).toFixed(2)}`,
             taxAmount: `\u20B9${(o.pricing?.tax || 0).toFixed(2)}`,
             date: o.createdAt

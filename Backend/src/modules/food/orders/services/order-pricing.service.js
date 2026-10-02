@@ -278,9 +278,13 @@ export async function calculateOrderPricing(userId, dto) {
     ? Math.round((subtotal * (deliveryPartnerIncentivePercent / 100)) * 100) / 100
     : 0;
 
-  const itemGst = Math.round(subtotal * 0.05);
-  const platformGst = Math.round(platformFee * 0.18);
-  const deliveryGst = Math.round(deliveryFee * 0.18);
+  const configuredGstRate = (feeSettings?.gstRate != null && Number.isFinite(Number(feeSettings.gstRate)))
+    ? Math.max(0, Number(feeSettings.gstRate))
+    : 0;
+
+  const itemGst = Math.round(subtotal * (configuredGstRate / 100));
+  const platformGst = configuredGstRate > 0 ? Math.round(platformFee * 0.18) : 0;
+  const deliveryGst = configuredGstRate > 0 ? Math.round(deliveryFee * 0.18) : 0;
   const tax = itemGst + platformGst + deliveryGst;
   const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst };
 

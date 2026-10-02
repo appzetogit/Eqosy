@@ -484,7 +484,10 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
       }
       return merged
     })(),
-    note: apiOrder?.note || previousOrder?.note || ''
+    note: apiOrder?.note || previousOrder?.note || '',
+    ratings: apiOrder?.ratings || previousOrder?.ratings || null,
+    restaurantRating: apiOrder?.ratings?.restaurant?.rating || apiOrder?.restaurantRating || previousOrder?.restaurantRating || null,
+    deliveryPartnerRating: apiOrder?.ratings?.deliveryPartner?.rating || apiOrder?.deliveryPartnerRating || previousOrder?.deliveryPartnerRating || null
   }
 }
 
@@ -739,11 +742,31 @@ export default function OrderTracking({ isSharedView = false }) {
   const [deliveryComment, setDeliveryComment] = useState("")
   const [submittingRating, setSubmittingRating] = useState(false)
 
+  const autoRatingPromptedRef = useRef(null)
+
   const isAlreadyRated = Boolean(
     order?.ratings?.restaurant?.rating ||
     order?.restaurantRating ||
     order?.ratings?.deliveryPartner?.rating
   )
+
+  // Auto open rating modal when order status reaches delivered and order is not yet rated
+  useEffect(() => {
+    const currentOrderId = order?.id || order?.orderId || order?.mongoId || order?._id || orderId
+    if (!currentOrderId) return
+
+    if (
+      orderStatus === 'delivered' &&
+      !isAlreadyRated &&
+      autoRatingPromptedRef.current !== currentOrderId
+    ) {
+      autoRatingPromptedRef.current = currentOrderId
+      const timer = setTimeout(() => {
+        setIsRatingModalOpen(true)
+      }, 800)
+      return () => clearTimeout(timer)
+    }
+  }, [orderStatus, isAlreadyRated, order, orderId])
 
   const handleRatingSubmit = async () => {
     if (!order) return
@@ -763,10 +786,22 @@ export default function OrderTracking({ isSharedView = false }) {
       toast.success("Thank you for rating your delivery & food!")
       setIsRatingModalOpen(false)
 
+      const currentOrderId = order?.id || order?.orderId || order?.mongoId || order?._id || orderId
+      if (currentOrderId) {
+        try {
+          const stored = localStorage.getItem('shownRatingForOrders')
+          const set = stored ? new Set(JSON.parse(stored)) : new Set()
+          set.add(String(currentOrderId))
+          localStorage.setItem('shownRatingForOrders', JSON.stringify(Array.from(set)))
+        } catch { }
+      }
+
       // Update order state locally so UI updates immediately
       setOrder(prev => prev ? {
         ...prev,
-        ratings: response?.data?.data?.order?.ratings || {
+        restaurantRating,
+        deliveryPartnerRating: hasDeliveryPartner ? deliveryRating : null,
+        ratings: response?.data?.data?.order?.ratings || response?.data?.order?.ratings || {
           restaurant: { rating: restaurantRating, comment: restaurantComment },
           deliveryPartner: hasDeliveryPartner ? { rating: deliveryRating, comment: deliveryComment } : null
         }

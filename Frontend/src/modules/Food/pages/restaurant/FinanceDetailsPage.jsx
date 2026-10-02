@@ -215,8 +215,14 @@ export default function FinanceDetailsPage() {
           >
             {activeTab === "summary" && (
               <div className="space-y-6">
-                {/* Estimated Payout Card */}
-                <div className="bg-white rounded-lg p-4">
+                {/* Estimated Payout & Commission Card */}
+                <div className="bg-white rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between bg-purple-50 p-2.5 rounded-lg border border-purple-200">
+                    <span className="text-xs font-semibold text-purple-900">Admin Commission Rate</span>
+                    <span className="text-xs font-bold bg-purple-600 text-white px-2.5 py-1 rounded">
+                      {financeData?.commissionRate || financeData?.restaurant?.commissionRate || "10%"}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs text-gray-600 mb-1">Active Earnings</p>

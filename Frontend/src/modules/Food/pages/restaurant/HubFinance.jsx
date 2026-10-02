@@ -872,13 +872,18 @@ export default function HubFinance() {
           <div className="space-y-6">
             {/* Current cycle */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h2 className="text-base font-bold text-gray-900">Current cycle</h2>
-                {financeData?.currentCycle?.netAvailable !== undefined && (
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Net Balance: {formatCurrency(withdrawableAmount)}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shadow-xs">
+                    Admin Commission: {financeData?.commissionRate || financeData?.currentCycle?.commissionRate || "10%"}
                   </span>
-                )}
+                  {financeData?.currentCycle?.netAvailable !== undefined && (
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Net Balance: {formatCurrency(withdrawableAmount)}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                 {loading ? (
@@ -1258,9 +1263,11 @@ export default function HubFinance() {
                   <p className="text-xs text-gray-600">Earnings</p>
                   <p className="text-base font-semibold text-gray-900">{formatCurrency(invoiceSummary.earnings)}</p>
                 </div>
-                <div className="rounded-md bg-gray-50 p-3">
-                  <p className="text-xs text-gray-600">Commission</p>
-                  <p className="text-base font-semibold text-gray-900">{formatCurrency(invoiceSummary.commission)}</p>
+                <div className="rounded-md bg-purple-50 p-3 border border-purple-100">
+                  <p className="text-xs text-purple-700 font-medium">
+                    Commission ({financeData?.commissionRate || financeData?.currentCycle?.commissionRate || "10%"})
+                  </p>
+                  <p className="text-base font-semibold text-purple-900">{formatCurrency(invoiceSummary.commission)}</p>
                 </div>
                 <div className="rounded-md bg-gray-50 p-3">
                   <p className="text-xs text-gray-600">Gross amount</p>

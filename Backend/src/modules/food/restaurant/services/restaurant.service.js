@@ -7,6 +7,7 @@ import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
+import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
 
 
 const normalizeName = (value) =>
@@ -615,7 +616,35 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
             ].join(' ')
         )
         .lean();
-    return toRestaurantProfile(doc);
+    if (!doc) return null;
+    const profile = toRestaurantProfile(doc);
+
+    try {
+        const commissionDoc = await FoodRestaurantCommission.findOne({
+            $or: [{ restaurantId: doc._id }, { restaurant: doc._id }],
+            status: { $ne: false }
+        }).lean();
+        const defaultComm = commissionDoc?.defaultCommission || { type: 'percentage', value: 10 };
+        const value = Math.max(0, Number(defaultComm.value ?? 10) || 0);
+        const type = defaultComm.type || 'percentage';
+        const formattedRate = type === 'amount' ? `₹${value}` : `${value}%`;
+
+        profile.adminCommission = {
+            type,
+            value,
+            formattedRate
+        };
+        profile.commissionRate = formattedRate;
+        profile.commissionValue = value;
+        profile.commissionType = type;
+    } catch (err) {
+        profile.adminCommission = { type: 'percentage', value: 10, formattedRate: '10%' };
+        profile.commissionRate = '10%';
+        profile.commissionValue = 10;
+        profile.commissionType = 'percentage';
+    }
+
+    return profile;
 };
 
 export const updateRestaurantAcceptingOrders = async (restaurantId, isAcceptingOrders) => {

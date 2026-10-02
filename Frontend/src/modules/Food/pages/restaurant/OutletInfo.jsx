@@ -455,6 +455,24 @@ export default function OutletInfo() {
         <div className="px-4 py-4"><h2 className="text-base font-bold text-gray-900 text-center">Restaurant Information</h2></div>
 
         <div className="px-4 pb-6 space-y-3">
+          {/* Admin Commission Rate Transparency Card */}
+          <div className="bg-purple-50 rounded-xl p-4 border border-purple-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-1">Admin Commission Rate</p>
+                <p className="text-xl font-bold text-purple-950">
+                  {loading ? "Loading..." : (restaurantData?.commissionRate || restaurantData?.adminCommission?.formattedRate || "10%")}
+                </p>
+                <p className="text-xs text-purple-700 mt-1">
+                  Commission percentage charged by Admin on order subtotals
+                </p>
+              </div>
+              <div className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 shadow-xs">
+                {loading ? "..." : (restaurantData?.commissionRate || restaurantData?.adminCommission?.formattedRate || "10%")}
+              </div>
+            </div>
+          </div>
+
           <div className="bg-blue-100/50 rounded-lg p-4 border border-blue-300">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -464,7 +482,6 @@ export default function OutletInfo() {
               <button onClick={handleOpenEditDialog} className="text-blue-600 text-sm font-normal">Edit</button>
             </div>
           </div>
-          {/* ... other info cards ... */}
         </div>
       </div>
 

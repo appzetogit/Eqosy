@@ -4,6 +4,7 @@ import { FoodTransaction } from '../../orders/models/foodTransaction.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { FoodRestaurantWithdrawal } from '../models/foodRestaurantWithdrawal.model.js';
 import { getRestaurantWithdrawalSettings } from '../../admin/services/admin.service.js';
+import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
 
 function toTwoDigitYearString(dateObj) {
     const y = String(dateObj.getFullYear());
@@ -205,6 +206,18 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
     const withdrawalSettings = await getRestaurantWithdrawalSettings();
     const minimumWithdrawalAmount = Number(withdrawalSettings?.minimumWithdrawalAmount) || 0;
 
+    let commRuleDoc = null;
+    try {
+        commRuleDoc = await FoodRestaurantCommission.findOne({
+            $or: [{ restaurantId: rid }, { restaurant: rid }],
+            status: { $ne: false }
+        }).lean();
+    } catch (err) {}
+    const defaultComm = commRuleDoc?.defaultCommission || { type: 'percentage', value: 10 };
+    const commVal = Math.max(0, Number(defaultComm.value ?? 10) || 0);
+    const commType = defaultComm.type || 'percentage';
+    const commissionRateFormatted = commType === 'amount' ? `₹${commVal}` : `${commVal}%`;
+
     const currentCycle = {
         start: { ...nowWindow.startMeta },
         end: { ...nowWindow.endMeta },
@@ -215,6 +228,8 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         minimumWithdrawalAmount,
         totalOrders: currentCycleOrders.length,
         payoutDate: null,
+        commissionRate: commissionRateFormatted,
+        adminCommission: { type: commType, value: commVal, formattedRate: commissionRateFormatted },
         orders: currentCycleOrders
     };
 
@@ -223,7 +238,8 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         count: currentCycleOrders.length,
         subtotal: currentCycleOrders.reduce((sum, o) => sum + (Number(o.orderTotal) || 0), 0),
         taxes: currentCycleOrders.reduce((sum, o) => sum + Math.max(0, (Number(o.totalAmount) || 0) - (Number(o.orderTotal) || 0)), 0),
-        gross: currentCycleOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0)
+        gross: currentCycleOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+        commissionRate: commissionRateFormatted
     };
 
     // Past cycles: build from provided startDate/endDate query.
@@ -276,8 +292,12 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         restaurant: {
             name: restaurant?.restaurantName || '',
             restaurantId: restaurant?._id ? `REST${restaurant._id.toString().slice(-6).padStart(6, '0')}` : 'N/A',
-            address
+            address,
+            commissionRate: commissionRateFormatted,
+            adminCommission: { type: commType, value: commVal, formattedRate: commissionRateFormatted }
         },
+        commissionRate: commissionRateFormatted,
+        adminCommission: { type: commType, value: commVal, formattedRate: commissionRateFormatted },
         currentCycle,
         invoiceSummary,
         pastCycles: pastCyclesResult
