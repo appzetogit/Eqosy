@@ -55,8 +55,9 @@ import {
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
-import { filterFoodSidebarMenu } from "@food/constants/foodAdminAccess"
-import { getCurrentUser } from "@food/utils/auth"
+import { filterFoodSidebarMenu, normalizeFoodAdminProfile } from "@food/constants/foodAdminAccess"
+import { getCurrentUser, setAuthData, getModuleToken } from "@food/utils/auth"
+import { setUnifiedAdminSession } from "../../../Taxi/modules/admin/services/adminSession"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 import quickSpicyLogo from "@food/assets/eqosy-logo.png"
 import { adminAPI } from "@food/api"
@@ -116,14 +117,48 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
-  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const [adminProfile, setAdminProfile] = useState(() => getCurrentUser("admin") || {})
+
+  useEffect(() => {
+    let isMounted = true
+    const fetchFreshProfile = async () => {
+      try {
+        const res = await adminAPI.getAdminProfile()
+        const user = res?.data?.admin || res?.data?.data?.admin || res?.data?.data?.user
+        if (user && isMounted) {
+          const normalized = normalizeFoodAdminProfile(user)
+          const token = getModuleToken("admin")
+          if (token) {
+            setUnifiedAdminSession({ token, user: normalized })
+            setAuthData("admin", token, normalized)
+          }
+          setAdminProfile(normalized)
+        }
+      } catch (err) {
+        debugWarn("Failed to fetch fresh admin profile:", err)
+      }
+    }
+    fetchFreshProfile()
+    return () => { isMounted = false }
+  }, [])
+
   const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
                        adminProfile.adminLevel === "food_superadmin" || 
-                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "food");
+                       adminProfile.admin_type === "superadmin" ||
+                       (adminProfile.adminLevel === "subadmin" && (
+                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
+                           ? adminProfile.servicesAccess.includes('food')
+                           : (adminProfile.module === "food" || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0))
+                       ));
 
   const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
                        adminProfile.adminLevel === "taxi_superadmin" || 
-                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
+                       adminProfile.admin_type === "superadmin" ||
+                       (adminProfile.adminLevel === "subadmin" && (
+                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
+                           ? adminProfile.servicesAccess.includes('taxi')
+                           : (adminProfile.module === "taxi" || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0))
+                       ));
 
   useEffect(() => {
     if (showTaxiTab) prefetchTaxiAdmin()
@@ -349,9 +384,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
   // Filter menu items based on search query and admin permissions
   const permissionFilteredMenu = useMemo(() => {
-    const adminProfile = getCurrentUser("admin") || {}
     return filterFoodSidebarMenu(adminSidebarMenu, adminProfile)
-  }, [])
+  }, [adminProfile])
 
   const filteredMenuData = useMemo(() => {
     if (!searchQuery.trim()) {

@@ -7,7 +7,7 @@ export const apiRateLimiter = rateLimit({
     windowMs,
     // Dev UX: local UI can generate lots of background API calls (location, polling, etc).
     // Keep production strict, but avoid blocking local development.
-    max: config.nodeEnv === 'development' ? Math.max(config.rateLimitMaxRequests, 2000) : config.rateLimitMaxRequests,
+    max: config.nodeEnv === 'development' ? Math.max(config.rateLimitMaxRequests, 5000) : config.rateLimitMaxRequests,
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -23,7 +23,7 @@ export const authRateLimiter = rateLimit({
     windowMs: authWindowMs,
     // Dev UX: login/otp testing can be frequent. Keep production strict (e.g. 30), 
     // but relax local development to avoid 429 when testing flows.
-    max: config.nodeEnv === 'development' ? Math.max(config.authRateLimitMax, 100) : config.authRateLimitMax,
+    max: config.nodeEnv === 'development' ? Math.max(config.authRateLimitMax, 1000) : config.authRateLimitMax,
     standardHeaders: true,
     legacyHeaders: false,
     message: {

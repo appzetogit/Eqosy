@@ -19,6 +19,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { adminService } from '../../services/adminService';
+import { getUnifiedAdminProfile } from '../../services/adminSession';
+import { hasAdminPermission } from '../../constants/adminAccess';
 
 const ACTION_MENU_WIDTH = 238;
 const ACTION_MENU_GAP = 8;
@@ -26,6 +28,8 @@ const ACTION_MENU_MAX_HEIGHT = 300;
 
 const PendingDrivers = () => {
   const navigate = useNavigate();
+  const adminProfile = getUnifiedAdminProfile();
+  const canWrite = hasAdminPermission(adminProfile, 'drivers', 'write');
   const [searchTerm, setSearchTerm] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
@@ -240,12 +244,14 @@ const PendingDrivers = () => {
         </div>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-gray-900">Pending Drivers</h1>
-          <button
-            onClick={() => navigate('/taxi/admin/drivers/create')}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <Plus size={16} /> Add Drivers
-          </button>
+          {canWrite ? (
+            <button
+              onClick={() => navigate('/taxi/admin/drivers/create')}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus size={16} /> Add Drivers
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -437,28 +443,38 @@ const PendingDrivers = () => {
               ...menuPosition,
             }}
           >
-            <button onClick={() => handleAction('approve', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors text-sm font-semibold">
-              <CheckCircle2 size={16} /> Approve
-            </button>
-            <button onClick={() => handleAction('edit', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 text-amber-500 rounded-lg transition-colors text-sm font-semibold">
-              <Edit2 size={16} /> Edit
-            </button>
-            <button
-              onClick={() => {
-                closeMenu();
-                setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
-              }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 rounded-lg transition-colors text-sm font-semibold"
-            >
-              
-            </button>
+            {canWrite && (
+              <button onClick={() => handleAction('approve', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors text-sm font-semibold">
+                <CheckCircle2 size={16} /> Approve
+              </button>
+            )}
+            {canWrite && (
+              <button onClick={() => handleAction('edit', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 text-amber-500 rounded-lg transition-colors text-sm font-semibold">
+                <Edit2 size={16} /> Edit
+              </button>
+            )}
+            {canWrite && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 rounded-lg transition-colors text-sm font-semibold"
+              >
+                <Key size={16} /> Update Password
+              </button>
+            )}
             <button onClick={() => handleAction('view', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors text-sm font-semibold">
               <Eye size={16} /> View Profile
             </button>
-            <div className="h-px bg-gray-50 my-1 mx-2" />
-            <button onClick={() => handleAction('delete', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors text-sm font-semibold">
-              <Trash2 size={16} /> Delete
-            </button>
+            {canWrite && (
+              <>
+                <div className="h-px bg-gray-50 my-1 mx-2" />
+                <button onClick={() => handleAction('delete', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors text-sm font-semibold">
+                  <Trash2 size={16} /> Delete
+                </button>
+              </>
+            )}
           </div>
         </>,
         document.body,

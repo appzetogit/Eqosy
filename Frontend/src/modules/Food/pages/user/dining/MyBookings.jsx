@@ -137,13 +137,31 @@ export default function MyBookings() {
         }
     }
 
+    const handleCancelBooking = async (bookingId) => {
+        if (!window.confirm("Are you sure you want to cancel this table booking?")) return
+        try {
+            const response = await diningAPI.cancelBooking(bookingId)
+            if (response.data.success) {
+                toast.success("Table booking cancelled successfully")
+                setBookings((prev) =>
+                    prev.map((b) =>
+                        (b._id === bookingId || b.id === bookingId) ? { ...b, status: "cancelled" } : b
+                    )
+                )
+            }
+        } catch (error) {
+            debugError("Error cancelling booking:", error)
+            toast.error("Failed to cancel booking")
+        }
+    }
+
     if (loading) return <Loader />
 
     return (
         <AnimatedPage className="bg-slate-50 min-h-screen pb-10">
             {/* Header */}
             <div className="bg-white p-4 flex items-center shadow-sm sticky top-0 z-10">
-                <button onClick={() => navigate("/")}>
+                <button onClick={() => navigate("/food/user")}>
                     <ArrowLeft className="w-6 h-6 text-gray-700 cursor-pointer" />
                 </button>
                 <h1 className="ml-4 text-xl font-semibold text-gray-800">My Table Bookings</h1>
@@ -152,7 +170,7 @@ export default function MyBookings() {
             <div className="p-4 space-y-4">
                 {bookings.length > 0 ? (
                     bookings.map((booking) => (
-                        <div key={booking._id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-start gap-4">
+                        <div key={booking._id || booking.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-start gap-4">
                             <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
                                 <img
                                     src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || ""}
@@ -179,7 +197,7 @@ export default function MyBookings() {
                                     </span>
                                 </p>
 
-                                <div className="flex items-center gap-4 mt-3">
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
                                     <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600 bg-slate-100 px-2 py-0.5 rounded-lg">
                                         <Calendar className="w-3 h-3" />
                                         {new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
@@ -194,12 +212,27 @@ export default function MyBookings() {
                                     </div>
                                 </div>
 
+                                {booking.specialRequest && (
+                                    <p className="text-[11px] text-[#EB590E] bg-[#FFF2EB] p-2 rounded-xl mt-2 font-medium border border-[#EB590E]/20">
+                                        <span className="font-bold">Note:</span> "{booking.specialRequest}"
+                                    </p>
+                                )}
+
                                 {booking.status === 'completed' && (
                                     <button
                                         onClick={() => setSelectedBooking(booking)}
                                         className="mt-3 w-full py-2 bg-red-50 text-red-600 text-[11px] font-bold rounded-lg border border-red-100 hover:bg-red-100 transition-colors"
                                     >
                                         RATE & REVIEW
+                                    </button>
+                                )}
+
+                                {(booking.status === 'confirmed' || booking.status === 'accepted' || booking.status === 'pending') && (
+                                    <button
+                                        onClick={() => handleCancelBooking(booking._id || booking.id)}
+                                        className="mt-3 w-full py-2 bg-slate-100 text-slate-700 text-[11px] font-bold rounded-lg border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                                    >
+                                        CANCEL BOOKING
                                     </button>
                                 )}
                             </div>
@@ -212,7 +245,7 @@ export default function MyBookings() {
                         </div>
                         <h3 className="text-lg font-bold text-gray-800">No bookings yet</h3>
                         <p className="text-gray-500 text-sm mt-2">Book your favorite restaurant for a great dining experience!</p>
-                        <Link to="/dining">
+                        <Link to="/food/user/dining">
                             <button className="mt-6 bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-lg shadow-red-200">
                                 Book a table
                             </button>

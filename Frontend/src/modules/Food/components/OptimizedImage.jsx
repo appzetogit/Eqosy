@@ -32,12 +32,12 @@ const OptimizedImage = React.memo(({
   const imgRef = useRef(null)
   const observerRef = useRef(null)
 
-  // Check if image URL supports optimization (external URLs)
+  // Check if image URL supports optimization (external CDNs that support query params)
   const supportsOptimization = (imageSrc) => {
     if (!imageSrc || typeof imageSrc !== 'string' || imageSrc === '') return false
     if (imageSrc.startsWith('data:') || imageSrc.startsWith('/')) return false
-    // Check if it's an external URL (http/https)
-    return /^https?:\/\//.test(imageSrc)
+    // Only append params for services known to support w & q params (like unsplash, imgix)
+    return /images\.unsplash\.com|imgix\.net/i.test(imageSrc)
   }
 
   const appendImageParams = (imageSrc, params) => {

@@ -20,6 +20,8 @@ import {
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import { getUnifiedAdminProfile } from '../../services/adminSession';
+import { hasAdminPermission } from '../../constants/adminAccess';
 
 const ACTION_MENU_WIDTH = 176;
 const ACTION_MENU_GAP = 8;
@@ -27,6 +29,8 @@ const ACTION_MENU_MAX_HEIGHT = 260;
 
 const DriverList = ({ mode = 'approved' }) => {
   const navigate = useNavigate();
+  const adminProfile = getUnifiedAdminProfile();
+  const canWrite = hasAdminPermission(adminProfile, 'drivers', 'write');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState(null);
@@ -220,7 +224,7 @@ const DriverList = ({ mode = 'approved' }) => {
         </div>
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Drivers' : 'Approved Drivers'}</h1>
-          {mode !== 'active' ? (
+          {mode !== 'active' && canWrite ? (
             <button
               onClick={() => navigate('/taxi/admin/drivers/create')}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
@@ -403,33 +407,39 @@ const DriverList = ({ mode = 'approved' }) => {
               ...menuPosition,
             }}
           >
-            <button
-              onClick={() => {
-                closeMenu();
-                handleAction('disapprove', activeMenu);
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
-            >
-              <XCircle size={13} /> Disapprove
-            </button>
-            <button
-              onClick={() => {
-                closeMenu();
-                navigate(`/taxi/admin/drivers/edit/${activeMenu}`);
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Edit2 size={13} className="text-gray-400" /> Edit
-            </button>
-            <button
-              onClick={() => {
-                closeMenu();
-                setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Key size={13} className="text-gray-400" /> Update Password
-            </button>
+            {canWrite && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  handleAction('disapprove', activeMenu);
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
+              >
+                <XCircle size={13} /> Disapprove
+              </button>
+            )}
+            {canWrite && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  navigate(`/taxi/admin/drivers/edit/${activeMenu}`);
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Edit2 size={13} className="text-gray-400" /> Edit
+              </button>
+            )}
+            {canWrite && (
+              <button
+                onClick={() => {
+                  closeMenu();
+                  setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Key size={13} className="text-gray-400" /> Update Password
+              </button>
+            )}
             <button
               onClick={() => {
                 closeMenu();
@@ -439,16 +449,20 @@ const DriverList = ({ mode = 'approved' }) => {
             >
               <Eye size={13} className="text-gray-400" /> View Profile
             </button>
-            <div className="h-px bg-gray-100 my-1" />
-            <button
-              onClick={() => {
-                closeMenu();
-                handleAction('delete', activeMenu);
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-            >
-              <Trash2 size={13} /> Delete
-            </button>
+            {canWrite && (
+              <>
+                <div className="h-px bg-gray-100 my-1" />
+                <button
+                  onClick={() => {
+                    closeMenu();
+                    handleAction('delete', activeMenu);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </>
+            )}
           </div>
         </>,
         document.body,

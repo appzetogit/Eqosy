@@ -201,6 +201,25 @@ export default function NotificationBroadcast() {
     loadRestaurants();
   }, []);
 
+  const filteredRestaurantsForForm = useMemo(() => {
+    if (!form.zoneId) return restaurants;
+    return restaurants.filter((r) => {
+      const rZoneId = typeof r.zoneId === "string" ? r.zoneId : (r.zoneId?._id || r.zoneId?.id || r.location?.zoneId || "");
+      return String(rZoneId) === String(form.zoneId);
+    });
+  }, [restaurants, form.zoneId]);
+
+  useEffect(() => {
+    if (!form.restaurantId || !form.zoneId) return;
+    const isStillValid = filteredRestaurantsForForm.some(
+      (r) => String(r._id || r.id) === String(form.restaurantId)
+    );
+    if (!isStillValid) {
+      setForm((prev) => ({ ...prev, restaurantId: "", productId: "", redirectUrl: "" }));
+      setMenuItems([]);
+    }
+  }, [form.zoneId, filteredRestaurantsForForm, form.restaurantId]);
+
   const handleRestaurantSelect = (restaurantId) => {
     const restaurant = restaurants.find((r) => String(r._id || r.id) === String(restaurantId));
     if (restaurant) {
@@ -401,7 +420,7 @@ export default function NotificationBroadcast() {
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               >
                 <option value="">-- No Direct Link --</option>
-                {restaurants.map((r) => (
+                {filteredRestaurantsForForm.map((r) => (
                   <option key={r._id || r.id} value={r._id || r.id}>
                     {r.restaurantName || r.name}
                   </option>

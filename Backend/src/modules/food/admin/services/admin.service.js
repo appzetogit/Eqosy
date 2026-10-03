@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
+import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
@@ -277,7 +278,7 @@ export async function updateRestaurantComplaint(id, updateData) {
     return updated;
 }
 
-export async function getRestaurants(query) {
+export async function getRestaurants(query = {}, adminContext = null) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
@@ -286,7 +287,23 @@ export async function getRestaurants(query) {
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
         filter.status = status;
     }
-    if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return { restaurants: [], total: 0, page, limit };
+        }
+        if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
+            const reqZoneIdStr = String(query.zoneId).trim();
+            if (!rawZoneIds.map(String).includes(reqZoneIdStr)) {
+                return { restaurants: [], total: 0, page, limit };
+            }
+            filter.zoneId = new mongoose.Types.ObjectId(reqZoneIdStr);
+        } else {
+            filter.zoneId = { $in: zoneObjectIds };
+        }
+    } else if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
         filter.zoneId = new mongoose.Types.ObjectId(query.zoneId);
     }
     const [restaurants, total] = await Promise.all([
@@ -425,11 +442,46 @@ const getDateRangeByPeriod = (periodRaw) => {
 const formatMonthShort = (year, monthIndex) =>
     new Date(year, monthIndex, 1).toLocaleString('en-IN', { month: 'short' });
 
-export async function getDashboardStats(query = {}) {
+export async function getDashboardStats(query = {}, adminContext = null) {
     const periodRange = getDateRangeByPeriod(query.period);
-    const zoneId = query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)
-        ? new mongoose.Types.ObjectId(query.zoneId)
-        : null;
+
+    let zoneObjectIdsToFilter = null;
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return {
+                orders: { total: 0, byStatus: { delivered: 0, cancelled: 0, pending: 0 } },
+                revenue: { total: 0 },
+                commission: { total: 0 },
+                platformFee: { total: 0 },
+                deliveryFee: { total: 0 },
+                gst: { total: 0 },
+                totalAdminEarnings: 0,
+                deliveryProfit: 0,
+                restaurants: { total: 0, pendingRequests: 0 },
+                deliveryBoys: { total: 0, pendingRequests: 0 },
+                foods: { total: 0 },
+                addons: { total: 0 },
+                customers: { total: 0 },
+                orderStats: { pending: 0, completed: 0 },
+                monthlyData: [],
+                liveSignals: []
+            };
+        }
+        if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
+            const reqZoneIdStr = String(query.zoneId).trim();
+            if (rawZoneIds.map(String).includes(reqZoneIdStr)) {
+                zoneObjectIdsToFilter = [new mongoose.Types.ObjectId(reqZoneIdStr)];
+            } else {
+                zoneObjectIdsToFilter = zoneObjectIds;
+            }
+        } else {
+            zoneObjectIdsToFilter = zoneObjectIds;
+        }
+    } else if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
+        zoneObjectIdsToFilter = [new mongoose.Types.ObjectId(query.zoneId)];
+    }
 
     const orderMatch = {
         $or: [
@@ -440,19 +492,27 @@ export async function getDashboardStats(query = {}) {
     if (periodRange) {
         orderMatch.createdAt = { $gte: periodRange.start, $lte: periodRange.end };
     }
-    if (zoneId) {
-        orderMatch.zoneId = zoneId;
-    }
 
     const restaurantMatch = {};
-    if (zoneId) {
-        restaurantMatch.zoneId = zoneId;
+    if (zoneObjectIdsToFilter) {
+        restaurantMatch.zoneId = { $in: zoneObjectIdsToFilter };
     }
 
-    const zoneRestaurantIds = zoneId
-        ? await FoodRestaurant.find({ zoneId }).distinct('_id')
+    const zoneRestaurantIds = zoneObjectIdsToFilter
+        ? await FoodRestaurant.find({ zoneId: { $in: zoneObjectIdsToFilter } }).distinct('_id')
         : null;
-    const zoneScopedRestaurantMatch = zoneId
+
+    if (zoneObjectIdsToFilter) {
+        orderMatch.$and = orderMatch.$and || [];
+        orderMatch.$and.push({
+            $or: [
+                { zoneId: { $in: zoneObjectIdsToFilter } },
+                { restaurantId: { $in: zoneRestaurantIds || [] } }
+            ]
+        });
+    }
+
+    const zoneScopedRestaurantMatch = zoneObjectIdsToFilter
         ? { restaurantId: { $in: zoneRestaurantIds || [] } }
         : {};
 
@@ -754,9 +814,21 @@ function formatTimeAgo(date) {
 }
 
 
-export async function getTransactionReport(query = {}) {
+export async function getTransactionReport(query = {}, adminContext = null) {
     const { fromDate, toDate, zone, restaurant, search } = query;
     const match = {};
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return [];
+        }
+        const restFilter = { zoneId: { $in: zoneObjectIds } };
+        const restaurantsList = await FoodRestaurant.find(restFilter).select('_id').lean();
+        const restaurantIds = restaurantsList.map(r => r._id);
+        match.restaurantId = { $in: restaurantIds };
+    }
 
     if (fromDate && toDate) {
         match.createdAt = { $gte: new Date(fromDate), $lte: new Date(toDate) };
@@ -775,16 +847,31 @@ export async function getTransactionReport(query = {}) {
     }
 
     let restaurantIds = null;
-    if (zone || restaurant) {
+    if ((zone && zone !== 'All Zones') || (restaurant && restaurant !== 'All restaurants')) {
         const restFilter = {};
-        if (zone) restFilter.zoneId = zone; // Assuming zone is an ID or we need to lookup
+        if (zone && zone !== 'All Zones') {
+            const zoneRaw = String(zone).trim();
+            if (mongoose.Types.ObjectId.isValid(zoneRaw)) {
+                restFilter.zoneId = new mongoose.Types.ObjectId(zoneRaw);
+            } else {
+                const matchedZone = await FoodZone.findOne({
+                    $or: [{ name: zoneRaw }, { zoneName: zoneRaw }]
+                }).select('_id').lean();
+                if (matchedZone?._id) {
+                    restFilter.zoneId = matchedZone._id;
+                } else {
+                    return { transactions: [], summary: { completedTransaction: 0, refundedTransaction: 0, adminEarning: 0, restaurantEarning: 0, deliverymanEarning: 0 } };
+                }
+            }
+        }
         if (restaurant && restaurant !== 'All restaurants') {
-            const restDoc = await mongoose.model('FoodRestaurant').findOne({ restaurantName: restaurant }).lean();
+            const restDoc = await FoodRestaurant.findOne({ restaurantName: restaurant }).lean();
             if (restDoc) restFilter._id = restDoc._id;
+            else return { transactions: [], summary: { completedTransaction: 0, refundedTransaction: 0, adminEarning: 0, restaurantEarning: 0, deliverymanEarning: 0 } };
         }
 
         if (Object.keys(restFilter).length > 0) {
-            const restaurantsList = await mongoose.model('FoodRestaurant').find(restFilter).select('_id').lean();
+            const restaurantsList = await FoodRestaurant.find(restFilter).select('_id').lean();
             restaurantIds = restaurantsList.map(r => r._id);
             match.restaurantId = { $in: restaurantIds };
         }
@@ -1078,56 +1165,27 @@ export async function getRestaurantReport(query = {}) {
 }
 
 export async function getTaxReport(query = {}) {
-    const { fromDate, toDate, dateRangeType, groupBy = 'restaurant', search } = query;
+    const { groupBy = 'restaurant', search } = query;
     const match = {
         orderStatus: 'delivered'
     };
 
-    const now = new Date();
-
-    if (dateRangeType === 'Today') {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'Yesterday') {
-        const y = new Date(now);
-        y.setDate(y.getDate() - 1);
-        const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
-        const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'This Week') {
-        const dayOfWeek = now.getDay();
-        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
-        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'Last Week') {
-        const dayOfWeek = now.getDay();
-        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7;
-        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'This Month') {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'Last Month') {
-        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (dateRangeType === 'This Year') {
-        const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-        const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-        match.createdAt = { $gte: start, $lte: end };
-    } else if (fromDate || toDate) {
-        match.createdAt = {};
-        if (fromDate) match.createdAt.$gte = new Date(fromDate);
-        if (toDate) match.createdAt.$lte = new Date(toDate);
+    const dateMatch = getReportDateFilter(query);
+    if (dateMatch) {
+        match.createdAt = dateMatch;
     }
 
     if (search && String(search).trim()) {
         const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        match.orderId = { $regex: escaped, $options: 'i' };
+        const matchingRestaurants = await FoodRestaurant.find({
+            restaurantName: { $regex: escaped, $options: 'i' }
+        }).select('_id').lean();
+        const matchingIds = matchingRestaurants.map(r => r._id);
+        
+        match.$or = [
+            { orderId: { $regex: escaped, $options: 'i' } },
+            { restaurantId: { $in: matchingIds } }
+        ];
     }
 
     let pipeline = [];
@@ -1238,19 +1296,124 @@ export async function getTaxReport(query = {}) {
     };
 }
 
+function getReportDateFilter(query = {}) {
+    const { dateRangeType, fromDate, toDate, selectedMonth, selectedYear } = query;
+    const now = new Date();
+
+    if (!dateRangeType || dateRangeType === 'All Time') {
+        if (dateRangeType === 'All Time') return null;
+        if (!fromDate && !toDate && !selectedMonth && !selectedYear) return null;
+    }
+
+    if (dateRangeType === 'Today') {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Yesterday') {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0);
+        const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'This Week') {
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Last Week') {
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) - 7;
+        const start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'This Month') {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Last Month') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Past 3 Months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 3, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Past 6 Months') {
+        const start = new Date(now.getFullYear(), now.getMonth() - 6, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'This Year') {
+        const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Last Year') {
+        const start = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Specific Month & Year' || dateRangeType === 'Specific Month' || (selectedMonth !== undefined && selectedMonth !== null && String(selectedMonth).trim() !== '')) {
+        const yr = parseInt(selectedYear || now.getFullYear(), 10);
+        const mo = parseInt(selectedMonth, 10);
+        const monthIdx = mo >= 1 ? mo - 1 : 0;
+        const start = new Date(yr, monthIdx, 1, 0, 0, 0, 0);
+        const end = new Date(yr, monthIdx + 1, 0, 23, 59, 59, 999);
+        return { $gte: start, $lte: end };
+    }
+
+    if (dateRangeType === 'Specific Year' || (selectedYear && !selectedMonth)) {
+        const yr = parseInt(selectedYear, 10);
+        if (!isNaN(yr)) {
+            const start = new Date(yr, 0, 1, 0, 0, 0, 0);
+            const end = new Date(yr, 11, 31, 23, 59, 59, 999);
+            return { $gte: start, $lte: end };
+        }
+    }
+
+    if (fromDate || toDate) {
+        const dateMatch = {};
+        if (fromDate) {
+            const fDate = new Date(fromDate);
+            if (!isNaN(fDate.getTime())) dateMatch.$gte = fDate;
+        }
+        if (toDate) {
+            const tDate = new Date(toDate);
+            if (!isNaN(tDate.getTime())) dateMatch.$lte = tDate;
+        }
+        if (Object.keys(dateMatch).length > 0) return dateMatch;
+    }
+
+    return null;
+}
+
 export async function getTaxReportDetail(reportId, query = {}) {
     if (!reportId) {
         throw new ValidationError('Report ID or key required');
     }
 
-    const { fromDate, toDate, groupBy = 'restaurant' } = query;
+    const { groupBy = 'restaurant' } = query;
     const match = {
         orderStatus: 'delivered'
     };
-
-    if (fromDate && toDate) {
-        match.createdAt = { $gte: new Date(fromDate), $lte: new Date(toDate) };
-    }
 
     let sourceTitle = 'Tax Details';
 
@@ -1271,6 +1434,16 @@ export async function getTaxReportDetail(reportId, query = {}) {
         match.restaurantId = new mongoose.Types.ObjectId(reportId);
         const restaurant = await FoodRestaurant.findById(reportId).select('restaurantName').lean();
         sourceTitle = `Tax Details: ${restaurant?.restaurantName || 'Restaurant'}`;
+
+        const dateMatch = getReportDateFilter(query);
+        if (dateMatch) {
+            match.createdAt = dateMatch;
+        }
+    } else {
+        const dateMatch = getReportDateFilter(query);
+        if (dateMatch) {
+            match.createdAt = dateMatch;
+        }
     }
 
     const orders = await FoodOrder.find(match)
@@ -2483,8 +2656,19 @@ export async function updateRestaurantMenuById(id, menu) {
     return doc.menu || { sections: [] };
 }
 
-export async function getPendingRestaurants() {
-    const restaurants = await FoodRestaurant.find({ status: { $in: ['pending', 'rejected'] } })
+export async function getPendingRestaurants(adminContext = null) {
+    const filter = { status: { $in: ['pending', 'rejected'] } };
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return [];
+        }
+        filter.zoneId = { $in: zoneObjectIds };
+    }
+
+    const restaurants = await FoodRestaurant.find(filter)
         .populate('zoneId', 'name zoneName')
         .sort({ createdAt: -1 })
         .lean();
@@ -3159,11 +3343,22 @@ export async function rejectRestaurantAddon(addonId, reason) {
 }
 
 // ----- Foods (separate collection) -----
-export async function getFoods(query) {
+export async function getFoods(query = {}, adminContext = null) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
     const filter = {};
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return { foods: [], total: 0, page, limit };
+        }
+        const zoneRestaurants = await FoodRestaurant.find({ zoneId: { $in: zoneObjectIds } }).select('_id').lean();
+        const zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+        filter.restaurantId = { $in: zoneRestaurantIds };
+    }
 
     if (query.restaurantId && mongoose.Types.ObjectId.isValid(query.restaurantId)) {
         filter.restaurantId = query.restaurantId;

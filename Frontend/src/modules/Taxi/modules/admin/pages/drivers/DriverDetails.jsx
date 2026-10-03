@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import { getUnifiedAdminProfile } from '../../services/adminSession';
+import { hasAdminPermission } from '../../constants/adminAccess';
 import { DELHI_CENTER, HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
 import { API_BASE_URL } from '../../../../shared/api/runtimeConfig';
 import BikeIcon from '@/assets/icons/bike.png';
@@ -225,6 +227,8 @@ const DriverDetails = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
+  const adminProfile = getUnifiedAdminProfile();
+  const canWrite = hasAdminPermission(adminProfile, 'drivers', 'write');
   const [activeTab, setActiveTab] = useState('Driver Profile');
   const [profile, setProfile] = useState(null);
   const [walletForm, setWalletForm] = useState({ amount: '', operation: 'credit', isSubmitting: false });
@@ -811,14 +815,16 @@ const DriverDetails = () => {
                       These values mirror the fields collected from the driver on the vehicle setup step.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/taxi/admin/drivers/edit/${id}`, { state: { from: location.pathname + location.search } })}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    <PencilLine size={15} />
-                    Edit Driver Fields
-                  </button>
+                  {canWrite && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/taxi/admin/drivers/edit/${id}`, { state: { from: location.pathname + location.search } })}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      <PencilLine size={15} />
+                      Edit Driver Fields
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -914,150 +920,154 @@ const DriverDetails = () => {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!doc.sourceKey) return;
-                                  const confirmApprove = window.confirm(`Are you sure you want to approve "${doc.name}"?`);
-                                  if (!confirmApprove) return;
+                            {canWrite ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!doc.sourceKey) return;
+                                    const confirmApprove = window.confirm(`Are you sure you want to approve "${doc.name}"?`);
+                                    if (!confirmApprove) return;
 
-                                  try {
-                                    setDocumentActionKey(`${doc.sourceKey}:approve`);
-                                    const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));
-                                    const nextDocuments = {
-                                      ...(profile?.documents || {}),
-                                      [doc.sourceKey]: {
-                                        ...(profile?.documents?.[doc.sourceKey] || {}),
-                                        key: doc.sourceKey,
-                                        name: doc.name,
-                                        fileName: doc.fileNames?.[0] || doc.name || doc.sourceKey,
-                                        previewUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.previewUrl || '',
-                                        secureUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.secureUrl || '',
-                                        images: doc.images || profile?.documents?.[doc.sourceKey]?.images || [],
-                                        fileNames: doc.fileNames || profile?.documents?.[doc.sourceKey]?.fileNames || [],
-                                        identify_number: doc.identify_number || profile?.documents?.[doc.sourceKey]?.identify_number || '',
-                                        expiry_date: doc.expiry_date || profile?.documents?.[doc.sourceKey]?.expiry_date || '',
-                                        status: 'approved',
-                                        comment: '',
-                                        remarks: '',
-                                        reason: '',
-                                        admin_comment: '',
-                                        rejection_reason: '',
-                                        reviewedAt: new Date().toISOString(),
-                                        reverificationRequestedAt: null,
-                                      },
-                                    };
-
-                                    const response = await fetch(
-                                      `${API_BASE_URL}/admin/drivers/${id}`,
-                                      {
-                                        method: 'PATCH',
-                                        headers: {
-                                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                          'Content-Type': 'application/json',
+                                    try {
+                                      setDocumentActionKey(`${doc.sourceKey}:approve`);
+                                      const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));
+                                      const nextDocuments = {
+                                        ...(profile?.documents || {}),
+                                        [doc.sourceKey]: {
+                                          ...(profile?.documents?.[doc.sourceKey] || {}),
+                                          key: doc.sourceKey,
+                                          name: doc.name,
+                                          fileName: doc.fileNames?.[0] || doc.name || doc.sourceKey,
+                                          previewUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.previewUrl || '',
+                                          secureUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.secureUrl || '',
+                                          images: doc.images || profile?.documents?.[doc.sourceKey]?.images || [],
+                                          fileNames: doc.fileNames || profile?.documents?.[doc.sourceKey]?.fileNames || [],
+                                          identify_number: doc.identify_number || profile?.documents?.[doc.sourceKey]?.identify_number || '',
+                                          expiry_date: doc.expiry_date || profile?.documents?.[doc.sourceKey]?.expiry_date || '',
+                                          status: 'approved',
+                                          comment: '',
+                                          remarks: '',
+                                          reason: '',
+                                          admin_comment: '',
+                                          rejection_reason: '',
+                                          reviewedAt: new Date().toISOString(),
+                                          reverificationRequestedAt: null,
                                         },
-                                        body: JSON.stringify({ documents: nextDocuments }),
-                                      },
-                                    );
-                                    const data = await response.json();
-                                    if (!response.ok || !data?.success) throw new Error(data?.message || 'Unable to approve');
-                                    await fetchProfile();
-                                  } catch (err) {
-                                    window.alert(err?.message || 'Unable to approve');
-                                  } finally {
-                                    setDocumentActionKey('');
-                                  }
-                                }}
-                                disabled={
-                                  documentActionKey.length > 0 ||
-                                  !doc.images?.length ||
-                                  String(doc.status || '').toLowerCase() === 'approved'
-                                }
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                                  documentActionKey === `${doc.sourceKey}:approve`
-                                    ? 'bg-emerald-100 text-emerald-500'
-                                    : !doc.images?.length || String(doc.status || '').toLowerCase() === 'approved' || documentActionKey.length > 0
-                                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                                      : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
-                                }`}
-                              >
-                                {documentActionKey === `${doc.sourceKey}:approve` ? 'Saving...' : 'Approve'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!doc.sourceKey) return;
-                                  const note = window.prompt(`Reason for rejecting "${doc.name}"`, doc.comment || '');
-                                  if (note === null) return;
+                                      };
 
-                                  try {
-                                    setDocumentActionKey(`${doc.sourceKey}:reject`);
-                                    const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));
-                                    const nextDocuments = {
-                                      ...(profile?.documents || {}),
-                                      [doc.sourceKey]: {
-                                        ...(profile?.documents?.[doc.sourceKey] || {}),
-                                        key: doc.sourceKey,
-                                        name: doc.name,
-                                        fileName: doc.fileNames?.[0] || doc.name || doc.sourceKey,
-                                        previewUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.previewUrl || '',
-                                        secureUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.secureUrl || '',
-                                        images: doc.images || profile?.documents?.[doc.sourceKey]?.images || [],
-                                        fileNames: doc.fileNames || profile?.documents?.[doc.sourceKey]?.fileNames || [],
-                                        identify_number: doc.identify_number || profile?.documents?.[doc.sourceKey]?.identify_number || '',
-                                        expiry_date: doc.expiry_date || profile?.documents?.[doc.sourceKey]?.expiry_date || '',
-                                        status: 'rejected',
-                                        comment: String(note || '').trim(),
-                                        remarks: String(note || '').trim(),
-                                        reason: String(note || '').trim(),
-                                        admin_comment: String(note || '').trim(),
-                                        rejection_reason: String(note || '').trim(),
-                                        reviewedAt: new Date().toISOString(),
-                                        reverificationRequestedAt: null,
-                                      },
-                                    };
-
-                                    const response = await fetch(
-                                      `${API_BASE_URL}/admin/drivers/${id}`,
-                                      {
-                                        method: 'PATCH',
-                                        headers: {
-                                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                          'Content-Type': 'application/json',
+                                      const response = await fetch(
+                                        `${API_BASE_URL}/admin/drivers/${id}`,
+                                        {
+                                          method: 'PATCH',
+                                          headers: {
+                                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                            'Content-Type': 'application/json',
+                                          },
+                                          body: JSON.stringify({ documents: nextDocuments }),
                                         },
-                                        body: JSON.stringify({ documents: nextDocuments }),
-                                      },
-                                    );
-                                    const data = await response.json();
-
-                                    if (!response.ok || !data?.success) {
-                                      throw new Error(data?.message || 'Unable to reject document');
+                                      );
+                                      const data = await response.json();
+                                      if (!response.ok || !data?.success) throw new Error(data?.message || 'Unable to approve');
+                                      await fetchProfile();
+                                    } catch (err) {
+                                      window.alert(err?.message || 'Unable to approve');
+                                    } finally {
+                                      setDocumentActionKey('');
                                     }
-
-                                    await fetchProfile();
-                                  } catch (err) {
-                                    window.alert(err?.message || 'Unable to reject document');
-                                  } finally {
-                                    setDocumentActionKey('');
+                                  }}
+                                  disabled={
+                                    documentActionKey.length > 0 ||
+                                    !doc.images?.length ||
+                                    String(doc.status || '').toLowerCase() === 'approved'
                                   }
-                                }}
-                                disabled={
-                                  documentActionKey.length > 0 ||
-                                  !doc.images?.length ||
-                                  ['rejected', 'declined'].includes(String(doc.status || '').toLowerCase())
-                                }
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                                  documentActionKey === `${doc.sourceKey}:reject`
-                                    ? 'bg-rose-100 text-rose-500'
-                                    : !doc.images?.length || ['rejected', 'declined'].includes(String(doc.status || '').toLowerCase()) || documentActionKey.length > 0
-                                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                                      : 'text-rose-600 bg-rose-50 hover:bg-rose-100'
-                                }`}
-                              >
-                                {documentActionKey === `${doc.sourceKey}:reject` ? 'Saving...' : 'Decline'}
-                              </button>
-                            </div>
+                                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                                    documentActionKey === `${doc.sourceKey}:approve`
+                                      ? 'bg-emerald-100 text-emerald-500'
+                                      : !doc.images?.length || String(doc.status || '').toLowerCase() === 'approved' || documentActionKey.length > 0
+                                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                        : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                                  }`}
+                                >
+                                  {documentActionKey === `${doc.sourceKey}:approve` ? 'Saving...' : 'Approve'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!doc.sourceKey) return;
+                                    const note = window.prompt(`Reason for rejecting "${doc.name}"`, doc.comment || '');
+                                    if (note === null) return;
+
+                                    try {
+                                      setDocumentActionKey(`${doc.sourceKey}:reject`);
+                                      const token = (localStorage.getItem('admin_accessToken') || localStorage.getItem('adminToken'));
+                                      const nextDocuments = {
+                                        ...(profile?.documents || {}),
+                                        [doc.sourceKey]: {
+                                          ...(profile?.documents?.[doc.sourceKey] || {}),
+                                          key: doc.sourceKey,
+                                          name: doc.name,
+                                          fileName: doc.fileNames?.[0] || doc.name || doc.sourceKey,
+                                          previewUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.previewUrl || '',
+                                          secureUrl: doc.images?.[0] || profile?.documents?.[doc.sourceKey]?.secureUrl || '',
+                                          images: doc.images || profile?.documents?.[doc.sourceKey]?.images || [],
+                                          fileNames: doc.fileNames || profile?.documents?.[doc.sourceKey]?.fileNames || [],
+                                          identify_number: doc.identify_number || profile?.documents?.[doc.sourceKey]?.identify_number || '',
+                                          expiry_date: doc.expiry_date || profile?.documents?.[doc.sourceKey]?.expiry_date || '',
+                                          status: 'rejected',
+                                          comment: String(note || '').trim(),
+                                          remarks: String(note || '').trim(),
+                                          reason: String(note || '').trim(),
+                                          admin_comment: String(note || '').trim(),
+                                          rejection_reason: String(note || '').trim(),
+                                          reviewedAt: new Date().toISOString(),
+                                          reverificationRequestedAt: null,
+                                        },
+                                      };
+
+                                      const response = await fetch(
+                                        `${API_BASE_URL}/admin/drivers/${id}`,
+                                        {
+                                          method: 'PATCH',
+                                          headers: {
+                                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                            'Content-Type': 'application/json',
+                                          },
+                                          body: JSON.stringify({ documents: nextDocuments }),
+                                        },
+                                      );
+                                      const data = await response.json();
+
+                                      if (!response.ok || !data?.success) {
+                                        throw new Error(data?.message || 'Unable to reject document');
+                                      }
+
+                                      await fetchProfile();
+                                    } catch (err) {
+                                      window.alert(err?.message || 'Unable to reject document');
+                                    } finally {
+                                      setDocumentActionKey('');
+                                    }
+                                  }}
+                                  disabled={
+                                    documentActionKey.length > 0 ||
+                                    !doc.images?.length ||
+                                    ['rejected', 'declined'].includes(String(doc.status || '').toLowerCase())
+                                  }
+                                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                                    documentActionKey === `${doc.sourceKey}:reject`
+                                      ? 'bg-rose-100 text-rose-500'
+                                      : !doc.images?.length || ['rejected', 'declined'].includes(String(doc.status || '').toLowerCase()) || documentActionKey.length > 0
+                                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                        : 'text-rose-600 bg-rose-50 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  {documentActionKey === `${doc.sourceKey}:reject` ? 'Saving...' : 'Decline'}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-semibold text-gray-400">Read Only</span>
+                            )}
                           </td>
                         </tr>
                       ))

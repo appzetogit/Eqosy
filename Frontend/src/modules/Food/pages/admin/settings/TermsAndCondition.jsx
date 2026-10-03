@@ -13,6 +13,7 @@ export default function TermsAndCondition() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [viewMode, setViewMode] = useState("edit") // "edit" | "preview"
+  const [activeTab, setActiveTab] = useState("user") // "user" | "restaurant" | "delivery" | "driver" | "seller"
   const [termsData, setTermsData] = useState({
     title: 'Terms and Conditions',
     content: ''
@@ -20,12 +21,20 @@ export default function TermsAndCondition() {
 
   useEffect(() => {
     fetchTermsData()
-  }, [])
+  }, [activeTab])
+
+  const getEndpoint = () => {
+    if (activeTab === "restaurant") return API_ENDPOINTS.ADMIN.RESTAURANT_TERMS;
+    if (activeTab === "delivery") return API_ENDPOINTS.ADMIN.DELIVERY_TERMS;
+    if (activeTab === "driver") return API_ENDPOINTS.ADMIN.DRIVER_TERMS;
+    if (activeTab === "seller") return API_ENDPOINTS.ADMIN.SELLER_TERMS;
+    return API_ENDPOINTS.ADMIN.TERMS;
+  }
 
   const fetchTermsData = async () => {
     try {
       setLoading(true)
-      const response = await api.get(API_ENDPOINTS.ADMIN.TERMS, { contextModule: "admin" })
+      const response = await api.get(getEndpoint(), { contextModule: "admin" })
       if (response.data.success) {
         const pageData = response.data.data || { title: 'Terms and Conditions', content: '' }
         const content = pageData.content || ''
@@ -51,8 +60,8 @@ export default function TermsAndCondition() {
       const htmlContent = plainTextToLegalHtml(termsData.content)
       
       const response = await api.put(
-        API_ENDPOINTS.ADMIN.TERMS,
-        { title: termsData.title, content: htmlContent },
+        getEndpoint(),
+        { title: termsData.title || 'Terms and Conditions', content: htmlContent },
         { contextModule: "admin" }
       )
       if (response.data.success) {
@@ -89,8 +98,42 @@ export default function TermsAndCondition() {
       <div className="max-w-6xl mx-auto">
         {/* Page Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Terms And Condition</h1>
-          <p className="text-sm text-slate-600 mt-1">Manage your Terms and Conditions content</p>
+          <h1 className="text-2xl font-bold text-slate-900">Terms And Conditions</h1>
+          <p className="text-sm text-slate-600 mt-1">Manage Terms and Conditions content for different apps</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 mb-6 space-x-6 overflow-x-auto pb-1">
+          <button
+            onClick={() => setActiveTab("user")}
+            className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === "user" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            User App
+          </button>
+          <button
+            onClick={() => setActiveTab("restaurant")}
+            className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === "restaurant" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            Restaurant App
+          </button>
+          <button
+            onClick={() => setActiveTab("delivery")}
+            className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === "delivery" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            Delivery App
+          </button>
+          <button
+            onClick={() => setActiveTab("driver")}
+            className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === "driver" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            Driver App (Taxi)
+          </button>
+          <button
+            onClick={() => setActiveTab("seller")}
+            className={`whitespace-nowrap pb-3 font-medium text-sm transition-colors border-b-2 ${activeTab === "seller" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            Seller App
+          </button>
         </div>
 
         {/* Text Area */}

@@ -14,6 +14,10 @@ const TaxiApp = lazyWithRetry(() => import('../modules/Taxi/TaxiApp'))
 const AuthApp = lazyWithRetry(() => import('../modules/auth/routes'))
 const GlobalTerms = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Terms'))
 const GlobalPrivacy = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Privacy'))
+const GlobalRefund = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Refund'))
+const GlobalShipping = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Shipping'))
+const GlobalCancellation = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Cancellation'))
+const GlobalAbout = lazyWithRetry(() => import('../modules/Food/pages/user/profile/About'))
 
 const PageLoader = () => <SmartRouteSkeleton />
 
@@ -87,6 +91,22 @@ const AppRoutes = () => {
 
   useEffect(() => {
     const handleGlobalAuthStale = (event) => {
+      const currentPath = String(window.location.pathname || '').toLowerCase()
+      // Do not trigger session expired error or forced login redirect if already on login, auth, terms, or privacy page
+      if (
+        currentPath === '/login' ||
+        currentPath.includes('/auth/') ||
+        currentPath.includes('/login') ||
+        currentPath === '/terms' ||
+        currentPath === '/privacy' ||
+        currentPath === '/refund' ||
+        currentPath === '/shipping' ||
+        currentPath === '/cancellation' ||
+        currentPath === '/about'
+      ) {
+        return
+      }
+
       const role = String(event.detail?.role || 'user').toLowerCase()
       if (role === 'admin') {
         navigate('/admin/login', { replace: true })
@@ -168,6 +188,10 @@ const AppRoutes = () => {
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
       <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
+      <Route path="/refund" element={<Suspense fallback={<PageLoader />}><GlobalRefund /></Suspense>} />
+      <Route path="/shipping" element={<Suspense fallback={<PageLoader />}><GlobalShipping /></Suspense>} />
+      <Route path="/cancellation" element={<Suspense fallback={<PageLoader />}><GlobalCancellation /></Suspense>} />
+      <Route path="/about" element={<Suspense fallback={<PageLoader />}><GlobalAbout /></Suspense>} />
       <Route path="/food/*" element={<FoodAppWrapper />} />
       <Route path="/taxi/*" element={<TaxiAppWrapper />} />
       <Route

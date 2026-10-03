@@ -111,6 +111,62 @@ export const hasModuleAccess = (admin = {}, module) => {
   if (!module) return true;
   if (isPlatformSuperAdmin(admin)) return true;
 
+  const adminTypeLower = String(admin.admin_type || admin.role || '').trim().toLowerCase();
+  const levelLower = String(admin.adminLevel || admin.admin_level || '').trim().toLowerCase();
+  const isExplicitSubadmin = adminTypeLower === 'subadmin' || levelLower === 'subadmin';
+
+  if (isExplicitSubadmin) {
+    if (module === ADMIN_MODULES.TAXI) {
+      const permissions = Array.isArray(admin.permissions) ? admin.permissions : [];
+      const hasTaxiPermissions = permissions.some((p) => {
+        const raw = String(p || '').toLowerCase();
+        return (
+          raw.includes('driver') ||
+          raw.includes('trip') ||
+          raw.includes('ongoing') ||
+          raw.includes('delivery') ||
+          raw.includes('user') ||
+          raw.includes('owner') ||
+          raw.includes('zone') ||
+          raw.includes('vehicle') ||
+          raw.includes('service_location') ||
+          raw.includes('pricing') ||
+          raw.includes('bus') ||
+          raw.includes('rental') ||
+          raw.includes('pooling') ||
+          raw.includes('geo') ||
+          raw.includes('dashboard') ||
+          raw.includes('chat') ||
+          raw.includes('promotion') ||
+          raw.includes('wallet') ||
+          raw.includes('report') ||
+          raw.includes('setting')
+        );
+      });
+
+      const hasTaxiScope =
+        (Array.isArray(admin.service_location_ids) && admin.service_location_ids.length > 0) ||
+        (Array.isArray(admin.zone_ids) && admin.zone_ids.length > 0) ||
+        admin.module === ADMIN_MODULES.TAXI;
+
+      if (hasTaxiPermissions || hasTaxiScope) {
+        return true;
+      }
+    }
+
+    if (module === ADMIN_MODULES.FOOD) {
+      const permissions = Array.isArray(admin.permissions) ? admin.permissions : [];
+      const hasFoodPermissions = permissions.some((p) => {
+        const raw = String(p || '').toLowerCase();
+        return raw.includes('food') || raw.includes('restaurant') || raw.includes('order');
+      });
+      const hasFoodScope = (Array.isArray(admin.food_zone_ids) && admin.food_zone_ids.length > 0) || admin.module === ADMIN_MODULES.FOOD;
+      if (hasFoodPermissions || hasFoodScope) {
+        return true;
+      }
+    }
+  }
+
   const adminModule = resolveAdminModule(admin);
   if (adminModule && adminModule !== module) {
     return false;
@@ -118,6 +174,9 @@ export const hasModuleAccess = (admin = {}, module) => {
 
   const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
   if (servicesAccess.length > 0 && !servicesAccess.includes(module)) {
+    if (isExplicitSubadmin && Array.isArray(admin.permissions) && admin.permissions.length > 0) {
+      return true;
+    }
     return false;
   }
 

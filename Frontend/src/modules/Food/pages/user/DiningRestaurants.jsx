@@ -367,7 +367,7 @@ export default function DiningRestaurants() {
                 }
 
                 return (
-                  <Link key={restaurant.id} to={`/food/user/restaurants/${restaurantSlug}`}>
+                  <Link key={restaurant.id} to={`/food/user/dining/${restaurant.diningType || 'dining'}/${restaurantSlug}`} state={{ restaurant }}>
                     <Card className="overflow-hidden gap-0 cursor-pointer border-0 group bg-white shadow-md hover:shadow-xl transition-all duration-300 py-0 rounded-2xl">
                       {/* Image Section */}
                       <div className="relative h-48 sm:h-56 md:h-60 w-full overflow-hidden rounded-t-2xl">
@@ -383,7 +383,7 @@ export default function DiningRestaurants() {
                         {/* Featured Dish Badge - Top Left */}
                         <div className="absolute top-3 left-3">
                           <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium">
-                            {restaurant.featuredDish} â€¢ â‚¹{restaurant.featuredPrice}
+                            {restaurant.featuredDish} • ₹{restaurant.featuredPrice}
                           </div>
                         </div>
 

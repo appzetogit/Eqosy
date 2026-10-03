@@ -189,8 +189,6 @@ export default function DiningRestaurantDetails() {
   const closingTime = formatTimeLabel(restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:59")
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
   const topTabs = [
-    { id: "prebook", label: "Pre-book offers", target: "restaurant-prebook" },
-    { id: "walkin", label: "Walk-in offers", target: "restaurant-prebook" },
     { id: "menu", label: "Menu", target: "restaurant-menu" },
     { id: "photos", label: "Photos", target: "restaurant-photos" },
     { id: "about", label: "About", target: "restaurant-about" },
@@ -326,17 +324,25 @@ export default function DiningRestaurantDetails() {
                 disabled={!isDiningEnabled}
                 className={`flex h-[52px] items-center justify-center gap-2 rounded-full border px-3 text-[15px] font-medium shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-opacity ${
                   isDiningEnabled
-                    ? "border-[#f1ebee] bg-white text-[#2b2118]"
+                    ? "border-[#f1ebee] bg-white text-[#2b2118] hover:bg-orange-50"
                     : "cursor-not-allowed border-[#f2d7da] bg-[#fff5f6] text-[#c06a79] opacity-80"
                 }`}
               >
-              <Ticket className="h-[15px] w-[15px] text-[#ef4c62]" />
-              <span>{isDiningEnabled ? "Book a table" : "Dining paused"}</span>
+                <Ticket className="h-[15px] w-[15px] text-[#ef4c62]" />
+                <span>{isDiningEnabled ? "Book a table" : "Dining paused"}</span>
               </button>
-              <button className="flex h-[52px] items-center justify-center rounded-full border border-[#f1ebee] bg-white text-[#ef4c62] shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+              <button
+                onClick={() => scrollToSection("restaurant-menu")}
+                className="flex h-[52px] items-center justify-center rounded-full border border-[#f1ebee] bg-white text-[#ef4c62] shadow-[0_10px_24px_rgba(15,23,42,0.05)] hover:bg-orange-50"
+                title="View Menu"
+              >
                 <Tag className="h-[15px] w-[15px]" />
               </button>
-              <button className="flex h-[52px] items-center justify-center rounded-full border border-[#f1ebee] bg-white text-[#ef4c62] shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+              <button
+                onClick={() => scrollToSection("restaurant-about")}
+                className="flex h-[52px] items-center justify-center rounded-full border border-[#f1ebee] bg-white text-[#ef4c62] shadow-[0_10px_24px_rgba(15,23,42,0.05)] hover:bg-orange-50"
+                title="Restaurant Timings & Info"
+              >
                 <Clock3 className="h-[15px] w-[15px]" />
               </button>
             </div>
@@ -346,21 +352,6 @@ export default function DiningRestaurantDetails() {
                 Dining bookings are currently turned off by the restaurant.
               </div>
             )}
-
-          <div className="mt-4 overflow-hidden rounded-[18px] bg-[linear-gradient(180deg,#fff0ce,#fff8ea)] px-4 py-4 shadow-[0_8px_24px_rgba(238,184,68,0.22)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="rounded-full bg-[#8e77ff]/10 p-2 text-[#7f69eb]">
-                <Percent className="h-5 w-5" />
-              </div>
-              <div className="flex-1 text-center">
-                <p className="text-[33px] font-black leading-none tracking-[-0.04em] text-[#2c2352]">20% CASHBACK</p>
-                <p className="mt-1 text-[14px] font-medium text-[#4a4068]">on every dining bill</p>
-              </div>
-              <div className="rounded-full bg-[#8e77ff]/10 p-2 text-[#7f69eb]">
-                <Percent className="h-5 w-5" />
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -388,36 +379,13 @@ export default function DiningRestaurantDetails() {
       </div>
 
       <div className="mx-auto max-w-md px-4 pt-4">
-        <section id="restaurant-prebook">
-          <div>
-            <h2 className="text-[29px] font-black leading-none text-[#23180f]">Pre-book offers</h2>
-            <p className="mt-1 text-[15px] text-[#ef4c62]">Limited slots with extra offers</p>
-          </div>
-
-          <div className="mt-3 overflow-hidden rounded-[18px] bg-[linear-gradient(135deg,#0f4a87,#0b2954_70%)] text-white shadow-[0_10px_26px_rgba(8,52,95,0.25)]">
-            <div className="flex items-start justify-between px-4 pb-3 pt-4">
-              <div>
-                <p className="text-[28px] font-black leading-none">Flat 50% OFF</p>
-                <p className="mt-2 text-[14px] text-white/80">Dining Carnival offer</p>
-              </div>
-              <button className="rounded-full bg-black/45 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur-sm">
-                Book now
-              </button>
-            </div>
-            <div className="border-t border-white/10 px-4 py-2 text-center text-[12px] text-white/75">
-              3 slots available from 3:30 PM today
-            </div>
-          </div>
-        </section>
-
-        <section id="restaurant-menu" className="mt-5 border-t border-[#e8e8ef] pt-4">
+        <section id="restaurant-menu" className="pt-2">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-[28px] font-black leading-none text-[#23180f]">Menu</h2>
-              <p className="mt-2 text-[13px] text-[#e19135]">Last updated a month ago</p>
             </div>
             <div className="rounded-full bg-[#fff3e6] px-3 py-1 text-xs font-semibold text-[#e58a2c]">
-              {featuredSections.length || 2} dishes
+              {featuredSections.length || 2} categories
             </div>
           </div>
 
@@ -440,7 +408,7 @@ export default function DiningRestaurantDetails() {
                 </div>
                 <div className="px-2 pb-3 pt-2 text-center">
                   <p className="text-[16px] font-medium leading-tight text-[#2b2218]">{section.title}</p>
-                  <p className="mt-1 text-[12px] text-[#7f7a73]">{section.pages} pages</p>
+                  <p className="mt-1 text-[12px] text-[#7f7a73]">{section.pages} items</p>
                 </div>
               </div>
             ))}
@@ -485,22 +453,6 @@ export default function DiningRestaurantDetails() {
               <div className="flex items-start gap-3">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#ef4c62]" />
                 <p>{address}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 border-t border-[#e8e8ef] pt-4">
-              <h3 className="text-[20px] font-semibold text-[#23180f]">Featured In</h3>
-              <div className="mt-3 overflow-hidden rounded-[16px] bg-white shadow-sm">
-                <div className="aspect-[1.2] bg-[#efe8df]">
-                  {heroImage ? (
-                    <img src={heroImage} alt={restaurantName} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-[#a28868]">Featured image</div>
-                  )}
-                </div>
-                <div className="-mt-14 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.72))] p-3 pt-10 text-sm font-medium text-white">
-                  Pan-Asian Restaurants
-                </div>
               </div>
             </div>
 

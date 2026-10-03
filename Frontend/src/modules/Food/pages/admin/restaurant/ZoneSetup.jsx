@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { MapPin, Plus, Search, Edit, Trash2, Eye, Map, Bike } from "lucide-react"
 import { adminAPI } from "@food/api"
+import { getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -9,6 +11,8 @@ const debugError = (...args) => {}
 
 export default function ZoneSetup() {
   const navigate = useNavigate()
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "zones"), [adminProfile])
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -81,13 +85,15 @@ export default function ZoneSetup() {
               <Map className="w-5 h-5" />
               <span>View Map</span>
             </button>
-            <button
-              onClick={() => navigate("/admin/food/zone-setup/add")}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Zone</span>
-            </button>
+            {canWrite && (
+              <button
+                onClick={() => navigate("/admin/food/zone-setup/add")}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Zone</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -157,26 +163,30 @@ export default function ZoneSetup() {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/admin/food/zone-setup/edit/${zone._id || zone.id}`)
-                      }}
-                      className="p-2 text-slate-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteZone(zone._id || zone.id)
-                      }}
-                      className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canWrite && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/admin/food/zone-setup/edit/${zone._id || zone.id}`)
+                          }}
+                          className="p-2 text-slate-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteZone(zone._id || zone.id)
+                          }}
+                          className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2 text-sm">

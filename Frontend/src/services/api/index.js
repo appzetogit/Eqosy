@@ -457,6 +457,18 @@ export const adminAPI = {
       body ?? {},
       { contextModule: "admin" },
     ),
+  /** Dining Banners (admin) */
+  getDiningBanners: () =>
+    apiClient.get("/food/hero-banners/dining", { contextModule: "admin" }),
+  createDiningBanner: (formData) =>
+    apiClient.post("/food/hero-banners/dining/multiple", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      contextModule: "admin",
+    }),
+  deleteDiningBanner: (id) =>
+    apiClient.delete(`/food/hero-banners/dining/${String(id)}`, {
+      contextModule: "admin",
+    }),
   createCategory: (body) =>
     apiClient.post("/food/admin/categories", body ?? {}, {
       contextModule: "admin",
@@ -2585,11 +2597,15 @@ const collectRestaurantBookingKeys = (restaurantCandidate) => {
     raw?.restaurantId,
     raw?.slug,
     raw?.restaurantNameNormalized,
+    raw?.name,
+    raw?.restaurantName,
     raw?.restaurant?._id,
     raw?.restaurant?.id,
     raw?.restaurant?.restaurantId,
     raw?.restaurant?.slug,
     raw?.restaurant?.restaurantNameNormalized,
+    raw?.restaurant?.name,
+    raw?.restaurant?.restaurantName,
   ];
 
   return Array.from(
@@ -2734,6 +2750,9 @@ export const diningAPI = {
       data: { success: Boolean(updated), data: updated },
     });
   },
+  cancelBooking: (bookingId) => {
+    return diningAPI.updateBookingStatusRestaurant(bookingId, "cancelled");
+  },
   createReview: (payload = {}) => {
     const bookingId = String(payload?.bookingId || "").trim();
     if (!bookingId) {
@@ -2852,6 +2871,33 @@ export const diningAPI = {
     const bookings = getStoredBookings();
     const next = [booking, ...bookings].sort(byLatest);
     saveStoredBookings(next);
+
+    // Save notification item for restaurant inbox
+    try {
+      const notifKey = "restaurant_notifications_inbox_v1";
+      const existingNotifs = JSON.parse(localStorage.getItem(notifKey) || "[]");
+      const notifItem = {
+        id: `notif_${booking.bookingId}`,
+        title: `🍽️ New Table Booking #${booking.bookingId}`,
+        message: `${booking.user?.name || "Guest"} reserved a table for ${booking.guests} guest(s) on ${new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} at ${booking.timeSlot}.${booking.specialRequest ? ` Note: "${booking.specialRequest}"` : ''}`,
+        type: "dining_booking",
+        createdAt: nowIso,
+        read: false,
+        restaurantId: restaurantId,
+      };
+      localStorage.setItem(notifKey, JSON.stringify([notifItem, ...existingNotifs].slice(0, 50)));
+    } catch {}
+
+    // Optionally try posting to backend endpoint if backend has dining booking endpoint
+    try {
+      apiClient.post("/food/dining/bookings", {
+        restaurantId,
+        guests: booking.guests,
+        date: booking.date,
+        timeSlot: booking.timeSlot,
+        specialRequest: booking.specialRequest,
+      }).catch(() => {});
+    } catch {}
 
     return Promise.resolve({
       data: {

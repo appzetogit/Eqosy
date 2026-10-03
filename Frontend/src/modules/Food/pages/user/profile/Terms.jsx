@@ -1,4 +1,4 @@
-﻿import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, FileText, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -7,6 +7,8 @@ import { Button } from "@food/components/ui/button"
 import api from "@food/api"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { API_ENDPOINTS } from "@food/api/config"
+
+import { isUnifiedAuthenticated } from "@food/utils/auth"
 
 export default function Terms() {
   const navigate = useNavigate()
@@ -36,10 +38,10 @@ export default function Terms() {
   }
 
   const handleBack = () => {
-    if (window.history.length > 2) {
-      goBack()
+    if (typeof window !== "undefined" && window.history && window.history.length > 2) {
+      navigate(-1)
     } else {
-      navigate('/food/user')
+      navigate(isUnifiedAuthenticated() ? '/food/user' : '/login', { replace: true })
     }
   }
 

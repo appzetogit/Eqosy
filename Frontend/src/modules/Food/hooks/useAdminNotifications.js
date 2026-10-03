@@ -3,10 +3,64 @@ import { adminAPI, supportAPI } from "@food/api";
 import { io } from "socket.io-client";
 import { API_BASE_URL, resolveSocketOrigin } from "@food/api/config";
 import { toast } from "sonner";
+import { getCurrentUser } from "@food/utils/auth";
+import { canReadFood, isFoodSuperAdminLike, getRouteResource } from "@food/constants/foodAdminAccess";
 
 const STORAGE_KEY = "admin_notifications_dismissed_v1";
 const REALTIME_KEY = "admin_realtime_notifications_v1";
 const UPDATE_EVENT = "adminNotificationsUpdated";
+
+const notifCategoryResourceMap = {
+  handover_approval: "orders",
+  restaurant_approval: "restaurants",
+  delivery_approval: "delivery",
+  food_approval: "foods",
+  support: "support",
+  delivery_support: "support",
+  withdrawals: "wallet",
+  delivery_withdrawals: "delivery",
+  fssai_expired: "restaurants",
+};
+
+export const checkAdminNotifAccess = (item, admin = null) => {
+  const currentAdmin = admin || getCurrentUser("admin");
+  if (!currentAdmin) return true;
+  if (isFoodSuperAdminLike(currentAdmin)) return true;
+
+  // 1. Check Resource Permission
+  const targetResource =
+    item?.resource ||
+    notifCategoryResourceMap[item?.category] ||
+    (item?.path ? getRouteResource(item.path) : null);
+
+  if (targetResource && !canReadFood(currentAdmin, targetResource)) {
+    return false;
+  }
+
+  // 2. Check Zone Scope Access
+  const assignedZones = Array.isArray(currentAdmin?.food_zone_ids)
+    ? currentAdmin.food_zone_ids.map(String).filter(Boolean)
+    : Array.isArray(currentAdmin?.assignedZones)
+    ? currentAdmin.assignedZones.map(String).filter(Boolean)
+    : [];
+
+  if (assignedZones.length > 0) {
+    const itemZoneId = String(
+      item?.zoneId ||
+      item?.restaurantZoneId ||
+      item?.rawOrder?.restaurantId?.zoneId?._id ||
+      item?.rawOrder?.restaurantId?.zoneId ||
+      item?.rawOrder?.zoneId ||
+      ""
+    );
+
+    if (itemZoneId && itemZoneId !== "undefined" && itemZoneId !== "null" && !assignedZones.includes(itemZoneId)) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 const safeParse = (value, fallback) => {
   try {
@@ -81,8 +135,6 @@ const joinMeta = (...parts) => parts.filter(Boolean).join(" • ");
 
 const extractRows = (res) => {
   if (!res) return [];
-  // Axios wraps: res.data = { success, message, data: { ... } }
-  // So res.data.data is the actual payload object
   const payload = res?.data?.data ?? res?.data ?? res;
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.items)) return payload.items;
@@ -101,7 +153,6 @@ const extractRows = (res) => {
 const mapPendingHandovers = (response) => {
   const list = extractRows(response);
 
-  // Only show orders with PENDING handover request (backend already filters but double-check)
   return list.filter((item) => {
     const hrStatus = String(item?.dispatch?.handoverRequest?.status || "").toLowerCase();
     return !hrStatus || hrStatus === "pending";
@@ -126,6 +177,7 @@ const mapPendingHandovers = (response) => {
     const restaurantObj = typeof item?.restaurantId === "object" ? item.restaurantId : null;
     const restaurantName = restaurantObj?.restaurantName || restaurantObj?.name || item?.restaurantName || "Restaurant";
     const zoneName = (typeof restaurantObj?.zoneId === "object" ? restaurantObj.zoneId?.name : null) || restaurantObj?.area || item?.zoneName || "Zone";
+    const restaurantZoneId = String(restaurantObj?.zoneId?._id || restaurantObj?.zoneId || item?.zoneId || "");
 
     const userObj = typeof item?.userId === "object" ? item.userId : null;
     const customerName = userObj?.name || userObj?.fullName || item?.customerName || item?.deliveryAddress?.contactName || "Customer";
@@ -145,6 +197,8 @@ const mapPendingHandovers = (response) => {
       message: `Driver ${partnerName}${partnerPhone ? ` (${partnerPhone})` : ""} requested handover for Order #${orderDisplayId} (${restaurantName}). Reason: ${reason}${note ? ` (${note})` : ""}. Driver set Offline. Admin approval required.`,
       type: "approval",
       category: "handover_approval",
+      resource: "orders",
+      zoneId: restaurantZoneId,
       path: `/admin/food/delivery-partners/gigs?handoverId=${orderMongoId}`,
       createdAt:
         item?.dispatch?.handoverRequest?.requestedAt ||
@@ -181,6 +235,8 @@ const mapPendingRestaurants = (response) => {
       message: `${item?.restaurantName || "Restaurant"} submitted a restaurant approval request. Owner: ${item?.ownerName || "N/A"}. Contact: ${item?.ownerPhone || "N/A"}.`,
       type: "approval",
       category: "restaurant_approval",
+      resource: "restaurants",
+      zoneId: String(item?.zoneId?._id || item?.zoneId || ""),
       path: "/admin/food/restaurants/joining-request",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -198,6 +254,7 @@ const mapDeliveryJoinRequests = (response) => {
       message: `${item?.name || "Delivery partner"} submitted a joining request. Phone: ${item?.phone || "N/A"}. Email: ${item?.email || "N/A"}.`,
       type: "approval",
       category: "delivery_approval",
+      resource: "delivery",
       path: "/admin/food/delivery-partners/join-request",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -215,6 +272,8 @@ const mapFoodApprovals = (response) => {
       message: `${item?.itemName || "Food item"} from ${item?.restaurantName || "Restaurant"} is waiting for review. Category: ${item?.category || item?.type || "N/A"}.`,
       type: "approval",
       category: "food_approval",
+      resource: "foods",
+      zoneId: String(item?.restaurantId?.zoneId?._id || item?.restaurantId?.zoneId || item?.zoneId || ""),
       path: "/admin/food/food-approval",
       createdAt: item?.requestedAt || item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.requestedAt || item?.createdAt || item?.updatedAt),
@@ -243,6 +302,7 @@ const mapUserRestaurantSupport = (response) => {
         message,
         type: "support",
         category: "support",
+        resource: "support",
         path: "/admin/food/support-tickets",
         createdAt: item?.createdAt || item?.updatedAt,
         timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -261,6 +321,7 @@ const mapDeliverySupport = (response) => {
       message: `${item?.deliveryPartner?.name || "Delivery partner"} raised a support ticket. Subject: ${item?.subject || "N/A"}. Priority: ${item?.priority || "medium"}. Status: ${item?.status || "open"}.`,
       type: "support",
       category: "delivery_support",
+      resource: "support",
       path: "/admin/food/delivery-support-tickets",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -278,6 +339,8 @@ const mapExpiredFssai = (response) => {
       `${item?.restaurantName || "Restaurant"} FSSAI license has expired.`,
     type: "compliance",
     category: "fssai_expired",
+    resource: "restaurants",
+    zoneId: String(item?.zoneId?._id || item?.zoneId || ""),
     path: "/admin/food/restaurants",
     createdAt: item?.createdAt || item?.fssaiExpiry,
     timeLabel: toDateLabel(item?.createdAt || item?.fssaiExpiry),
@@ -295,6 +358,8 @@ const mapWithdrawalRequests = (response) => {
       message: `${item?.restaurantName || item?.restaurantId?.restaurantName || "Restaurant"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
       type: "approval",
       category: "withdrawals",
+      resource: "wallet",
+      zoneId: String(item?.restaurantId?.zoneId?._id || item?.restaurantId?.zoneId || item?.zoneId || ""),
       path: "/admin/food/restaurant-withdraws",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -312,6 +377,7 @@ const mapDeliveryWithdrawals = (response) => {
       message: `${item?.deliveryPartner?.name || item?.deliveryPartnerName || "Delivery partner"} requested a withdrawal of ₹${item?.amount || 0}. Status: ${item?.status || "pending"}.`,
       type: "approval",
       category: "delivery_withdrawals",
+      resource: "delivery",
       path: "/admin/food/delivery-withdrawal",
       createdAt: item?.createdAt || item?.updatedAt,
       timeLabel: toDateLabel(item?.createdAt || item?.updatedAt),
@@ -336,6 +402,7 @@ const mapEmergencyOfflineRequests = (response) => {
         message: `Driver ${partnerName}${partnerPhone ? ` (${partnerPhone})` : ""} requested emergency offline approval. Reason: "${reason}"`,
         type: "approval",
         category: "handover_approval",
+        resource: "delivery",
         path: "/admin/food/delivery-partners",
         createdAt: item?.emergencyOfflineRequest?.requestedAt || item?.updatedAt || item?.createdAt,
         timeLabel: toDateLabel(item?.emergencyOfflineRequest?.requestedAt || item?.updatedAt || item?.createdAt),
@@ -353,6 +420,7 @@ export default function useAdminNotifications(options = {}) {
   const loadNotifications = useCallback(async () => {
     const dismissed = new Set(getDismissedIds());
     const storedRealtime = getStoredRealtimeNotifs();
+    const currentAdmin = getCurrentUser("admin");
 
     try {
       setLoading(true);
@@ -367,7 +435,6 @@ export default function useAdminNotifications(options = {}) {
         adminAPI.getPendingHandovers(),
         adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }),
         adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }),
-        // Fetch ALL delivery partners (high limit) to catch emergency offline requests
         adminAPI.getDeliveryPartners({ limit: 500, page: 1 }),
       ]);
 
@@ -396,8 +463,6 @@ export default function useAdminNotifications(options = {}) {
       const handoverRows = mapPendingHandovers(handoverRes);
       const emergencyRows = mapEmergencyOfflineRequests(deliveryPartnersRes);
 
-      console.debug("[AdminNotif] handoverRows:", handoverRows.length, "emergencyRows:", emergencyRows.length);
-
       const fetchedPending = [
         ...handoverRows,
         ...emergencyRows,
@@ -411,11 +476,12 @@ export default function useAdminNotifications(options = {}) {
         ...mapExpiredFssai(fssaiExpiredRes),
       ];
 
-      // Live pending DB tasks from backend and Realtime transient notifications respect dismissed IDs.
+      // Filter tasks according to Subadmin permissions & assigned zones
       const aggregated = uniqueById([
         ...fetchedPending.filter((item) => item?.id && !dismissed.has(item.id)),
         ...storedRealtime.filter((item) => item?.id && !dismissed.has(item.id)),
       ])
+        .filter((item) => checkAdminNotifAccess(item, currentAdmin))
         .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
 
       setItems(aggregated);
@@ -438,7 +504,11 @@ export default function useAdminNotifications(options = {}) {
       loadNotifications();
     };
     window.addEventListener(UPDATE_EVENT, handler);
-    return () => window.removeEventListener(UPDATE_EVENT, handler);
+    window.addEventListener("adminAuthChanged", handler);
+    return () => {
+      window.removeEventListener(UPDATE_EVENT, handler);
+      window.removeEventListener("adminAuthChanged", handler);
+    };
   }, [loadNotifications]);
 
   // Real-time socket updates for Admin Notifications
@@ -464,8 +534,6 @@ export default function useAdminNotifications(options = {}) {
         const name = data.name || data.fullName || 'New Account';
         const phone = data.phone || data.mobile || '';
 
-        toast.info(`🆕 ${title}: ${name}${phone ? ` (${phone})` : ''}`);
-
         const rawId = String(data.id || data._id || Date.now());
         const targetId = data.type === 'restaurant'
           ? `approval-restaurant-${rawId}`
@@ -477,15 +545,19 @@ export default function useAdminNotifications(options = {}) {
           message: `${name}${phone ? ` (${phone})` : ''} registered and requires review.`,
           type: "approval",
           category: data.type === 'restaurant' ? 'restaurant_approval' : 'delivery_approval',
+          resource: data.type === 'restaurant' ? 'restaurants' : 'delivery',
           path: data.type === 'restaurant' ? '/admin/food/restaurants/joining-request' : '/admin/food/delivery-partners/join-request',
           createdAt: data.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(name, phone, data.type),
         };
 
-        // Un-dismiss if previously dismissed
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(item, currentAdmin)) return;
+
+        toast.info(`🆕 ${title}: ${name}${phone ? ` (${phone})` : ''}`);
+
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
-        // Persist real-time item
         saveStoredRealtimeNotifs([item, ...getStoredRealtimeNotifs()]);
 
         setItems((prev) => uniqueById([item, ...(Array.isArray(prev) ? prev : [])]));
@@ -496,10 +568,6 @@ export default function useAdminNotifications(options = {}) {
       socket.on("new_driver_registration", handleRegistrationAlert);
 
       socket.on("admin_handover_request", (payload) => {
-        toast.error("🚨 Order Handover Request Received!", {
-          description: payload?.message || `Driver ${payload?.partnerName || 'Delivery driver'} requested emergency handover.`,
-        });
-
         const orderDisplayId = payload?.orderId || payload?.orderMongoId || "Order";
         const orderMongoId = String(payload?.orderMongoId || payload?.orderId || "");
         const targetId = `approval-handover-${orderMongoId || Date.now()}`;
@@ -512,6 +580,7 @@ export default function useAdminNotifications(options = {}) {
           message: payload?.message || `Driver ${payload?.partnerName || 'Driver'}${payload?.partnerPhone ? ` (${payload.partnerPhone})` : ""} requested handover for Order #${orderDisplayId} (${payload?.restaurantName || 'Restaurant'}). Reason: ${payload?.reason || 'Emergency'}. Driver set Offline. Admin approval required.`,
           type: "approval",
           category: "handover_approval",
+          resource: "orders",
           path: `/admin/food/delivery-partners/gigs?handoverId=${orderMongoId}`,
           createdAt: new Date().toISOString(),
           timeLabel: "Just now",
@@ -529,6 +598,13 @@ export default function useAdminNotifications(options = {}) {
           rawOrder: payload,
         };
 
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.error("🚨 Order Handover Request Received!", {
+          description: payload?.message || `Driver ${payload?.partnerName || 'Delivery driver'} requested emergency handover.`,
+        });
+
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
 
@@ -539,13 +615,6 @@ export default function useAdminNotifications(options = {}) {
       socket.on("admin_notification", (payload = {}) => {
         const title = payload?.title || payload?.notification?.title || "Admin Notification";
         const body = payload?.message || payload?.body || payload?.notification?.body || payload?.data?.message || "";
-
-        if (body) {
-          toast.info(`${title}: ${body}`);
-        } else {
-          toast.info(title);
-        }
-
         const rawId = String(payload?.id || payload?._id || payload?.notificationId || Date.now());
         const targetId = `admin-notif-${rawId}`;
 
@@ -555,11 +624,21 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: payload?.type || "info",
           category: payload?.category || "general",
+          resource: payload?.resource || null,
           path: payload?.path || payload?.targetUrl || payload?.link || "/admin/food",
           createdAt: payload?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(title, body),
         };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        if (body) {
+          toast.info(`${title}: ${body}`);
+        } else {
+          toast.info(title);
+        }
 
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
@@ -573,9 +652,6 @@ export default function useAdminNotifications(options = {}) {
         const isDelivery = data?.source === "delivery" || data?.deliveryPartner;
         const title = isDelivery ? "🎫 Delivery Support Ticket Raised" : "🎫 New Support Ticket Raised";
         const body = data?.subject || data?.message || data?.issueType || "A ticket has been created.";
-
-        toast.info(title, { description: body });
-
         const rawId = String(data?.id || data?._id || Date.now());
         const targetId = isDelivery ? `support-delivery-${rawId}` : `support-main-${rawId}`;
 
@@ -585,11 +661,17 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: "support",
           category: isDelivery ? "delivery_support" : "support",
+          resource: "support",
           path: isDelivery ? "/admin/food/delivery-support-tickets" : "/admin/food/support-tickets",
           createdAt: data?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(data?.userName || data?.restaurantName || data?.deliveryPartnerName || "Support Ticket", data?.subject || data?.issueType),
         };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.info(title, { description: body });
 
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
@@ -605,9 +687,6 @@ export default function useAdminNotifications(options = {}) {
         const amount = data?.amount || 0;
         const title = isDelivery ? "💸 Delivery Partner Withdrawal Request" : "💸 Restaurant Withdrawal Request";
         const body = `${partnerName} requested a withdrawal of ₹${amount}.`;
-
-        toast.info(title, { description: body });
-
         const rawId = String(data?.id || data?._id || Date.now());
         const targetId = isDelivery ? `withdrawal-delivery-${rawId}` : `withdrawal-restaurant-${rawId}`;
 
@@ -617,11 +696,17 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: "approval",
           category: isDelivery ? "delivery_withdrawals" : "withdrawals",
+          resource: isDelivery ? "delivery" : "wallet",
           path: isDelivery ? "/admin/food/delivery-withdrawal" : "/admin/food/restaurant-withdraws",
           createdAt: data?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(partnerName, `₹${amount}`),
         };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.info(title, { description: body });
 
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
@@ -635,9 +720,6 @@ export default function useAdminNotifications(options = {}) {
         const driverName = data?.name || data?.driverName || "Delivery Partner";
         const title = "⚠️ Emergency Offline Request";
         const body = `Driver ${driverName} requested emergency offline.`;
-
-        toast.error(title, { description: body });
-
         const rawId = String(data?.id || data?._id || Date.now());
         const targetId = `emergency-offline-${rawId}`;
 
@@ -647,11 +729,17 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: "approval",
           category: "handover_approval",
+          resource: "delivery",
           path: "/admin/food/delivery-partners/gigs",
           createdAt: data?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(driverName, "Emergency Offline"),
         };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.error(title, { description: body });
 
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
@@ -666,9 +754,6 @@ export default function useAdminNotifications(options = {}) {
         const restaurantName = data?.restaurantName || "Restaurant";
         const title = "🍕 Food Approval Pending";
         const body = `${itemName} from ${restaurantName} is waiting for review.`;
-
-        toast.info(title, { description: body });
-
         const rawId = String(data?.id || data?._id || Date.now());
         const targetId = `approval-food-${rawId}`;
 
@@ -678,11 +763,17 @@ export default function useAdminNotifications(options = {}) {
           message: body,
           type: "approval",
           category: "food_approval",
+          resource: "foods",
           path: "/admin/food/food-approval",
           createdAt: data?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(restaurantName, itemName),
         };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.info(title, { description: body });
 
         saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
         saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);

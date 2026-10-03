@@ -44,18 +44,29 @@ export default function RestaurantLogin() {
   }, [])
 
   const validatePhone = (phone) => {
-    if (!phone || phone.trim() === "") return "Phone number required"
+    if (!phone || phone.trim() === "") return "Please enter your 10-digit mobile number"
     const digitsOnly = phone.replace(/\D/g, "")
-    if (digitsOnly.length !== 10) return "Must be 10 digits"
-    if (!["6", "7", "8", "9"].includes(digitsOnly[0])) return "Invalid number"
+    if (digitsOnly.length < 10) return "Mobile number must be exactly 10 digits"
+    if (digitsOnly.length > 10) return "Mobile number cannot exceed 10 digits"
+    if (!["6", "7", "8", "9"].includes(digitsOnly[0])) return "Please enter a valid mobile number starting with 6, 7, 8, or 9"
     return ""
   }
 
   const handlePhoneChange = (e) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 10)
+    const rawInput = e.target.value
+    const digitsOnly = rawInput.replace(/\D/g, "")
+    
+    let validationErr = ""
+    if (rawInput.length > 10 || digitsOnly.length > 10) {
+      validationErr = "Mobile number cannot exceed 10 digits"
+    } else if (digitsOnly.length > 0 && !["6", "7", "8", "9"].includes(digitsOnly[0])) {
+      validationErr = "Mobile number must start with 6, 7, 8, or 9"
+    }
+
+    const value = digitsOnly.slice(0, 10)
     setFormData((prev) => ({ ...prev, phone: value }))
     sessionStorage.setItem("restaurantLoginPhone", value)
-    if (error) setError(validatePhone(value))
+    setError(validationErr)
   }
 
   const handleSendOTP = async () => {
@@ -69,6 +80,7 @@ export default function RestaurantLogin() {
 
     try {
       setIsSending(true)
+      setError("")
       await restaurantAPI.sendOTP(fullPhone, "login")
       sessionStorage.setItem("restaurantAuthData", JSON.stringify({
         method: "phone",
@@ -78,7 +90,20 @@ export default function RestaurantLogin() {
       }))
       navigate("/food/restaurant/otp")
     } catch (apiErr) {
-      setError(apiErr?.response?.data?.error || apiErr?.response?.data?.message || "Failed to send OTP")
+      const errMsg = apiErr?.response?.data?.error || apiErr?.response?.data?.message || apiErr?.message || "Failed to send OTP"
+      if (/not found|not registered|no account|user not found|account not found/i.test(errMsg) || apiErr?.response?.status === 404) {
+        // Automatically redirect to signup/onboarding if account does not exist
+        sessionStorage.setItem("restaurantAuthData", JSON.stringify({
+          method: "phone",
+          phone: fullPhone,
+          isSignUp: true,
+          module: "restaurant",
+        }))
+        await restaurantAPI.sendOTP(fullPhone, "register").catch(() => {})
+        navigate("/food/restaurant/otp")
+        return
+      }
+      setError(errMsg)
     } finally {
       setIsSending(false)
     }

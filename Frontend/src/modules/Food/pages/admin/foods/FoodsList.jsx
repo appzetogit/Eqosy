@@ -6,6 +6,8 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@food/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@food/components/ui/popover"
 import { getFoodDisplayPrice, getFoodVariants } from "@food/utils/foodVariants"
+import { getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -33,10 +35,22 @@ const createVariantDraft = (variant = {}) => ({
 })
 
 export default function FoodsList() {
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "foods"), [adminProfile])
+
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedZone, setSelectedZone] = useState("all")
+  const [zones, setZones] = useState([])
   const [selectedRestaurant, setSelectedRestaurant] = useState("all")
   const [foods, setFoods] = useState([])
   const [restaurantsForFilter, setRestaurantsForFilter] = useState([])
+
+  useEffect(() => {
+    adminAPI.getZones({ limit: 1000 }).then((res) => {
+      const list = res?.data?.data?.zones || res?.data?.zones || res?.data?.data || []
+      setZones(Array.isArray(list) ? list : [])
+    }).catch(() => setZones([]))
+  }, [])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [selectedFood, setSelectedFood] = useState(null)
@@ -106,6 +120,7 @@ export default function FoodsList() {
           .map((restaurant) => ({
             id: String(restaurant?._id || restaurant?.id || ""),
             name: restaurant?.name || restaurant?.restaurantName || "Unknown Restaurant",
+            zoneId: typeof restaurant?.zoneId === "string" ? restaurant.zoneId : (restaurant?.zoneId?._id || restaurant?.zoneId?.id || restaurant?.location?.zoneId || ""),
           }))
           .filter((restaurant) => restaurant.id)
           .sort((a, b) => a.name.localeCompare(b.name))
@@ -206,6 +221,23 @@ export default function FoodsList() {
     return `FOOD${lastDigits}`
   }
 
+  const restaurantOptions = useMemo(() => {
+    if (selectedZone === "all" || !selectedZone) {
+      return restaurantsForFilter
+    }
+    return restaurantsForFilter.filter(
+      (r) => String(r.zoneId) === String(selectedZone)
+    )
+  }, [restaurantsForFilter, selectedZone])
+
+  useEffect(() => {
+    if (selectedRestaurant === "all") return
+    const exists = restaurantOptions.some((r) => r.id === selectedRestaurant)
+    if (!exists) {
+      setSelectedRestaurant("all")
+    }
+  }, [selectedZone, restaurantOptions, selectedRestaurant])
+
   const filteredFoods = useMemo(() => {
     let result = [...foods]
 
@@ -219,13 +251,18 @@ export default function FoodsList() {
       )
     }
 
+    if (selectedZone !== "all") {
+      const validRestIds = new Set(restaurantOptions.map((r) => r.id))
+      result = result.filter((food) => validRestIds.has(String(food.restaurantId)))
+    }
+
     if (selectedRestaurant !== "all") {
       result = result.filter((food) => String(food.restaurantId) === selectedRestaurant)
     }
 
     result.sort((a, b) => getItemCreatedMs(b) - getItemCreatedMs(a))
     return result
-  }, [foods, searchQuery, selectedRestaurant])
+  }, [foods, searchQuery, selectedZone, selectedRestaurant, restaurantOptions])
 
   const totalPages = useMemo(() => {
     if (filteredFoods.length === 0) return 1
@@ -239,17 +276,7 @@ export default function FoodsList() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, selectedRestaurant, pageSize])
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
-
-  const restaurantOptions = useMemo(() => {
-    return restaurantsForFilter
-  }, [restaurantsForFilter])
+  }, [searchQuery, selectedZone, selectedRestaurant, pageSize])
 
   const openAddFoodModal = () => {
     setFoodFormMode("add")
@@ -488,14 +515,16 @@ export default function FoodsList() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={openAddFoodModal}
-              className="px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 inline-flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Food</span>
-            </button>
+            {canWrite && (
+              <button
+                type="button"
+                onClick={openAddFoodModal}
+                className="px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Food</span>
+              </button>
+            )}
             <div className="relative flex-1 sm:flex-initial min-w-[200px]">
               <input
                 type="text"
@@ -506,6 +535,18 @@ export default function FoodsList() {
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
+            <select
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+            >
+              <option value="all">All Areas / Zones</option>
+              {zones.map((zone) => (
+                <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                  {zone.name || zone.zoneName}
+                </option>
+              ))}
+            </select>
             <select
               value={selectedRestaurant}
               onChange={(e) => setSelectedRestaurant(e.target.value)}
@@ -614,25 +655,29 @@ export default function FoodsList() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => openEditFoodModal(food)}
-                          className="p-1.5 rounded text-amber-600 hover:bg-amber-50 transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(food.id)}
-                          disabled={deleting}
-                          className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete"
-                        >
-                          {deleting ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
+                        {canWrite && (
+                          <>
+                            <button
+                              onClick={() => openEditFoodModal(food)}
+                              className="p-1.5 rounded text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(food.id)}
+                              disabled={deleting}
+                              className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete"
+                            >
+                              {deleting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

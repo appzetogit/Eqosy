@@ -30,9 +30,50 @@ export default function TableBookingConfirmation() {
     const { restaurant, guests, date, timeSlot, discount } = resolvedState
 
     const [specialRequest, setSpecialRequest] = useState("")
+    const [showSpecialRequestBox, setShowSpecialRequestBox] = useState(false)
+    const [tempRequestText, setTempRequestText] = useState("")
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
+
+    const activeOfferText =
+        restaurant?.offer ||
+        restaurant?.diningSettings?.offer ||
+        (restaurant?.diningSettings?.discountPercentage
+            ? `${restaurant.diningSettings.discountPercentage}% OFF`
+            : typeof discount === "string" && discount.includes("%")
+            ? discount
+            : "10% cashback")
+
+    const quickPills = [
+        "🎂 Birthday decoration",
+        "💍 Anniversary setup",
+        "👶 High chair needed",
+        "🪟 Window table preference",
+        "🤫 Quiet / Private table",
+        "🕯️ Candlelight setup",
+    ]
+
+    const handleTogglePill = (pillText) => {
+        if (tempRequestText.includes(pillText)) {
+            setTempRequestText((prev) =>
+                prev
+                    .split(", ")
+                    .filter((item) => item !== pillText)
+                    .join(", ")
+            )
+        } else {
+            setTempRequestText((prev) => (prev ? `${prev}, ${pillText}` : pillText))
+        }
+    }
+
+    const handleSaveSpecialRequest = () => {
+        setSpecialRequest(tempRequestText.trim())
+        setShowSpecialRequestBox(false)
+        if (tempRequestText.trim()) {
+            toast.success("Special request added!")
+        }
+    }
 
     useEffect(() => {
         if (!restaurant) {
@@ -53,7 +94,6 @@ export default function TableBookingConfirmation() {
                 }
             } catch (error) {
                 debugError("Error fetching user:", error)
-                // If not logged in, navigate to sign-in but the ProtectedRoute should handle this
             } finally {
                 setLoading(false)
             }
@@ -153,23 +193,118 @@ export default function TableBookingConfirmation() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 pt-4 border-t border-dashed border-slate-100 text-purple-600">
-                            <Ticket className="w-5 h-5" />
-                            <span className="font-bold text-sm">10% cashback</span>
+                        <div
+                            onClick={() => {
+                                toast.success(`🎉 ${activeOfferText} Applied!`, {
+                                    description: `Valid for ${restaurant?.name}. Show your booking ticket at the restaurant to redeem.`,
+                                    duration: 4000
+                                })
+                            }}
+                            className="flex items-center justify-between pt-4 border-t border-dashed border-slate-100 text-purple-600 cursor-pointer hover:opacity-80 transition-all active:scale-[0.99] group"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Ticket className="w-5 h-5 text-purple-600 group-hover:rotate-12 transition-transform" />
+                                <span className="font-bold text-sm">{activeOfferText}</span>
+                            </div>
+                            <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-bold border border-purple-200/60">
+                                Applied ✓
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Special Request */}
-                <button className="w-full bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-slate-100 p-2 rounded-xl group-hover:bg-slate-200 transition-colors">
-                            <Info className="w-5 h-5 text-slate-600" />
+                {/* Special Request Section */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+                    <div
+                        onClick={() => {
+                            setTempRequestText(specialRequest)
+                            setShowSpecialRequestBox(!showSpecialRequestBox)
+                        }}
+                        className="flex items-center justify-between cursor-pointer group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="bg-slate-100 p-2 rounded-xl group-hover:bg-slate-200 transition-colors">
+                                <Info className="w-5 h-5 text-slate-600" />
+                            </div>
+                            <div>
+                                <span className="font-bold text-gray-700 block">Add special request</span>
+                                {specialRequest && !showSpecialRequestBox && (
+                                    <p className="text-xs text-[#EB590E] font-medium mt-0.5 line-clamp-1">
+                                        "{specialRequest}"
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                        <span className="font-bold text-gray-700">Add special request</span>
+                        <ChevronRight
+                            className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${
+                                showSpecialRequestBox ? "rotate-90" : ""
+                            }`}
+                        />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                </button>
+
+                    {showSpecialRequestBox && (
+                        <div className="pt-3 border-t border-slate-100 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <p className="text-xs font-semibold text-slate-500">Quick Requests:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {quickPills.map((pill) => {
+                                    const isSelected = tempRequestText.includes(pill)
+                                    return (
+                                        <button
+                                            key={pill}
+                                            type="button"
+                                            onClick={() => handleTogglePill(pill)}
+                                            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+                                                isSelected
+                                                    ? "bg-[#EB590E] text-white shadow-sm"
+                                                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                            }`}
+                                        >
+                                            {pill}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+
+                            <textarea
+                                value={tempRequestText}
+                                onChange={(e) => setTempRequestText(e.target.value)}
+                                placeholder="Type any specific note for the restaurant (e.g., quiet table, high chair, allergy note)..."
+                                className="w-full h-24 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                            />
+
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                                {specialRequest && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSpecialRequest("")
+                                            setTempRequestText("")
+                                            setShowSpecialRequestBox(false)
+                                            toast.info("Special request cleared")
+                                        }}
+                                        className="px-3 py-1.5 text-xs text-red-500 font-bold hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                        Remove
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSpecialRequestBox(false)}
+                                    className="px-3 py-1.5 text-xs text-slate-500 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveSpecialRequest}
+                                    className="px-4 py-1.5 text-xs bg-[#EB590E] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+                                >
+                                    Save Request
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {/* Preferences Section */}
                 <div className="pt-4">
@@ -218,8 +353,8 @@ export default function TableBookingConfirmation() {
 
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center justify-between">
                         <div>
-                            <p className="font-bold text-gray-900">{user?.name || "Shailu"}</p>
-                            <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || "8090512291"}</p>
+                            <p className="font-bold text-gray-900">{user?.name || "Guest User"}</p>
+                            <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || ""}</p>
                         </div>
                         <button className="text-red-500 text-sm font-bold hover:underline">Edit</button>
                     </div>
@@ -241,7 +376,7 @@ export default function TableBookingConfirmation() {
                                 "Cover charges upon entry are subject to the discretion of the restaurant",
                                 "House rules are to be observed at all times",
                                 "Special requests will be accommodated at the restaurant's discretion",
-                                "Offers can be availed only by paying via Tastizo",
+                                "Offers can be availed only by paying via Eqosy Pay",
                                 "Cover charges cannot be refunded if slot is cancelled within 30 minutes of slot start time",
                                 "Additional service charges on the bill are at the restaurant's discretion"
                             ].map((term, i) => (

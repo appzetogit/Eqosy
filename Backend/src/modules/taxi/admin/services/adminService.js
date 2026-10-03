@@ -2935,6 +2935,21 @@ export const ensureFleetOwnersSeeded = async () => {
 export const ensureAdminState = async () => {
   await syncDefaultAdminRecord();
   await seedInitialData();
+  try {
+    await Admin.updateMany(
+      {
+        $or: [
+          { food_zone_ids: { $exists: true, $not: { $size: 0 } } },
+          { service_location_ids: { $exists: true, $not: { $size: 0 } } },
+        ],
+      },
+      {
+        $set: {
+          servicesAccess: ['food', 'taxi'],
+        },
+      },
+    );
+  } catch (_) {}
   return { ready: true };
 };
 
@@ -3116,7 +3131,7 @@ const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existing
     permissions,
     service_location_ids: adminType === 'superadmin' ? [] : serviceLocationIds,
     zone_ids: adminType === 'superadmin' ? [] : zoneIds,
-    servicesAccess: isCreatingModuleSuperAdmin ? [module] : undefined,
+    servicesAccess: isCreatingModuleSuperAdmin ? [module] : ['food', 'taxi'],
     active,
     status,
     isActive: active,
@@ -3126,8 +3141,40 @@ const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existing
 export const createAdminAccount = async (currentAdmin, payload = {}) => {
   assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
 
+  const email = String(payload.email || '').trim().toLowerCase();
   const password = String(payload.password || '').trim();
   const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || '').trim();
+
+  const existingAdmin = await Admin.findOne({ email });
+  if (existingAdmin) {
+    const existingServices = Array.isArray(existingAdmin.servicesAccess) ? existingAdmin.servicesAccess : [];
+    existingAdmin.servicesAccess = [...new Set([...existingServices, 'taxi', 'food'])];
+
+    const newPermissions = normalizeAdminPermissions(payload.permissions || []);
+    existingAdmin.permissions = [...new Set([...(existingAdmin.permissions || []), ...newPermissions])];
+
+    const newLocs = normalizeObjectIdList(payload.service_location_ids);
+    const existingLocs = (existingAdmin.service_location_ids || []).map((id) => String(id));
+    existingAdmin.service_location_ids = normalizeObjectIdList([...existingLocs, ...newLocs]);
+
+    const newZones = normalizeObjectIdList(payload.zone_ids);
+    const existingZones = (existingAdmin.zone_ids || []).map((id) => String(id));
+    existingAdmin.zone_ids = normalizeObjectIdList([...existingZones, ...newZones]);
+
+    if (password) {
+      if (password.length < 5) {
+        throw new ApiError(400, 'Password must be at least 5 characters');
+      }
+      if (passwordConfirmation && password !== passwordConfirmation) {
+        throw new ApiError(400, 'Passwords do not match');
+      }
+      existingAdmin.password = password;
+    }
+
+    await existingAdmin.save();
+    const [serializedAdmin] = await enrichAdminSummaries([existingAdmin]);
+    return serializedAdmin;
+  }
 
   if (!password || password.length < 5) {
     throw new ApiError(400, 'Password must be at least 5 characters');
@@ -3142,13 +3189,11 @@ export const createAdminAccount = async (currentAdmin, payload = {}) => {
   if (createPayload.parentAdminId) {
     createPayload.parentAdminId = toObjectId(createPayload.parentAdminId);
   }
-  if (createPayload.servicesAccess === undefined) {
-    delete createPayload.servicesAccess;
-  }
+  createPayload.servicesAccess = [...new Set([...(createPayload.servicesAccess || []), 'taxi', 'food'])];
 
   const created = await Admin.create({
     ...createPayload,
-    password: await hashPassword(password),
+    password,
   });
 
   const [serializedAdmin] = await enrichAdminSummaries([created]);
@@ -3171,6 +3216,7 @@ export const updateAdminAccount = async (currentAdmin, id, payload = {}) => {
 
   const validated = await validateSubadminPayload(currentAdmin, payload, admin._id);
   const { parentAdminId, ...updateFields } = validated;
+  updateFields.servicesAccess = [...new Set([...(admin.servicesAccess || []), 'taxi', 'food'])];
   Object.assign(admin, updateFields);
 
   if (payload.password) {
@@ -3182,7 +3228,7 @@ export const updateAdminAccount = async (currentAdmin, id, payload = {}) => {
     if (password !== passwordConfirmation) {
       throw new ApiError(400, 'Passwords do not match');
     }
-    admin.password = await hashPassword(password);
+    admin.password = password;
   }
 
   await admin.save();
@@ -3272,7 +3318,7 @@ export const resetPassword = async ({ email, otp, password }) => {
     throw new ApiError(400, 'Invalid or expired OTP');
   }
 
-  admin.password = await hashPassword(password);
+  admin.password = password;
   admin.resetPasswordOtp = undefined;
   admin.resetPasswordExpires = undefined;
   await admin.save();
@@ -7148,17 +7194,50 @@ export const deleteOwner = async (id) => {
     };
   };
 
-export const getDashboardData = async () => {
+export const getDashboardData = async (currentAdmin = {}) => {
+  const isSuper = isSuperAdminLike(currentAdmin);
+  const serviceLocationIds = normalizeObjectIdList(currentAdmin?.service_location_ids || []);
+  const zoneIds = normalizeObjectIdList(currentAdmin?.zone_ids || []);
+
+  const driverFilter = {};
+  const approvedDriverFilter = { approve: true };
+  const userFilter = {};
+  const ownerFilter = {};
+  const rideFilter = {};
+  const supportTicketMatch = {};
+
+  if (!isSuper) {
+    if (serviceLocationIds.length > 0) {
+      driverFilter.service_location_id = { $in: serviceLocationIds };
+      approvedDriverFilter.service_location_id = { $in: serviceLocationIds };
+      ownerFilter.service_location_id = { $in: serviceLocationIds };
+      rideFilter.service_location_id = { $in: serviceLocationIds };
+      supportTicketMatch.service_location_id = { $in: serviceLocationIds };
+    } else if (zoneIds.length > 0) {
+      driverFilter.zone_id = { $in: zoneIds };
+      approvedDriverFilter.zone_id = { $in: zoneIds };
+      rideFilter.zone_id = { $in: zoneIds };
+    } else {
+      driverFilter._id = null;
+      approvedDriverFilter._id = null;
+      userFilter._id = null;
+      ownerFilter._id = null;
+      rideFilter._id = null;
+      supportTicketMatch._id = null;
+    }
+  }
+
   const [totalUsers, totalDrivers, totalOwners, approvedDrivers, rides, supportTicketStats] = await Promise.all([
-    User.countDocuments(),
-    Driver.countDocuments(),
-    Owner.countDocuments(),
-    Driver.countDocuments({ approve: true }),
-    Ride.find()
+    User.countDocuments(userFilter),
+    Driver.countDocuments(driverFilter),
+    Owner.countDocuments(ownerFilter),
+    Driver.countDocuments(approvedDriverFilter),
+    Ride.find(rideFilter)
       .select('status liveStatus fare paymentMethod commissionAmount driverEarnings driverId createdAt updatedAt completedAt')
       .sort({ createdAt: -1 })
       .lean(),
     SupportTicket.aggregate([
+      ...(Object.keys(supportTicketMatch).length > 0 ? [{ $match: supportTicketMatch }] : []),
       {
         $group: {
           _id: '$status',

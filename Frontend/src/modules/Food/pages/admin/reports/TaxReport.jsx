@@ -10,10 +10,12 @@ const debugError = (...args) => {}
 
 export default function TaxReport() {
   const [filters, setFilters] = useState({
-    dateRangeType: "This Month",
+    dateRangeType: "All Time",
     groupBy: "restaurant",
     customFromDate: "",
     customToDate: "",
+    selectedMonth: String(new Date().getMonth() + 1),
+    selectedYear: String(new Date().getFullYear()),
     search: "",
   })
   const [reports, setReports] = useState([])
@@ -40,8 +42,11 @@ export default function TaxReport() {
       }
 
       if (filters.dateRangeType === "Custom Range") {
-        if (filters.customFromDate) params.fromDate = new Date(filters.customFromDate).toISOString()
-        if (filters.customToDate) params.toDate = new Date(filters.customToDate + "T23:59:59").toISOString()
+        if (filters.customFromDate) params.fromDate = new Date(filters.customFromDate + "T00:00:00").toISOString()
+        if (filters.customToDate) params.toDate = new Date(filters.customToDate + "T23:59:59.999").toISOString()
+      } else if (filters.dateRangeType === "Specific Month & Year") {
+        params.selectedMonth = filters.selectedMonth
+        params.selectedYear = filters.selectedYear
       }
 
       const response = await adminAPI.getTaxReport(params)
@@ -71,14 +76,16 @@ export default function TaxReport() {
   useEffect(() => {
     fetchTaxReport()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.dateRangeType, filters.groupBy])
+  }, [filters.dateRangeType, filters.groupBy, filters.selectedMonth, filters.selectedYear])
 
   const handleReset = () => {
     setFilters({
-      dateRangeType: "This Month",
+      dateRangeType: "All Time",
       groupBy: "restaurant",
       customFromDate: "",
       customToDate: "",
+      selectedMonth: String(new Date().getMonth() + 1),
+      selectedYear: String(new Date().getFullYear()),
       search: "",
     })
   }
@@ -97,8 +104,11 @@ export default function TaxReport() {
         dateRangeType: filters.dateRangeType
       }
       if (filters.dateRangeType === "Custom Range") {
-        if (filters.customFromDate) params.fromDate = new Date(filters.customFromDate).toISOString()
-        if (filters.customToDate) params.toDate = new Date(filters.customToDate + "T23:59:59").toISOString()
+        if (filters.customFromDate) params.fromDate = new Date(filters.customFromDate + "T00:00:00").toISOString()
+        if (filters.customToDate) params.toDate = new Date(filters.customToDate + "T23:59:59.999").toISOString()
+      } else if (filters.dateRangeType === "Specific Month & Year") {
+        params.selectedMonth = filters.selectedMonth
+        params.selectedYear = filters.selectedYear
       }
 
       const response = await adminAPI.getTaxReportDetail(report.rawKey || report.id, params)
@@ -142,6 +152,25 @@ export default function TaxReport() {
     return String(r.incomeSource || '').toLowerCase().includes(term) || String(r.id || '').toLowerCase().includes(term)
   })
 
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+
+  const getDisplayPeriodText = () => {
+    if (filters.dateRangeType === "Custom Range") {
+      if (filters.customFromDate || filters.customToDate) {
+        return `${filters.customFromDate || 'Beginning'} → ${filters.customToDate || 'Today'}`
+      }
+      return "Custom Date Range"
+    }
+    if (filters.dateRangeType === "Specific Month & Year") {
+      const mName = monthNames[parseInt(filters.selectedMonth, 10) - 1] || filters.selectedMonth
+      return `${mName} ${filters.selectedYear}`
+    }
+    return filters.dateRangeType
+  }
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen overflow-x-hidden font-sans">
       <div className="w-full max-w-full">
@@ -150,7 +179,7 @@ export default function TaxReport() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Tax & GST Reports</h1>
             <p className="text-sm text-slate-500 mt-1">
-              View and filter GST / tax collected day-wise, month-wise, or by restaurant for any period.
+              View and filter GST / tax collected day-wise, month-wise, or by restaurant for any past date, month, or year.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -191,13 +220,32 @@ export default function TaxReport() {
 
         {/* Filter Controls Card */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-bold text-slate-900">Tax Report Filters</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-slate-900">Tax Report Filters</h2>
+            </div>
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {["All Time", "Today", "This Month", "Last Month", "This Year", "Last Year"].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setFilters(prev => ({ ...prev, dateRangeType: preset }))}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    filters.dateRangeType === preset
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Top row: Date Range & Group By */}
+            {/* Top row: Date Range & Group By & Search */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Date Range Type */}
               <div className="relative">
@@ -209,15 +257,19 @@ export default function TaxReport() {
                   onChange={(e) => setFilters(prev => ({ ...prev, dateRangeType: e.target.value }))}
                   className="w-full px-4 py-2.5 pr-8 text-sm font-medium rounded-xl border border-slate-300 bg-white text-slate-800 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
                 >
+                  <option value="All Time">All Time (All Historical Data)</option>
                   <option value="Today">Today</option>
                   <option value="Yesterday">Yesterday</option>
                   <option value="This Week">This Week</option>
                   <option value="Last Week">Last Week</option>
                   <option value="This Month">This Month</option>
                   <option value="Last Month">Last Month</option>
+                  <option value="Past 3 Months">Past 3 Months</option>
+                  <option value="Past 6 Months">Past 6 Months</option>
                   <option value="This Year">This Year</option>
-                  <option value="All Time">All Time</option>
-                  <option value="Custom Range">Custom Date Range</option>
+                  <option value="Last Year">Last Year</option>
+                  <option value="Specific Month & Year">Specific Month & Year</option>
+                  <option value="Custom Range">Custom Date Range (Calendar)</option>
                 </select>
                 <ChevronDown className="absolute right-3 bottom-3 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
@@ -257,11 +309,11 @@ export default function TaxReport() {
               </div>
             </div>
 
-            {/* Custom Range Picker Inputs if "Custom Range" is selected */}
+            {/* Custom Range Inputs if "Custom Range" is selected */}
             {filters.dateRangeType === "Custom Range" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">From Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">From Date (Calendar)</label>
                   <input
                     type="date"
                     value={filters.customFromDate}
@@ -270,13 +322,45 @@ export default function TaxReport() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">To Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">To Date (Calendar)</label>
                   <input
                     type="date"
                     value={filters.customToDate}
                     onChange={(e) => setFilters(prev => ({ ...prev, customToDate: e.target.value }))}
                     className="w-full px-4 py-2 text-sm rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Specific Month & Year Inputs */}
+            {filters.dateRangeType === "Specific Month & Year" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Select Month</label>
+                  <select
+                    value={filters.selectedMonth}
+                    onChange={(e) => setFilters(prev => ({ ...prev, selectedMonth: e.target.value }))}
+                    className="w-full px-4 py-2 text-sm rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    {monthNames.map((m, idx) => (
+                      <option key={m} value={String(idx + 1)}>
+                        {m} ({idx + 1})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Select Year</label>
+                  <select
+                    value={filters.selectedYear}
+                    onChange={(e) => setFilters(prev => ({ ...prev, selectedYear: e.target.value }))}
+                    className="w-full px-4 py-2 text-sm rounded-xl border border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(yr => (
+                      <option key={yr} value={String(yr)}>{yr}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
@@ -341,7 +425,7 @@ export default function TaxReport() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-red-100 text-red-700 mb-1">
-                  Tax Due / Collected ({filters.dateRangeType})
+                  Tax Due / Collected ({getDisplayPeriodText()})
                 </span>
                 <p className="text-3xl font-extrabold text-red-600">{stats.totalTax}</p>
                 <p className="text-xs text-red-500 mt-1 font-medium">
@@ -395,7 +479,7 @@ export default function TaxReport() {
                   : "Tax Report by Income Source"} ({filteredReports.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Period: <span className="font-semibold text-slate-800">{filters.dateRangeType}</span>
+                Period: <span className="font-semibold text-slate-800">{getDisplayPeriodText()}</span>
               </p>
             </div>
           </div>

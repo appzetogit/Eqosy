@@ -128,7 +128,7 @@ export async function globalSearch(req, res, next) {
 
 export async function getRestaurants(req, res, next) {
     try {
-        const data = await adminService.getRestaurants(req.query);
+        const data = await adminService.getRestaurants(req.query, req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Restaurants fetched successfully',
@@ -141,7 +141,7 @@ export async function getRestaurants(req, res, next) {
 
 export async function getRestaurantReport(req, res, next) {
     try {
-        const data = await adminService.getRestaurantReport(req.query || {});
+        const data = await adminService.getRestaurantReport(req.query || {}, req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Restaurant report fetched successfully',
@@ -154,7 +154,7 @@ export async function getRestaurantReport(req, res, next) {
 
 export async function getDashboardStats(req, res, next) {
     try {
-        const data = await adminService.getDashboardStats(req.query || {});
+        const data = await adminService.getDashboardStats(req.query || {}, req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Dashboard stats fetched successfully',
@@ -167,7 +167,7 @@ export async function getDashboardStats(req, res, next) {
 
 export async function getTransactionReport(req, res, next) {
     try {
-        const data = await adminService.getTransactionReport(req.query || {});
+        const data = await adminService.getTransactionReport(req.query || {}, req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Transaction report fetched successfully',
@@ -361,7 +361,7 @@ export async function updateRestaurantZoneFeaturedRank(req, res, next) {
 // ----- Foods -----
 export async function getFoods(req, res, next) {
     try {
-        const data = await adminService.getFoods(req.query || {});
+        const data = await adminService.getFoods(req.query || {}, req.adminContext);
         res.status(200).json({ success: true, message: 'Foods fetched successfully', data });
     } catch (error) {
         next(error);
@@ -606,7 +606,7 @@ export async function updateSupportTicketController(req, res, next) {
 
 export async function getPendingRestaurants(req, res, next) {
     try {
-        const pending = await adminService.getPendingRestaurants();
+        const pending = await adminService.getPendingRestaurants(req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Pending restaurants fetched successfully',

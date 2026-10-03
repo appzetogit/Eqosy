@@ -204,6 +204,7 @@ export default function RestaurantOTP() {
       }
     } catch (err) {
       const message = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Invalid OTP."
+      
       if (/pending approval/i.test(message)) {
         const pendingPhone = authData?.phone || authData?.email || contactInfo
         if (pendingPhone) setRestaurantPendingPhone(pendingPhone)
@@ -214,6 +215,16 @@ export default function RestaurantOTP() {
         })
         return
       }
+
+      if (/not found|not registered|no account|user not found|account not found|register/i.test(message) || err?.response?.status === 404) {
+        const pendingPhone = authData?.phone || authData?.email || contactInfo
+        if (pendingPhone) setRestaurantPendingPhone(pendingPhone)
+        sessionStorage.removeItem("restaurantAuthData")
+        sessionStorage.removeItem("restaurantLoginPhone")
+        navigate("/food/restaurant/onboarding", { replace: true })
+        return
+      }
+
       setError(message)
       setOtp(["", "", "", ""])
       hasSubmittedRef.current = false

@@ -219,38 +219,65 @@ export const canWriteFood = (admin = {}, resource) => hasFoodAdminPermission(adm
 const PATH_RESOURCE_RULES = [
   { prefix: '/admin/food/management', resource: 'subadmins' },
   { prefix: '/admin/food/point-of-sale', resource: 'pos' },
+
+  // Specific order routes before generic /admin/food/orders
+  { prefix: '/admin/food/order-detect-delivery', resource: 'orders' },
   { prefix: '/admin/food/orders', resource: 'orders' },
+
+  // Specific restaurant routes before generic /admin/food/restaurants
+  { prefix: '/admin/food/restaurants/commission', resource: 'fee_settings' },
+  { prefix: '/admin/food/restaurants/complaints', resource: 'support' },
+  { prefix: '/admin/food/restaurants/reviews', resource: 'restaurants' },
   { prefix: '/admin/food/restaurants', resource: 'restaurants' },
+
   { prefix: '/admin/food/foods', resource: 'foods' },
   { prefix: '/admin/food/addons', resource: 'foods' },
   { prefix: '/admin/food/food-approval', resource: 'foods' },
   { prefix: '/admin/food/categories', resource: 'categories' },
   { prefix: '/admin/food/zone-setup', resource: 'zones' },
-  { prefix: '/admin/food/delivery', resource: 'delivery' },
+
+  // Delivery routes
+  { prefix: '/admin/food/delivery-cash-limit', resource: 'delivery' },
+  { prefix: '/admin/food/cash-limit-settlement', resource: 'delivery' },
+  { prefix: '/admin/food/delivery-withdrawal', resource: 'delivery' },
+  { prefix: '/admin/food/delivery-boy-wallet', resource: 'delivery' },
+  { prefix: '/admin/food/delivery-emergency-help', resource: 'delivery' },
+  { prefix: '/admin/food/delivery-support-tickets', resource: 'delivery' },
   { prefix: '/admin/food/delivery-partners', resource: 'delivery' },
+  { prefix: '/admin/food/delivery', resource: 'delivery' },
+
   { prefix: '/admin/food/customers', resource: 'customers' },
-  { prefix: '/admin/food/support', resource: 'support' },
   { prefix: '/admin/food/support-tickets', resource: 'support' },
+  { prefix: '/admin/food/support', resource: 'support' },
   { prefix: '/admin/food/chattings', resource: 'support' },
   { prefix: '/admin/food/contact-messages', resource: 'support' },
   { prefix: '/admin/food/safety-emergency-reports', resource: 'support' },
+
   { prefix: '/admin/food/reports', resource: 'reports' },
   { prefix: '/admin/food/transaction-report', resource: 'reports' },
   { prefix: '/admin/food/order-report', resource: 'reports' },
   { prefix: '/admin/food/tax-report', resource: 'reports' },
   { prefix: '/admin/food/restaurant-report', resource: 'reports' },
   { prefix: '/admin/food/customer-report', resource: 'reports' },
+
   { prefix: '/admin/food/wallet', resource: 'wallet' },
   { prefix: '/admin/food/transactions', resource: 'wallet' },
   { prefix: '/admin/food/restaurant-withdraws', resource: 'wallet' },
+
   { prefix: '/admin/food/campaigns', resource: 'promotions' },
   { prefix: '/admin/food/coupons', resource: 'promotions' },
   { prefix: '/admin/food/banners', resource: 'promotions' },
   { prefix: '/admin/food/promotional-banner', resource: 'promotions' },
   { prefix: '/admin/food/hero-banner-management', resource: 'promotions' },
+  { prefix: '/admin/food/eqosy-landing-settings', resource: 'promotions' },
+
   { prefix: '/admin/food/referral-settings', resource: 'referrals' },
   { prefix: '/admin/food/fee-settings', resource: 'fee_settings' },
+
+  { prefix: '/admin/food/dining-management', resource: 'dining' },
+  { prefix: '/admin/food/dining-list', resource: 'dining' },
   { prefix: '/admin/food/dining', resource: 'dining' },
+
   { prefix: '/admin/food/business-setup', resource: 'settings' },
   { prefix: '/admin/food/settings', resource: 'settings' },
   { prefix: '/admin/food/system', resource: 'settings' },
@@ -270,6 +297,8 @@ export const getRoutePermission = (pathname = '') => {
 };
 
 const itemHasAccess = (admin, item) => {
+  if (isFoodSuperAdminLike(admin)) return true;
+
   if (item.resource) {
     return canReadFood(admin, item.resource);
   }
@@ -281,6 +310,7 @@ const itemHasAccess = (admin, item) => {
   if (item.path) {
     const resource = getRouteResource(item.path);
     if (resource) return canReadFood(admin, resource);
+    return false;
   }
 
   if (item.subItems?.length) {

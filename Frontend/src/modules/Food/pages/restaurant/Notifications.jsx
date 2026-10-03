@@ -107,7 +107,32 @@ export default function Notifications() {
         : "N/A",
     }))
 
-    return [...broadcastRows, ...orderNotifications].sort((a, b) => b.timeValue - a.timeValue)
+    let diningNotifRows = []
+    try {
+      const raw = localStorage.getItem("restaurant_notifications_inbox_v1")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        diningNotifRows = (Array.isArray(parsed) ? parsed : []).map((item) => ({
+          id: item.id,
+          message: item.title,
+          detail: item.message,
+          source: "broadcast",
+          read: item.read,
+          timeValue: item.createdAt ? new Date(item.createdAt).getTime() : 0,
+          time: item.createdAt
+            ? new Date(item.createdAt).toLocaleString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })
+            : "N/A",
+        }))
+      }
+    } catch {}
+
+    return [...diningNotifRows, ...broadcastRows, ...orderNotifications].sort((a, b) => b.timeValue - a.timeValue)
   }, [broadcastNotifications, dismissedIds, orders])
 
   const removeNotification = (id, source = "order") => {

@@ -9,9 +9,25 @@ import {
 
 const parseKeyFromParam = (req) => String(req.params?.key || '').trim().toLowerCase();
 
+const VALID_LEGAL_KEYS = [
+    'terms', 'restaurant-terms', 'delivery-terms', 'driver-terms', 'seller-terms',
+    'privacy', 'restaurant-privacy', 'delivery-privacy', 'driver-privacy', 'seller-privacy',
+    'refund', 'shipping', 'cancellation'
+];
+
 export const getPublicPageController = async (req, res, next) => {
     try {
-        const key = parseKeyFromParam(req);
+        let key = parseKeyFromParam(req);
+        const userType = String(req.query?.userType || '').trim().toLowerCase();
+        if (userType && ['terms', 'privacy'].includes(key)) {
+            const roleKey = `${userType}-${key}`;
+            if (VALID_LEGAL_KEYS.includes(roleKey)) {
+                const rolePage = await getPublicPageByKey(roleKey);
+                if (rolePage?.data?.content && rolePage.data.content.trim()) {
+                    key = roleKey;
+                }
+            }
+        }
         const result = await getPublicPageByKey(key);
         return sendResponse(res, 200, 'Page fetched successfully', result.data);
     } catch (error) {
@@ -38,7 +54,7 @@ export const upsertAdminPageController = async (req, res, next) => {
             const result = await upsertAboutPage(req.body ?? {}, updatedBy);
             return sendResponse(res, 200, 'Page updated successfully', result.data);
         }
-        if (['terms', 'privacy', 'refund', 'shipping', 'cancellation'].includes(key)) {
+        if (VALID_LEGAL_KEYS.includes(key)) {
             const result = await upsertLegalPage(key, req.body ?? {}, updatedBy);
             return sendResponse(res, 200, 'Page updated successfully', result.data);
         }

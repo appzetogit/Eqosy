@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, UtensilsCrossed, Edit, X } from "lucide-react"
 import api, { adminAPI, uploadAPI } from "@food/api"
 import { getModuleToken } from "@food/utils/auth"
@@ -140,7 +140,7 @@ export default function DiningManagement() {
     const fetchBanners = async () => {
         try {
             setBannersLoading(true)
-            const response = await api.get('/food/hero-banners/dining', getAuthConfig())
+            const response = await adminAPI.getDiningBanners()
             if (response.data.success) {
                 setBanners(response.data.data.banners || [])
             } else {
@@ -166,9 +166,7 @@ export default function DiningManagement() {
             if (bannerTagline.trim()) formData.append('title', bannerTagline.trim())
             if (bannerPercentageOff.trim()) formData.append('ctaText', bannerPercentageOff.trim())
 
-            const response = await api.post('/food/hero-banners/dining/multiple', formData, getAuthConfig({
-                headers: { 'Content-Type': 'multipart/form-data' }
-            }))
+            const response = await adminAPI.createDiningBanner(formData)
 
             if (response.data.success) {
                 setSuccess("Dining page banner created successfully")
@@ -190,7 +188,7 @@ export default function DiningManagement() {
         if (!window.confirm("Delete this banner?")) return
         try {
             setBannersDeleting(id)
-            await api.delete(`/food/hero-banners/dining/${id}`, getAuthConfig())
+            await adminAPI.deleteDiningBanner(id)
             fetchBanners()
             setSuccess("Banner deleted")
         } catch (err) { setError("Failed to delete banner") }
@@ -283,18 +281,18 @@ export default function DiningManagement() {
                                 {categoriesLoading ? <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div> : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {categories.map(cat => (
-                                            <div key={cat._id} className="border rounded-lg overflow-hidden group relative">
-                                                <img src={cat.imageUrl} alt={cat.name} className="w-full h-32 object-cover" />
-                                                <div className="p-3 bg-white">
-                                                    <p className="font-medium text-slate-900">{cat.name}</p>
-                                                </div>
-                                                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEditCategory(cat)} className="p-1.5 bg-blue-100 text-blue-600 rounded-full">
-                                                        <Edit className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => handleDeleteCategory(cat._id)} className="p-1.5 bg-red-100 text-red-600 rounded-full">
-                                                        {categoriesDeleting === cat._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                                    </button>
+                                            <div key={cat._id} className="border rounded-xl overflow-hidden group relative bg-white shadow-xs hover:shadow-md transition-all">
+                                                <img src={cat.imageUrl} alt={cat.name} className="w-full h-36 object-cover" />
+                                                <div className="p-3 bg-white flex items-center justify-between">
+                                                    <p className="font-semibold text-slate-900 text-sm truncate">{cat.name}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button onClick={() => handleEditCategory(cat)} title="Edit Category" className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
+                                                            <Edit className="w-4 h-4" />
+                                                        </button>
+                                                        <button onClick={() => handleDeleteCategory(cat._id)} title="Delete Category" className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors">
+                                                            {categoriesDeleting === cat._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}

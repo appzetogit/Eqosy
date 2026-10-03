@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus } from "lucide-react"
 import { adminAPI, restaurantAPI, uploadAPI } from "@food/api"
-import { clearModuleAuth } from "@food/utils/auth"
+import { clearModuleAuth, getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { exportRestaurantsToPDF } from "@food/components/admin/restaurants/restaurantsExportUtils"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
@@ -103,6 +104,8 @@ const getPrimaryRestaurantImage = (restaurant, fallback = "") => {
 
 export default function RestaurantsList() {
   const navigate = useNavigate()
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "restaurants"), [adminProfile])
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1346,11 +1349,11 @@ export default function RestaurantsList() {
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <button
                             type="button"
-                            onClick={() => handleToggleIsRestaurant(restaurant)}
-                            disabled={togglingIsRestaurantId === (restaurant._id || restaurant.id)}
+                            onClick={() => canWrite && handleToggleIsRestaurant(restaurant)}
+                            disabled={!canWrite || togglingIsRestaurantId === (restaurant._id || restaurant.id)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                               restaurant.isRestaurant ? "bg-blue-600" : "bg-slate-300"
-                            } ${togglingIsRestaurantId === (restaurant._id || restaurant.id) ? "opacity-60 cursor-not-allowed" : ""}`}
+                            } ${(!canWrite || togglingIsRestaurantId === (restaurant._id || restaurant.id)) ? "opacity-60 cursor-not-allowed" : ""}`}
                             title={restaurant.isRestaurant ? "Shown in Food section" : "Shown in Grocery section"}
                           >
                             <span
@@ -1363,11 +1366,11 @@ export default function RestaurantsList() {
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <button
                             type="button"
-                            onClick={() => handleToggleIsSponsored(restaurant)}
-                            disabled={togglingIsSponsoredId === (restaurant._id || restaurant.id)}
+                            onClick={() => canWrite && handleToggleIsSponsored(restaurant)}
+                            disabled={!canWrite || togglingIsSponsoredId === (restaurant._id || restaurant.id)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                               restaurant.isSponsored ? "bg-amber-500" : "bg-slate-300"
-                            } ${togglingIsSponsoredId === (restaurant._id || restaurant.id) ? "opacity-60 cursor-not-allowed" : ""}`}
+                            } ${(!canWrite || togglingIsSponsoredId === (restaurant._id || restaurant.id)) ? "opacity-60 cursor-not-allowed" : ""}`}
                             title={restaurant.isSponsored ? "Sponsored" : "Not Sponsored"}
                           >
                             <span
@@ -1396,23 +1399,27 @@ export default function RestaurantsList() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleBanRestaurant(restaurant)}
-                              className={`p-1.5 rounded transition-colors ${!restaurant.isActive
-                                ? "text-green-600 hover:bg-green-50"
-                                : "text-red-600 hover:bg-red-50"
-                                }`}
-                              title={!restaurant.isActive ? "Unban Restaurant" : "Ban Restaurant"}
-                            >
-                              <ShieldX className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRestaurant(restaurant)}
-                              className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
-                              title="Delete Restaurant"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canWrite && (
+                              <>
+                                <button
+                                  onClick={() => handleBanRestaurant(restaurant)}
+                                  className={`p-1.5 rounded transition-colors ${!restaurant.isActive
+                                    ? "text-green-600 hover:bg-green-50"
+                                    : "text-red-600 hover:bg-red-50"
+                                    }`}
+                                  title={!restaurant.isActive ? "Unban Restaurant" : "Ban Restaurant"}
+                                >
+                                  <ShieldX className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRestaurant(restaurant)}
+                                  className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
+                                  title="Delete Restaurant"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

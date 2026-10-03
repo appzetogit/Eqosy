@@ -131,8 +131,8 @@ const Login = () => {
 
         <p className="text-xs text-gray-400 font-medium text-center leading-relaxed mt-8">
            By continuing, you agree to our 
-           <Link to="/terms" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Terms</Link> & 
-           <Link to="/privacy" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Privacy Policy</Link>
+           <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Terms</Link> & 
+           <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Privacy Policy</Link>
         </p>
       </form>
     </AuthLayout>

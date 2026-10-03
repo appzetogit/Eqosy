@@ -22,6 +22,7 @@ export default function SignIn() {
     phone: "",
     countryCode: "+91", // required; default +91 for India
   })
+  const [agreedTerms, setAgreedTerms] = useState(true)
 
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -210,9 +211,25 @@ export default function SignIn() {
               )}
             </div>
 
+            <div className="flex items-start gap-2.5 px-1 py-1">
+              <input
+                type="checkbox"
+                id="foodSignInTerms"
+                checked={agreedTerms}
+                onChange={(e) => setAgreedTerms(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-[#0D2A6B] focus:ring-[#0D2A6B] cursor-pointer mt-0.5"
+              />
+              <label htmlFor="foodSignInTerms" className="text-xs font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none leading-relaxed">
+                By joining, I agree to the{" "}
+                <Link to="/terms" target="_blank" className="font-bold text-[#0D2A6B] dark:text-blue-400 hover:underline">Terms of Service</Link>
+                {" "}and{" "}
+                <Link to="/privacy" target="_blank" className="font-bold text-[#0D2A6B] dark:text-blue-400 hover:underline">Privacy Policy</Link>
+              </label>
+            </div>
+
             <Button
               type="submit"
-              disabled={isLoading || formData.phone.length !== 10}
+              disabled={isLoading || !agreedTerms || formData.phone.length !== 10}
               className="w-full h-16 bg-[#0D2A6B] hover:bg-[#07143A] text-white font-black text-base uppercase tracking-widest rounded-2xl transition-all duration-300 shadow-[0_12px_24px_rgba(13,42,107,0.3)] hover:shadow-[0_16px_32px_rgba(13,42,107,0.4)] active:scale-[0.98] disabled:opacity-50 disabled:grayscale"
             >
               {isLoading ? (

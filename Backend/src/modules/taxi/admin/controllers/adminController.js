@@ -715,8 +715,8 @@ export const deleteOwnerBooking = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getDashboardData = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getDashboardData()),
+export const getDashboardData = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDashboardData(req.auth?.admin)),
 );
 export const getOwnerDashboardData = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getOwnerDashboardData()),

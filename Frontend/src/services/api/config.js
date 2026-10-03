@@ -88,6 +88,10 @@ export const API_ENDPOINTS = {
     // CMS pages (admin auth + public)
     TERMS: "/food/admin/pages-social-media/terms",
     TERMS_PUBLIC: "/food/pages/terms",
+    RESTAURANT_TERMS: "/food/admin/pages-social-media/restaurant-terms",
+    DELIVERY_TERMS: "/food/admin/pages-social-media/delivery-terms",
+    DRIVER_TERMS: "/food/admin/pages-social-media/driver-terms",
+    SELLER_TERMS: "/food/admin/pages-social-media/seller-terms",
     PRIVACY: "/food/admin/pages-social-media/privacy",
     PRIVACY_PUBLIC: "/food/pages/privacy",
     RESTAURANT_PRIVACY: "/food/admin/pages-social-media/restaurant-privacy",

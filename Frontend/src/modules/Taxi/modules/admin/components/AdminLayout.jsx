@@ -15,8 +15,12 @@ import { hasAdminPermission } from '../constants/adminAccess';
 import {
   clearUnifiedAdminSession,
   getUnifiedAdminProfile,
+  getUnifiedAdminToken,
+  setUnifiedAdminSession,
+  normalizeAdminProfile,
   syncAdminSessionBridge,
 } from '../services/adminSession';
+import { adminAPI } from '@food/api';
 import toast from 'react-hot-toast';
 import {
   Ban,
@@ -626,11 +630,21 @@ const AdminLayout = () => {
   const [adminProfile, setAdminProfile] = useState(() => readAdminProfile());
   const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
                        adminProfile.adminLevel === "food_superadmin" || 
-                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "food");
+                       adminProfile.admin_type === "superadmin" ||
+                       (adminProfile.adminLevel === "subadmin" && (
+                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
+                           ? adminProfile.servicesAccess.includes('food')
+                           : (adminProfile.module === "food" || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0))
+                       ));
 
   const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
                        adminProfile.adminLevel === "taxi_superadmin" || 
-                       (adminProfile.adminLevel === "subadmin" && adminProfile.module === "taxi");
+                       adminProfile.admin_type === "superadmin" ||
+                       (adminProfile.adminLevel === "subadmin" && (
+                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
+                           ? adminProfile.servicesAccess.includes('taxi')
+                           : (adminProfile.module === "taxi" || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0))
+                       ));
 
   const appName = settings.general?.app_name || 'App';
 
@@ -646,10 +660,30 @@ const AdminLayout = () => {
   };
 
   useEffect(() => {
-    const syncAdminProfile = () => setAdminProfile(readAdminProfile());
-    window.addEventListener('storage', syncAdminProfile);
+    let isMounted = true;
+    const syncAdminProfile = async () => {
+      try {
+        const res = await adminAPI.getAdminProfile();
+        const user = res?.data?.admin || res?.data?.data?.admin || res?.data?.data?.user;
+        if (user && isMounted) {
+          const normalized = normalizeAdminProfile(user);
+          const token = getUnifiedAdminToken();
+          if (token) {
+            setUnifiedAdminSession({ token, user: normalized });
+          }
+          setAdminProfile(normalized);
+          return;
+        }
+      } catch (_) {}
+      if (isMounted) setAdminProfile(readAdminProfile());
+    };
     syncAdminProfile();
-    return () => window.removeEventListener('storage', syncAdminProfile);
+    const handleStorage = () => setAdminProfile(readAdminProfile());
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1005,6 +1039,55 @@ const AdminLayout = () => {
     () => filterSidebarSectionsByAccess(mode === OWNER_MODE ? ownerSections : adminSections, adminProfile),
     [adminProfile, adminSections, mode, ownerSections],
   );
+
+  // Auto-redirect if subadmin accesses an unauthorized route or root /taxi/admin without dashboard permission
+  useEffect(() => {
+    if (!adminProfile || Object.keys(adminProfile).length === 0) return;
+
+    const isSub = String(adminProfile.admin_type || adminProfile.adminLevel || adminProfile.role || '').toLowerCase().includes('subadmin');
+    if (!isSub) return;
+
+    const allItems = flattenItems(adminSections);
+    const findRequiredPermission = (items) => {
+      for (const item of items) {
+        if (item.path && pathMatches(location.pathname, item.path)) {
+          return item.permission;
+        }
+        if (item.subItems) {
+          const found = findRequiredPermission(item.subItems);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const requiredPermission = findRequiredPermission(allItems);
+    const isRootAdminPath = location.pathname === '/taxi/admin' || location.pathname === '/taxi/admin/' || location.pathname === '/taxi/admin/dashboard';
+
+    const lacksPermission = requiredPermission ? !hasAdminPermission(adminProfile, requiredPermission) : false;
+    const lacksDashboard = isRootAdminPath && !hasAdminPermission(adminProfile, 'dashboard.view');
+
+    if (lacksDashboard || lacksPermission) {
+      const findFirstAvailablePath = (sections) => {
+        for (const sec of sections) {
+          for (const item of sec.items || []) {
+            if (item.path) return item.path;
+            if (item.subItems) {
+              for (const sub of item.subItems) {
+                if (sub.path) return sub.path;
+              }
+            }
+          }
+        }
+        return null;
+      };
+
+      const firstAvailable = findFirstAvailablePath(sidebarSections);
+      if (firstAvailable && firstAvailable !== location.pathname) {
+        navigate(firstAvailable, { replace: true });
+      }
+    }
+  }, [adminProfile, adminSections, location.pathname, navigate, sidebarSections]);
   useEffect(() => {
     let active = true;
     const fetchSupportStats = async () => {

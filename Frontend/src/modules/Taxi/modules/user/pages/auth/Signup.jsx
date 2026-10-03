@@ -41,6 +41,7 @@ const Signup = () => {
   const [photoError, setPhotoError] = useState('');
   const [error, setError] = useState('');
   const [otpSending, setOtpSending] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const navigate = useNavigate();
   const appName = settings.general?.app_name || 'App';
   const isValidPhone = /^\d{10}$/.test(formData.phone);
@@ -224,6 +225,25 @@ const Signup = () => {
             <p className="ml-1 text-sm text-gray-500">We'll send a 4-digit OTP to this number.</p>
           </div>
 
+          <div className="flex items-start gap-2.5 px-1 py-1">
+            <input
+              type="checkbox"
+              id="userTermsCheck"
+              checked={acceptedTerms}
+              onChange={(e) => {
+                setAcceptedTerms(e.target.checked);
+                if (error) setError('');
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
+            />
+            <label htmlFor="userTermsCheck" className="text-xs font-medium text-gray-600 cursor-pointer select-none leading-relaxed">
+              I agree to the{' '}
+              <Link to="/terms" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Terms and Conditions</Link>
+              {' '}and{' '}
+              <Link to="/privacy" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Privacy Policy</Link>
+            </label>
+          </div>
+
           {error && (
             <p className="text-sm font-bold text-red-500 text-center bg-red-50 py-3 rounded-lg border border-red-100">{error}</p>
           )}
@@ -231,9 +251,9 @@ const Signup = () => {
           <motion.button
             whileTap={{ scale: 0.98 }}
             type="submit"
-            disabled={!isValidPhone || otpSending}
+            disabled={!isValidPhone || otpSending || !acceptedTerms}
             className={`w-full py-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-3 ${
-              isValidPhone && !otpSending
+              isValidPhone && !otpSending && acceptedTerms
                 ? 'bg-[#1A1A1A] text-white hover:bg-black hover:shadow-lg'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -261,11 +281,11 @@ const Signup = () => {
             </p>
             <p className="text-[12px] text-gray-400 font-medium leading-relaxed px-2">
               By continuing, you agree to our
-              <Link to="/terms" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+              <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
                 Terms
               </Link>
               {' '}and
-              <Link to="/privacy" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
                 Privacy Policy
               </Link>
             </p>
@@ -469,11 +489,11 @@ const Signup = () => {
           </p>
           <p className="text-[12px] text-gray-400 font-medium leading-relaxed px-2">
             By creating an account, you agree to our
-            <Link to="/terms" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+            <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
               Terms
             </Link>
             {' '}and
-            <Link to="/privacy" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+            <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
               Privacy Policy
             </Link>
           </p>

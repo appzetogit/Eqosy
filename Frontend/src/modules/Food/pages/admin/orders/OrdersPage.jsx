@@ -17,6 +17,8 @@ import { OrdersDashboardSkeleton } from "@food/components/ui/loading-skeletons"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
 import alertSound from "@food/assets/audio/alert.mp3"
 import originalSound from "@food/assets/audio/original.mp3"
+import { getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -39,6 +41,9 @@ const statusConfig = {
 }
 
 export default function OrdersPage({ statusKey = "all" }) {
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "orders"), [adminProfile])
+
   const config = statusConfig[statusKey] || statusConfig["all"]
   const [orders, setOrders] = useState([])
   const [zones, setZones] = useState([])
@@ -994,10 +999,10 @@ export default function OrdersPage({ statusKey = "all" }) {
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
-        onRefund={handleRefund}
-        onDeleteOrder={statusKey === "all" ? handleDeleteOrder : undefined}
-        onAcceptOrder={statusKey === "all" || statusKey === "pending" ? handleAcceptOrder : undefined}
-        onRejectOrder={statusKey === "all" || statusKey === "pending" ? handleRejectOrder : undefined}
+        onRefund={canWrite ? handleRefund : undefined}
+        onDeleteOrder={canWrite && statusKey === "all" ? handleDeleteOrder : undefined}
+        onAcceptOrder={canWrite && (statusKey === "all" || statusKey === "pending") ? handleAcceptOrder : undefined}
+        onRejectOrder={canWrite && (statusKey === "all" || statusKey === "pending") ? handleRejectOrder : undefined}
         actionLoadingOrderId={processingActionOrderId}
         deletingOrderId={deletingOrderId}
       />

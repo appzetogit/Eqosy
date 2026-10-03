@@ -359,7 +359,7 @@ export async function switchToCashController(req, res, next) {
 
 export async function listOrdersAdminController(req, res, next) {
     try {
-        const result = await orderService.listOrdersAdmin(req.query);
+        const result = await orderService.listOrdersAdmin(req.query, req.adminContext);
         return sendResponse(res, 200, 'Orders retrieved', result);
     } catch (err) {
         next(err);
@@ -369,7 +369,7 @@ export async function listOrdersAdminController(req, res, next) {
 export async function getOrderByIdAdminController(req, res, next) {
     try {
         const orderId = req.params.orderId;
-        const order = await orderService.getOrderById(orderId, { admin: true });
+        const order = await orderService.getOrderById(orderId, { admin: true, adminContext: req.adminContext });
         return sendResponse(res, 200, 'Order retrieved', { order });
     } catch (err) {
         next(err);
@@ -381,7 +381,7 @@ export async function assignDeliveryPartnerController(req, res, next) {
         const adminId = req.user?.userId;
         const orderId = req.params.orderId;
         const dto = validateAssignDeliveryDto(req.body);
-        const order = await orderService.assignDeliveryPartnerAdmin(orderId, dto.deliveryPartnerId, adminId);
+        const order = await orderService.assignDeliveryPartnerAdmin(orderId, dto.deliveryPartnerId, adminId, req.adminContext);
         return sendResponse(res, 200, 'Delivery partner assigned', { order });
     } catch (err) {
         next(err);
@@ -392,7 +392,7 @@ export async function deleteOrderAdminController(req, res, next) {
     try {
         const adminId = req.user?.userId;
         const orderId = req.params.orderId;
-        const result = await orderService.deleteOrderAdmin(orderId, adminId);
+        const result = await orderService.deleteOrderAdmin(orderId, adminId, req.adminContext);
         return sendResponse(res, 200, 'Order deleted successfully', result);
     } catch (err) {
         next(err);
@@ -414,7 +414,7 @@ export async function listAvailableDeliveryPartnersForOrderController(req, res, 
     try {
         const orderId = req.params.orderId;
         const onlineOnly = req.query.onlineOnly !== 'false';
-        const partners = await orderService.listAvailableDeliveryPartnersForOrder(orderId, { onlineOnly });
+        const partners = await orderService.listAvailableDeliveryPartnersForOrder(orderId, { onlineOnly }, req.adminContext);
         return sendResponse(res, 200, 'Available delivery partners retrieved', { deliveryPartners: partners });
     } catch (err) {
         next(err);
@@ -436,7 +436,7 @@ export async function approveOrderHandoverAdminController(req, res, next) {
     try {
         const adminId = req.user?.userId;
         const orderId = req.params.orderId;
-        const order = await orderService.approveOrderHandoverAdmin(orderId, adminId);
+        const order = await orderService.approveOrderHandoverAdmin(orderId, adminId, req.adminContext);
         return sendResponse(res, 200, 'Order handover approved by Admin', { order });
     } catch (err) {
         next(err);
@@ -448,7 +448,7 @@ export async function rejectOrderHandoverAdminController(req, res, next) {
         const adminId = req.user?.userId;
         const orderId = req.params.orderId;
         const { reason } = req.body || {};
-        const order = await orderService.rejectOrderHandoverAdmin(orderId, adminId, reason);
+        const order = await orderService.rejectOrderHandoverAdmin(orderId, adminId, reason, req.adminContext);
         return sendResponse(res, 200, 'Order handover rejected by Admin', { order });
     } catch (err) {
         next(err);
@@ -457,7 +457,7 @@ export async function rejectOrderHandoverAdminController(req, res, next) {
 
 export async function listPendingHandoverRequestsAdminController(req, res, next) {
     try {
-        const orders = await orderService.listPendingHandoverRequestsAdmin();
+        const orders = await orderService.listPendingHandoverRequestsAdmin(req.adminContext);
         return sendResponse(res, 200, 'Pending handover requests retrieved', { orders });
     } catch (err) {
         next(err);

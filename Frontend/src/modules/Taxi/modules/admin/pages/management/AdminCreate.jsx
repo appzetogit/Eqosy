@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, ChevronRight, Loader2, LockKeyhole, MapPinned, Shield, UserRound } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Loader2, LockKeyhole, MapPinned, Search, Shield, UserRound } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
-import { ADMIN_PERMISSION_GROUPS } from '../../constants/adminAccess';
+import {
+  ADMIN_PERMISSION_GROUPS,
+  resourcePermissionsFromFlat,
+  flattenResourcePermissions,
+} from '../../constants/adminAccess';
 
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-100';
@@ -15,7 +19,7 @@ const initialForm = {
   phone: '',
   role: 'Operations Subadmin',
   admin_type: 'subadmin',
-  permissions: [],
+  resourcePermissions: {},
   service_location_ids: [],
   zone_ids: [],
   password: '',
@@ -44,6 +48,27 @@ const PermissionCheckbox = ({ checked, label, onChange }) => (
   </button>
 );
 
+const AccessToggle = ({ checked, label, onChange }) => (
+  <button
+    type="button"
+    onClick={onChange}
+    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all ${
+      checked
+        ? 'border-blue-200 bg-blue-50 text-blue-800'
+        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+    }`}
+  >
+    <span
+      className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+        checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'
+      }`}
+    >
+      <Check size={10} />
+    </span>
+    {label}
+  </button>
+);
+
 const AdminCreate = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -53,6 +78,7 @@ const AdminCreate = () => {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [permissionSearch, setPermissionSearch] = useState('');
 
   const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -68,10 +94,12 @@ const AdminCreate = () => {
 
         const nextServiceLocations = Array.isArray(serviceLocationResponse?.data)
           ? serviceLocationResponse.data
-          : serviceLocationResponse?.data?.results || [];
+          : serviceLocationResponse?.data?.results || serviceLocationResponse?.data?.locations || [];
         const nextZones = Array.isArray(zoneResponse?.data?.results)
           ? zoneResponse.data.results
-          : zoneResponse?.data?.results || [];
+          : Array.isArray(zoneResponse?.data)
+          ? zoneResponse.data
+          : zoneResponse?.data?.zones || [];
 
         setServiceLocations(nextServiceLocations);
         setZones(nextZones);
@@ -91,9 +119,13 @@ const AdminCreate = () => {
             phone: existingAdmin.phone || '',
             role: existingAdmin.role || 'Operations Subadmin',
             admin_type: existingAdmin.admin_type || 'subadmin',
-            permissions: Array.isArray(existingAdmin.permissions) ? existingAdmin.permissions.filter((item) => item !== '*') : [],
-            service_location_ids: Array.isArray(existingAdmin.service_location_ids) ? existingAdmin.service_location_ids : [],
-            zone_ids: Array.isArray(existingAdmin.zone_ids) ? existingAdmin.zone_ids : [],
+            resourcePermissions: resourcePermissionsFromFlat(existingAdmin.permissions || []),
+            service_location_ids: Array.isArray(existingAdmin.service_location_ids)
+              ? existingAdmin.service_location_ids.map((item) => String(item._id || item.id || item))
+              : [],
+            zone_ids: Array.isArray(existingAdmin.zone_ids)
+              ? existingAdmin.zone_ids.map((item) => String(item._id || item.id || item))
+              : [],
             password: '',
             passwordConfirmation: '',
             active: existingAdmin.active !== false,
@@ -110,41 +142,78 @@ const AdminCreate = () => {
   }, [id, isEdit, navigate]);
 
   const visibleZones = useMemo(() => {
-    if (form.admin_type === 'superadmin') {
+    if (form.admin_type === 'superadmin' || !form.service_location_ids || form.service_location_ids.length === 0) {
       return zones;
     }
 
     const serviceLocationSet = new Set((form.service_location_ids || []).map(String));
-    return zones.filter((zone) => serviceLocationSet.has(String(zone.service_location_id || '')));
+    const matched = zones.filter((zone) => {
+      const locId = String(
+        zone.service_location_id?._id ||
+        zone.service_location_id?.id ||
+        zone.service_location_id ||
+        zone.serviceLocationId ||
+        zone.service_location ||
+        ''
+      );
+      return !locId || locId === 'undefined' || locId === 'null' || serviceLocationSet.has(locId);
+    });
+
+    return matched.length > 0 ? matched : zones;
   }, [form.admin_type, form.service_location_ids, zones]);
 
   useEffect(() => {
     if (form.admin_type === 'superadmin') {
-      if (form.permissions.length > 0 || form.service_location_ids.length > 0 || form.zone_ids.length > 0) {
+      if (Object.keys(form.resourcePermissions || {}).length > 0 || form.service_location_ids.length > 0 || form.zone_ids.length > 0) {
         setForm((current) => ({
           ...current,
-          permissions: [],
+          resourcePermissions: {},
           service_location_ids: [],
           zone_ids: [],
         }));
       }
-      return;
     }
+  }, [form.admin_type]);
 
-    const allowedZoneIds = new Set(visibleZones.map((zone) => String(zone.id || zone._id || '')));
-    setForm((current) => ({
-      ...current,
-      zone_ids: current.zone_ids.filter((zoneId) => allowedZoneIds.has(String(zoneId))),
-    }));
-  }, [form.admin_type, form.permissions.length, form.service_location_ids.length, form.zone_ids.length, visibleZones]);
+  const filteredPermissionGroups = useMemo(() => {
+    const query = permissionSearch.trim().toLowerCase();
+    if (!query) return ADMIN_PERMISSION_GROUPS;
 
-  const handlePermissionToggle = (permission) => {
-    setForm((current) => ({
-      ...current,
-      permissions: current.permissions.includes(permission)
-        ? current.permissions.filter((item) => item !== permission)
-        : [...current.permissions, permission],
-    }));
+    return ADMIN_PERMISSION_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          item.label.toLowerCase().includes(query) ||
+          item.key.toLowerCase().includes(query) ||
+          group.title.toLowerCase().includes(query)
+      ),
+    })).filter((group) => group.items.length > 0);
+  }, [permissionSearch]);
+
+  const setResourceAccess = (resource, action, enabled) => {
+    setForm((current) => {
+      const next = {
+        ...(current.resourcePermissions || {}),
+        [resource]: {
+          read: Boolean(current.resourcePermissions?.[resource]?.read),
+          write: Boolean(current.resourcePermissions?.[resource]?.write),
+        },
+      };
+
+      if (action === 'read') {
+        next[resource].read = enabled;
+        if (!enabled) next[resource].write = false;
+      } else {
+        next[resource].write = enabled;
+        if (enabled) next[resource].read = true;
+      }
+
+      if (!next[resource].read && !next[resource].write) {
+        delete next[resource];
+      }
+
+      return { ...current, resourcePermissions: next };
+    });
   };
 
   const handleMultiSelect = (key, value) => {
@@ -179,13 +248,20 @@ const AdminCreate = () => {
       }
     }
 
+    const permissions = form.admin_type === 'superadmin' ? [] : flattenResourcePermissions(form.resourcePermissions);
+
+    if (form.admin_type === 'subadmin' && permissions.length === 0) {
+      toast.error('Select at least one permission for the subadmin.');
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim(),
       role: form.admin_type === 'superadmin' ? 'superadmin' : form.role.trim(),
       admin_type: form.admin_type,
-      permissions: form.admin_type === 'superadmin' ? [] : form.permissions,
+      permissions,
       service_location_ids: form.admin_type === 'superadmin' ? [] : form.service_location_ids,
       zone_ids: form.admin_type === 'superadmin' ? [] : form.zone_ids,
       active: form.active,
@@ -237,7 +313,7 @@ const AdminCreate = () => {
               {isEdit ? 'Update Scoped Access' : 'Create Scoped Subadmin'}
             </h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
-              Assign module access first, then limit the account to the right service locations and zones.
+              Assign module access first, then limit the account to the right service locations and working zones.
             </p>
           </div>
 
@@ -362,14 +438,29 @@ const AdminCreate = () => {
 
           <div className="space-y-6 xl:col-span-8">
             <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-200/50">
-              <div className="mb-6 flex items-center gap-3">
-                <div className="rounded-2xl bg-violet-50 p-3 text-violet-700">
-                  <Shield size={18} />
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-violet-50 p-3 text-violet-700">
+                    <Shield size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">Sidebar Permissions</h3>
+                    <p className="text-xs font-semibold text-slate-500">Choose read-only or read+write access for each module.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">Sidebar Permissions</h3>
-                  <p className="text-xs font-semibold text-slate-500">Choose which menu groups and modules the admin can access.</p>
-                </div>
+
+                {form.admin_type !== 'superadmin' && (
+                  <div className="relative min-w-[240px]">
+                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search (driver, ride, zone)..."
+                      value={permissionSearch}
+                      onChange={(e) => setPermissionSearch(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                )}
               </div>
 
               {form.admin_type === 'superadmin' ? (
@@ -378,21 +469,74 @@ const AdminCreate = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {ADMIN_PERMISSION_GROUPS.map((group) => (
-                    <div key={group.title} className="space-y-3">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{group.title}</div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        {group.items.map((permission) => (
-                          <PermissionCheckbox
-                            key={permission.key}
-                            checked={form.permissions.includes(permission.key)}
-                            label={permission.label}
-                            onChange={() => handlePermissionToggle(permission.key)}
-                          />
-                        ))}
-                      </div>
+                  {filteredPermissionGroups.length === 0 ? (
+                    <div className="py-8 text-center text-sm font-semibold text-slate-400">
+                      No matching permissions found for "{permissionSearch}".
                     </div>
-                  ))}
+                  ) : (
+                    filteredPermissionGroups.map((group) => (
+                      <div key={group.title} className="space-y-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{group.title}</div>
+                        <div className="space-y-3">
+                          {group.items.map((item) => {
+                            const access = form.resourcePermissions?.[item.key] || { read: false, write: false };
+                            const isDriverItem = item.key === 'drivers';
+                            const isTripsItem = item.key === 'trips';
+                            const isOngoingItem = item.key === 'ongoing';
+                            const isZonesItem = item.key === 'zones';
+
+                            return (
+                              <div
+                                key={item.key}
+                                className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-black text-slate-900">{item.label}</p>
+                                    {isDriverItem && (
+                                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                                        ★ Active Drivers
+                                      </span>
+                                    )}
+                                    {isTripsItem && (
+                                      <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue-800">
+                                        ★ Ride Details
+                                      </span>
+                                    )}
+                                    {isOngoingItem && (
+                                      <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-800">
+                                        ★ Live Rides
+                                      </span>
+                                    )}
+                                    {isZonesItem && (
+                                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800">
+                                        ★ Working Zone Config
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs font-semibold text-slate-500">Read or write access</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <AccessToggle
+                                    label="Read"
+                                    checked={access.read}
+                                    onChange={() => setResourceAccess(item.key, 'read', !access.read)}
+                                  />
+                                  {access.read && (
+                                    <AccessToggle
+                                      label="Write"
+                                      checked={access.write}
+                                      onChange={() => setResourceAccess(item.key, 'write', !access.write)}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -403,8 +547,8 @@ const AdminCreate = () => {
                   <MapPinned size={18} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">Service Location Scope</h3>
-                  <p className="text-xs font-semibold text-slate-500">Subadmins only see records inside the locations and zones selected here.</p>
+                  <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">Working Zone & Location Scope</h3>
+                  <p className="text-xs font-semibold text-slate-500">Assign specific cities (Service Locations) and working zones where this subadmin will operate.</p>
                 </div>
               </div>
 
@@ -415,7 +559,7 @@ const AdminCreate = () => {
               ) : (
                 <div className="space-y-6">
                   <div>
-                    <div className={labelClass}>Assigned Service Locations</div>
+                    <div className={labelClass}>Assigned Service Locations (Cities / Regions)</div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       {serviceLocations.map((location) => {
                         const value = String(location._id || location.id || '');
@@ -434,7 +578,12 @@ const AdminCreate = () => {
                   </div>
 
                   <div>
-                    <div className={labelClass}>Assigned Zones</div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className={labelClass}>Assigned Working Zones (Konse Zone Mai Kaam Karna Hai)</div>
+                      <span className="text-[11px] font-bold text-slate-400">
+                        {visibleZones.length} Zone{visibleZones.length === 1 ? '' : 's'} Available
+                      </span>
+                    </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       {visibleZones.map((zone) => {
                         const value = String(zone._id || zone.id || '');
@@ -450,7 +599,7 @@ const AdminCreate = () => {
                       })}
                     </div>
                     {visibleZones.length === 0 && (
-                      <p className="text-sm font-semibold text-slate-400">Select service locations first to unlock matching zones.</p>
+                      <p className="text-sm font-semibold text-slate-400">No zones configured yet.</p>
                     )}
                   </div>
                 </div>

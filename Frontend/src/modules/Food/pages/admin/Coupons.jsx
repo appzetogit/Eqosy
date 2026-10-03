@@ -19,6 +19,8 @@ export default function Coupons() {
   const [updatingCartVisibility, setUpdatingCartVisibility] = useState({})
   const [deletingOffer, setDeletingOffer] = useState({})
   const [errors, setErrors] = useState({})
+  const [zones, setZones] = useState([])
+  const [selectedZoneId, setSelectedZoneId] = useState("")
   const [formData, setFormData] = useState({
     couponCode: "",
     discountType: "percentage",
@@ -34,6 +36,13 @@ export default function Coupons() {
     perUserLimit: "",
     isFirstOrderOnly: false,
   })
+
+  useEffect(() => {
+    adminAPI.getZones({ limit: 1000 }).then((res) => {
+      const list = res?.data?.data?.zones || res?.data?.zones || res?.data?.data || []
+      setZones(Array.isArray(list) ? list : [])
+    }).catch(() => setZones([]))
+  }, [])
 
   const fetchOffers = useCallback(async () => {
     try {
@@ -80,6 +89,22 @@ export default function Coupons() {
 
     fetchRestaurants()
   }, [])
+
+  const filteredRestaurantsForCoupon = useMemo(() => {
+    if (!selectedZoneId) return restaurants
+    return restaurants.filter((r) => {
+      const rZoneId = typeof r.zoneId === "string" ? r.zoneId : (r.zoneId?._id || r.zoneId?.id || r.location?.zoneId || "")
+      return String(rZoneId) === String(selectedZoneId)
+    })
+  }, [restaurants, selectedZoneId])
+
+  useEffect(() => {
+    if (!formData.restaurantId || !selectedZoneId) return
+    const isStillValid = filteredRestaurantsForCoupon.some((r) => String(r._id || r.id) === String(formData.restaurantId))
+    if (!isStillValid) {
+      setFormData((prev) => ({ ...prev, restaurantId: "" }))
+    }
+  }, [selectedZoneId, filteredRestaurantsForCoupon, formData.restaurantId])
 
   const todayYMD = () => {
     const d = new Date()
@@ -466,21 +491,38 @@ export default function Coupons() {
               </div>
 
                 {formData.restaurantScope === "selected" && (
-                  <div className="md:col-span-2 lg:col-span-3">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Select Restaurant</label>
-                    <select
-                      value={formData.restaurantId}
-                      onChange={(e) => handleFormChange("restaurantId", e.target.value)}
-                      className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Choose a restaurant</option>
-                      {restaurants.map((restaurant) => (
-                        <option key={restaurant._id} value={restaurant._id}>
-                          {restaurant.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Select Area / Zone (Optional)</label>
+                      <select
+                        value={selectedZoneId}
+                        onChange={(e) => setSelectedZoneId(e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">All Areas / Zones</option>
+                        {zones.map((zone) => (
+                          <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                            {zone.name || zone.zoneName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Select Restaurant</label>
+                      <select
+                        value={formData.restaurantId}
+                        onChange={(e) => handleFormChange("restaurantId", e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Choose a restaurant</option>
+                        {filteredRestaurantsForCoupon.map((restaurant) => (
+                          <option key={restaurant._id || restaurant.id} value={restaurant._id || restaurant.id}>
+                            {restaurant.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
               </div>
 

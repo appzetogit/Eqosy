@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
-import { MapPin, Search, Mic, SlidersHorizontal, Star, X, ArrowDownUp, Timer, IndianRupee, Clock, Bookmark, UtensilsCrossed, ChevronDown, Bell, ShoppingCart, Wallet } from "lucide-react"
+import { MapPin, Search, Mic, SlidersHorizontal, Star, X, ArrowDownUp, Timer, IndianRupee, Clock, Bookmark, UtensilsCrossed, Utensils, ChevronDown, Bell, ShoppingCart, Wallet } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
 import { Card, CardContent } from "@food/components/ui/card"
@@ -511,13 +511,18 @@ export default function Dining() {
           </div>
 
           <div className="flex items-center gap-x-2 sm:gap-x-3">
+            {/* My Bookings Action */}
+            <Link to="/food/user/bookings" className="flex items-center justify-center h-8 w-8 sm:h-[38px] sm:w-[38px] rounded-full bg-[#FFF2EB] dark:bg-gray-800 border border-[#EB590E]/30 shadow-sm transition hover:bg-[#FFE5D6] active:scale-95" title="My Table Bookings">
+              <Utensils className="h-[15px] w-[15px] sm:h-[18px] sm:w-[18px] text-[#EB590E]" strokeWidth={2} />
+            </Link>
+
             {/* Wallet Action */}
-            <Link to="/user/wallet" className="flex items-center justify-center h-8 w-8 sm:h-[38px] sm:w-[38px] rounded-full bg-gray-100/80 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-95">
+            <Link to="/food/user/wallet" className="flex items-center justify-center h-8 w-8 sm:h-[38px] sm:w-[38px] rounded-full bg-gray-100/80 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-95">
               <Wallet className="h-[15px] w-[15px] sm:h-[18px] sm:w-[18px] text-gray-800 dark:text-gray-200" strokeWidth={2} />
             </Link>
 
             {/* Cart Action */}
-            <Link to="/user/cart" className="flex items-center justify-center h-8 w-8 sm:h-[38px] sm:w-[38px] relative rounded-full bg-gray-100/80 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-95">
+            <Link to="/food/user/cart" className="flex items-center justify-center h-8 w-8 sm:h-[38px] sm:w-[38px] relative rounded-full bg-gray-100/80 dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 shadow-sm transition hover:bg-gray-200 active:scale-95">
               <ShoppingCart className="h-[15px] w-[15px] sm:h-[18px] sm:w-[18px] text-gray-800 dark:text-gray-200" strokeWidth={2} />
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] bg-[#EB590E] rounded-full flex items-center justify-center ring-2 ring-white dark:ring-[#0a0a0a]">
@@ -527,7 +532,7 @@ export default function Dining() {
             </Link>
 
             {/* Minimalist Profile/Avatar */}
-            <Link to="/user/profile" className="relative group hover:scale-105 transition-transform ml-1">
+            <Link to="/food/user/profile" className="relative group hover:scale-105 transition-transform ml-1">
               <div className="h-8 w-8 sm:h-[38px] sm:w-[38px] rounded-full bg-gradient-to-tr from-[#FA0272] to-[#ffb800] p-[2px] shadow-sm">
                 <div className="h-full w-full rounded-full border-2 border-white dark:border-[#0a0a0a] overflow-hidden bg-[#FA0272]/10 backdrop-blur-sm" />
               </div>
@@ -575,7 +580,7 @@ export default function Dining() {
       {/* Banner Section */}
       <div
         className="relative w-full px-3 sm:px-4 md:px-6 lg:px-8 pb-4 sm:pb-6 cursor-pointer"
-        onClick={() => navigate('/user/dining/restaurants')}
+        onClick={() => navigate('/food/user/dining/restaurants')}
       >
         <motion.div
           initial={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -680,46 +685,44 @@ export default function Dining() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
             {loading
               ? loadingCategoryCards.map((key, index) => (
                 <DiningCategorySkeleton key={key} index={index} />
               ))
-              : filteredCategories.map((category, index) => (
+              : safeCategories.map((category, index) => (
               <Link
                 key={category._id || category.id}
-                to={`/user/dining/${category.slug}`}
+                to={`/food/user/dining/${category.slug}`}
               >
                 <motion.div
-                  className="relative h-[138px] sm:h-[154px] md:h-[166px] overflow-hidden rounded-[18px] border border-[#e9e1d8] bg-white shadow-[0_1px_2px_rgba(35,24,12,0.05)] cursor-pointer group"
+                  className="relative h-[150px] sm:h-[165px] md:h-[180px] overflow-hidden rounded-[18px] border border-[#e9e1d8] bg-white shadow-[0_2px_8px_rgba(35,24,12,0.06)] cursor-pointer group flex flex-col"
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-50px" }}
                   transition={{ duration: 0.4, delay: index * 0.05 }}
-                  whileHover={{ y: -2, boxShadow: "0 10px 24px -18px rgba(63, 38, 18, 0.24)" }}
+                  whileHover={{ y: -3, boxShadow: "0 12px 28px -12px rgba(63, 38, 18, 0.28)" }}
                 >
-                  <div className="absolute inset-x-0 top-0 z-10 px-3 pt-3 sm:px-4 sm:pt-4">
-                    <p className="font-['Poppins',_'Nunito_Sans',sans-serif] max-w-[74%] text-[13px] sm:text-[15px] md:text-[16px] font-semibold leading-[1.02] tracking-[-0.02em] text-[#2d2722]">
-                      {category.name}
-                    </p>
-                  </div>
-
-                  <div className="absolute inset-x-0 bottom-0 h-[64%] overflow-hidden rounded-b-[18px]">
+                  <div className="relative w-full h-[72%] overflow-hidden bg-slate-100">
                     {category.imageUrl ? (
                       <OptimizedImage
                         src={category.imageUrl}
                         alt={category.name}
-                        className="w-full h-full transition-transform duration-500 group-hover:scale-[1.03]"
+                        className="w-full h-full transition-transform duration-500 group-hover:scale-[1.06]"
                         objectFit="cover"
-                        sizes="(max-width: 640px) 31vw, (max-width: 768px) 180px, 220px"
-                        placeholder="blur"
+                        sizes="(max-width: 640px) 45vw, (max-width: 768px) 180px, 220px"
                         priority={index < 6}
                       />
                     ) : (
-                      <div className={`relative h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(235,89,14,0.22),transparent_35%),linear-gradient(180deg,#fff7ee_0%,#fff1e1_100%)] ${shimmerClassName}`}>
-                        <div className="absolute inset-x-0 bottom-0 h-[70%] rounded-t-[60%] bg-white/55" />
+                      <div className="relative h-full w-full bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center">
+                        <UtensilsCrossed className="w-8 h-8 text-orange-400 opacity-60" />
                       </div>
                     )}
+                  </div>
+                  <div className="w-full h-[28%] bg-white px-2 flex items-center justify-center text-center border-t border-slate-100">
+                    <p className="font-bold text-[13px] sm:text-[14px] leading-tight text-[#2d2722] line-clamp-1">
+                      {category.name}
+                    </p>
                   </div>
                 </motion.div>
               </Link>

@@ -1271,11 +1271,29 @@ const SelectVehicle = () => {
           return;
         }
 
+        const isParcelMode =
+          routeState.isParcel ||
+          String(routeState.serviceType || '').toLowerCase() === 'parcel' ||
+          String(routeState.category || '').toLowerCase().includes('parcel') ||
+          String(routeState.deliveryCategory || '').toLowerCase().includes('parcel') ||
+          location.pathname.includes('/parcel');
+
         const nextVehicles = getVehicleTypes(response)
           .filter((type) => {
             const isActive = type.active !== false && Number(type.status ?? 1) !== 0;
             const transportType = String(type.transport_type || 'taxi').toLowerCase();
-            console.log('Vehicle:', type.name, 'transport:', transportType, 'isActive:', isActive, 'active:', type.active, 'status:', type.status);
+            const iconType = String(type.icon_types || type.vehicleIconType || type.name || '').toLowerCase();
+            const name = String(type.name || type.vehicle_type || '').toLowerCase();
+            const isCycle = ['cycle', 'bicycle', 'e-cycle'].some((k) => iconType.includes(k) || name.includes(k));
+
+            if (isCycle && !isParcelMode && transportType !== 'delivery') {
+              return false;
+            }
+
+            if (isParcelMode) {
+              return isActive && (transportType === 'delivery' || transportType === 'both');
+            }
+
             return isActive && (transportType === 'taxi' || transportType === 'both');
           })
           .map(normalizeVehicleType);
@@ -1501,12 +1519,28 @@ const SelectVehicle = () => {
       baseList = rankedVehicles.map(({ vehicle }) => vehicle);
     }
 
+    const isParcelService =
+      bookingTab === 'parcel' ||
+      routeState.isParcel ||
+      String(routeState.serviceType || '').toLowerCase() === 'parcel' ||
+      location.pathname.includes('/parcel');
+
+    const filteredBaseList = baseList.filter((vehicle) => {
+      const name = String(vehicle?.name || '').toLowerCase();
+      const iconType = String(vehicle?.iconType || '').toLowerCase();
+      const isCycle = ['cycle', 'bicycle', 'e-cycle'].some((k) => name.includes(k) || iconType.includes(k));
+      if (isCycle && !isParcelService && String(vehicle.transportType || '').toLowerCase() !== 'delivery') {
+        return false;
+      }
+      return true;
+    });
+
     if (bookingTab === 'bid') {
-      return baseList.filter((vehicle) => vehicle.supportsBidding);
+      return filteredBaseList.filter((vehicle) => vehicle.supportsBidding);
     } else {
-      return baseList.filter((vehicle) => !vehicle.supportsBidding || vehicle.dispatchType === 'both' || vehicle.dispatchType === 'normal');
+      return filteredBaseList.filter((vehicle) => !vehicle.supportsBidding || vehicle.dispatchType === 'both' || vehicle.dispatchType === 'normal');
     }
-  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, bookingTab]);
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, bookingTab, routeState.isParcel, routeState.serviceType, location.pathname]);
 
   const effectiveSelectedId = selected || displayedVehicles[0]?.id || '';
   const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === effectiveSelectedId) || pricedVehicles[0] || null, [pricedVehicles, effectiveSelectedId]);

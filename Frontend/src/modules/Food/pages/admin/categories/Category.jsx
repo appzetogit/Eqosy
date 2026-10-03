@@ -24,6 +24,8 @@ import { API_BASE_URL } from "@food/api/config"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 
 const defaultFormData = {
   name: "",
@@ -58,6 +60,9 @@ const zoneLabel = (zone) => {
 }
 
 export default function Category() {
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "categories"), [adminProfile])
+
   const [searchQuery, setSearchQuery] = useState("")
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -150,23 +155,37 @@ export default function Category() {
     return () => window.clearTimeout(timer)
   }, [searchQuery, showPendingOnly])
 
-  // Extract unique areas from zones & restaurants
-  const availableAreas = useMemo(() => {
-    const areasSet = new Set()
-    zones.forEach((z) => {
-      if (z.name) areasSet.add(z.name)
-      if (z.zoneName) areasSet.add(z.zoneName)
-      if (z.area) areasSet.add(z.area)
-      if (z.serviceLocation) areasSet.add(z.serviceLocation)
+  // Cascading Restaurants filtered by selected Zone
+  const availableRestaurants = useMemo(() => {
+    if (!selectedZoneId || selectedZoneId === "all" || selectedZoneId === "global_zone") {
+      return restaurants
+    }
+    const targetZoneObj = zones.find((z) => String(z._id || z.id) === String(selectedZoneId))
+    const targetZoneName = String(targetZoneObj?.name || targetZoneObj?.zoneName || targetZoneObj?.serviceLocation || "").toLowerCase().trim()
+
+    return restaurants.filter((r) => {
+      const rZoneObj = r.zoneId || r.zone
+      const rZoneIdStr = String(
+        typeof rZoneObj === "object"
+          ? (rZoneObj?._id || rZoneObj?.id || "")
+          : (rZoneObj || r.location?.zoneId || r.address?.zoneId || "")
+      ).trim()
+
+      const rZoneName = String(
+        (typeof rZoneObj === "object" ? (rZoneObj?.name || rZoneObj?.zoneName) : "") ||
+        r.zoneName ||
+        r.area ||
+        r.serviceLocation ||
+        r.city ||
+        ""
+      ).toLowerCase().trim()
+
+      const matchesId = rZoneIdStr && rZoneIdStr === String(selectedZoneId)
+      const matchesName = Boolean(targetZoneName && rZoneName && (rZoneName.includes(targetZoneName) || targetZoneName.includes(rZoneName)))
+
+      return matchesId || matchesName
     })
-    restaurants.forEach((r) => {
-      if (r.area) areasSet.add(r.area)
-      if (r.address?.area) areasSet.add(r.address.area)
-      if (r.zoneName) areasSet.add(r.zoneName)
-      if (r.city) areasSet.add(r.city)
-    })
-    return Array.from(areasSet).filter(Boolean).sort()
-  }, [zones, restaurants])
+  }, [restaurants, selectedZoneId, zones])
 
   // Advanced Filtering
   const filteredCategories = useMemo(() => {
@@ -232,28 +251,16 @@ export default function Category() {
         if (!matchesRestId && !matchesRestName) return false
       }
 
-      // 6. Area Filter
-      if (selectedArea !== "all") {
-        const areaLower = selectedArea.toLowerCase()
-        const catZoneName = zoneLabel(category?.zoneId).toLowerCase()
-        const restObj = category?.createdByRestaurant || category?.restaurant
-        const restArea = String(restObj?.area || restObj?.address?.area || restObj?.city || "").toLowerCase()
-
-        const matchesArea = catZoneName.includes(areaLower) || restArea.includes(areaLower)
-        if (!matchesArea) return false
-      }
-
       return true
     })
-  }, [categories, searchQuery, scopeFilter, approvalFilter, selectedZoneId, selectedRestaurantId, selectedArea, zones, restaurants])
+  }, [categories, searchQuery, scopeFilter, approvalFilter, selectedZoneId, selectedRestaurantId, zones, restaurants])
 
   const hasActiveFilters =
     searchQuery !== "" ||
     scopeFilter !== "all" ||
     approvalFilter !== "all" ||
     selectedZoneId !== "all" ||
-    selectedRestaurantId !== "all" ||
-    selectedArea !== "all"
+    selectedRestaurantId !== "all"
 
   const resetAllFilters = () => {
     setSearchQuery("")
@@ -261,7 +268,6 @@ export default function Category() {
     setApprovalFilter("all")
     setSelectedZoneId("all")
     setSelectedRestaurantId("all")
-    setSelectedArea("all")
     setShowPendingOnly(false)
   }
 
@@ -538,13 +544,15 @@ export default function Category() {
               Export
             </button>
 
-            <button
-              onClick={handleAddNew}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              Add Category
-            </button>
+            {canWrite && (
+              <button
+                onClick={handleAddNew}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                Add Category
+              </button>
+            )}
           </div>
         </div>
 
@@ -564,15 +572,14 @@ export default function Category() {
                 key={tab.id}
                 type="button"
                 onClick={() => setScopeFilter(tab.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                  scopeFilter === tab.id
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${scopeFilter === tab.id
                     ? tab.id === "global"
                       ? "bg-sky-600 text-white border-sky-600 shadow-sm"
                       : tab.id === "restaurant"
-                      ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                      : "bg-slate-900 text-white border-slate-900 shadow-sm"
+                        ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                        : "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -597,17 +604,16 @@ export default function Category() {
                   setApprovalFilter(tab.id)
                   setShowPendingOnly(tab.id === "pending")
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                  approvalFilter === tab.id
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${approvalFilter === tab.id
                     ? tab.id === "pending"
                       ? "bg-amber-600 text-white border-amber-600 shadow-sm"
                       : tab.id === "approved"
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : tab.id === "rejected"
-                      ? "bg-rose-600 text-white border-rose-600 shadow-sm"
-                      : "bg-slate-800 text-white border-slate-800 shadow-sm"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : tab.id === "rejected"
+                          ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                          : "bg-slate-800 text-white border-slate-800 shadow-sm"
                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -615,8 +621,8 @@ export default function Category() {
           </div>
         </div>
 
-        {/* Filter Row 2: Zone, Restaurant, Area Dropdowns & Search */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+        {/* Filter Row 2: Cascading Zone & Restaurant Filters + Search Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
           {/* Zone Dropdown Filter */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
@@ -624,10 +630,12 @@ export default function Category() {
             </label>
             <select
               value={selectedZoneId}
-              onChange={(e) => setSelectedZoneId(e.target.value)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
-                selectedZoneId !== "all" ? "border-blue-500 bg-blue-50/50 text-blue-900 font-bold" : "border-slate-300 bg-white text-slate-700"
-              }`}
+              onChange={(e) => {
+                setSelectedZoneId(e.target.value)
+                setSelectedRestaurantId("all")
+              }}
+              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${selectedZoneId !== "all" ? "border-blue-500 bg-blue-50/50 text-blue-900 font-bold" : "border-slate-300 bg-white text-slate-700"
+                }`}
             >
               <option value="all">📍 All Zones</option>
               <option value="global_zone">🌐 Global (All Zones)</option>
@@ -644,7 +652,7 @@ export default function Category() {
             </select>
           </div>
 
-          {/* Restaurant Dropdown Filter */}
+          {/* Restaurant Dropdown Filter (Cascaded by Zone) */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
               <Store className="w-3.5 h-3.5 text-amber-600" /> Restaurant Filter
@@ -652,13 +660,16 @@ export default function Category() {
             <select
               value={selectedRestaurantId}
               onChange={(e) => setSelectedRestaurantId(e.target.value)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
-                selectedRestaurantId !== "all" ? "border-amber-500 bg-amber-50/50 text-amber-900 font-bold" : "border-slate-300 bg-white text-slate-700"
-              }`}
+              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${selectedRestaurantId !== "all" ? "border-amber-500 bg-amber-50/50 text-amber-900 font-bold" : "border-slate-300 bg-white text-slate-700"
+                }`}
             >
-              <option value="all">🏪 All Restaurants</option>
+              <option value="all">
+                {selectedZoneId !== "all"
+                  ? `🏪 All Restaurants in Zone (${availableRestaurants.length})`
+                  : "🏪 All Restaurants"}
+              </option>
               {restaurantsLoading && <option disabled>Loading restaurants...</option>}
-              {restaurants.map((rest) => {
+              {availableRestaurants.map((rest) => {
                 const rId = String(rest._id || rest.id || "")
                 const rName = rest.name || rest.restaurantName || rId
                 return (
@@ -667,27 +678,6 @@ export default function Category() {
                   </option>
                 )
               })}
-            </select>
-          </div>
-
-          {/* Area Dropdown Filter */}
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-              <Compass className="w-3.5 h-3.5 text-emerald-600" /> Area Filter
-            </label>
-            <select
-              value={selectedArea}
-              onChange={(e) => setSelectedArea(e.target.value)}
-              className={`w-full rounded-xl border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
-                selectedArea !== "all" ? "border-emerald-500 bg-emerald-50/50 text-emerald-900 font-bold" : "border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              <option value="all">🌆 All Areas</option>
-              {availableAreas.map((area, idx) => (
-                <option key={idx} value={area}>
-                  🌆 {area}
-                </option>
-              ))}
             </select>
           </div>
 
@@ -704,14 +694,14 @@ export default function Category() {
                   placeholder="Search name, owner..."
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-xs outline-none focus:border-slate-900"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-xs outline-none focus:border-slate-900"
                 />
               </div>
               {hasActiveFilters && (
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="shrink-0 px-3 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 text-xs font-bold transition-all flex items-center gap-1"
+                  className="shrink-0 px-3 py-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 text-xs font-bold transition-all flex items-center gap-1"
                   title="Clear all filters"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -742,12 +732,6 @@ export default function Category() {
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-semibold">
                 Restaurant: {restaurants.find((r) => String(r._id || r.id) === selectedRestaurantId)?.name || selectedRestaurantId}
                 <X className="w-3 h-3 cursor-pointer text-amber-500 hover:text-amber-900" onClick={() => setSelectedRestaurantId("all")} />
-              </span>
-            )}
-            {selectedArea !== "all" && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold">
-                Area: {selectedArea}
-                <X className="w-3 h-3 cursor-pointer text-emerald-500 hover:text-emerald-900" onClick={() => setSelectedArea("all")} />
               </span>
             )}
             {approvalFilter !== "all" && (
@@ -863,13 +847,22 @@ export default function Category() {
                         </span>
                       </td>
                       <td className="px-4 py-5 text-center">
-                        <button
-                          onClick={() => handleToggleStatus(category.id)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full ${category?.status ? "bg-blue-600" : "bg-slate-300"}`}
-                          title={category?.status ? "Deactivate" : "Activate"}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${category?.status ? "translate-x-6" : "translate-x-1"}`} />
-                        </button>
+                        {canWrite ? (
+                          <button
+                            onClick={() => handleToggleStatus(category.id)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full ${category?.status ? "bg-blue-600" : "bg-slate-300"}`}
+                            title={category?.status ? "Deactivate" : "Activate"}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${category?.status ? "translate-x-6" : "translate-x-1"}`} />
+                          </button>
+                        ) : (
+                          <span
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full opacity-60 cursor-not-allowed ${category?.status ? "bg-blue-600" : "bg-slate-300"}`}
+                            title="Read-only mode (No write permission)"
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${category?.status ? "translate-x-6" : "translate-x-1"}`} />
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-5">
                         <div className="space-y-2">
@@ -883,50 +876,58 @@ export default function Category() {
                         </div>
                       </td>
                       <td className="px-5 py-5">
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {approvalStatus !== "approved" && (
+                        {canWrite ? (
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {approvalStatus !== "approved" && (
+                                <button
+                                  onClick={() => handleApprove(category.id)}
+                                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                                >
+                                  Approve
+                                </button>
+                              )}
+                              {isRestaurantCategory && approvalStatus !== "rejected" && (
+                                <button
+                                  onClick={() => handleReject(category)}
+                                  className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                                >
+                                  Reject
+                                </button>
+                              )}
+                              {isRestaurantCategory && !category?.isGlobal && approvalStatus === "approved" && (
+                                <button
+                                  onClick={() => handleMakeGlobal(category)}
+                                  className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                                >
+                                  Make Global
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-end gap-1">
                               <button
-                                onClick={() => handleApprove(category.id)}
-                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                                onClick={() => handleEdit(category)}
+                                className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
+                                title="Edit"
                               >
-                                Approve
+                                <Pencil className="h-4 w-4" />
                               </button>
-                            )}
-                            {isRestaurantCategory && approvalStatus !== "rejected" && (
                               <button
-                                onClick={() => handleReject(category)}
-                                className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+                                onClick={() => handleDelete(category.id)}
+                                className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"
+                                title="Delete"
                               >
-                                Reject
+                                <Trash2 className="h-4 w-4" />
                               </button>
-                            )}
-                            {isRestaurantCategory && !category?.isGlobal && approvalStatus === "approved" && (
-                              <button
-                                onClick={() => handleMakeGlobal(category)}
-                                className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-                              >
-                                Make Global
-                              </button>
-                            )}
+                            </div>
                           </div>
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleEdit(category)}
-                              className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-                              title="Edit"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(category.id)}
-                              className="rounded-lg p-2 text-rose-600 hover:bg-rose-50"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                        ) : (
+                          <div className="text-right">
+                            <span className="inline-flex items-center rounded-lg bg-slate-100 border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500">
+                              Read Only
+                            </span>
                           </div>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   )

@@ -62,13 +62,13 @@ const PhoneRegistration = () => {
         }
         return normalizedSaved;
     });
-    const [agreed, setAgreed] = useState(true);
+    const routePrefix = location.pathname.startsWith('/taxi/owner') ? '/taxi/owner' : '/taxi/driver';
+    const isLoginPage = location.pathname === `${routePrefix}/login` || location.pathname === `${routePrefix}/login/`;
+    const [agreed, setAgreed] = useState(() => (isLoginPage ? true : false));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const phoneCardRef = useRef(null);
     const phoneInputRef = useRef(null);
-    const routePrefix = location.pathname.startsWith('/taxi/owner') ? '/taxi/owner' : '/taxi/driver';
-    const isLoginPage = location.pathname === `${routePrefix}/login` || location.pathname === `${routePrefix}/login/`;
     const appName = settings.general?.app_name || 'App';
 
     const roleOptions = [
@@ -322,48 +322,50 @@ const PhoneRegistration = () => {
                                 </div>
                             </div>
 
-                            <div className="flex gap-2.5 px-1 items-start mt-1">
-                                <div className="relative flex items-center shrink-0 mt-0.5">
-                                    <input
-                                        type="checkbox"
-                                        id="terms"
-                                        checked={agreed}
-                                        onChange={() => setAgreed(!agreed)}
-                                        className="peer h-[16px] w-[16px] cursor-pointer appearance-none rounded-[4px] border-[1.5px] border-slate-300 bg-white transition-all checked:bg-[#F38F24] checked:border-[#F38F24]"
-                                    />
-                                    <CheckCircle2 className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
-                                </div>
-                                <label htmlFor="terms" className="text-[11px] font-medium text-slate-500 leading-relaxed cursor-pointer select-none">
-                                    I agree to the{' '}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            saveDriverRegistrationSession({
-                                                ...storedSession,
-                                                role,
-                                            });
-                                            navigate('/terms', { state: { role, returnTo: location.pathname } });
-                                        }}
-                                        className="text-[#F38F24] font-bold hover:text-orange-600"
-                                    >
-                                        Terms
-                                    </button>
-                                    {' '}and{' '}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            saveDriverRegistrationSession({
-                                                ...storedSession,
-                                                role,
-                                            });
-                                            navigate('/privacy', { state: { role, returnTo: location.pathname } });
-                                        }}
-                                        className="text-[#F38F24] font-bold hover:text-orange-600"
-                                    >
-                                        Privacy Policy
-                                    </button>.
-                                </label>
-                            </div>
+                            {!isLoginPage && (
+                              <div className="flex gap-2.5 px-1 items-start mt-1">
+                                  <div className="relative flex items-center shrink-0 mt-0.5">
+                                      <input
+                                          type="checkbox"
+                                          id="terms"
+                                          checked={agreed}
+                                          onChange={() => setAgreed(!agreed)}
+                                          className="peer h-[16px] w-[16px] cursor-pointer appearance-none rounded-[4px] border-[1.5px] border-slate-300 bg-white transition-all checked:bg-[#F38F24] checked:border-[#F38F24]"
+                                      />
+                                      <CheckCircle2 className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
+                                  </div>
+                                  <label htmlFor="terms" className="text-[11px] font-medium text-slate-500 leading-relaxed cursor-pointer select-none">
+                                      I agree to the{' '}
+                                      <button
+                                          type="button"
+                                          onClick={() => {
+                                              saveDriverRegistrationSession({
+                                                  ...storedSession,
+                                                  role,
+                                              });
+                                              navigate('/terms', { state: { role, returnTo: location.pathname } });
+                                          }}
+                                          className="text-[#F38F24] font-bold hover:text-orange-600"
+                                      >
+                                          Terms
+                                      </button>
+                                      {' '}and{' '}
+                                      <button
+                                          type="button"
+                                          onClick={() => {
+                                              saveDriverRegistrationSession({
+                                                  ...storedSession,
+                                                  role,
+                                              });
+                                              navigate('/privacy', { state: { role, returnTo: location.pathname } });
+                                          }}
+                                          className="text-[#F38F24] font-bold hover:text-orange-600"
+                                      >
+                                          Privacy Policy
+                                      </button>.
+                                  </label>
+                              </div>
+                            )}
 
                             <AnimatePresence>
                                 {error && (

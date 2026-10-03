@@ -41,6 +41,33 @@ export default function TableBookingSuccess() {
 
     const formattedDate = new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
+    const handleShare = async () => {
+        const shareText = `🎉 Table booked at ${booking.restaurant?.name || 'Restaurant'}!\n📅 Date: ${formattedDate} at ${booking.timeSlot}\n👥 Guests: ${booking.guests}\n🎫 Booking ID: ${booking.bookingId}`
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: "Table Booking Confirmation",
+                    text: shareText,
+                    url: window.location.href,
+                })
+                toast.success("Booking details shared successfully!")
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    navigator.clipboard.writeText(shareText)
+                    toast.success("Booking ticket copied to clipboard!")
+                }
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareText)
+                toast.success("Booking ticket copied to clipboard!")
+            } catch {
+                toast.error("Failed to copy booking ticket")
+            }
+        }
+    }
+
     return (
         <AnimatedPage className="bg-white min-h-screen flex flex-col items-center justify-center p-6 pb-24">
             <motion.div
@@ -90,7 +117,7 @@ export default function TableBookingSuccess() {
                             />
                         </div>
                         <div className="min-w-0">
-                            <h2 className="font-black text-lg text-gray-900 truncate">{booking.restaurant?.name || "The Great Indian Restaurant"}</h2>
+                            <h2 className="font-black text-lg text-gray-900 truncate">{booking.restaurant?.name || "Restaurant"}</h2>
                             <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                                 <MapPin className="w-3 h-3" />
                                 <span className="truncate">
@@ -132,12 +159,27 @@ export default function TableBookingSuccess() {
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-indigo-600">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></div>
-                            <span className="font-bold text-sm">10% Cashback with Tastizo Pay</span>
+                    {booking.specialRequest && (
+                        <div className="p-3 bg-amber-50 border border-amber-200/60 rounded-2xl text-xs text-amber-900 font-medium flex items-start gap-2">
+                            <span className="font-bold shrink-0">Note:</span>
+                            <span>"{booking.specialRequest}"</span>
                         </div>
-                        <Share2 className="w-5 h-5 cursor-pointer hover:scale-110 transition-transform" />
+                    )}
+
+                    <div className="flex items-center justify-between text-[#EB590E]">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#EB590E] animate-pulse"></div>
+                            <span className="font-bold text-sm">
+                                {booking.restaurant?.offer || "10% Cashback"} with Eqosy Pay
+                            </span>
+                        </div>
+                        <button
+                            onClick={handleShare}
+                            className="p-2 hover:bg-[#FFF2EB] rounded-full transition-transform active:scale-90"
+                            title="Share Ticket"
+                        >
+                            <Share2 className="w-5 h-5 cursor-pointer text-[#EB590E] hover:scale-110 transition-transform" />
+                        </button>
                     </div>
                 </div>
             </motion.div>

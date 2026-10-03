@@ -11,12 +11,17 @@ import {
 } from "@food/components/ui/dialog"
 import { adminAPI } from "@food/api"
 import { toast } from "sonner"
+import { getCurrentUser } from "@food/utils/auth"
+import { canWriteFood } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
 
 export default function FoodApproval() {
+  const adminProfile = useMemo(() => getCurrentUser("admin") || {}, [])
+  const canWrite = useMemo(() => canWriteFood(adminProfile, "foods"), [adminProfile])
+
   const [foodRequests, setFoodRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -198,7 +203,7 @@ export default function FoodApproval() {
                 {totalRequests}
               </span>
             </div>
-            {totalRequests > 0 && (
+            {canWrite && totalRequests > 0 && (
               <button
                 onClick={async () => {
                   if (window.confirm(`Are you sure you want to approve all ${totalRequests} pending items?`)) {
@@ -337,22 +342,26 @@ export default function FoodApproval() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleApprove(request)}
-                                disabled={processing || !request.isActionable}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Approve"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleRejectClick(request)}
-                                disabled={processing || !request.isActionable}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Reject"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
+                              {canWrite && (
+                                <>
+                                  <button
+                                    onClick={() => handleApprove(request)}
+                                    disabled={processing || !request.isActionable}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Approve"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectClick(request)}
+                                    disabled={processing || !request.isActionable}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Reject"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

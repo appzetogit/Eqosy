@@ -10,6 +10,7 @@ import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { ValidationError, ForbiddenError, NotFoundError } from '../../../../core/auth/errors.js';
 import { buildPaginationOptions, buildPaginatedResult } from '../../../../utils/helpers.js';
+import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOfferUsage } from '../../admin/models/offerUsage.model.js';
 import { FoodDeliverySurgeZone } from '../../admin/models/deliverySurgeZone.model.js';
@@ -607,14 +608,14 @@ async function ensureShareTrackingId(order) {
 
 export async function getOrderById(
   orderId,
-  { userId, restaurantId, deliveryPartnerId, admin } = {},
+  { userId, restaurantId, deliveryPartnerId, admin, adminContext } = {},
 ) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
   const order = await FoodOrder.findOne(identity)
     .populate(
       "restaurantId",
-      "restaurantName ownerPhone profileImage area city location rating totalRatings primaryContactNumber",
+      "restaurantName ownerPhone profileImage area city location rating totalRatings primaryContactNumber zoneId",
     )
     .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar")
     .populate("userId", "name fullName phone email")
@@ -622,7 +623,25 @@ export async function getOrderById(
     .lean();
   if (!order) throw new NotFoundError("Order not found");
 
-  if (admin) return normalizeOrderForClient(order);
+  if (admin) {
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+      const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+      const allowedZoneIdsStr = normalizeObjectIdList(rawZoneIds).map(String);
+      if (allowedZoneIdsStr.length === 0) {
+        throw new ForbiddenError("You do not have permission to view orders in this zone");
+      }
+
+      let orderZoneIdStr = order.zoneId ? String(order.zoneId) : null;
+      if (!orderZoneIdStr && order.restaurantId?.zoneId) {
+        orderZoneIdStr = String(order.restaurantId.zoneId);
+      }
+
+      if (orderZoneIdStr && !allowedZoneIdsStr.includes(orderZoneIdStr)) {
+        throw new ForbiddenError("You do not have permission to view orders in this zone");
+      }
+    }
+    return normalizeOrderForClient(order);
+  }
 
   const orderUserId = order.userId?._id?.toString() || order.userId?.toString();
   const orderRestaurantId = order.restaurantId?._id?.toString() || order.restaurantId?.toString();
@@ -1608,9 +1627,122 @@ export async function switchToCash(orderId, deliveryPartnerId) {
 }
 
 // ----- Admin -----
-export async function listOrdersAdmin(query = {}) {
+export async function listOrdersAdmin(query = {}, adminContext = null) {
   const { page, limit, skip } = buildPaginationOptions(query);
   const filter = {};
+
+  if (adminContext && !isSuperAdminLike(adminContext)) {
+    const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+    const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+    if (zoneObjectIds.length === 0) {
+      const emptyPaginated = buildPaginatedResult({ docs: [], total: 0, page, limit });
+      return { ...emptyPaginated, orders: [] };
+    }
+
+    const zoneRestaurants = await FoodRestaurant.find({ zoneId: { $in: zoneObjectIds } }).select('_id').lean();
+    const zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { zoneId: { $in: zoneObjectIds } },
+        { restaurantId: { $in: zoneRestaurantIds } }
+      ]
+    });
+  }
+
+  // Zone filter (accepts zone ID or zone name string)
+  const zoneRaw = typeof (query.zone || query.zoneId) === 'string' ? String(query.zone || query.zoneId).trim() : '';
+  if (zoneRaw && zoneRaw !== 'All Zones') {
+    let resolvedZoneId = null;
+    if (mongoose.Types.ObjectId.isValid(zoneRaw)) {
+      resolvedZoneId = new mongoose.Types.ObjectId(zoneRaw);
+    } else {
+      const matchedZone = await FoodZone.findOne({
+        $or: [{ name: zoneRaw }, { zoneName: zoneRaw }]
+      }).select('_id').lean();
+      if (matchedZone?._id) {
+        resolvedZoneId = matchedZone._id;
+      }
+    }
+
+    if (resolvedZoneId) {
+      if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIdsStr = normalizeObjectIdList(rawZoneIds).map(String);
+        if (!zoneObjectIdsStr.includes(resolvedZoneId.toString())) {
+          const emptyPaginated = buildPaginatedResult({ docs: [], total: 0, page, limit });
+          return { ...emptyPaginated, orders: [] };
+        }
+      }
+      const zoneRestaurants = await FoodRestaurant.find({ zoneId: resolvedZoneId }).select('_id').lean();
+      const zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { zoneId: resolvedZoneId },
+          { restaurantId: { $in: zoneRestaurantIds } }
+        ]
+      });
+    } else {
+      const emptyPaginated = buildPaginatedResult({ docs: [], total: 0, page, limit });
+      return { ...emptyPaginated, orders: [] };
+    }
+  }
+
+  // Restaurant filter (accepts restaurant ID or restaurant name string)
+  const restaurantRaw = typeof (query.restaurant || query.restaurantId) === 'string' ? String(query.restaurant || query.restaurantId).trim() : '';
+  if (restaurantRaw && restaurantRaw !== 'All restaurants') {
+    let resolvedRestId = null;
+    if (mongoose.Types.ObjectId.isValid(restaurantRaw)) {
+      resolvedRestId = new mongoose.Types.ObjectId(restaurantRaw);
+    } else {
+      const matchedRest = await FoodRestaurant.findOne({
+        $or: [{ restaurantName: restaurantRaw }, { name: restaurantRaw }]
+      }).select('_id').lean();
+      if (matchedRest?._id) {
+        resolvedRestId = matchedRest._id;
+      }
+    }
+
+    if (resolvedRestId) {
+      filter.restaurantId = resolvedRestId;
+    } else {
+      const emptyPaginated = buildPaginatedResult({ docs: [], total: 0, page, limit });
+      return { ...emptyPaginated, orders: [] };
+    }
+  }
+
+  // Customer filter (accepts user ID or customer name string)
+  const customerRaw = typeof (query.customer || query.customerId || query.userId) === 'string' ? String(query.customer || query.customerId || query.userId).trim() : '';
+  if (customerRaw && customerRaw !== 'All customers') {
+    let resolvedUserId = null;
+    if (mongoose.Types.ObjectId.isValid(customerRaw)) {
+      resolvedUserId = new mongoose.Types.ObjectId(customerRaw);
+    } else {
+      const rx = new RegExp(`^${customerRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      const matchedUser = await FoodUser.findOne({
+        $or: [{ name: rx }, { fullName: rx }]
+      }).select('_id').lean();
+      if (matchedUser?._id) {
+        resolvedUserId = matchedUser._id;
+      }
+    }
+
+    if (resolvedUserId) {
+      filter.userId = resolvedUserId;
+    } else {
+      const customerRx = new RegExp(customerRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { customerName: customerRx },
+          { "deliveryAddress.contactName": customerRx }
+        ]
+      });
+    }
+  }
 
   const rawStatus =
     typeof query.status === "string" ? query.status.trim().toLowerCase() : "";
@@ -1618,12 +1750,10 @@ export async function listOrdersAdmin(query = {}) {
     typeof query.cancelledBy === "string"
       ? query.cancelledBy.trim().toLowerCase()
       : "";
-  const restaurantIdRaw =
-    typeof query.restaurantId === "string" ? query.restaurantId.trim() : "";
   const startDateRaw =
-    typeof query.startDate === "string" ? query.startDate.trim() : "";
+    typeof (query.startDate || query.fromDate) === "string" ? String(query.startDate || query.fromDate).trim() : "";
   const endDateRaw =
-    typeof query.endDate === "string" ? query.endDate.trim() : "";
+    typeof (query.endDate || query.toDate) === "string" ? String(query.endDate || query.toDate).trim() : "";
   const searchTerm =
     typeof (query.search || query.q || query.orderId || query.order_id) === "string"
       ? String(query.search || query.q || query.orderId || query.order_id).trim()
@@ -1702,19 +1832,21 @@ export async function listOrdersAdmin(query = {}) {
     }
   }
 
-  if (restaurantIdRaw && mongoose.Types.ObjectId.isValid(restaurantIdRaw)) {
-    filter.restaurantId = new mongoose.Types.ObjectId(restaurantIdRaw);
-  }
-
   if (startDateRaw || endDateRaw) {
     const createdAt = {};
-    const start = startDateRaw ? new Date(startDateRaw) : null;
-    const end = endDateRaw ? new Date(endDateRaw) : null;
-    if (start && !Number.isNaN(start.getTime())) {
-      createdAt.$gte = start;
+    if (startDateRaw) {
+      const start = new Date(startDateRaw);
+      if (!Number.isNaN(start.getTime())) {
+        if (startDateRaw.length <= 10) start.setHours(0, 0, 0, 0);
+        createdAt.$gte = start;
+      }
     }
-    if (end && !Number.isNaN(end.getTime())) {
-      createdAt.$lte = end;
+    if (endDateRaw) {
+      const end = new Date(endDateRaw);
+      if (!Number.isNaN(end.getTime())) {
+        if (endDateRaw.length <= 10) end.setHours(23, 59, 59, 999);
+        createdAt.$lte = end;
+      }
     }
     if (Object.keys(createdAt).length > 0) {
       filter.createdAt = createdAt;
@@ -1725,7 +1857,7 @@ export async function listOrdersAdmin(query = {}) {
     FoodOrder.find(filter)
       .select("+deliveryOtp")
       .populate("userId", "name phone email")
-      .populate("restaurantId", "restaurantName area city ownerPhone")
+      .populate("restaurantId", "restaurantName area city ownerPhone zoneId")
       .populate("dispatch.deliveryPartnerId", "name phone")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -1737,15 +1869,41 @@ export async function listOrdersAdmin(query = {}) {
   return { ...paginated, orders: paginated.data };
 }
 
+async function assertSubadminOrderZoneAccess(order, adminContext) {
+  if (!adminContext || isSuperAdminLike(adminContext)) return;
+  const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+  const allowedZoneIdsStr = normalizeObjectIdList(rawZoneIds).map(String);
+  if (allowedZoneIdsStr.length === 0) {
+    throw new ForbiddenError("You do not have permission to perform this action in this zone");
+  }
+
+  let orderZoneIdStr = order.zoneId ? String(order.zoneId) : null;
+  if (!orderZoneIdStr && order.restaurantId) {
+    const restaurantIdVal = typeof order.restaurantId === 'object' ? order.restaurantId._id : order.restaurantId;
+    if (restaurantIdVal) {
+      const restaurant = await FoodRestaurant.findById(restaurantIdVal).select('zoneId').lean();
+      if (restaurant?.zoneId) {
+        orderZoneIdStr = String(restaurant.zoneId);
+      }
+    }
+  }
+
+  if (orderZoneIdStr && !allowedZoneIdsStr.includes(orderZoneIdStr)) {
+    throw new ForbiddenError("You do not have permission to perform this action in this zone");
+  }
+}
+
 export async function assignDeliveryPartnerAdmin(
   orderId,
   deliveryPartnerId,
   adminId,
+  adminContext = null,
 ) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
   const order = await FoodOrder.findOne(identity);
   if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
 
   const partner = await FoodDeliveryPartner.findById(deliveryPartnerId)
     .select("status name phone")
@@ -1814,12 +1972,13 @@ export async function assignDeliveryPartnerAdmin(
   return normalizeOrderForClient(order);
 }
 
-export async function listAvailableDeliveryPartnersForOrder(orderId, options = {}) {
+export async function listAvailableDeliveryPartnersForOrder(orderId, options = {}, adminContext = null) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
   const order = await FoodOrder.findOne(identity).populate("restaurantId", "zoneId location").lean();
   if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
 
   const resolvedZoneId = order.zoneId || order.restaurantId?.zoneId || (await resolveOrderZoneId(order, order.restaurantId));
 
@@ -2025,12 +2184,13 @@ export async function handoverDeliveryOrder(orderId, partnerId, payload = {}) {
   };
 }
 
-export async function approveOrderHandoverAdmin(orderId, adminId) {
+export async function approveOrderHandoverAdmin(orderId, adminId, adminContext = null) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
   const order = await FoodOrder.findOne(identity);
   if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
 
   const partnerId = order.dispatch?.handoverRequest?.requestedBy || order.dispatch?.deliveryPartnerId;
   if (!partnerId) throw new ValidationError("No delivery partner associated with this handover request");
@@ -2154,12 +2314,13 @@ export async function approveOrderHandoverAdmin(orderId, adminId) {
   return normalizeOrderForClient(order);
 }
 
-export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
+export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '', adminContext = null) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
   const order = await FoodOrder.findOne(identity);
   if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
 
   const partnerId = order.dispatch?.handoverRequest?.requestedBy || order.dispatch?.deliveryPartnerId;
   if (!partnerId) throw new ValidationError("No delivery partner associated with this handover request");
@@ -2219,11 +2380,29 @@ export async function rejectOrderHandoverAdmin(orderId, adminId, reason = '') {
   return normalizeOrderForClient(order);
 }
 
-export async function listPendingHandoverRequestsAdmin() {
-  const orders = await FoodOrder.find({
+export async function listPendingHandoverRequestsAdmin(adminContext = null) {
+  const filter = {
     'dispatch.handoverRequest.status': 'pending',
     'dispatch.status': { $ne: 'unassigned' }
-  })
+  };
+
+  if (adminContext && !isSuperAdminLike(adminContext)) {
+    const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+    const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+    if (zoneObjectIds.length === 0) {
+      return [];
+    }
+
+    const zoneRestaurants = await FoodRestaurant.find({ zoneId: { $in: zoneObjectIds } }).select('_id').lean();
+    const zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+
+    filter.$or = [
+      { zoneId: { $in: zoneObjectIds } },
+      { restaurantId: { $in: zoneRestaurantIds } }
+    ];
+  }
+
+  const orders = await FoodOrder.find(filter)
     .populate({
       path: 'restaurantId',
       select: 'restaurantName name phone location area city zoneId',
@@ -2237,12 +2416,13 @@ export async function listPendingHandoverRequestsAdmin() {
   return orders.map(o => normalizeOrderForClient(o));
 }
 
-export async function deleteOrderAdmin(orderId, adminId) {
+export async function deleteOrderAdmin(orderId, adminId, adminContext = null) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
   const order = await FoodOrder.findOne(identity).lean();
   if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
 
   // Keep support tickets but detach deleted order reference.
   await Promise.all([

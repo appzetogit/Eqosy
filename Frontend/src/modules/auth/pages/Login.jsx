@@ -7,21 +7,106 @@ import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
 import { resolvePostLoginRoute } from "@/shared/utils/activeModule.js"
 
+const getInitialOtpSession = () => {
+  try {
+    const savedSessionRaw = sessionStorage.getItem("eqosy_active_otp_session")
+    if (savedSessionRaw) {
+      const saved = JSON.parse(savedSessionRaw)
+      const elapsedSeconds = Math.floor((Date.now() - (saved.timestamp || 0)) / 1000)
+      if (elapsedSeconds < 600 && saved.phoneNumber) {
+        const remainingTimer = Math.max(0, (saved.resendTimer || 60) - elapsedSeconds)
+        return {
+          phoneNumber: saved.phoneNumber,
+          step: saved.step || 2,
+          resendTimer: remainingTimer,
+          pendingAuthData: saved.pendingAuthData || null,
+        }
+      } else {
+        sessionStorage.removeItem("eqosy_active_otp_session")
+      }
+    }
+  } catch (_) {}
+  return null
+}
+
 export default function UnifiedOTPFastLogin() {
   const RESEND_COOLDOWN_SECONDS = 60
   const VERIFY_REQUEST_TIMEOUT_MS = 20000
   const FCM_FETCH_TIMEOUT_MS = 12000
-  const [phoneNumber, setPhoneNumber] = useState("")
+
+  const initialSessionRef = useRef(null)
+  if (initialSessionRef.current === null) {
+    initialSessionRef.current = getInitialOtpSession()
+  }
+  const initialSession = initialSessionRef.current
+
+  const [phoneNumber, setPhoneNumber] = useState(() => initialSession?.phoneNumber || "")
   const [otp, setOtp] = useState("")
-  const [step, setStep] = useState(1) // 1: Phone, 2: OTP, 3: Name
+  const [step, setStep] = useState(() => initialSession?.step || 1) // 1: Phone, 2: OTP, 3: Name
   const [loading, setLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [resendTimer, setResendTimer] = useState(0)
+  const [otpSent, setOtpSent] = useState(() => Boolean(initialSession?.step && initialSession.step > 1))
+  const [resendTimer, setResendTimer] = useState(() => initialSession?.resendTimer || 0)
   const [name, setName] = useState("")
-  const [pendingAuthData, setPendingAuthData] = useState(null)
+  const [agreeTerms, setAgreeTerms] = useState(false)
+  const [pendingAuthData, setPendingAuthData] = useState(() => initialSession?.pendingAuthData || null)
+  const [policyModal, setPolicyModal] = useState({ open: false, title: "", content: "", loading: false })
   const navigate = useNavigate()
   const location = useLocation()
   const submitting = useRef(false)
+
+  const openPolicyModal = async (type) => {
+    const title = type === "terms" ? "Terms of Service" : "Privacy Policy"
+    setPolicyModal({ open: true, title, content: "", loading: true })
+    try {
+      const endpoint = type === "terms" ? "/food/pages/terms" : "/food/pages/privacy"
+      const res = await apiClient.get(endpoint)
+      const payload = res?.data?.data || res?.data || {}
+      const pageTitle = payload.title || title
+      const pageContent = payload.content || ""
+
+      if (pageContent) {
+        setPolicyModal({
+          open: true,
+          title: pageTitle,
+          content: pageContent,
+          loading: false,
+        })
+      } else {
+        setPolicyModal({
+          open: true,
+          title: pageTitle,
+          content: `<div class="py-4 text-slate-700 font-medium leading-relaxed">Welcome to Eqosy. Please read and agree to our ${pageTitle} before using our services. Full detailed terms are available in the system settings.</div>`,
+          loading: false,
+        })
+      }
+    } catch (_) {
+      setPolicyModal({
+        open: true,
+        title,
+        content: `<div class="py-4 text-slate-700 font-medium leading-relaxed">Welcome to Eqosy. Please read and agree to our ${title} before using our services. Full detailed terms are available in the system settings.</div>`,
+        loading: false,
+      })
+    }
+  }
+
+  // Persist session whenever state changes
+  useEffect(() => {
+    if (step > 1 && phoneNumber) {
+      try {
+        sessionStorage.setItem("eqosy_active_otp_session", JSON.stringify({
+          phoneNumber,
+          step,
+          resendTimer,
+          pendingAuthData,
+          timestamp: Date.now(),
+        }))
+      } catch (_) {}
+    } else if (step === 1) {
+      try {
+        sessionStorage.removeItem("eqosy_active_otp_session")
+      } catch (_) {}
+    }
+  }, [step, phoneNumber, pendingAuthData, resendTimer])
 
   // Dismiss soft keyboard on unmount & auto-redirect if already logged in
   useEffect(() => {
@@ -336,6 +421,9 @@ export default function UnifiedOTPFastLogin() {
 
       setUnifiedAuthData(data)
       try {
+        sessionStorage.removeItem("eqosy_active_otp_session")
+      } catch (_) {}
+      try {
         await authAPI.saveLoginFcmToken(fcmToken, platform)
       } catch (fcmSaveError) {
         console.warn("[Auth] FCM save route failed after login:", fcmSaveError?.message || fcmSaveError)
@@ -399,6 +487,9 @@ export default function UnifiedOTPFastLogin() {
       }
 
       setUnifiedAuthData(nextData)
+      try {
+        sessionStorage.removeItem("eqosy_active_otp_session")
+      } catch (_) {}
       toast.success("Profile completed successfully!")
       const targetRoute = location.state?.from || resolvePostLoginRoute()
       navigate(targetRoute, { replace: true })
@@ -687,25 +778,48 @@ export default function UnifiedOTPFastLogin() {
                 </div>
 
                 <div className="mt-6 pt-2 flex flex-col items-center">
-                  <p className="text-center text-[13px] text-gray-800 mb-5 px-4 font-medium leading-relaxed max-w-[30ch]">
-                    By continuing, you agree to our{" "}
-                    <Link to="/terms" className="font-bold text-slate-900 hover:underline">Terms</Link>
-                    {" "}and{" "}
-                    <Link to="/privacy" className="font-bold text-slate-900 hover:underline">Privacy Policy</Link>.
-                  </p>
+                  {step > 1 && (
+                    <div className="flex items-start gap-2.5 mb-5 px-3 text-left cursor-pointer">
+                      <input
+                        type="checkbox"
+                        id="agreeTermsCheck"
+                        checked={agreeTerms}
+                        onChange={(e) => setAgreeTerms(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
+                      />
+                      <label htmlFor="agreeTermsCheck" className="text-[13px] text-gray-800 font-medium leading-relaxed cursor-pointer select-none">
+                        I agree to the{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); openPolicyModal("terms"); }}
+                          className="font-bold text-slate-900 hover:underline inline-block"
+                        >
+                          Terms
+                        </button>
+                        {" "}and{" "}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); openPolicyModal("privacy"); }}
+                          className="font-bold text-slate-900 hover:underline inline-block"
+                        >
+                          Privacy Policy
+                        </button>.
+                      </label>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
                     disabled={
                       loading ||
                       (step === 1 && String(phoneNumber).length < 10) ||
-                      (step === 2 && otp.length !== 4) ||
-                      (step === 3 && String(name).trim().length < 2)
+                      (step === 2 && (!agreeTerms || otp.length !== 4)) ||
+                      (step === 3 && (!agreeTerms || String(name).trim().length < 2))
                     }
                     className={`w-full h-[60px] rounded-full font-semibold text-[17px] transition-all flex items-center justify-center gap-3 ${loading ||
                       (step === 1 && String(phoneNumber).length < 10) ||
-                      (step === 2 && otp.length !== 4) ||
-                      (step === 3 && String(name).trim().length < 2)
+                      (step === 2 && (!agreeTerms || otp.length !== 4)) ||
+                      (step === 3 && (!agreeTerms || String(name).trim().length < 2))
                       ? "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed shadow-inner"
                       : "bg-[#1A1A1A] text-white shadow-lg active:scale-[0.98]"
                       }`}
@@ -717,8 +831,8 @@ export default function UnifiedOTPFastLogin() {
                         {step === 1 ? "Continue securely" : step === 2 ? "Verify & Login" : "Complete Profile"}
                         <ArrowRight className={`w-5 h-5 ${loading ||
                           (step === 1 && String(phoneNumber).length < 10) ||
-                          (step === 2 && otp.length !== 4) ||
-                          (step === 3 && String(name).trim().length < 2)
+                          (step === 2 && (!agreeTerms || otp.length !== 4)) ||
+                          (step === 3 && (!agreeTerms || String(name).trim().length < 2))
                           ? 'text-[#9CA3AF]'
                           : 'text-[#F38F24]'
                           }`} />
@@ -742,6 +856,46 @@ export default function UnifiedOTPFastLogin() {
           </div>
         </div>
       </div>
+      {/* Legal Policy In-Page Modal */}
+      {policyModal.open && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+          >
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h3 className="text-lg font-black text-slate-900">{policyModal.title}</h3>
+              <button
+                type="button"
+                onClick={() => setPolicyModal({ ...policyModal, open: false })}
+                className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 text-slate-700 text-sm leading-relaxed">
+              {policyModal.loading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#F38F24]" />
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Loading policy...</p>
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: policyModal.content }} />
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setPolicyModal({ ...policyModal, open: false })}
+                className="px-6 py-2 bg-[#1A1A1A] text-white rounded-full font-bold text-sm hover:bg-black transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

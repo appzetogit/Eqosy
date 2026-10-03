@@ -246,18 +246,23 @@ apiClient.interceptors.response.use(
     }
     
     // Do NOT attempt token refresh or trigger onRefreshFailed for authentication endpoints
-    // (login, verify-otp, send-otp, signup, etc.) where 401 is a credential validation failure.
+    // or public page/config endpoints (terms, privacy, public data) where 401 must not trigger session expiration.
     const reqUrl = String(original.url || "").toLowerCase();
-    const isAuthEndpoint =
+    const isAuthOrPublicEndpoint =
       reqUrl.includes("/auth/") ||
       reqUrl.includes("/login") ||
       reqUrl.includes("/verify-otp") ||
       reqUrl.includes("/send-otp") ||
       reqUrl.includes("/signup") ||
       reqUrl.includes("/register") ||
-      reqUrl.includes("/forgot-password");
+      reqUrl.includes("/forgot-password") ||
+      reqUrl.includes("/pages-content") ||
+      reqUrl.includes("/config/") ||
+      reqUrl.includes("/terms") ||
+      reqUrl.includes("/privacy") ||
+      reqUrl.includes("/public");
 
-    if (isAuthEndpoint) {
+    if (isAuthOrPublicEndpoint) {
       return Promise.reject(err);
     }
 

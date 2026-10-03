@@ -23,6 +23,7 @@ export default function RestaurantSignup() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [apiError, setApiError] = useState("")
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [keyboardInset, setKeyboardInset] = useState(0)
 
   useEffect(() => {
@@ -228,9 +229,25 @@ export default function RestaurantSignup() {
               </AnimatePresence>
             </div>
 
+            <div className="flex items-start gap-2.5 px-1 pt-1">
+              <input
+                type="checkbox"
+                id="restaurantTermsCheck"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
+              />
+              <label htmlFor="restaurantTermsCheck" className="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none leading-relaxed">
+                I agree to the{' '}
+                <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Terms & Conditions</a>
+                {' '}and{' '}
+                <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Privacy Policy</a>
+              </label>
+            </div>
+
             <Button
               type="submit"
-              disabled={isLoading || formData.phone.length !== 10 || formData.name.length < 2}
+              disabled={isLoading || formData.phone.length !== 10 || formData.name.length < 2 || !acceptedTerms}
               className="w-full h-14 rounded-xl font-bold text-base transition-all bg-[#1A1A1A] hover:bg-black text-white hover:shadow-lg disabled:opacity-50 disabled:bg-gray-200 disabled:text-gray-400 mt-4"
             >
               {isLoading ? (

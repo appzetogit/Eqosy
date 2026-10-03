@@ -262,8 +262,36 @@ export const getFoodAdminById = async (currentAdmin, adminId) => {
 export const createFoodAdminAccount = async (currentAdmin, payload = {}) => {
   assertFoodAdminPermission(currentAdmin, 'subadmins', 'subadmins', 'write');
 
+  const email = String(payload.email || '').trim().toLowerCase();
   const password = String(payload.password || '').trim();
   const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || '').trim();
+
+  const existingAdmin = await FoodAdmin.findOne({ email });
+  if (existingAdmin) {
+    const existingServices = Array.isArray(existingAdmin.servicesAccess) ? existingAdmin.servicesAccess : [];
+    existingAdmin.servicesAccess = [...new Set([...existingServices, 'food'])];
+
+    const newPermissions = normalizeAdminPermissions(payload.permissions || []);
+    existingAdmin.permissions = [...new Set([...(existingAdmin.permissions || []), ...newPermissions])];
+
+    const newFoodZones = normalizeObjectIdList(payload.food_zone_ids);
+    const existingFoodZones = (existingAdmin.food_zone_ids || []).map((id) => String(id));
+    existingAdmin.food_zone_ids = normalizeObjectIdList([...existingFoodZones, ...newFoodZones]);
+
+    if (password) {
+      if (password.length < 6) {
+        throw new ApiError(400, 'Password must be at least 6 characters');
+      }
+      if (passwordConfirmation && password !== passwordConfirmation) {
+        throw new ApiError(400, 'Passwords do not match');
+      }
+      existingAdmin.password = password;
+    }
+
+    await existingAdmin.save();
+    const [serializedAdmin] = await enrichFoodAdminSummaries([existingAdmin.toObject()]);
+    return serializedAdmin;
+  }
 
   if (!password || password.length < 6) {
     throw new ApiError(400, 'Password must be at least 6 characters');

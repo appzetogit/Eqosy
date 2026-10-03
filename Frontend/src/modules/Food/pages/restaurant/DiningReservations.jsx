@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, Clock, Users, Search, MessageSquare, CheckCircle2, Clock4, UploadCloud, ImagePlus, ChevronDown, ChevronUp, Sparkles, MapPin, Phone, Info, X } from "lucide-react"
+import { Calendar, Clock, Users, Search, MessageSquare, CheckCircle2, Clock4, UploadCloud, ImagePlus, ChevronDown, ChevronUp, Sparkles, MapPin, Phone, Info, X, ArrowLeft } from "lucide-react"
 import { diningAPI, restaurantAPI } from "@food/api"
 import Loader from "@food/components/Loader"
 import { Badge } from "@food/components/ui/badge"
 import { toast } from "sonner"
+import alertSound from "@food/assets/audio/alert.mp3"
 const debugError = (...args) => { }
 
 const getRestaurantFromResponse = (response) =>
@@ -70,6 +72,7 @@ const getBookerPhone = (booking) =>
 
 
 export default function DiningReservations() {
+    const navigate = useNavigate()
     const [bookings, setBookings] = useState([])
     const [loading, setLoading] = useState(true)
     const [restaurant, setRestaurant] = useState(null)
@@ -92,6 +95,44 @@ export default function DiningReservations() {
     const [diningSettingsMessage, setDiningSettingsMessage] = useState("")
     const [diningSettingsError, setDiningSettingsError] = useState("")
 
+    const audioRef = useRef(null)
+    const alertedBookingIdsRef = useRef(new Set())
+    const isFirstLoadRef = useRef(true)
+
+    const handleBack = () => {
+        const currentPath = window.location.pathname
+        if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+            navigate(-1)
+            setTimeout(() => {
+                if (window.location.pathname === currentPath) {
+                    navigate("/food/restaurant/explore")
+                }
+            }, 100)
+        } else {
+            navigate("/food/restaurant/explore")
+        }
+    }
+
+    const stopBookingNotificationSound = () => {
+        try {
+            if (audioRef.current) {
+                audioRef.current.pause()
+                audioRef.current.currentTime = 0
+            }
+        } catch {}
+    }
+
+    const playBookingNotificationSound = () => {
+        try {
+            if (!audioRef.current) {
+                audioRef.current = new Audio(alertSound)
+                audioRef.current.loop = true
+            }
+            audioRef.current.currentTime = 0
+            audioRef.current.play().catch(() => {})
+        } catch {}
+    }
+
     const syncRestaurantMediaState = (restaurantData) => {
         setRestaurant(restaurantData || null)
         const coverImages = getCoverImages(restaurantData)
@@ -104,33 +145,69 @@ export default function DiningReservations() {
     }
 
     useEffect(() => {
-        const fetchAll = async () => {
+        let isCancelled = false
+        let currentRestaurantData = null
+
+        const fetchBookingsData = async () => {
             try {
-                // First get the current restaurant
-                const resResponse = await restaurantAPI.getCurrentRestaurant()
-                if (resResponse.data.success) {
-                    const resData = getRestaurantFromResponse(resResponse)
+                if (!currentRestaurantData) {
+                    const resResponse = await restaurantAPI.getCurrentRestaurant()
+                    if (resResponse?.data?.success) {
+                        currentRestaurantData = getRestaurantFromResponse(resResponse)
+                        if (currentRestaurantData) syncRestaurantMediaState(currentRestaurantData)
+                    }
+                }
 
-                    const restaurantId = resData?._id || resData?.id
+                if (currentRestaurantData && !isCancelled) {
+                    const bookingsResponse = await diningAPI.getRestaurantBookings(currentRestaurantData)
+                    if (bookingsResponse?.data?.success && !isCancelled) {
+                        const fetchedList = Array.isArray(bookingsResponse.data.data) ? bookingsResponse.data.data : []
+                        
+                        // Check for new incoming table reservations
+                        if (isFirstLoadRef.current) {
+                            isFirstLoadRef.current = false
+                            fetchedList.forEach((b) => {
+                                const id = String(b._id || b.id || b.bookingId || "")
+                                if (id) alertedBookingIdsRef.current.add(id)
+                            })
+                        } else {
+                            const newBookings = fetchedList.filter((b) => {
+                                const id = String(b._id || b.id || b.bookingId || "")
+                                return id && !alertedBookingIdsRef.current.has(id)
+                            })
 
-                    if (restaurantId) {
-                        syncRestaurantMediaState(resData)
-                        // Then get its bookings
-                        const bookingsResponse = await diningAPI.getRestaurantBookings(resData)
-                        if (bookingsResponse.data.success) {
-                            setBookings(Array.isArray(bookingsResponse.data.data) ? bookingsResponse.data.data : [])
+                            if (newBookings.length > 0) {
+                                newBookings.forEach((b) => {
+                                    const id = String(b._id || b.id || b.bookingId || "")
+                                    alertedBookingIdsRef.current.add(id)
+                                    const guestName = b.user?.name || b.name || "Guest"
+                                    toast.success(`🍽️ New Reservation #${b.bookingId || id}!`, {
+                                        description: `${guestName} reserved a table for ${b.guests} guest(s) on ${b.timeSlot}.`,
+                                        duration: 6000
+                                    })
+                                })
+                                playBookingNotificationSound()
+                            }
                         }
-                    } else {
-                        debugError("Restaurant ID not found in response:", resData)
+
+                        setBookings(fetchedList)
                     }
                 }
             } catch (error) {
                 debugError("Error fetching reservations:", error)
             } finally {
-                setLoading(false)
+                if (!isCancelled) setLoading(false)
             }
         }
-        fetchAll()
+
+        fetchBookingsData()
+        const intervalId = setInterval(fetchBookingsData, 3000)
+
+        return () => {
+            isCancelled = true
+            clearInterval(intervalId)
+            stopBookingNotificationSound()
+        }
     }, [])
 
     const handleRestaurantPhotoUpload = async (event) => {
@@ -284,13 +361,21 @@ export default function DiningReservations() {
     }
 
     const handleStatusUpdate = async (bookingId, newStatus) => {
+        stopBookingNotificationSound()
         try {
             const response = await diningAPI.updateBookingStatusRestaurant(bookingId, newStatus)
             if (response.data.success) {
                 // Update local state
-                setBookings(prev => prev.map(b =>
-                    b._id === bookingId ? { ...b, status: newStatus } : b
-                ))
+                setBookings(prev => {
+                    const updated = prev.map(b =>
+                        b._id === bookingId ? { ...b, status: newStatus } : b
+                    )
+                    const hasPendingConfirmed = updated.some(b => String(b.status || '').toLowerCase() === 'confirmed')
+                    if (!hasPendingConfirmed) {
+                        stopBookingNotificationSound()
+                    }
+                    return updated
+                })
             }
         } catch (error) {
             debugError("Error updating status:", error)
@@ -369,12 +454,23 @@ export default function DiningReservations() {
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-3"
                     >
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                            Table Reservations
-                            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        </h1>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Live Queue Management</p>
+                        <button
+                            type="button"
+                            onClick={handleBack}
+                            className="p-2.5 rounded-2xl hover:bg-slate-100 active:scale-95 transition-all border border-slate-200 bg-white text-slate-700 shadow-sm shrink-0 cursor-pointer"
+                            aria-label="Back"
+                        >
+                            <ArrowLeft className="w-5 h-5 text-slate-800" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                                Table Reservations
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                            </h1>
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-0.5">Live Queue Management</p>
+                        </div>
                     </motion.div>
 
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

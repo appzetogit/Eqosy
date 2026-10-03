@@ -287,7 +287,10 @@ api.interceptors.response.use(
           (tokenRole === 'user' && serverMessage === 'User account is not active')
         );
 
-        const shouldClearAuth = !isPendingApprovalError && (hasAuthToken && isExplicitTokenExpired);
+        const currentPath = typeof window !== 'undefined' ? String(window.location.pathname || '').toLowerCase() : '';
+        const isPublicPath = currentPath === '/login' || currentPath.includes('/auth/') || currentPath.includes('/login') || currentPath === '/terms' || currentPath === '/privacy';
+
+        const shouldClearAuth = !isPublicPath && !isPendingApprovalError && (hasAuthToken && isExplicitTokenExpired);
         if (shouldClearAuth) {
           clearStaleAuthState(tokenRole, token);
           window.dispatchEvent(new CustomEvent('app:auth-stale', {

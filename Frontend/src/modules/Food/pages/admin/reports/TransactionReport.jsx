@@ -64,6 +64,28 @@ export default function TransactionReport() {
     fetchFilterData()
   }, [])
 
+  const filteredRestaurantsOptions = useMemo(() => {
+    if (filters.zone === "All Zones" || !filters.zone) {
+      return restaurants
+    }
+    const selectedZoneObj = zones.find(z => (z.zoneName || z.name) === filters.zone || z._id === filters.zone)
+    const targetZoneId = selectedZoneObj ? String(selectedZoneObj._id || selectedZoneObj.id) : ""
+
+    return restaurants.filter(r => {
+      const rZoneId = typeof r.zoneId === "string" ? r.zoneId : (r.zoneId?._id || r.zoneId?.id || r.location?.zoneId || "")
+      const rZoneName = r.zoneName || r.zone || ""
+      return (targetZoneId && String(rZoneId) === targetZoneId) || (rZoneName && rZoneName.toLowerCase() === filters.zone.toLowerCase())
+    })
+  }, [restaurants, zones, filters.zone])
+
+  useEffect(() => {
+    if (filters.restaurant === "All restaurants") return
+    const exists = filteredRestaurantsOptions.some(r => (r.restaurantName || r.name) === filters.restaurant)
+    if (!exists) {
+      setFilters(prev => ({ ...prev, restaurant: "All restaurants" }))
+    }
+  }, [filters.zone, filteredRestaurantsOptions, filters.restaurant])
+
   // Fetch transaction report data
   useEffect(() => {
     const fetchTransactionReport = async () => {
@@ -233,8 +255,8 @@ export default function TransactionReport() {
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All restaurants">All restaurants</option>
-                {restaurants.map(restaurant => (
-                  <option key={restaurant._id} value={restaurant.restaurantName || restaurant.name}>{restaurant.restaurantName || restaurant.name}</option>
+                {filteredRestaurantsOptions.map(restaurant => (
+                  <option key={restaurant._id || restaurant.id} value={restaurant.restaurantName || restaurant.name}>{restaurant.restaurantName || restaurant.name}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />

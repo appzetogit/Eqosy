@@ -133,6 +133,14 @@ export default function UserRouter() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="dining/bookings"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/login">
+                <MyBookings />
+              </ProtectedRoute>
+            }
+          />
           <Route path="under-250" element={<Under250 />} />
           <Route path="grocery" element={<Navigate to="/food/user?vertical=grocery" replace />} />
           <Route path="categories" element={<Categories />} />
@@ -269,14 +277,13 @@ export default function UserRouter() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="profile/about"
-            element={
-              <ProtectedRoute requiredRole="user" loginPath="/login">
-                <About />
-              </ProtectedRoute>
-            }
-          />
+          {/* Public Legal Policies & About (stay public) */}
+          <Route path="profile/about" element={<About />} />
+          <Route path="profile/terms" element={<Terms />} />
+          <Route path="profile/privacy" element={<Privacy />} />
+          <Route path="profile/refund" element={<Refund />} />
+          <Route path="profile/shipping" element={<Shipping />} />
+          <Route path="profile/cancellation" element={<Cancellation />} />
 
           <Route
             path="profile/report-safety-emergency"

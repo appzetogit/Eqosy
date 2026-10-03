@@ -18,6 +18,8 @@ const StatusToggle = ({ status, onToggle }) => (
 
 import UserModal from './UserModal';
 import { adminService } from '../../services/adminService';
+import { getUnifiedAdminProfile } from '../../services/adminSession';
+import { hasAdminPermission } from '../../constants/adminAccess';
 
 const GENDER_LABELS = {
   male: 'Male',
@@ -27,6 +29,8 @@ const GENDER_LABELS = {
 
 const UserList = () => {
   const navigate = useNavigate();
+  const adminProfile = getUnifiedAdminProfile();
+  const canWrite = hasAdminPermission(adminProfile, 'users', 'write');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -190,12 +194,14 @@ const UserList = () => {
           <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
             <Download size={15} /> Export
           </button>
-          <button 
-            onClick={handleAddUser}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <UserPlus size={15} /> New User
-          </button>
+          {canWrite && (
+            <button 
+              onClick={handleAddUser}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <UserPlus size={15} /> New User
+            </button>
+          )}
         </div>
       </div>
 
@@ -269,7 +275,13 @@ const UserList = () => {
                   <td className="px-4 py-3 text-sm text-gray-700">{user.phone}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{user.email}</td>
                   <td className="px-4 py-3 text-center">
-                    <StatusToggle status={user.status} onToggle={() => handleToggleStatus(user.id, user.status)} />
+                    {canWrite ? (
+                      <StatusToggle status={user.status} onToggle={() => handleToggleStatus(user.id, user.status)} />
+                    ) : (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {user.status}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="relative">
@@ -323,16 +335,24 @@ const UserList = () => {
               <button onClick={() => navigate(`/taxi/admin/users/${activeMenu}`)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                 <UserCheck size={13} className="text-emerald-500" /> View Profile
               </button>
-              <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                <Edit2 size={13} className="text-blue-500" /> Edit
-              </button>
-              <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                <Lock size={13} className="text-amber-500" /> Update Password
-              </button>
-              <div className="h-px bg-gray-100 my-1" />
-              <button onClick={() => handleDeleteUser(activeMenu)} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2">
-                <Trash2 size={13} /> Delete
-              </button>
+              {canWrite && (
+                <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                  <Edit2 size={13} className="text-blue-500" /> Edit
+                </button>
+              )}
+              {canWrite && (
+                <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                  <Lock size={13} className="text-amber-500" /> Update Password
+                </button>
+              )}
+              {canWrite && (
+                <>
+                  <div className="h-px bg-gray-100 my-1" />
+                  <button onClick={() => handleDeleteUser(activeMenu)} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2">
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </>
+              )}
             </div>
           </div>,
           document.body,

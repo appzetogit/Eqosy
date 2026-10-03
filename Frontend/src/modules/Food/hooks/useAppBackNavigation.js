@@ -1,5 +1,6 @@
 import { useCallback } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
+import { isUnifiedAuthenticated } from "@food/utils/auth"
 
 const toFoodPath = (value) => {
   if (typeof value !== "string") return null
@@ -47,7 +48,7 @@ const resolveBackPath = ({ pathname, search, state }) => {
       normalizedPath,
     )
   ) {
-    return explicitBackPath || "/food/user/profile"
+    return explicitBackPath || (isUnifiedAuthenticated() ? "/food/user/profile" : "/login")
   }
 
   if (normalizedPath === "/user/wallet") {
@@ -55,14 +56,14 @@ const resolveBackPath = ({ pathname, search, state }) => {
   }
 
   if (normalizedPath === "/user/notifications") {
-    return explicitBackPath || "/food/user"
+    return explicitBackPath || (isUnifiedAuthenticated() ? "/food/user" : "/login")
   }
 
   if (/^\/user\/restaurants\/[^/]+$/.test(normalizedPath)) {
     if (searchParams.get("under250") === "true") {
       return "/food/user/under-250"
     }
-    return explicitBackPath || "/food/user"
+    return explicitBackPath || (isUnifiedAuthenticated() ? "/food/user" : "/login")
   }
 
   if (/^\/user\/dining\/book(\/|$)/.test(normalizedPath)) {
@@ -103,7 +104,7 @@ const resolveBackPath = ({ pathname, search, state }) => {
   }
 
   if (normalizedPath === "/user/categories") {
-    return "/food/user"
+    return isUnifiedAuthenticated() ? "/food/user" : "/login"
   }
 
   if (/^\/user\/category\/[^/]+$/.test(normalizedPath)) {
@@ -115,11 +116,11 @@ const resolveBackPath = ({ pathname, search, state }) => {
     normalizedPath === "/user/gourmet" ||
     normalizedPath === "/user/coffee"
   ) {
-    return "/food/user"
+    return isUnifiedAuthenticated() ? "/food/user" : "/login"
   }
 
   if (/^\/user\/product\/[^/]+$/.test(normalizedPath)) {
-    return explicitBackPath || "/food/user"
+    return explicitBackPath || (isUnifiedAuthenticated() ? "/food/user" : "/login")
   }
 
   if (/^\/user\/complaints(\/|$)/.test(normalizedPath)) {
@@ -130,7 +131,7 @@ const resolveBackPath = ({ pathname, search, state }) => {
     return explicitBackPath
   }
 
-  return "/food/user"
+  return isUnifiedAuthenticated() ? "/food/user" : "/login"
 }
 
 export default function useAppBackNavigation() {
@@ -138,6 +139,15 @@ export default function useAppBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
-    navigate(resolveBackPath(location))
+    if (typeof window !== "undefined" && window.history && window.history.length > 2) {
+      navigate(-1)
+      return
+    }
+    const path = resolveBackPath(location)
+    if (!isUnifiedAuthenticated() && (path.startsWith("/food/user") || path.startsWith("/user"))) {
+      navigate("/login", { replace: true })
+      return
+    }
+    navigate(path)
   }, [location, navigate])
 }

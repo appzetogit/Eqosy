@@ -66,7 +66,7 @@ export default function RegularOrderReport() {
         }
 
         // Fetch restaurants
-        const restaurantsRes = await adminAPI.getRestaurants({ limit: 100 })
+        const restaurantsRes = await adminAPI.getRestaurants({ limit: 1000 })
         if (restaurantsRes.data?.success) {
           setRestaurants(restaurantsRes.data.data.restaurants || [])
         }
@@ -83,6 +83,28 @@ export default function RegularOrderReport() {
 
     fetchFilterData()
   }, [])
+
+  const filteredRestaurantsOptions = useMemo(() => {
+    if (filters.zone === "All Zones" || !filters.zone) {
+      return restaurants
+    }
+    const selectedZoneObj = zones.find(z => (z.zoneName || z.name) === filters.zone || z._id === filters.zone)
+    const targetZoneId = selectedZoneObj ? String(selectedZoneObj._id || selectedZoneObj.id) : ""
+
+    return restaurants.filter(r => {
+      const rZoneId = typeof r.zoneId === "string" ? r.zoneId : (r.zoneId?._id || r.zoneId?.id || r.location?.zoneId || "")
+      const rZoneName = r.zoneName || r.zone || ""
+      return (targetZoneId && String(rZoneId) === targetZoneId) || (rZoneName && rZoneName.toLowerCase() === filters.zone.toLowerCase())
+    })
+  }, [restaurants, zones, filters.zone])
+
+  useEffect(() => {
+    if (filters.restaurant === "All restaurants") return
+    const exists = filteredRestaurantsOptions.some(r => (r.restaurantName || r.name) === filters.restaurant)
+    if (!exists) {
+      setFilters(prev => ({ ...prev, restaurant: "All restaurants" }))
+    }
+  }, [filters.zone, filteredRestaurantsOptions, filters.restaurant])
 
   // Calculate date range based on time filter
   const getDateRange = () => {
@@ -388,8 +410,8 @@ export default function RegularOrderReport() {
               >
                 <option value="All Zones">All Zones</option>
                 {zones.map((zone) => (
-                  <option key={zone._id} value={zone.name}>
-                    {zone.name}
+                  <option key={zone._id} value={zone.zoneName || zone.name}>
+                    {zone.zoneName || zone.name}
                   </option>
                 ))}
               </select>
@@ -403,9 +425,9 @@ export default function RegularOrderReport() {
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All restaurants">All restaurants</option>
-                {restaurants.map((restaurant) => (
-                  <option key={restaurant._id} value={restaurant.name}>
-                    {restaurant.name}
+                {filteredRestaurantsOptions.map((restaurant) => (
+                  <option key={restaurant._id || restaurant.id} value={restaurant.restaurantName || restaurant.name}>
+                    {restaurant.restaurantName || restaurant.name}
                   </option>
                 ))}
               </select>
@@ -420,8 +442,8 @@ export default function RegularOrderReport() {
               >
                 <option value="All customers">All customers</option>
                 {customers.map((customer) => (
-                  <option key={customer._id} value={customer.name}>
-                    {customer.name}
+                  <option key={customer._id} value={customer.name || customer.fullName || customer.phone}>
+                    {customer.name || customer.fullName || customer.phone}
                   </option>
                 ))}
               </select>
