@@ -421,23 +421,8 @@ export const printOrderInvoice = (order) => {
 </body>
 </html>`;
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent || ""
-    );
-
     const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
     const blobUrl = URL.createObjectURL(blob);
-
-    if (isMobile) {
-      const printWin = window.open(blobUrl, "_blank");
-      toast.dismiss(toastId);
-      if (printWin) {
-        toast.success("Bill ready to view/print");
-      } else {
-        toast.error("Popup blocked! Please allow popups to view bill.");
-      }
-      return;
-    }
 
     try {
       let iframe = document.getElementById("restaurant-bill-print-frame");
@@ -467,15 +452,19 @@ export const printOrderInvoice = (order) => {
         } catch (err) {
           const printWin = window.open(blobUrl, "_blank");
           if (!printWin) {
-            toast.error("Popup blocked! Please allow popups to print.");
+            window.location.href = blobUrl;
+          } else {
+            toast.success("Bill opened for printing");
           }
         }
-      }, 300);
+      }, 350);
     } catch (err) {
       toast.dismiss(toastId);
       const printWin = window.open(blobUrl, "_blank");
       if (!printWin) {
-        toast.error("Popup blocked! Please allow popups to print.");
+        window.location.href = blobUrl;
+      } else {
+        toast.success("Bill opened for printing");
       }
     }
   } catch (error) {
