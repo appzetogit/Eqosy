@@ -97,6 +97,8 @@ const AppRoutes = () => {
         currentPath === '/login' ||
         currentPath.includes('/auth/') ||
         currentPath.includes('/login') ||
+        currentPath.includes('/onboarding') ||
+        currentPath.includes('/pending-verification') ||
         currentPath === '/terms' ||
         currentPath === '/privacy' ||
         currentPath === '/refund' ||

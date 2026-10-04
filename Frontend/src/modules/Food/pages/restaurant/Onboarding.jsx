@@ -21,7 +21,7 @@ import { determineStepToShow } from "@food/utils/onboardingUtils"
 import { toast } from "sonner"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
-import { clearModuleAuth, clearAuthData } from "@food/utils/auth"
+import { clearModuleAuth, clearAuthData, getModuleToken } from "@food/utils/auth"
 import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -1017,6 +1017,10 @@ export default function RestaurantOnboarding() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const token = getModuleToken("restaurant")
+      if (!token) {
+        return
+      }
       try {
         setLoading(true)
         // Use restaurantAPI.getCurrentRestaurant() to fetch real data

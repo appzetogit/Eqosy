@@ -255,6 +255,8 @@ apiClient.interceptors.response.use(
       reqUrl.includes("/send-otp") ||
       reqUrl.includes("/signup") ||
       reqUrl.includes("/register") ||
+      reqUrl.includes("/onboarding") ||
+      reqUrl.includes("/pending-verification") ||
       reqUrl.includes("/forgot-password") ||
       reqUrl.includes("/pages-content") ||
       reqUrl.includes("/config/") ||
