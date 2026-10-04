@@ -282,6 +282,12 @@ const AdminFareConfig = lazy(() => import('./modules/admin/pages/finance/FareCon
 const AdminSafetyCenter = lazy(() => import('./modules/admin/pages/safety/SafetyCenter'));
 const AdminCMSBuilder = lazy(() => import('./modules/admin/pages/cms/CMSBuilder'));
 const AdminHeaderFooter = lazy(() => import('./modules/admin/pages/cms/HeaderFooter'));
+const AdminCMSHome = lazy(() => import('./modules/admin/pages/cms/CMSHome'));
+const AdminCMSAbout = lazy(() => import('./modules/admin/pages/cms/CMSAbout'));
+const AdminCMSDriver = lazy(() => import('./modules/admin/pages/cms/CMSDriver'));
+const AdminCMSUser = lazy(() => import('./modules/admin/pages/cms/CMSUser'));
+const AdminCMSContact = lazy(() => import('./modules/admin/pages/cms/CMSContact'));
+const AdminCMSLegal = lazy(() => import('./modules/admin/pages/cms/CMSLegal'));
 const AdminGlobalSettings = lazy(() => import('./modules/admin/pages/settings/GlobalSettings'));
 const AdminGeneralSettings = lazy(() => import('./modules/admin/pages/settings/GeneralSettings'));
 const AdminCustomizationSettings = lazy(() => import('./modules/admin/pages/settings/CustomizationSettings'));
@@ -1580,6 +1586,30 @@ function TaxiApp() {
                 <Route
                   path="settings/cms/header-footer"
                   element={<AdminHeaderFooter />}
+                />
+                <Route
+                  path="settings/cms/home"
+                  element={<AdminCMSHome />}
+                />
+                <Route
+                  path="settings/cms/about"
+                  element={<AdminCMSAbout />}
+                />
+                <Route
+                  path="settings/cms/driver"
+                  element={<AdminCMSDriver />}
+                />
+                <Route
+                  path="settings/cms/user"
+                  element={<AdminCMSUser />}
+                />
+                <Route
+                  path="settings/cms/contact"
+                  element={<AdminCMSContact />}
+                />
+                <Route
+                  path="settings/cms/legal"
+                  element={<AdminCMSLegal />}
                 />
                 <Route
                   path="support/ticket-title"

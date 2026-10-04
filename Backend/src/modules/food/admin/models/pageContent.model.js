@@ -53,11 +53,13 @@ const pageContentSchema = new mongoose.Schema(
                 'refund',
                 'shipping',
                 'cancellation',
-                'about'
+                'about',
+                'home'
             ]
         },
         legal: { type: legalPageSchema, default: undefined },
         about: { type: aboutPageSchema, default: undefined },
+        home: { type: mongoose.Schema.Types.Mixed, default: undefined },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
         updatedByRole: { type: String, default: 'ADMIN' }
     },

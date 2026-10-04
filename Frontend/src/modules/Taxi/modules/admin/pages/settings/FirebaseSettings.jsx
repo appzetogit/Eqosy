@@ -105,7 +105,7 @@ const FirebaseSettings = () => {
           </div>
 
           <div className="p-8 space-y-8">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 <div className="md:col-span-2">
                    <label className={labelClass}>Firebase Database URL</label>
@@ -114,7 +114,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_database_url || ''}
                     onChange={(e) => updateField('firebase_database_url', e.target.value)}
                     placeholder="https://your-project.firebaseio.com"
-                    required
                    />
                 </div>
 
@@ -126,7 +125,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_api_key || ''}
                     onChange={(e) => updateField('firebase_api_key', e.target.value)}
                     placeholder="***********************************"
-                    required
                    />
                 </div>
 
@@ -137,7 +135,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_auth_domain || ''}
                     onChange={(e) => updateField('firebase_auth_domain', e.target.value)}
                     placeholder="your-project.firebaseapp.com"
-                    required
                    />
                 </div>
 
@@ -148,7 +145,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_project_id || ''}
                     onChange={(e) => updateField('firebase_project_id', e.target.value)}
                     placeholder="your-project-id"
-                    required
                    />
                 </div>
 
@@ -159,7 +155,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_storage_bucket || ''}
                     onChange={(e) => updateField('firebase_storage_bucket', e.target.value)}
                     placeholder="your-project.appspot.com"
-                    required
                    />
                 </div>
 
@@ -170,7 +165,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_messaging_sender_id || ''}
                     onChange={(e) => updateField('firebase_messaging_sender_id', e.target.value)}
                     placeholder="xxxxxxxxxxxx"
-                    required
                    />
                 </div>
 
@@ -181,7 +175,6 @@ const FirebaseSettings = () => {
                     value={settings.firebase_app_id || ''}
                     onChange={(e) => updateField('firebase_app_id', e.target.value)}
                     placeholder="1:xxxxxxxxx:web:xxxxxxxxxxxx"
-                    required
                    />
                 </div>
 

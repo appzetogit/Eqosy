@@ -1605,7 +1605,7 @@ export default function Under250() {
 
                   {/* Add Item Button */}
                   <Button
-                    className={`flex-1 h-[44px] md:h-[50px] lg:h-[56px] rounded-lg md:rounded-xl font-semibold flex items-center justify-center gap-2 text-sm md:text-base lg:text-lg ${shouldShowGrayscale
+                    className={`flex-1 min-w-0 h-[44px] md:h-[50px] lg:h-[56px] px-3 sm:px-4 rounded-lg md:rounded-xl font-semibold flex items-center justify-between sm:justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm md:text-base lg:text-lg overflow-hidden ${shouldShowGrayscale
                       ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
                       : 'bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white'
                       }`}
@@ -1617,15 +1617,15 @@ export default function Under250() {
                     }}
                     disabled={shouldShowGrayscale}
                   >
-                    <span>Add item</span>
-                    <div className="flex items-center gap-1 md:gap-2">
+                    <span className="whitespace-nowrap shrink-0">Add item</span>
+                    <div className="flex items-center gap-1 md:gap-2 shrink-0 whitespace-nowrap">
                       {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
-                        <span className="text-sm md:text-base lg:text-lg line-through text-red-200">
+                        <span className="text-xs sm:text-sm md:text-base lg:text-lg line-through text-red-200">
                           {RUPEE_SYMBOL}{Math.round(selectedItem.originalPrice)}
                         </span>
                       )}
-                      <span className="text-base md:text-lg lg:text-xl font-bold">
-                        {RUPEE_SYMBOL}{Math.round(selectedItem.price)}
+                      <span className="text-sm sm:text-base md:text-lg lg:text-xl font-bold">
+                        {RUPEE_SYMBOL}{Math.round(selectedItem.price * itemDetailQuantity)}
                       </span>
                     </div>
                   </Button>

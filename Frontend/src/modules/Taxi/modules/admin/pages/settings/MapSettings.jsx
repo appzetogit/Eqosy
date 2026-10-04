@@ -21,7 +21,11 @@ const MapSettings = () => {
     try {
       setLoading(true);
       const res = await adminService.getMapSettings();
-      setSettings(res.data?.settings || {});
+      const loaded = res.data?.settings || {};
+      if (!loaded.map_type) {
+        loaded.map_type = 'google_map';
+      }
+      setSettings(loaded);
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load Map settings');
@@ -66,14 +70,38 @@ const MapSettings = () => {
     { 
       id: 'google_map', 
       name: 'Google Maps', 
-      image: 'https://images.livemint.com/img/2021/11/17/1600x900/Google_Maps_rebranded_logo_1637135111166_1637135111306.jpg',
-      description: 'Satellite imagery, 360° panoramic views.'
+      description: 'Satellite imagery, 360° panoramic views.',
+      renderIcon: () => (
+        <div className="flex flex-col items-center justify-center space-y-2 py-2">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-500 via-green-500 to-yellow-400 p-0.5 shadow-sm">
+            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center">
+              <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" fill="#EA4335" />
+                <circle cx="12" cy="9" r="2.5" fill="#4285F4" />
+              </svg>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-gray-600 tracking-wider uppercase">Google Maps API</span>
+        </div>
+      )
     },
     { 
       id: 'open_street', 
       name: 'Open Street Map', 
-      image: 'https://upload.wikimedia.org/wikipedia/commons/b/b0/OpenStreetMap_logo.svg',
-      description: 'Free, open source wiki world map.'
+      description: 'Free, open source wiki world map.',
+      renderIcon: () => (
+        <div className="flex flex-col items-center justify-center space-y-2 py-2">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 shadow-sm">
+            <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center">
+              <svg className="w-8 h-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 000 18M12.5 3a17 17 0 010 18" />
+              </svg>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-gray-600 tracking-wider uppercase">OpenStreetMap</span>
+        </div>
+      )
     }
   ];
 
@@ -118,8 +146,8 @@ const MapSettings = () => {
                    onClick={() => updateField('map_type', map.id)}
                    className={`relative border-2 rounded-xl transition-all p-2 group cursor-pointer ${settings.map_type === map.id ? 'border-indigo-600 bg-indigo-50/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}
                 >
-                   <div className="aspect-video bg-gray-50 rounded-lg flex items-center justify-center p-6 overflow-hidden">
-                      <img src={map.image} alt={map.name} className="w-full h-full object-contain transform group-hover:scale-110 transition-transform duration-500" />
+                   <div className="aspect-video bg-gray-50/80 rounded-lg flex items-center justify-center p-6 overflow-hidden">
+                      {map.renderIcon()}
                    </div>
                    <div className="p-4 flex items-center justify-between">
                       <div>

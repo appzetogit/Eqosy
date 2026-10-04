@@ -166,8 +166,19 @@ const SMSGateways = () => {
                     {/* Card Header */}
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white">
                        <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 rounded-xl flex items-center justify-center border border-gray-100 bg-white p-2">
-                             <img src={provider.logo} alt={provider.name} className="w-full h-full object-contain" />
+                          <div className="w-14 h-14 rounded-xl flex items-center justify-center border border-gray-100 bg-white p-2 font-bold text-xs text-gray-700">
+                             <img 
+                               src={provider.logo} 
+                               alt={provider.name} 
+                               className="w-full h-full object-contain" 
+                               onError={(e) => {
+                                 e.target.onerror = null;
+                                 e.target.style.display = 'none';
+                                 if (e.target.parentNode) {
+                                   e.target.parentNode.innerText = provider.name;
+                                 }
+                               }}
+                             />
                           </div>
                           <div>
                              <h3 className="text-sm font-bold text-gray-900 tracking-tight">{provider.name} Integration</h3>

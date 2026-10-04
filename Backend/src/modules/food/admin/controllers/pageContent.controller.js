@@ -4,7 +4,8 @@ import {
     getPublicPageByKey,
     getAdminPageByKey,
     upsertLegalPage,
-    upsertAboutPage
+    upsertAboutPage,
+    upsertHomePage
 } from '../services/pageContent.service.js';
 
 const parseKeyFromParam = (req) => String(req.params?.key || '').trim().toLowerCase();
@@ -50,6 +51,10 @@ export const upsertAdminPageController = async (req, res, next) => {
         const key = parseKeyFromParam(req);
         const updatedBy = req.user?.userId || null;
 
+        if (key === 'home') {
+            const result = await upsertHomePage(req.body ?? {}, updatedBy);
+            return sendResponse(res, 200, 'Page updated successfully', result.data);
+        }
         if (key === 'about') {
             const result = await upsertAboutPage(req.body ?? {}, updatedBy);
             return sendResponse(res, 200, 'Page updated successfully', result.data);

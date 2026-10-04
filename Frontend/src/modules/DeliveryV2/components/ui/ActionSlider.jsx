@@ -72,10 +72,10 @@ export const ActionSlider = ({
       }`}
     >
       {/* Background Track */}
-      <div className={`absolute inset-y-0 left-[76px] right-5 flex items-center justify-center text-center font-bold text-[11px] uppercase tracking-[0.14em] leading-none whitespace-nowrap transition-opacity duration-300 ${
-        isSuccess ? 'opacity-0' : disabled ? 'text-white/70' : 'text-white/88'
+      <div className={`absolute inset-y-0 left-[68px] right-3 flex items-center justify-center text-center font-bold text-[10px] sm:text-[11px] uppercase tracking-wider leading-none overflow-hidden transition-opacity duration-300 pointer-events-none ${
+        isSuccess ? 'opacity-0' : disabled ? 'text-white/70' : 'text-white/90'
       }`}>
-        {displayLabel}
+        <span className="truncate px-1">{displayLabel}</span>
       </div>
 
       {/* Dynamic Progress Fill */}

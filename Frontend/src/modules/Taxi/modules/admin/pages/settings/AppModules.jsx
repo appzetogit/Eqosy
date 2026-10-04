@@ -383,8 +383,19 @@ const AppModules = ({ mode: propMode }) => {
                               <span className="text-[14px] font-medium text-slate-600 capitalize">{m.transport_type || 'Taxi'}</span>
                             </td>
                             <td className="px-6 py-5">
-                              <div className="w-10 h-10 rounded bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden">
-                                <img src={m.mobile_menu_icon || 'https://via.placeholder.com/40'} className="w-full h-full object-contain" alt="" />
+                              <div className="w-10 h-10 rounded bg-indigo-50/60 border border-indigo-100 flex items-center justify-center overflow-hidden font-bold text-xs text-indigo-600">
+                                {m.mobile_menu_icon ? (
+                                  <img 
+                                    src={m.mobile_menu_icon} 
+                                    className="w-full h-full object-contain" 
+                                    alt={m.name || ''} 
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <span>{m.name?.substring(0, 2).toUpperCase() || 'MOD'}</span>
+                                )}
                               </div>
                             </td>
                             <td className="px-6 py-5">

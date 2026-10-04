@@ -287,13 +287,15 @@ const buildMessagePayload = (payload = {}, token) => {
 
     const targetLink = data.link || payload.link || data.targetUrl || data.url;
     const ring = isRingEvent(payload);
+    const dataType = String(data.type || payload.type || data.chatType || payload.chatType || '').toLowerCase();
+    const isChat = dataType.includes('chat') || data.openChat === 'true' || Boolean(data.conversationId);
 
     message.android = {
         priority: 'high',
         notification: {
-            channel_id: ring ? 'default' : 'silent_channel',
-            ...(ring ? { sound: payload.sound || 'default' } : {}),
-            default_vibrate_timings: ring,
+            channel_id: isChat ? 'chat_messages' : (ring ? 'default' : 'silent_channel'),
+            ...(ring ? { sound: payload.sound || 'default' } : (isChat ? { sound: 'default' } : {})),
+            default_vibrate_timings: ring || isChat,
             default_light_settings: true,
             ...(targetLink ? { click_action: targetLink } : {})
         }

@@ -396,7 +396,7 @@ export const PickupActionModal = ({
                 label="Slide to Reach" 
                 disabledLabel={
                   distanceToTarget && distanceToTarget !== Infinity
-                    ? `Too Far from Restaurant (${(distanceToTarget / 1000).toFixed(1)} km)`
+                    ? `Far from Restaurant (${(distanceToTarget / 1000).toFixed(1)} km)`
                     : 'Get closer to restaurant'
                 }
                 successLabel="Reached!"

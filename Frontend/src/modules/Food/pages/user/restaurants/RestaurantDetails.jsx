@@ -3565,10 +3565,10 @@ function RestaurantDetailsContent() {
                   </div>
 
                   {/* Bottom Action Bar */}
-                  <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
-                    <div className="flex items-center gap-4">
+                  <div className="border-t border-gray-200 dark:border-gray-800 px-3 sm:px-4 py-3 sm:py-4 bg-white dark:bg-[#1a1a1a]">
+                    <div className="flex items-center gap-2 sm:gap-4">
                       {/* Quantity Selector */}
-                      <div className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
+                      <div className={`flex items-center gap-2 sm:gap-3 border-2 rounded-lg px-2 sm:px-3 h-[44px] shrink-0 bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
                         ? 'border-gray-300 dark:border-gray-700 opacity-50'
                         : 'border-gray-300 dark:border-gray-700'
                         }`}>
@@ -3589,9 +3589,9 @@ function RestaurantDetailsContent() {
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
                             }`}
                         >
-                          <Minus className="h-5 w-5" />
+                          <Minus className="h-4 w-4 sm:h-5 sm:w-5" />
                         </button>
-                        <span className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
+                        <span className={`text-base sm:text-lg font-semibold min-w-[1.5rem] sm:min-w-[2rem] text-center ${shouldShowGrayscale
                           ? 'text-gray-400 dark:text-gray-600'
                           : 'text-gray-900 dark:text-white'
                           }`}>
@@ -3614,13 +3614,13 @@ function RestaurantDetailsContent() {
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                           }
                         >
-                          <Plus className="h-5 w-5" />
+                          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                         </button>
                       </div>
 
                       {/* Add Item Button */}
                       <Button
-                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
+                        className={`flex-1 min-w-0 h-[44px] px-2.5 sm:px-4 rounded-lg font-semibold flex items-center justify-between sm:justify-center gap-1.5 overflow-hidden ${shouldShowGrayscale
                           ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
                           : 'bg-red-500 hover:bg-red-600 text-white'
                           }`}
@@ -3640,17 +3640,25 @@ function RestaurantDetailsContent() {
                         }}
                         disabled={shouldShowGrayscale}
                       >
-                        <span>{getDishQuantity(selectedItem, selectedVariantId) > 0 ? 'Done' : 'Add item'}</span>
-                        <div className="flex items-center gap-1">
+                        <span className="whitespace-nowrap shrink-0 text-xs sm:text-sm font-medium">
+                          {getDishQuantity(selectedItem, selectedVariantId) > 0 ? 'Done' : 'Add item'}
+                        </span>
+                        <div className="flex items-center gap-1 min-w-0 overflow-hidden text-xs sm:text-sm">
+                          {hasFoodVariants(selectedItem) ? (
+                            <>
+                              <span className="truncate min-w-0 max-w-[80px] xs:max-w-[120px] sm:max-w-none">
+                                {getVariantForDish(selectedItem, selectedVariantId)?.name || "Default"}
+                              </span>
+                              <span className="shrink-0">·</span>
+                            </>
+                          ) : null}
                           {selectedItem.originalPrice && selectedItem.originalPrice > selectedItem.price && (
-                            <span className="text-sm line-through text-red-200">
+                            <span className="text-xs line-through text-red-200 shrink-0 whitespace-nowrap">
                               {RUPEE_SYMBOL}{Math.round(selectedItem.originalPrice)}
                             </span>
                           )}
-                          <span className="text-base font-bold">
-                            {hasFoodVariants(selectedItem)
-                              ? `${getVariantForDish(selectedItem, selectedVariantId)?.name || "Default"} · ${RUPEE_SYMBOL}${Math.round(getVariantForDish(selectedItem, selectedVariantId)?.price || selectedItem.price) * (getDishQuantity(selectedItem, selectedVariantId) || 1)}`
-                              : `${RUPEE_SYMBOL}${Math.round(selectedItem.price) * (getDishQuantity(selectedItem, selectedVariantId) || 1)}`}
+                          <span className="font-bold shrink-0 whitespace-nowrap">
+                            {RUPEE_SYMBOL}{Math.round((hasFoodVariants(selectedItem) ? getVariantForDish(selectedItem, selectedVariantId)?.price || selectedItem.price : selectedItem.price) * (getDishQuantity(selectedItem, selectedVariantId) || 1))}
                           </span>
                         </div>
                       </Button>

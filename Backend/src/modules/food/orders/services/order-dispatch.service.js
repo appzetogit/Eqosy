@@ -499,15 +499,20 @@ export async function tryAutoAssign(orderId, options = {}) {
 
     // Pick the SINGLE CLOSEST delivery partner from eligible
     const targetPartner = eligible[0];
-    logger.info(`tryAutoAssign: Offering order ${order._id} to CLOSEST partner ${targetPartner.partnerId} (${targetPartner.distanceKm} km).`);
+    const roundedDistanceKm = Number.isFinite(Number(targetPartner.distanceKm))
+      ? Math.round(Number(targetPartner.distanceKm) * 10) / 10
+      : 0;
+    const formattedDistanceKmStr = roundedDistanceKm.toFixed(1);
+
+    logger.info(`tryAutoAssign: Offering order ${order._id} to CLOSEST partner ${targetPartner.partnerId} (${formattedDistanceKmStr} km).`);
 
     const io = getIO();
     const payload = buildDeliverySocketPayload(order, order.restaurantId);
 
     if (io) {
       const roomName = rooms.delivery(targetPartner.partnerId);
-      io.to(roomName).emit('new_order', { ...payload, pickupDistanceKm: targetPartner.distanceKm, forceAlert: true });
-      io.to(roomName).emit('play_notification_sound', { ...payload, pickupDistanceKm: targetPartner.distanceKm });
+      io.to(roomName).emit('new_order', { ...payload, pickupDistanceKm: roundedDistanceKm, forceAlert: true });
+      io.to(roomName).emit('play_notification_sound', { ...payload, pickupDistanceKm: roundedDistanceKm });
     }
 
     try {
@@ -515,7 +520,7 @@ export async function tryAutoAssign(orderId, options = {}) {
         [{ ownerType: 'DELIVERY_PARTNER', ownerId: targetPartner.partnerId }],
         {
           title: 'New order request! 🛵',
-          body: `Order #${order.order_id || order._id} is nearby (${targetPartner.distanceKm || 0} km). Accept now!`,
+          body: `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). Accept now!`,
           data: {
             type: 'new_order',
             orderId: order._id.toString(),

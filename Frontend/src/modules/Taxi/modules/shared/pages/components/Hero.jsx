@@ -194,15 +194,40 @@ export default function Hero() {
   };
 
   const [heroVideoSrc, setHeroVideoSrc] = useState(heroPromoVideo);
+  const [cmsHome, setCmsHome] = useState({
+    eyebrowBadge: "INDIA'S #1 UNIFIED SUPER APP",
+    heroTitle: "Move, Eat & Shop in One Unified App.",
+    heroSubtitle: "Fast food delivery, instant rides, 15-min groceries and express parcels — seamlessly connected in one app."
+  });
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("eqosy_landing_page_settings");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.hero_video) setHeroVideoSrc(parsed.hero_video);
-      }
-    } catch {}
+    let active = true;
+    const fetchCmsHome = async () => {
+      try {
+        const res = await fetch('/api/v1/food/pages/home');
+        const data = await res.json();
+        if (active && data?.success && data?.data) {
+          const payload = data.data;
+          setCmsHome(prev => ({
+            ...prev,
+            eyebrowBadge: payload.eyebrowBadge || prev.eyebrowBadge,
+            heroTitle: payload.heroTitle || prev.heroTitle,
+            heroSubtitle: payload.heroSubtitle || prev.heroSubtitle
+          }));
+          return;
+        }
+      } catch (_) {}
+
+      try {
+        const stored = localStorage.getItem("cms_home_settings");
+        if (stored && active) {
+          const parsed = JSON.parse(stored);
+          setCmsHome(prev => ({ ...prev, ...parsed }));
+        }
+      } catch (_) {}
+    };
+    fetchCmsHome();
+    return () => { active = false; };
   }, []);
 
   return (
@@ -284,7 +309,7 @@ export default function Hero() {
               className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-[#E5E7EB] bg-white px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider shadow-xs text-[#172033] w-max max-w-full truncate mb-2.5 sm:mb-3.5"
             >
               <span className="size-2 rounded-full bg-[#FF641F] animate-pulse shrink-0" />
-              <span className="truncate">INDIA'S #1 UNIFIED SUPER APP</span>
+              <span className="truncate">{cmsHome.eyebrowBadge || "INDIA'S #1 UNIFIED SUPER APP"}</span>
               <span className="text-[#D1D5DB]">•</span>
               <span className="text-[#667085] font-bold lowercase shrink-0">live 24/7</span>
             </motion.div>
@@ -296,12 +321,7 @@ export default function Hero() {
               transition={{ duration: 0.45, delay: 0.1, ease: "easeOut" }}
               className="font-display text-[26px] xs:text-3xl sm:text-4xl lg:text-[52px] font-black tracking-tight text-[#172033] leading-[1.12] max-w-full break-words"
             >
-              <span>Move, Eat & Shop </span>
-              <br className="hidden sm:inline" />
-              <span>in </span>
-              <span className="bg-gradient-to-r from-[#FF641F] via-[#377CF6] to-[#16B981] bg-clip-text text-transparent">
-                One Unified App.
-              </span>
+              <span>{cmsHome.heroTitle || "Move, Eat & Shop in One Unified App."}</span>
             </motion.h1>
 
             {/* Supporting Description */}
@@ -311,7 +331,7 @@ export default function Hero() {
               transition={{ duration: 0.4, delay: 0.2 }}
               className="mt-2 sm:mt-3 text-xs sm:text-base text-[#667085] font-medium leading-relaxed max-w-full"
             >
-              Fast food delivery, instant rides, 15-min groceries and express parcels — seamlessly connected in one app.
+              {cmsHome.heroSubtitle || "Fast food delivery, instant rides, 15-min groceries and express parcels — seamlessly connected in one app."}
             </motion.p>
 
             {/* =========================================================================

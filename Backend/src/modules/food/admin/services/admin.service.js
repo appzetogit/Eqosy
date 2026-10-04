@@ -624,7 +624,7 @@ export async function getDashboardStats(query = {}, adminContext = null) {
         FoodDeliveryPartner.countDocuments({ status: 'pending' }),
         FoodItem.countDocuments({ approvalStatus: 'approved', ...zoneScopedRestaurantMatch }),
         FoodAddon.countDocuments({ approvalStatus: 'approved', isDeleted: { $ne: true }, ...zoneScopedRestaurantMatch }),
-        zoneId
+        zoneObjectIdsToFilter
             ? FoodOrder.distinct('userId', { ...orderMatch, userId: { $ne: null } }).then((ids) => ids.length)
             : FoodUser.countDocuments({}),
         FoodRestaurant.find({ ...restaurantMatch, status: 'pending' }).sort({ createdAt: -1 }).limit(5).select('restaurantName createdAt').lean(),
@@ -638,7 +638,7 @@ export async function getDashboardStats(query = {}, adminContext = null) {
             ...orderMatch,
             orderStatus: { $in: CANCELLED_ORDER_STATUSES },
         }).sort({ updatedAt: -1 }).limit(5).select('orderId updatedAt').lean(),
-        zoneId
+        zoneObjectIdsToFilter
             ? FoodOrder.aggregate([
                 { $match: { ...orderMatch, userId: { $ne: null } } },
                 { $sort: { createdAt: -1 } },

@@ -706,6 +706,7 @@ const VehicleType = ({ mode: propMode }) => {
               onChange={(e) => {
                 const nextTransportType = e.target.value;
                 updateForm('transport_type', nextTransportType);
+                updateForm('is_taxi', nextTransportType);
                 if (!['delivery', 'both'].includes(normalizeTransportType(nextTransportType))) {
                   updateForm('delivery_category', '');
                   updateForm('delivery_distance_pricing', normalizeDeliveryDistancePricing());
@@ -922,7 +923,12 @@ const VehicleType = ({ mode: propMode }) => {
               </div>
             </div>
             <div className="mt-4 rounded-[24px] border border-orange-100 bg-gradient-to-r from-white via-orange-50/30 to-white p-3 shadow-sm">
-              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">User Card Preview</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">User Card Preview</p>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {formData.delivery_distance_pricing?.enabled ? 'Distance Base Fare Enabled' : 'Pricing via Set Price'}
+                </span>
+              </div>
               <div className="flex items-center gap-3 rounded-[20px] border border-orange-400 bg-white px-3 py-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100">
                   <img
@@ -938,7 +944,16 @@ const VehicleType = ({ mode: propMode }) => {
                   </div>
                   <p className="truncate text-[11px] font-bold text-slate-500">{formData.short_description || formData.description || 'Closest driver 940 m away'}</p>
                 </div>
-                <p className="text-sm font-black text-slate-900">₹31</p>
+                <div className="text-right">
+                  <p className="text-sm font-black text-slate-900">
+                    {formData.delivery_distance_pricing?.enabled 
+                      ? `₹${formData.delivery_distance_pricing?.base_price || 0}`
+                      : 'Zone Rate'}
+                  </p>
+                  <p className="text-[9px] font-medium text-slate-400">
+                    {formData.delivery_distance_pricing?.enabled ? 'Base Charge' : 'Set Price'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -1029,12 +1044,15 @@ const VehicleType = ({ mode: propMode }) => {
 
           <div>
             <label className={labelClass}>Operational Scope *</label>
-            <select value={formData.is_taxi} onChange={(e) => updateForm('is_taxi', e.target.value)} className={inputClass}>
+            <select value={formData.is_taxi || formData.transport_type} onChange={(e) => updateForm('is_taxi', e.target.value)} className={inputClass}>
               <option value="">Select Scope</option>
               {transportTypeOptions.map((t) => (
                 <option key={t.id || t._id || t.name} value={t.name}>{t.display_name}</option>
               ))}
             </select>
+            <p className="mt-1.5 text-xs text-slate-500">
+              Defines vehicle operational fleet scope (Passenger Ride, Parcel Delivery, or Both). Auto-synced with Transport Type.
+            </p>
           </div>
 
           <div className="lg:col-span-2">

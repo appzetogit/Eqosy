@@ -135,7 +135,6 @@ const MailSettings = () => {
                     value={settings.mail_driver || ''}
                     onChange={(e) => updateField('mail_driver', e.target.value)}
                     placeholder="smtp"
-                    required
                    />
                 </div>
 
@@ -146,7 +145,6 @@ const MailSettings = () => {
                     value={settings.mail_host || ''}
                     onChange={(e) => updateField('mail_host', e.target.value)}
                     placeholder="smtp.gmail.com"
-                    required
                    />
                 </div>
 
@@ -157,7 +155,6 @@ const MailSettings = () => {
                     value={settings.mail_port || ''}
                     onChange={(e) => updateField('mail_port', e.target.value)}
                     placeholder="587"
-                    required
                    />
                 </div>
 
@@ -167,7 +164,6 @@ const MailSettings = () => {
                     className={inputClass}
                     value={settings.mail_encryption || ''}
                     onChange={(e) => updateField('mail_encryption', e.target.value)}
-                    required
                    >
                      <option value="">Select Encryption</option>
                      <option value="tls">TLS</option>
@@ -182,7 +178,6 @@ const MailSettings = () => {
                     value={settings.mail_username || ''}
                     onChange={(e) => updateField('mail_username', e.target.value)}
                     placeholder="username@domain.com"
-                    required
                    />
                 </div>
 
@@ -195,7 +190,6 @@ const MailSettings = () => {
                         value={settings.mail_password || ''}
                         onChange={(e) => updateField('mail_password', e.target.value)}
                         placeholder="**********************"
-                        required
                       />
                       <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
                    </div>
@@ -212,7 +206,6 @@ const MailSettings = () => {
                           value={settings.mail_from_address || ''}
                           onChange={(e) => updateField('mail_from_address', e.target.value)}
                           placeholder={`noreply@${mailPlaceholderDomain}.com`}
-                          required
                          />
                       </div>
                       <div>
@@ -222,7 +215,6 @@ const MailSettings = () => {
                           value={settings.mail_from_name || ''}
                           onChange={(e) => updateField('mail_from_name', e.target.value)}
                           placeholder={`${appName} Admin`}
-                          required
                          />
                       </div>
                    </div>

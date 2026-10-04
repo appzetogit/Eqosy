@@ -78,7 +78,29 @@ const DEFAULT_PAGES = {
     },
     refund: { title: 'Refund Policy', content: '' },
     shipping: { title: 'Shipping Policy', content: '' },
-    cancellation: { title: 'Cancellation Policy', content: 'A cancellation charge will apply as per configured rules once order is confirmed.' }
+    cancellation: { title: 'Cancellation Policy', content: 'A cancellation charge will apply as per configured rules once order is confirmed.' },
+    home: {
+        eyebrowBadge: "INDIA'S #1 UNIFIED SUPER APP",
+        heroTitle: "Move, Eat & Shop in One Unified App.",
+        heroSubtitle: "Fast food delivery, instant rides, 15-min groceries and express parcels — seamlessly connected in one app.",
+        ctaPrimaryText: "Book Ride Now",
+        ctaSecondaryText: "Become a Driver",
+        heroImage: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=1000",
+        appStoreUrl: "https://apple.com",
+        playStoreUrl: "https://play.google.com",
+        stats: [
+            { label: "Total Rides", value: "1M+" },
+            { label: "Active Drivers", value: "50K+" },
+            { label: "Cities Covered", value: "100+" },
+            { label: "Rating", value: "4.9/5" }
+        ],
+        features: [
+            { id: 1, title: "Food", desc: "Gourmet Meals & Street Food", icon: "🍔" },
+            { id: 2, title: "Rides", desc: "City Cabs & Ride Pooling", icon: "🚕" },
+            { id: 3, title: "Grocery", desc: "Daily Essentials & Fresh Farm", icon: "🛒" },
+            { id: 4, title: "Parcel", desc: "Express Citywide Couriers", icon: "📦" }
+        ]
+    }
 };
 
 export const getPublicPageByKey = async (key) => {
@@ -88,9 +110,13 @@ export const getPublicPageByKey = async (key) => {
         if (k === 'about') {
             return { key: k, data: { appName: 'Eqosy', version: '1.0.0', description: '', logo: '' } };
         }
+        if (k === 'home') {
+            return { key: k, data: DEFAULT_PAGES.home };
+        }
         return { key: k, data: DEFAULT_PAGES[k] || { title: '', content: '' } };
     }
     if (k === 'about') return { key: k, data: normalizeAboutForResponse(doc.about || null) };
+    if (k === 'home') return { key: k, data: doc.home || DEFAULT_PAGES.home };
     const legalData = normalizeLegalForResponse(doc.legal || null);
     if (!legalData || !legalData.content || !legalData.content.trim()) {
         return { key: k, data: DEFAULT_PAGES[k] || legalData || { title: '', content: '' } };
@@ -159,10 +185,29 @@ export const upsertAboutPage = async (payload, updatedBy) => {
                 updatedByRole: 'ADMIN'
             }
         },
-        { upsert: true, new: true }
     ).lean();
 
     return { key: 'about', data: normalizeAboutForResponse(doc?.about || null) };
+};
+
+export const upsertHomePage = async (payload, updatedBy) => {
+    const homeData = payload?.home || payload || {};
+    const doc = await FoodPageContent.findOneAndUpdate(
+        { key: 'home' },
+        {
+            $set: {
+                key: 'home',
+                home: homeData,
+                legal: undefined,
+                about: undefined,
+                updatedBy: updatedBy || null,
+                updatedByRole: 'ADMIN'
+            }
+        },
+        { upsert: true, new: true }
+    ).lean();
+
+    return { key: 'home', data: doc?.home || homeData };
 };
 
 

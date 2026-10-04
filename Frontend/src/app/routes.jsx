@@ -185,8 +185,8 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/food/user" replace />} />
-      <Route path="/landing" element={<Navigate to="/food/user" replace />} />
+      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+      <Route path="/landing" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
       <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />

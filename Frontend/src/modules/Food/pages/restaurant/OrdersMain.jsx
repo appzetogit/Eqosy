@@ -76,129 +76,174 @@ export const printOrderInvoice = (order) => {
     return;
   }
 
-  // Restaurant details from order object or fallbacks
-  const restaurantName =
-    order.restaurantName ||
-    order.restaurant?.name ||
-    order.restaurantId?.name ||
-    localStorage.getItem("restaurant_name") ||
-    localStorage.getItem("restaurantName") ||
-    "Eqosy Demo Restaurant";
+  // Show loading toast immediately so the user knows bill generation is in progress
+  const toastId = toast.loading("Preparing Bill & Invoice...");
 
-  let restaurantAddress = "";
-  const rAddr =
-    order.restaurantAddress ||
-    order.restaurant?.location?.formattedAddress ||
-    order.restaurant?.address ||
-    order.restaurantId?.location?.formattedAddress ||
-    order.restaurantId?.address ||
-    localStorage.getItem("restaurant_address") ||
-    localStorage.getItem("restaurantAddress") ||
-    "";
+  try {
+    // Restaurant details from order object or fallbacks
+    const restaurantName =
+      order.restaurantName ||
+      order.restaurant?.name ||
+      order.restaurantId?.name ||
+      localStorage.getItem("restaurant_name") ||
+      localStorage.getItem("restaurantName") ||
+      "Eqosy Restaurant";
 
-  if (typeof rAddr === "string") {
-    restaurantAddress = rAddr;
-  } else if (rAddr && typeof rAddr === "object") {
-    restaurantAddress = [
-      rAddr.addressLine1 || rAddr.street || rAddr.address,
-      rAddr.area,
-      rAddr.city,
-      rAddr.state
-    ].filter(Boolean).join(", ") || rAddr.formattedAddress || "";
-  }
+    let restaurantAddress = "";
+    const rAddr =
+      order.restaurantAddress ||
+      order.restaurant?.location?.formattedAddress ||
+      order.restaurant?.address ||
+      order.restaurantId?.location?.formattedAddress ||
+      order.restaurantId?.address ||
+      localStorage.getItem("restaurant_address") ||
+      localStorage.getItem("restaurantAddress") ||
+      "";
 
-  const restaurantPhone =
-    order.restaurantPhone ||
-    order.restaurant?.phone ||
-    order.restaurant?.contactNumber ||
-    order.restaurantId?.phone ||
-    "";
+    if (typeof rAddr === "string") {
+      restaurantAddress = rAddr;
+    } else if (rAddr && typeof rAddr === "object") {
+      restaurantAddress = [
+        rAddr.addressLine1 || rAddr.street || rAddr.address,
+        rAddr.area,
+        rAddr.city,
+        rAddr.state
+      ].filter(Boolean).join(", ") || rAddr.formattedAddress || "";
+    }
 
-  // Customer details
-  const customerName = order.customerName || order.userId?.name || order.user?.name || "Customer";
+    const restaurantPhone =
+      order.restaurantPhone ||
+      order.restaurant?.phone ||
+      order.restaurant?.contactNumber ||
+      order.restaurantId?.phone ||
+      "";
 
-  let customerAddress = "";
-  const cAddr = order.customerAddress || order.deliveryAddress || order.address;
-  if (typeof cAddr === "string") {
-    customerAddress = cAddr;
-  } else if (cAddr && typeof cAddr === "object") {
-    customerAddress = [
-      cAddr.street || cAddr.streetAddress || cAddr.houseNo || cAddr.flatNo,
-      cAddr.area || cAddr.landmark,
-      cAddr.city,
-      cAddr.state,
-      cAddr.pincode || cAddr.zipCode,
-      cAddr.formattedAddress
-    ].filter(Boolean).join(", ");
-  }
+    // Customer details
+    const customerName = order.customerName || order.userId?.name || order.user?.name || "Customer";
 
-  const customerPhone = order.customerPhone || order.userId?.phone || order.user?.phone || order.phone || "";
+    let customerAddress = "";
+    const cAddr = order.customerAddress || order.deliveryAddress || order.address;
+    if (typeof cAddr === "string") {
+      customerAddress = cAddr;
+    } else if (cAddr && typeof cAddr === "object") {
+      customerAddress = [
+        cAddr.street || cAddr.streetAddress || cAddr.houseNo || cAddr.flatNo,
+        cAddr.area || cAddr.landmark,
+        cAddr.city,
+        cAddr.state,
+        cAddr.pincode || cAddr.zipCode,
+        cAddr.formattedAddress
+      ].filter(Boolean).join(", ");
+    }
 
-  const orderId = order.orderId || order._id || "N/A";
-  const orderDate = order.createdAt
-    ? new Date(order.createdAt).toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    })
-    : new Date().toLocaleString("en-IN");
+    const customerPhone = order.customerPhone || order.userId?.phone || order.user?.phone || order.phone || "";
 
-  const items = Array.isArray(order.items) ? order.items : [];
-  let foodTotal = 0;
+    const orderId = order.orderId || order._id || "N/A";
+    const orderDate = order.createdAt
+      ? new Date(order.createdAt).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      })
+      : new Date().toLocaleString("en-IN");
 
-  const itemRows = items.map((item) => {
-    const qty = item.quantity || item.qty || 1;
-    const price = isNaN(Number(item.price)) ? 0 : Number(item.price || 0);
-    const lineTotal = price * qty;
-    foodTotal += lineTotal;
+    const items = Array.isArray(order.items) ? order.items : [];
+    let foodTotal = 0;
 
-    const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
-    const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
+    const itemRows = items.map((item) => {
+      const qty = item.quantity || item.qty || 1;
+      const price = isNaN(Number(item.price)) ? 0 : Number(item.price || 0);
+      const lineTotal = price * qty;
+      foodTotal += lineTotal;
 
-    return `
-      <tr style="border-bottom: 1px dashed #cccccc;">
-        <td style="padding: 7px 4px; text-align: left; font-size: 13px; color: #000000;">
-          <div style="font-weight: 700;">${nameWithVariant}</div>
-          ${item.notes ? `<div style="font-size: 10px; color: #444444; font-style: italic;">Note: ${item.notes}</div>` : ''}
-          ${Array.isArray(item.addons) && item.addons.length > 0 ? `
-            <div style="font-size: 10px; color: #444444;">
-              Addons: ${item.addons.map(a => a.name || a.title || a).join(', ')}
-            </div>
-          ` : ''}
-        </td>
-        <td style="padding: 7px 4px; text-align: center; font-size: 13px; font-weight: 800; color: #000000;">${qty}</td>
-        <td style="padding: 7px 4px; text-align: right; font-size: 13px; color: #000000;">₹${price.toFixed(2)}</td>
-        <td style="padding: 7px 4px; text-align: right; font-size: 13px; font-weight: 800; color: #000000;">₹${lineTotal.toFixed(2)}</td>
-      </tr>
-    `;
-  }).join('');
+      const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
+      const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
 
-  const packaging = isNaN(Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges)) ? 0 : Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
-  const rawTotal = order.total || order.pricing?.total || (foodTotal + packaging);
-  const grandTotal = isNaN(Number(rawTotal)) ? (foodTotal + packaging) : Number(rawTotal);
+      return `
+        <tr style="border-bottom: 1px dashed #cccccc;">
+          <td style="padding: 7px 4px; text-align: left; font-size: 13px; color: #000000;">
+            <div style="font-weight: 700;">${nameWithVariant}</div>
+            ${item.notes ? `<div style="font-size: 10px; color: #444444; font-style: italic;">Note: ${item.notes}</div>` : ''}
+            ${Array.isArray(item.addons) && item.addons.length > 0 ? `
+              <div style="font-size: 10px; color: #444444;">
+                Addons: ${item.addons.map(a => a.name || a.title || a).join(', ')}
+              </div>
+            ` : ''}
+          </td>
+          <td style="padding: 7px 4px; text-align: center; font-size: 13px; font-weight: 800; color: #000000;">${qty}</td>
+          <td style="padding: 7px 4px; text-align: right; font-size: 13px; color: #000000;">₹${price.toFixed(2)}</td>
+          <td style="padding: 7px 4px; text-align: right; font-size: 13px; font-weight: 800; color: #000000;">₹${lineTotal.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
 
-  const htmlContent = `<!DOCTYPE html>
+    const packaging = isNaN(Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges)) ? 0 : Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
+    const rawTotal = order.total || order.pricing?.total || (foodTotal + packaging);
+    const grandTotal = isNaN(Number(rawTotal)) ? (foodTotal + packaging) : Number(rawTotal);
+
+    const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <title>Order Receipt #${orderId}</title>
   <style>
     @media print {
       @page { size: 80mm auto; margin: 3mm; }
-      body { width: 100%; margin: 0; padding: 0; }
+      body { width: 100%; margin: 0; padding: 0; background: #ffffff !important; }
+      .no-print-action-bar { display: none !important; }
     }
     * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      max-width: 380px;
+      max-width: 420px;
       margin: 0 auto;
       padding: 12px;
       color: #000000;
-      background: #ffffff;
+      background: #f8fafc;
       font-size: 12px;
+    }
+    .no-print-action-bar {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .no-print-btn {
+      background: #16a34a;
+      color: #ffffff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .no-print-close-btn {
+      background: #475569;
+      color: #ffffff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: 6px;
+    }
+    .receipt-container {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
     .text-center { text-align: center; }
     .restaurant-name {
@@ -285,152 +330,157 @@ export const printOrderInvoice = (order) => {
   </style>
 </head>
 <body>
-  <div class="text-center">
-    <div class="restaurant-name">${restaurantName}</div>
-    ${restaurantAddress ? `<div class="restaurant-sub">${restaurantAddress}</div>` : ''}
-    ${restaurantPhone ? `<div class="restaurant-sub">Ph: ${restaurantPhone}</div>` : ''}
-  </div>
-
-  <div class="divider"></div>
-
-  <div class="box">
-    <div class="info-row">
-      <span class="info-label">Order ID:</span>
-      <span class="info-val">#${orderId}</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">Date:</span>
-      <span class="info-val">${orderDate}</span>
+  <div class="no-print-action-bar">
+    <span style="font-weight: 700; font-size: 13px;">🧾 Bill Receipt #${orderId}</span>
+    <div>
+      <button class="no-print-btn" onclick="window.print()">🖨️ Print Bill</button>
+      <button class="no-print-close-btn" onclick="window.close()">✖ Close</button>
     </div>
   </div>
 
-  <div class="box">
-    <div class="box-title">CUSTOMER DETAILS</div>
-    <div style="font-size: 13px; font-weight: 800; color: #000000;">${customerName}</div>
-    ${customerPhone ? `<div style="color: #222222; font-weight: 600; margin-top: 2px;">📞 ${customerPhone}</div>` : ''}
-    ${customerAddress ? `<div style="color: #222222; font-weight: 500; margin-top: 3px; line-height: 1.3;">📍 ${customerAddress}</div>` : ''}
-  </div>
-
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th style="text-align: left;">ITEM</th>
-        <th style="text-align: center;">QTY</th>
-        <th style="text-align: right;">PRICE</th>
-        <th style="text-align: right;">AMOUNT</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemRows}
-    </tbody>
-  </table>
-
-  <div class="divider-solid"></div>
-
-  <div>
-    <div class="summary-row">
-      <span>Items Total</span>
-      <span>₹${foodTotal.toFixed(2)}</span>
+  <div class="receipt-container">
+    <div class="text-center">
+      <div class="restaurant-name">${restaurantName}</div>
+      ${restaurantAddress ? `<div class="restaurant-sub">${restaurantAddress}</div>` : ''}
+      ${restaurantPhone ? `<div class="restaurant-sub">Ph: ${restaurantPhone}</div>` : ''}
     </div>
-    ${packaging > 0 ? `<div class="summary-row"><span>Packaging</span><span>₹${packaging.toFixed(2)}</span></div>` : ''}
-    <div class="grand-total">
-      <span>TOTAL BILL</span>
-      <span>₹${grandTotal.toFixed(2)}</span>
-    </div>
-  </div>
 
-  ${order.sendCutlery !== undefined ? `
-    <div style="font-size: 11px; margin-top: 10px; padding: 7px; background: #fffbe6; border: 1.5px solid #ffe58f; border-radius: 6px; text-align: center; font-weight: 800; color: #000000;">
-      ${order.sendCutlery === false ? "🚫 Cutlery Not Requested" : "🍴 Cutlery Requested"}
-    </div>
-  ` : ''}
+    <div class="divider"></div>
 
-  ${order.note ? `
-    <div style="font-size: 11px; margin-top: 8px; padding: 7px; background: #e6f7ff; border: 1.5px solid #91d5ff; border-radius: 6px; color: #000000; font-weight: 600;">
-      <strong>Note:</strong> ${order.note}
+    <div class="box">
+      <div class="info-row">
+        <span class="info-label">Order ID:</span>
+        <span class="info-val">#${orderId}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Date:</span>
+        <span class="info-val">${orderDate}</span>
+      </div>
     </div>
-  ` : ''}
 
-  <div class="footer">
-    <div style="font-weight: 700;">Thank You For Your Order!</div>
-    <div style="font-size: 9px; margin-top: 2px; color: #555555;">Powered by Eqosy</div>
+    <div class="box">
+      <div class="box-title">CUSTOMER DETAILS</div>
+      <div style="font-size: 13px; font-weight: 800; color: #000000;">${customerName}</div>
+      ${customerPhone ? `<div style="color: #222222; font-weight: 600; margin-top: 2px;">📞 ${customerPhone}</div>` : ''}
+      ${customerAddress ? `<div style="color: #222222; font-weight: 500; margin-top: 3px; line-height: 1.3;">📍 ${customerAddress}</div>` : ''}
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="text-align: left;">ITEM</th>
+          <th style="text-align: center;">QTY</th>
+          <th style="text-align: right;">PRICE</th>
+          <th style="text-align: right;">AMOUNT</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+      </tbody>
+    </table>
+
+    <div class="divider-solid"></div>
+
+    <div>
+      <div class="summary-row">
+        <span>Items Total</span>
+        <span>₹${foodTotal.toFixed(2)}</span>
+      </div>
+      ${packaging > 0 ? `<div class="summary-row"><span>Packaging</span><span>₹${packaging.toFixed(2)}</span></div>` : ''}
+      <div class="grand-total">
+        <span>TOTAL BILL</span>
+        <span>₹${grandTotal.toFixed(2)}</span>
+      </div>
+    </div>
+
+    ${order.sendCutlery !== undefined ? `
+      <div style="font-size: 11px; margin-top: 10px; padding: 7px; background: #fffbe6; border: 1.5px solid #ffe58f; border-radius: 6px; text-align: center; font-weight: 800; color: #000000;">
+        ${order.sendCutlery === false ? "🚫 Cutlery Not Requested" : "🍴 Cutlery Requested"}
+      </div>
+    ` : ''}
+
+    ${order.note ? `
+      <div style="font-size: 11px; margin-top: 8px; padding: 7px; background: #e6f7ff; border: 1.5px solid #91d5ff; border-radius: 6px; color: #000000; font-weight: 600;">
+        <strong>Note:</strong> ${order.note}
+      </div>
+    ` : ''}
+
+    <div class="footer">
+      <div style="font-weight: 700;">Thank You For Your Order!</div>
+      <div style="font-size: 9px; margin-top: 2px; color: #555555;">Powered by Eqosy</div>
+    </div>
   </div>
 
   <script>
     window.onload = function() {
       setTimeout(function() {
-        window.print();
-      }, 300);
+        try { window.print(); } catch(e) {}
+      }, 400);
     };
   </script>
 </body>
 </html>`;
 
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent || ""
-  );
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent || ""
+    );
 
-  if (isMobile) {
-    const printWin = window.open("", "_blank");
-    if (printWin) {
-      printWin.document.open();
-      printWin.document.write(htmlContent);
-      printWin.document.close();
-      printWin.focus();
-      setTimeout(() => {
-        try {
-          printWin.print();
-        } catch (e) {}
-      }, 300);
-    } else {
-      toast.error("Popup blocked! Please allow popups to print the bill.");
-    }
-    return;
-  }
-
-  try {
-    let iframe = document.getElementById("restaurant-bill-print-frame");
-    if (!iframe) {
-      iframe = document.createElement("iframe");
-      iframe.id = "restaurant-bill-print-frame";
-      iframe.style.position = "fixed";
-      iframe.style.right = "-9999px";
-      iframe.style.bottom = "-9999px";
-      iframe.style.width = "0px";
-      iframe.style.height = "0px";
-      iframe.style.border = "none";
-      document.body.appendChild(iframe);
-    }
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(htmlContent);
-    doc.close();
-
-    setTimeout(() => {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      } catch (err) {
-        const blob = new Blob([htmlContent], { type: "text/html" });
-        const blobUrl = URL.createObjectURL(blob);
-        const printWin = window.open(blobUrl, "_blank");
-        if (!printWin) {
-          toast.error("Popup blocked! Please allow popups to print the bill.");
-        } else {
-          printWin.focus();
-        }
-      }
-    }, 250);
-  } catch (err) {
-    const blob = new Blob([htmlContent], { type: "text/html" });
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
     const blobUrl = URL.createObjectURL(blob);
-    const printWin = window.open(blobUrl, "_blank");
-    if (!printWin) {
-      toast.error("Popup blocked! Please allow popups to print the bill.");
-    } else {
-      printWin.focus();
+
+    if (isMobile) {
+      const printWin = window.open(blobUrl, "_blank");
+      toast.dismiss(toastId);
+      if (printWin) {
+        toast.success("Bill ready to view/print");
+      } else {
+        toast.error("Popup blocked! Please allow popups to view bill.");
+      }
+      return;
     }
+
+    try {
+      let iframe = document.getElementById("restaurant-bill-print-frame");
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "restaurant-bill-print-frame";
+        iframe.style.position = "fixed";
+        iframe.style.right = "-9999px";
+        iframe.style.bottom = "-9999px";
+        iframe.style.width = "0px";
+        iframe.style.height = "0px";
+        iframe.style.border = "none";
+        document.body.appendChild(iframe);
+      }
+
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        toast.dismiss(toastId);
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          toast.success("Bill sent to printer");
+        } catch (err) {
+          const printWin = window.open(blobUrl, "_blank");
+          if (!printWin) {
+            toast.error("Popup blocked! Please allow popups to print.");
+          }
+        }
+      }, 300);
+    } catch (err) {
+      toast.dismiss(toastId);
+      const printWin = window.open(blobUrl, "_blank");
+      if (!printWin) {
+        toast.error("Popup blocked! Please allow popups to print.");
+      }
+    }
+  } catch (error) {
+    toast.dismiss(toastId);
+    toast.error("Failed to generate bill print");
   }
 };
 
