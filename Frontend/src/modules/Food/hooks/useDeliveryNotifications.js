@@ -530,6 +530,50 @@ export const useDeliveryNotifications = () => {
       return;
     }
 
+    // SPECIAL CASE: Gig Reminders should play sound ONCE and NEVER enter the continuous alarm loop
+    if (dataType.includes('gig_reminder')) {
+      const gigId = orderData?.data?.bookingId || orderData?.data?.gigId || orderData?.gigId || '';
+      const currentPartnerId = String(deliveryPartnerId || '').trim();
+      if (gigId && isGigReminderDismissed(gigId, currentPartnerId)) {
+        debugLog('[GigReminder] Already dismissed — skipping sound');
+        return;
+      }
+
+      playNotificationSound(orderData);
+
+      const notifMessage = orderData?.message || orderData?.title || orderData?.body || 'Your shift starts soon. Please log in and go online!';
+
+      toast.info(notifMessage, {
+        duration: 15000,
+        action: {
+          label: 'Dismiss',
+          onClick: () => {
+            if (gigId) {
+              markGigReminderDismissed(gigId, currentPartnerId);
+            }
+            toast.dismiss();
+          },
+        },
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('gigReminderReceived', {
+            detail: {
+              gigId,
+              partnerId: currentPartnerId,
+              title: orderData?.title || '⏰ Shift Reminder',
+              message: notifMessage,
+              onDismiss: () => {
+                if (gigId) markGigReminderDismissed(gigId, currentPartnerId);
+              },
+            },
+          })
+        );
+      }
+      return;
+    }
+
     activeOrderRef.current = orderData || { id: Date.now() };
     if (isPushRingEvent(orderData)) {
       playNotificationSound(orderData);
@@ -1208,7 +1252,7 @@ export const useDeliveryNotifications = () => {
       // ── Gig Reminder special handling ──────────────────────────────────────
       // If this is a gig_reminder notification, check if the partner already
       // dismissed it. If dismissed → silently drop the ring. If not dismissed
-      // → dispatch a custom event so the UI can show a Dismiss/Stop button.
+      // → play single sound (no loop) and show Dismiss button in toast.
       const notifType = String(payload?.type || payload?.data?.type || '').toLowerCase();
       if (notifType.includes('gig_reminder')) {
         const gigId = payload?.data?.bookingId || payload?.data?.gigId || payload?.gigId || '';
@@ -1220,24 +1264,91 @@ export const useDeliveryNotifications = () => {
           return;
         }
 
-        // Not yet dismissed — dispatch event so UI can show Dismiss button
+        // Play single sound ONCE (no alarm loop)
+        playNotificationSound(payload);
+
+        const notifMessage = payload?.message || payload?.data?.body || payload?.body || 'Aapki gig shift shuru hone wali hai!';
+
+        toast.info(notifMessage, {
+          duration: 15000,
+          action: {
+            label: 'Dismiss',
+            onClick: () => {
+              if (gigId) {
+                markGigReminderDismissed(gigId, currentPartnerId);
+              }
+              toast.dismiss();
+            },
+          },
+        });
+
+        // Dispatch event so UI can show Dismiss button if mounted
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('gigReminderReceived', {
             detail: {
               gigId,
               partnerId: currentPartnerId,
               title: payload?.title || payload?.data?.title || '🔔 Shift Reminder',
-              message: payload?.message || payload?.data?.body || 'Aapki gig shift shuru hone wali hai!',
+              message: notifMessage,
               onDismiss: () => {
-                markGigReminderDismissed(gigId, currentPartnerId);
+                if (gigId) markGigReminderDismissed(gigId, currentPartnerId);
                 debugLog('[GigReminder] Partner dismissed reminder — future rings blocked', { gigId, currentPartnerId });
               }
             }
           }));
         }
+        return;
       }
       // ───────────────────────────────────────────────────────────────────────
     });
+
+    // Explicit socket listeners for 30-min and 15-min gig reminders
+    const handleGigReminderSocket = (data = {}) => {
+      debugLog('⏰ Gig reminder received via socket:', data);
+      const gigId = data?.gigId || data?.bookingId || '';
+      const currentPartnerId = String(deliveryPartnerId || '').trim();
+
+      if (gigId && isGigReminderDismissed(gigId, currentPartnerId)) {
+        debugLog('[GigReminder] Already dismissed — skipping sound');
+        return;
+      }
+
+      playNotificationSound(data);
+
+      const notifMessage = data?.message || data?.title || 'Your shift starts soon. Please go online!';
+
+      toast.info(notifMessage, {
+        duration: 15000,
+        action: {
+          label: 'Dismiss',
+          onClick: () => {
+            if (gigId) {
+              markGigReminderDismissed(gigId, currentPartnerId);
+            }
+            toast.dismiss();
+          },
+        },
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('gigReminderReceived', {
+            detail: {
+              gigId,
+              partnerId: currentPartnerId,
+              title: data?.title || '⏰ Shift Reminder',
+              message: notifMessage,
+              onDismiss: () => {
+                if (gigId) markGigReminderDismissed(gigId, currentPartnerId);
+              },
+            },
+          })
+        );
+      }
+    };
+
+    socketRef.current.on('gig:reminder_30min', handleGigReminderSocket);
+    socketRef.current.on('gig:reminder_15min', handleGigReminderSocket);
 
     // Auth change/refresh listeners
     const handleAuthChange = () => {

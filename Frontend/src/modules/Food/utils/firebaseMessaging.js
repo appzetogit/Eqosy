@@ -266,20 +266,27 @@ export function isPushRingEvent(payload = {}) {
   // 2. EXPLICIT GUARD: Status updates (Order Status Update, Food Ready, Preparing, Pickup, Arrived, Delivered, Cancelled)
   // must show notifications but NEVER play loud order ringtone!
   if (
+    type.includes('rider_arrived') ||
+    type.includes('partner_arrived') ||
+    type.includes('reached_pickup') ||
+    type.includes('picked_up') ||
+    type.includes('out_for_delivery') ||
+    type.includes('reached_drop') ||
+    type.includes('at_drop') ||
+    type.includes('delivered') ||
+    type.includes('order_completed') ||
     type.includes('order_status_update') ||
     type.includes('status_update') ||
     type.includes('order_ready') ||
     type.includes('ready_for_pickup') ||
     type.includes('completed') ||
-    type.includes('delivered') ||
-    type.includes('partner_arrived') ||
-    type.includes('picked_up') ||
     type.includes('cancel') ||
     title.includes('ready') ||
     title.includes('prepared') ||
     title.includes('completed') ||
     title.includes('delivered') ||
     title.includes('arrived') ||
+    title.includes('picked') ||
     title.includes('cancelled') ||
     title.includes('updated')
   ) {
@@ -304,7 +311,7 @@ export function isPushRingEvent(payload = {}) {
 
     // Extra guard for gig_reminder: check if partner already dismissed it
     if (type.includes('gig_reminder')) {
-      const gigId = data?.bookingId || data?.gigId || '';
+      const gigId = data?.bookingId || data?.gigId || payload?.gigId || '';
       const GIG_DISMISS_PREFIX = 'gig_reminder_dismissed_';
       if (gigId) {
         try {
@@ -326,13 +333,21 @@ export function isPushRingEvent(payload = {}) {
     return true;
   }
 
-  // 4. Restaurant / User New Order Ring Event (when a customer places a new order)
+  // 4. Restaurant / User New Order or Dining Reservation Ring Event
   const isRestaurantNewOrder =
     type.includes('new_order') ||
     type.includes('order_created') ||
     type.includes('place_order') ||
+    type.includes('new_dining') ||
+    type.includes('dining_booking') ||
+    type.includes('new_reservation') ||
+    type.includes('table_booking') ||
+    type.includes('dining_order') ||
     title.includes('new order') ||
-    title.includes('order received');
+    title.includes('order received') ||
+    title.includes('new reservation') ||
+    title.includes('table booking') ||
+    title.includes('new dining');
 
   if (isRestaurantNewOrder) {
     // If we're currently in the delivery module, restaurant new order should NOT ring the driver!

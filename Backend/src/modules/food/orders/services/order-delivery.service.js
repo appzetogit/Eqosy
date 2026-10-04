@@ -32,7 +32,7 @@ import {
   isStatusAdvance,
 } from './order.helpers.js';
 
-function emitOrderUpdate(order, deliveryPartnerId) {
+function emitOrderUpdate(order, deliveryPartnerId, options = {}) {
   try {
     const io = getIO();
     if (io) {
@@ -85,6 +85,8 @@ function emitOrderUpdate(order, deliveryPartnerId) {
         io.to(rooms.tracking(order.order_id)).emit('order_status_update', payload);
       }
     }
+
+    if (options.skipPush) return;
 
     // Only send push notifications for key delivery milestones
     const status = order.deliveryState?.status || order.orderStatus;
@@ -933,7 +935,7 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   order.markModified('deliveryVerification');
   await order.save();
 
-  emitOrderUpdate(order, deliveryPartnerId);
+  emitOrderUpdate(order, deliveryPartnerId, { skipPush: true });
 
   const sanitized = sanitizeOrderForExternal(order);
   const payMsg = sanitized.isPaid

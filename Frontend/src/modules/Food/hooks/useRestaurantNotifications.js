@@ -230,6 +230,23 @@ export const useRestaurantNotifications = () => {
       return;
     }
 
+    // GUARD: Never ring for rider movement or non-new order status updates
+    if (
+      rawType.includes('rider_arrived') ||
+      rawType.includes('partner_arrived') ||
+      rawType.includes('reached_pickup') ||
+      rawType.includes('picked_up') ||
+      rawType.includes('out_for_delivery') ||
+      rawType.includes('reached_drop') ||
+      rawType.includes('at_drop') ||
+      rawType.includes('delivered') ||
+      rawType.includes('order_status_update') ||
+      rawType.includes('status_update')
+    ) {
+      debugLog('[RestaurantNotification] Blocked rider/status payload from order ring:', orderData);
+      return;
+    }
+
     // Ensure order belongs strictly to the currently logged in restaurant
     const targetRestaurantId = String(
       orderData?.restaurantId?._id ||
@@ -557,6 +574,19 @@ export const useRestaurantNotifications = () => {
       setNewOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
+
+    // Listen for new dining / table booking notifications
+    const handleDiningAlert = (data) => {
+      debugLog('🍽️ New dining/table reservation received:', data);
+      if (!restaurantId) return;
+      setNewOrder(data);
+      handleIncomingOrderAlert(data);
+    };
+
+    socketRef.current.on('new_dining_order', handleDiningAlert);
+    socketRef.current.on('new_reservation', handleDiningAlert);
+    socketRef.current.on('dining_booking', handleDiningAlert);
+    socketRef.current.on('table_booking', handleDiningAlert);
 
     // NOTE: This event is only sent to delivery rooms by the backend (auto-dispatch).
     // The restaurant socket should NEVER ring on this event — it's for delivery partners only.

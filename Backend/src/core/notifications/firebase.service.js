@@ -184,7 +184,7 @@ const isRingEvent = (payload = {}) => {
     const title = String(payload.title || payload.notification?.title || '').toLowerCase();
     const sound = String(payload.sound || data.sound || '').toLowerCase();
 
-    // Chat messages are NOT ring events
+    // 1. Chat messages are NOT ring events
     if (
         type === 'chat_message' ||
         type.includes('chat') ||
@@ -196,49 +196,68 @@ const isRingEvent = (payload = {}) => {
         return false;
     }
 
-    if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
-        return true;
+    // 2. Status updates, rider arrival, pickup, drop, delivery events are SILENT status notifications (NO RING)
+    if (
+        type.includes('rider_arrived') ||
+        type.includes('partner_arrived') ||
+        type.includes('reached_pickup') ||
+        type.includes('picked_up') ||
+        type.includes('out_for_delivery') ||
+        type.includes('reached_drop') ||
+        type.includes('at_drop') ||
+        type.includes('delivered') ||
+        type.includes('order_completed') ||
+        type.includes('mark_completed') ||
+        type.includes('order_status_update') ||
+        type.includes('status_update') ||
+        type.includes('order_ready') ||
+        type.includes('ready_for_pickup') ||
+        type.includes('cancel') ||
+        title.includes('arrived') ||
+        title.includes('picked up') ||
+        title.includes('completed') ||
+        title.includes('delivered') ||
+        title.includes('marked complete') ||
+        title.includes('updated') ||
+        title.includes('ready')
+    ) {
+        return false;
     }
 
-    // 1. Order aane par
+    // 3. New Order (Food or Dining reservation/booking) -> RING Loudly
     if (
         type.includes('new_order') ||
         type.includes('order_created') ||
         type.includes('place_order') ||
+        type.includes('new_dining') ||
+        type.includes('dining_booking') ||
+        type.includes('new_reservation') ||
+        type.includes('table_booking') ||
+        type.includes('dining_order') ||
         title.includes('new order') ||
-        title.includes('order received')
+        title.includes('order received') ||
+        title.includes('new reservation') ||
+        title.includes('table booking') ||
+        title.includes('new dining')
     ) {
         return true;
     }
 
-    // 2. Delivery boy ko order assign karne ke liye
+    // 4. Delivery partner order dispatch or gig reminder -> RING
     if (
         type.includes('order_assigned') ||
         type.includes('order_assign') ||
         type.includes('delivery_assigned') ||
-        type.includes('ring') ||
         type.includes('gig_reminder') ||
         title.includes('assigned')
     ) {
         return true;
     }
 
-    // Status updates (Order completed, delivered, partner arrived, picked up) are text notifications, NOT ring events
-    if (
-        type.includes('order_completed') ||
-        type.includes('delivered') ||
-        type.includes('mark_completed') ||
-        type.includes('partner_arrived') ||
-        type.includes('picked_up') ||
-        title.includes('completed') ||
-        title.includes('delivered') ||
-        title.includes('marked complete') ||
-        title.includes('arrived')
-    ) {
-        return false;
+    if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
+        return true;
     }
 
-    // Status updates like "delivery boy aarha hai", picked_up, reaching, etc. are silent status updates
     return false;
 };
 
@@ -353,11 +372,22 @@ const readTokensFromDoc = (doc, platform) => {
     if (!doc) return [];
     if (platform) {
         const field = getTokenFieldForOwnerPlatform(doc.__ownerType, platform);
-        return readTokenFieldAsList(doc, field);
+        const tokens = readTokenFieldAsList(doc, field);
+        if (platform === 'mobile' && tokens.length > 0) {
+            return [tokens[tokens.length - 1]];
+        }
+        return tokens;
     }
     const webField = getTokenFieldForOwnerPlatform(doc.__ownerType, 'web');
     const mobileField = getTokenFieldForOwnerPlatform(doc.__ownerType, 'mobile');
-    return normalizeTokenList([...readTokenFieldAsList(doc, webField), ...readTokenFieldAsList(doc, mobileField)]);
+
+    const webTokens = readTokenFieldAsList(doc, webField);
+    const mobileTokens = readTokenFieldAsList(doc, mobileField);
+
+    const activeMobileToken = mobileTokens.length > 0 ? [mobileTokens[mobileTokens.length - 1]] : [];
+    const activeWebTokens = webTokens.slice(-2);
+
+    return normalizeTokenList([...activeWebTokens, ...activeMobileToken]);
 };
 
 export const listOwnerTokens = async ({ ownerType, ownerId, platform }) => {
@@ -403,12 +433,14 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
         `[FCM Service] upsert start ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} existingCount=${existingTokens.length} tokenPreview=${previewToken(normalizedToken)}`
     );
 
-    const tokens = normalizeTokenList([...existingTokens, normalizedToken]);
-    const updateValue = Array.isArray(doc[field]) ? tokens : (tokens[tokens.length - 1] || '');
+    const filteredTokens = existingTokens.filter((t) => t !== normalizedToken);
+    const tokens = normalizeTokenList([...filteredTokens, normalizedToken]);
+    const trimmedTokens = normalizedPlatform === 'mobile' ? tokens.slice(-1) : tokens.slice(-3);
+    const updateValue = Array.isArray(doc[field]) ? trimmedTokens : (trimmedTokens[trimmedTokens.length - 1] || '');
 
     await model.updateOne({ _id: normalizedOwnerId }, { $set: { [field]: updateValue } });
     logger.info(
-        `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${tokens.length} tokenPresent=${tokens.includes(normalizedToken)}`
+        `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${trimmedTokens.length} tokenPresent=${trimmedTokens.includes(normalizedToken)}`
     );
     return { success: true };
 };

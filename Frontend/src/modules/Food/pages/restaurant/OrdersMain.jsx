@@ -366,6 +366,28 @@ export const printOrderInvoice = (order) => {
 </body>
 </html>`;
 
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent || ""
+  );
+
+  if (isMobile) {
+    const printWin = window.open("", "_blank");
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => {
+        try {
+          printWin.print();
+        } catch (e) {}
+      }, 300);
+    } else {
+      toast.error("Popup blocked! Please allow popups to print the bill.");
+    }
+    return;
+  }
+
   try {
     let iframe = document.getElementById("restaurant-bill-print-frame");
     if (!iframe) {

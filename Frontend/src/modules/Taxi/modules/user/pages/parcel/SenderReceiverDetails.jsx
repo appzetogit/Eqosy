@@ -17,6 +17,8 @@ import {
   Plus,
   User,
   X,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
@@ -710,6 +712,110 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, mapNe
   );
 };
 
+const ParcelTermsModal = ({ open, onClose }) => {
+  if (!open) return null;
+
+  return (
+    <AnimatePresence>
+      <Motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4"
+      >
+        <Motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 20 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+          className="relative w-full max-w-lg max-h-[85vh] flex flex-col rounded-[28px] bg-white shadow-2xl overflow-hidden border border-slate-100 font-sans"
+        >
+          {/* Modal Header */}
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-900 text-white">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black tracking-tight text-white">Parcel Delivery Policy</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Prohibited Items & Customer Liability</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Modal Body */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 text-slate-700 text-xs leading-relaxed space-y-4 font-medium">
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+              <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-[11px] font-bold">
+                <strong className="block text-amber-950 text-xs mb-0.5">Mandatory Legal Declaration</strong>
+                By booking a parcel on Eqosy, you confirm & warrant that your package contains NO illegal, prohibited, dangerous, or restricted items.
+              </div>
+            </div>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                1. Strictly Prohibited & Illegal Items
+              </h4>
+              <p className="text-slate-600">Customers must NOT send any of the following items under any circumstances:</p>
+              <ul className="list-disc pl-5 space-y-1.5 text-slate-700 font-semibold">
+                <li><strong>Alcohol, Narcotics & Illegal Substances:</strong> Liquor, spirits, drugs, narcotics, intoxicating substances, or unprescribed pharmaceuticals.</li>
+                <li><strong>Hazardous & Flammable Goods:</strong> Explosives, fireworks, gasoline, compressed gas cylinders, toxic chemicals, or corrosive liquids.</li>
+                <li><strong>Weapons & Contraband:</strong> Firearms, ammunition, knives, offensive weapons, or illegal contraband.</li>
+                <li><strong>Stolen & Counterfeit Property:</strong> Stolen goods, illegal merchandise, or items prohibited under Central/State Indian Laws.</li>
+                <li><strong>High-Value Cash & Precious Metals:</strong> Physical cash, currency notes, coins, gold, diamonds, or high-value negotiable securities.</li>
+                <li><strong>Perishable & Live Cargo:</strong> Animals, insects, biological samples, or human remains.</li>
+              </ul>
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                2. Sole Customer Liability & Legal Indemnity
+              </h4>
+              <p>
+                The <strong>Sender / Customer assumes 100% complete legal, civil, financial, and criminal responsibility</strong> for the parcel contents. Eqosy and its delivery captains act solely as logistics technology facilitators.
+              </p>
+              <p>
+                If any prohibited or illegal items are found inside a parcel, the customer agrees to fully indemnify and hold harmless Eqosy, its app operators, employees, and delivery partners from any law enforcement actions, police investigations, fines, or court proceedings.
+              </p>
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                3. Inspection & Reporting to Police / Authorities
+              </h4>
+              <p>
+                Delivery captains and Eqosy reserve the right to inspect suspicious packages and immediately surrender any illegal parcel to the local Police, Narcotics Control Bureau (NCB), or Excise Department.
+              </p>
+            </section>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="border-t border-slate-100 p-4 bg-slate-50 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-black text-xs hover:bg-slate-800 transition-colors shadow-md"
+            >
+              I Understand & Agree
+            </button>
+          </div>
+        </Motion.div>
+      </Motion.div>
+    </AnimatePresence>
+  );
+};
+
 const ContactDetailsSheet = ({
   open,
   onClose,
@@ -724,6 +830,9 @@ const ContactDetailsSheet = ({
   setReceiverName,
   receiverMobile,
   setReceiverMobile,
+  acceptedTerms,
+  setAcceptedTerms,
+  onOpenTermsModal,
   errors,
   clearError,
 }) => {
@@ -822,6 +931,47 @@ const ContactDetailsSheet = ({
 
               <PhoneInput label="Mobile Number" value={receiverMobile} onChange={setReceiverMobile} error={errors.receiverMobile} name="receiverMobile" onClearError={clearError} disabled={useSelfForReceiver} />
             </div>
+
+            {/* Prohibited Items & Terms Checkbox */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className={`flex cursor-pointer items-start gap-3 rounded-[20px] border p-3.5 transition-all ${errors.acceptedTerms ? 'border-red-300 bg-red-50' : acceptedTerms ? 'border-blue-200 bg-blue-50/50' : 'border-slate-200 bg-slate-50/60'}`}>
+                <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => {
+                      setAcceptedTerms(e.target.checked);
+                      if (e.target.checked) clearError('acceptedTerms');
+                    }}
+                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-lg border-2 border-slate-300 bg-white checked:bg-slate-900 checked:border-slate-900 transition-all"
+                  />
+                  <CheckCircle2 size={12} className="absolute text-white opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                </div>
+                <div className="flex-1 text-xs">
+                  <p className="font-bold text-slate-800 leading-snug">
+                    I confirm parcel contains <span className="text-red-600 font-black">NO illegal, alcohol, or prohibited items</span> and agree customer is liable.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenTermsModal?.();
+                    }}
+                    className="mt-1 text-[11px] font-black text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <ShieldCheck size={13} />
+                    Read Prohibited Items Policy
+                  </button>
+                </div>
+              </label>
+              {errors.acceptedTerms && (
+                <p className="ml-2 flex items-center gap-1 text-[11px] font-black text-red-500">
+                  <AlertCircle size={11} strokeWidth={3} />
+                  {errors.acceptedTerms}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-slate-100 px-5 py-4">
@@ -907,6 +1057,8 @@ const SenderReceiverDetails = () => {
   const [dropCoords, setDropCoords] = useState(() => parcelState.dropCoords || (parcelState.drop ? getCoords(parcelState.drop || '') : null));
   const [activeMapPicker, setActiveMapPicker] = useState(null);
   const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
   const [errors, setErrors] = useState({});
   const [recoveredSelectedVehicles, setRecoveredSelectedVehicles] = useState([]);
@@ -916,6 +1068,7 @@ const SenderReceiverDetails = () => {
   const autoPickupRequestedRef = useRef(false);
   const livePickupHydratedRef = useRef(false);
   const dropInputRef = useRef(null);
+  const termsRef = useRef(null);
   const dropGeocodeTimerRef = useRef(null);
   const dropSuggestionTimerRef = useRef(null);
   const autocompleteServiceRef = useRef(null);
@@ -1189,6 +1342,7 @@ const SenderReceiverDetails = () => {
     if (!PHONE_REGEX.test(receiverMobile)) nextErrors.receiverMobile = 'Enter a valid 10-digit number';
     if (!pickup.trim()) nextErrors.pickup = 'Pickup location is required';
     if (!drop.trim()) nextErrors.drop = 'Drop location is required';
+    if (!acceptedTerms) nextErrors.acceptedTerms = 'Please check the box to confirm no prohibited items & accept policy';
     setErrors(nextErrors);
     return {
       isValid: Object.keys(nextErrors).length === 0,
@@ -1629,6 +1783,16 @@ const SenderReceiverDetails = () => {
         return;
       }
 
+      if (nextErrors.acceptedTerms) {
+        if (fromContactSheet) {
+          setIsContactSheetOpen(false);
+        }
+        setTimeout(() => {
+          termsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        return;
+      }
+
       if (fromContactSheet) {
         setIsContactSheetOpen(false);
       }
@@ -1739,6 +1903,7 @@ const SenderReceiverDetails = () => {
           setActiveMapPicker(null);
         }}
       />
+      <ParcelTermsModal open={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} />
       <ContactDetailsSheet
         open={isContactSheetOpen}
         onClose={() => setIsContactSheetOpen(false)}
@@ -1769,6 +1934,9 @@ const SenderReceiverDetails = () => {
           }
           setReceiverMobile(value);
         }}
+        acceptedTerms={acceptedTerms}
+        setAcceptedTerms={setAcceptedTerms}
+        onOpenTermsModal={() => setIsTermsModalOpen(true)}
         errors={errors}
         clearError={(key, value) => {
           if (key === 'senderMobile' || key === 'receiverMobile') {
@@ -2102,6 +2270,47 @@ const SenderReceiverDetails = () => {
                 </div>
               ) : null}
             </>
+          )}
+        </div>
+
+        {/* Prohibited Items & Terms Checkbox on Main Page */}
+        <div ref={termsRef} className="mt-5 space-y-2">
+          <label className={`flex cursor-pointer items-start gap-3 rounded-[24px] bg-white p-4 shadow-sm border transition-all ${errors.acceptedTerms ? 'border-red-300 bg-red-50/50' : acceptedTerms ? 'border-blue-200 bg-blue-50/20' : 'border-slate-200'}`}>
+            <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => {
+                  setAcceptedTerms(e.target.checked);
+                  if (e.target.checked) clearError('acceptedTerms');
+                }}
+                className="peer h-5 w-5 cursor-pointer appearance-none rounded-lg border-2 border-slate-300 bg-white checked:bg-slate-900 checked:border-slate-900 transition-all"
+              />
+              <CheckCircle2 size={12} className="absolute text-white opacity-0 peer-checked:opacity-100 pointer-events-none" />
+            </div>
+            <div className="flex-1 text-xs">
+              <p className="font-bold text-slate-800 leading-snug">
+                I confirm the parcel contains <span className="text-red-600 font-black">NO illegal, alcohol, or prohibited items</span> and accept customer liability.
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsTermsModalOpen(true);
+                }}
+                className="mt-1.5 text-[11px] font-black text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <ShieldCheck size={14} />
+                Read Prohibited Items Policy
+              </button>
+            </div>
+          </label>
+          {errors.acceptedTerms && (
+            <p className="ml-3 flex items-center gap-1 text-[11px] font-black text-red-500">
+              <AlertCircle size={11} strokeWidth={3} />
+              {errors.acceptedTerms}
+            </p>
           )}
         </div>
 
