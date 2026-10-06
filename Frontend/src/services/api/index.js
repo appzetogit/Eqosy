@@ -2611,10 +2611,25 @@ const collectRestaurantBookingKeys = (restaurantCandidate) => {
   return Array.from(
     new Set(
       values
-        .map((value) => String(value || "").trim())
+        .map((value) => String(value || "").trim().toLowerCase())
         .filter(Boolean),
     ),
   );
+};
+
+const parseTimeToMinutes = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const hhmmMatch = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmmMatch) return Number(hhmmMatch[1]) * 60 + Number(hhmmMatch[2]);
+  const meridiemMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (!meridiemMatch) return null;
+  let hour = Number(meridiemMatch[1]);
+  const minute = Number(meridiemMatch[2] || 0);
+  const meridiem = meridiemMatch[3].toUpperCase();
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return hour * 60 + minute;
 };
 
 const buildLocalBookingId = () =>
@@ -2710,7 +2725,7 @@ export const diningAPI = {
 
     const filtered = bookings
       .filter((booking) => {
-        if (keys.length === 0) return false;
+        if (keys.length === 0) return true;
         const bookingKeys = collectRestaurantBookingKeys({
           restaurantId: booking?.restaurantId,
           ...(booking?.restaurant && typeof booking.restaurant === "object"
@@ -2745,6 +2760,38 @@ export const diningAPI = {
       next.find(
         (booking) => String(booking?._id || booking?.id || "") === id,
       ) || null;
+
+    if (updated && nextStatus === "cancelled") {
+      const nowIso = new Date().toISOString();
+      try {
+        const notifKey = "restaurant_notifications_inbox_v1";
+        const existingNotifs = JSON.parse(localStorage.getItem(notifKey) || "[]");
+        const notifItem = {
+          id: `notif_cancel_${updated.bookingId || id}_${Date.now()}`,
+          title: `❌ Table Booking Cancelled #${updated.bookingId || id}`,
+          message: `${updated.user?.name || "Guest"} cancelled table reservation for ${updated.guests || 1} guest(s) on ${updated.timeSlot || ""}.`,
+          type: "dining_booking_cancelled",
+          createdAt: nowIso,
+          read: false,
+          restaurantId: updated.restaurantId,
+        };
+        localStorage.setItem(notifKey, JSON.stringify([notifItem, ...existingNotifs].slice(0, 50)));
+      } catch {}
+
+      try {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("restaurant_dining_cancelled", { detail: updated }));
+          window.dispatchEvent(new CustomEvent("restaurant_dining_booked", { detail: updated }));
+          window.dispatchEvent(new Event("storage"));
+          window.dispatchEvent(new Event("adminNotificationsUpdated"));
+        }
+        if (typeof BroadcastChannel !== "undefined") {
+          const channel = new BroadcastChannel("eqosy_dining_notifications");
+          channel.postMessage({ type: "dining_booking_cancelled", booking: updated });
+          channel.close();
+        }
+      } catch {}
+    }
 
     return Promise.resolve({
       data: { success: Boolean(updated), data: updated },
@@ -2843,6 +2890,40 @@ export const diningAPI = {
       normalizeBookingUser(await getCurrentUserForBookings()) ||
       null;
     const nowIso = new Date().toISOString();
+    const bookingDateObj = new Date(payload?.date || nowIso);
+    if (!Number.isNaN(bookingDateObj.getTime())) {
+      const isToday = bookingDateObj.toDateString() === new Date().toDateString();
+      const todayReset = new Date();
+      todayReset.setHours(0, 0, 0, 0);
+      const bookingReset = new Date(bookingDateObj);
+      bookingReset.setHours(0, 0, 0, 0);
+
+      if (bookingReset.getTime() < todayReset.getTime()) {
+        return Promise.resolve({
+          data: {
+            success: false,
+            message: "Cannot book a table for a past date.",
+            data: null,
+          },
+        });
+      }
+
+      if (isToday) {
+        const slotMins = parseTimeToMinutes(payload?.timeSlot);
+        const now = new Date();
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        if (slotMins !== null && slotMins <= currentMins) {
+          return Promise.resolve({
+            data: {
+              success: false,
+              message: "Selected time slot has already passed. Please select a future time slot.",
+              data: null,
+            },
+          });
+        }
+      }
+    }
+
     const localBookingId = buildLocalBookingId();
 
     const booking = {
@@ -2886,6 +2967,20 @@ export const diningAPI = {
         restaurantId: restaurantId,
       };
       localStorage.setItem(notifKey, JSON.stringify([notifItem, ...existingNotifs].slice(0, 50)));
+    } catch {}
+
+    // Trigger real-time notifications for restaurant tabs and windows
+    try {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("restaurant_dining_booked", { detail: booking }));
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("adminNotificationsUpdated"));
+      }
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("eqosy_dining_notifications");
+        channel.postMessage({ type: "new_dining_booking", booking });
+        channel.close();
+      }
     } catch {}
 
     // Optionally try posting to backend endpoint if backend has dining booking endpoint

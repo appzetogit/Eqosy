@@ -199,13 +199,14 @@ export const useRestaurantNotifications = () => {
     }
   };
 
-  const startAlertLoop = () => {
+  const startAlertLoop = (maxDurationMs = 3000) => {
     stopAlertLoop();
     alertLoopStartedAtRef.current = Date.now();
+    const maxMs = Number(maxDurationMs) || 3000;
 
     alertLoopTimerRef.current = setInterval(() => {
       const elapsed = Date.now() - alertLoopStartedAtRef.current;
-      if (elapsed >= ALERT_LOOP_MAX_MS || !activeOrderRef.current) {
+      if (elapsed >= maxMs || !activeOrderRef.current) {
         stopAlertLoop();
         return;
       }
@@ -215,6 +216,10 @@ export const useRestaurantNotifications = () => {
         playNotificationSound(activeOrderRef.current);
       }
     }, ALERT_LOOP_INTERVAL_MS);
+
+    setTimeout(() => {
+      stopAlertLoop();
+    }, maxMs);
   };
 
   const handleIncomingOrderAlert = (orderData) => {
@@ -264,7 +269,30 @@ export const useRestaurantNotifications = () => {
     }
 
     const statusStr = String(orderData?.status || orderData?.orderStatus || '').toLowerCase();
-    // Stop the ring as soon as the restaurant accepts (confirmed) or progresses the order further.
+    const isDining = rawType.includes('dining') || rawType.includes('table') || rawType.includes('reservation');
+
+    if (isDining) {
+      if (statusStr.includes('cancel')) {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        toast.error(`❌ Table Booking #${orderData?.bookingId || orderData?.orderId || ''} Cancelled by guest`);
+        playNotificationSound(orderData);
+        setTimeout(() => stopAlertLoop(), 3000);
+        return;
+      }
+      if (!shouldProcessOrderAlert(orderData)) {
+        return;
+      }
+      activeOrderRef.current = orderData || { id: Date.now() };
+      playNotificationSound(orderData);
+      startAlertLoop(3000);
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        showBackgroundOrderNotification(orderData);
+      }
+      return;
+    }
+
+    // Stop the ring for standard food orders as soon as accepted (confirmed) or progressed
     if (
       statusStr === 'confirmed' ||
       statusStr === 'preparing' ||
@@ -420,6 +448,160 @@ export const useRestaurantNotifications = () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, []);
+
+  const playFallbackChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window.__restaurantAudioCtx || window.__restaurantAudioCtx.state === 'closed') {
+        window.__restaurantAudioCtx = new AudioCtx();
+      }
+      const ctx = window.__restaurantAudioCtx;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+
+      // Soft 3-tone melody chime (E5 -> G#5 -> B5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(659.25, now);
+      gain1.gain.setValueAtTime(0.25, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.4);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(830.61, now + 0.12);
+      gain2.gain.setValueAtTime(0.3, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.65);
+
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(987.77, now + 0.25);
+      gain3.gain.setValueAtTime(0.35, now + 0.25);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now + 0.25);
+      osc3.stop(now + 0.95);
+    } catch {}
+  };
+
+  const playSoftNotificationSound = () => {
+    try {
+      playFallbackChime();
+    } catch {}
+
+    try {
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.volume = 0.85;
+        audioRef.current.currentTime = 0;
+        const p = audioRef.current.play();
+        if (p !== undefined) {
+          p.catch(() => {});
+        }
+        setTimeout(() => {
+          try {
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+            }
+          } catch {}
+        }, 3000);
+      } else {
+        const audio = new Audio(resolveAudioSource(alertSound));
+        audio.volume = 0.85;
+        audio.currentTime = 0;
+        const p = audio.play();
+        if (p !== undefined) {
+          p.catch(() => {});
+        }
+        setTimeout(() => {
+          try {
+            audio.pause();
+            audio.currentTime = 0;
+          } catch {}
+        }, 3000);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handleDiningEvent = (event) => {
+      const bookingData = event?.detail || event?.data?.booking || event?.data;
+      if (bookingData) {
+        const isCancelled = String(bookingData.status || '').toLowerCase().includes('cancel') || event?.type === 'restaurant_dining_cancelled';
+        const bookingId = bookingData.bookingId || bookingData.id || bookingData._id || 'Dining';
+        const orderPayload = {
+          ...bookingData,
+          orderId: bookingId,
+          type: isCancelled ? 'dining_booking_cancelled' : 'dining_booking',
+          status: isCancelled ? 'cancelled' : (bookingData.status || 'confirmed'),
+          title: isCancelled
+            ? `❌ Table Booking Cancelled #${bookingId}`
+            : `🍽️ New Table Booking #${bookingId}`,
+          guests: bookingData.guests || 1,
+          timeSlot: bookingData.timeSlot || '',
+          user: bookingData.user || null,
+        };
+
+        setNewOrder(orderPayload);
+        playSoftNotificationSound();
+
+        if (isCancelled) {
+          toast.error(`❌ Table Booking #${bookingId} Cancelled by guest`, { duration: 5000 });
+        } else {
+          toast.success(`🍽️ New Table Booking #${bookingId}!`, {
+            description: `${bookingData.user?.name || 'Guest'} reserved a table for ${bookingData.guests || 1} guest(s) on ${bookingData.timeSlot || ''}.`,
+            duration: 6000
+          });
+        }
+
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+          showBackgroundOrderNotification(orderPayload);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('restaurant_dining_booked', handleDiningEvent);
+      window.addEventListener('restaurant_dining_cancelled', handleDiningEvent);
+      window.addEventListener('storage', handleDiningEvent);
+    }
+
+    let channel = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        channel = new BroadcastChannel('eqosy_dining_notifications');
+        channel.onmessage = (msg) => {
+          if (msg.data?.type === 'new_dining_booking' || msg.data?.type === 'dining_booking_cancelled') {
+            handleDiningEvent({ detail: msg.data.booking, type: msg.data.type });
+          }
+        };
+      } catch {}
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('restaurant_dining_booked', handleDiningEvent);
+        window.removeEventListener('restaurant_dining_cancelled', handleDiningEvent);
+        window.removeEventListener('storage', handleDiningEvent);
+      }
+      if (channel) channel.close();
+    };
+  }, [restaurantId]);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -680,6 +862,18 @@ export const useRestaurantNotifications = () => {
     const handleUserInteraction = async () => {
       userInteractedRef.current = true;
 
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          if (!window.__restaurantAudioCtx || window.__restaurantAudioCtx.state === 'closed') {
+            window.__restaurantAudioCtx = new AudioCtx();
+          }
+          if (window.__restaurantAudioCtx.state === 'suspended') {
+            await window.__restaurantAudioCtx.resume();
+          }
+        }
+      } catch (_) {}
+
       if (!audioRef.current) {
         audioRef.current = new Audio(resolveAudioSource(alertSound));
         audioRef.current.preload = 'auto';
@@ -740,6 +934,11 @@ export const useRestaurantNotifications = () => {
       if (usedNativeBridge) {
         return;
       }
+
+      // Always play soft web audio chime ring tone
+      try {
+        playFallbackChime();
+      } catch (_) {}
 
       if (audioRef.current) {
         audioRef.current.muted = false;

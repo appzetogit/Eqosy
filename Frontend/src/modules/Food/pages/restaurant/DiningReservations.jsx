@@ -113,6 +113,54 @@ export default function DiningReservations() {
         }
     }
 
+    const playFallbackChime = () => {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext
+            if (!AudioCtx) return
+            if (!window.__restaurantAudioCtx || window.__restaurantAudioCtx.state === 'closed') {
+                window.__restaurantAudioCtx = new AudioCtx()
+            }
+            const ctx = window.__restaurantAudioCtx
+            if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => {})
+            }
+            const now = ctx.currentTime
+
+            const osc1 = ctx.createOscillator()
+            const gain1 = ctx.createGain()
+            osc1.type = 'sine'
+            osc1.frequency.setValueAtTime(659.25, now)
+            gain1.gain.setValueAtTime(0.25, now)
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+            osc1.connect(gain1)
+            gain1.connect(ctx.destination)
+            osc1.start(now)
+            osc1.stop(now + 0.4)
+
+            const osc2 = ctx.createOscillator()
+            const gain2 = ctx.createGain()
+            osc2.type = 'sine'
+            osc2.frequency.setValueAtTime(830.61, now + 0.12)
+            gain2.gain.setValueAtTime(0.3, now + 0.12)
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65)
+            osc2.connect(gain2)
+            gain2.connect(ctx.destination);
+            osc2.start(now + 0.12)
+            osc2.stop(now + 0.65)
+
+            const osc3 = ctx.createOscillator()
+            const gain3 = ctx.createGain()
+            osc3.type = 'sine'
+            osc3.frequency.setValueAtTime(987.77, now + 0.25)
+            gain3.gain.setValueAtTime(0.35, now + 0.25)
+            gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.95)
+            osc3.connect(gain3)
+            gain3.connect(ctx.destination)
+            osc3.start(now + 0.25)
+            osc3.stop(now + 0.95)
+        } catch {}
+    }
+
     const stopBookingNotificationSound = () => {
         try {
             if (audioRef.current) {
@@ -124,12 +172,22 @@ export default function DiningReservations() {
 
     const playBookingNotificationSound = () => {
         try {
-            if (!audioRef.current) {
-                audioRef.current = new Audio(alertSound)
-                audioRef.current.loop = true
+            playFallbackChime()
+        } catch {}
+        try {
+            const audio = new Audio(alertSound)
+            audio.volume = 0.85
+            audio.currentTime = 0
+            const p = audio.play()
+            if (p !== undefined) {
+                p.catch(() => {})
             }
-            audioRef.current.currentTime = 0
-            audioRef.current.play().catch(() => {})
+            setTimeout(() => {
+                try {
+                    audio.pause()
+                    audio.currentTime = 0
+                } catch {}
+            }, 3000)
         } catch {}
     }
 
@@ -203,10 +261,38 @@ export default function DiningReservations() {
         fetchBookingsData()
         const intervalId = setInterval(fetchBookingsData, 3000)
 
+        const handleRealtimeBookingEvent = () => {
+            fetchBookingsData()
+        }
+
+        if (typeof window !== "undefined") {
+            window.addEventListener("restaurant_dining_booked", handleRealtimeBookingEvent)
+            window.addEventListener("restaurant_dining_cancelled", handleRealtimeBookingEvent)
+            window.addEventListener("storage", handleRealtimeBookingEvent)
+        }
+
+        let channel = null
+        if (typeof BroadcastChannel !== "undefined") {
+            try {
+                channel = new BroadcastChannel("eqosy_dining_notifications")
+                channel.onmessage = (msg) => {
+                    if (msg.data?.type === "new_dining_booking" || msg.data?.type === "dining_booking_cancelled") {
+                        handleRealtimeBookingEvent()
+                    }
+                }
+            } catch {}
+        }
+
         return () => {
             isCancelled = true
             clearInterval(intervalId)
             stopBookingNotificationSound()
+            if (typeof window !== "undefined") {
+                window.removeEventListener("restaurant_dining_booked", handleRealtimeBookingEvent)
+                window.removeEventListener("restaurant_dining_cancelled", handleRealtimeBookingEvent)
+                window.removeEventListener("storage", handleRealtimeBookingEvent)
+            }
+            if (channel) channel.close()
         }
     }, [])
 

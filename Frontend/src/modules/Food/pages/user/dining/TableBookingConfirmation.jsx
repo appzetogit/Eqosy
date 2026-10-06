@@ -35,6 +35,23 @@ export default function TableBookingConfirmation() {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
+    const [isEditingUser, setIsEditingUser] = useState(false)
+    const [editName, setEditName] = useState("")
+    const [editPhone, setEditPhone] = useState("")
+
+    const handleSaveUserDetails = () => {
+        if (!editName.trim()) {
+            toast.error("Please enter a valid guest name")
+            return
+        }
+        setUser((prev) => ({
+            ...prev,
+            name: editName.trim(),
+            phone: editPhone.trim(),
+        }))
+        setIsEditingUser(false)
+        toast.success("Guest details updated!")
+    }
 
     const activeOfferText =
         restaurant?.offer ||
@@ -101,6 +118,21 @@ export default function TableBookingConfirmation() {
         fetchUser()
     }, [restaurant, navigate])
 
+    const parseTimeToMinutes = (value) => {
+        if (!value) return null
+        const raw = String(value).trim()
+        const hhmmMatch = raw.match(/^(\d{1,2}):(\d{2})$/)
+        if (hhmmMatch) return Number(hhmmMatch[1]) * 60 + Number(hhmmMatch[2])
+        const meridiemMatch = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i)
+        if (!meridiemMatch) return null
+        let hour = Number(meridiemMatch[1])
+        const minute = Number(meridiemMatch[2] || 0)
+        const meridiem = meridiemMatch[3].toUpperCase()
+        if (meridiem === "PM" && hour !== 12) hour += 12
+        if (meridiem === "AM" && hour === 12) hour = 0
+        return hour * 60 + minute
+    }
+
     const handleBooking = async () => {
         try {
             setBookingInProgress(true)
@@ -115,6 +147,22 @@ export default function TableBookingConfirmation() {
             if (!restaurantId) {
                 toast.error("Unable to proceed. Restaurant ID is missing.")
                 return
+            }
+
+            if (date && timeSlot) {
+                const bookingDate = new Date(date)
+                if (!Number.isNaN(bookingDate.getTime())) {
+                    const isToday = bookingDate.toDateString() === new Date().toDateString()
+                    if (isToday) {
+                        const slotMins = parseTimeToMinutes(timeSlot)
+                        const now = new Date()
+                        const currentMins = now.getHours() * 60 + now.getMinutes()
+                        if (slotMins !== null && slotMins <= currentMins) {
+                            toast.error("Selected time slot has already passed. Please go back and select a future time slot.")
+                            return
+                        }
+                    }
+                }
             }
 
             const response = await diningAPI.createBooking({
@@ -134,6 +182,8 @@ export default function TableBookingConfirmation() {
                 } catch {}
                 // Navigate to success page with booking details
                 navigate("/food/user/dining/book-success", { state: { booking: response.data.data } })
+            } else {
+                toast.error(response.data.message || "Failed to confirm booking")
             }
         } catch (error) {
             debugError("Booking error:", error)
@@ -315,30 +365,46 @@ export default function TableBookingConfirmation() {
                     </div>
 
                     <div className="space-y-2">
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+                        <div
+                            onClick={() => {
+                                toast.info("Modifying booking details...", {
+                                    description: "Going back to select a different date, time, or guest count.",
+                                })
+                                goBack()
+                            }}
+                            className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 active:scale-[0.99] transition-all group"
+                        >
                             <div className="flex items-start gap-3">
-                                <div className="text-[#EB590E] mt-1">
+                                <div className="text-[#EB590E] mt-1 group-hover:scale-110 transition-transform">
                                     <Edit2 className="w-5 h-5" />
                                 </div>
                                 <div>
                                     <p className="font-bold text-gray-800 text-sm">Modification available</p>
-                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
+                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, {formattedDate}</p>
                                 </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
+                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
                         </div>
 
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+                        <div
+                            onClick={() => {
+                                toast.info("Free Cancellation Policy", {
+                                    description: `You can cancel your table reservation for ${restaurant?.name || 'this restaurant'} anytime before ${timeSlot} on ${formattedDate} with 0 cancellation fee.`,
+                                    duration: 5000,
+                                })
+                            }}
+                            className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 active:scale-[0.99] transition-all group"
+                        >
                             <div className="flex items-start gap-3">
-                                <div className="text-red-400 mt-1">
+                                <div className="text-red-400 mt-1 group-hover:scale-110 transition-transform">
                                     <ShieldCheck className="w-5 h-5" />
                                 </div>
                                 <div>
                                     <p className="font-bold text-gray-800 text-sm">Cancellation available</p>
-                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, today</p>
+                                    <p className="text-xs text-slate-400">Valid till {timeSlot}, {formattedDate}</p>
                                 </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-slate-300" />
+                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
                         </div>
                     </div>
                 </div>
@@ -351,12 +417,66 @@ export default function TableBookingConfirmation() {
                         <div className="h-px bg-slate-200 flex-1"></div>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center justify-between">
-                        <div>
-                            <p className="font-bold text-gray-900">{user?.name || "Guest User"}</p>
-                            <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || ""}</p>
-                        </div>
-                        <button className="text-red-500 text-sm font-bold hover:underline">Edit</button>
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        {isEditingUser ? (
+                            <div className="space-y-3 animate-in fade-in duration-200">
+                                <p className="text-xs font-bold text-slate-600">Update Guest Details</p>
+                                <div>
+                                    <label className="text-[11px] font-semibold text-slate-500">Full Name</label>
+                                    <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        placeholder="Enter guest name"
+                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-semibold text-slate-500">Phone Number</label>
+                                    <input
+                                        type="tel"
+                                        value={editPhone}
+                                        onChange={(e) => setEditPhone(e.target.value)}
+                                        placeholder="Enter phone number"
+                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsEditingUser(false)}
+                                        className="px-3 py-1.5 text-xs text-slate-500 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveUserDetails}
+                                        className="px-4 py-1.5 text-xs bg-[#EB590E] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+                                    >
+                                        Save Details
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-bold text-gray-900">{user?.name || "Guest User"}</p>
+                                    <p className="text-sm text-slate-400 mt-1">{user?.phone || user?.email || "No contact info"}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditName(user?.name || "")
+                                        setEditPhone(user?.phone || "")
+                                        setIsEditingUser(true)
+                                    }}
+                                    className="text-red-500 text-sm font-bold hover:underline cursor-pointer"
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

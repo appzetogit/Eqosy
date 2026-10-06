@@ -57,9 +57,9 @@ const buildSlots = (timing) => {
 
   const slots = []
   let cursor = opening
-  const end = closing > opening ? closing : opening + 240
+  const end = closing > opening ? closing : opening + 24 * 60
 
-  while (cursor <= end && slots.length < 16) {
+  while (cursor <= end) {
     const hours = Math.floor((cursor % (24 * 60)) / 60)
     const minutes = cursor % 60
     slots.push(formatTimeValue(`${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`))
@@ -126,7 +126,10 @@ export default function TableBooking() {
     return Number.isNaN(initial.getTime()) ? new Date() : initial
   })
   const [selectedSlot, setSelectedSlot] = useState(location.state?.selectedTime || null)
-  const [selectedMealPeriod, setSelectedMealPeriod] = useState("lunch")
+  const [selectedMealPeriod, setSelectedMealPeriod] = useState(() => {
+    const now = new Date()
+    return now.getHours() >= 17 ? "dinner" : "lunch"
+  })
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -169,7 +172,24 @@ export default function TableBooking() {
     }
     return buildFallbackTiming(restaurant)
   }, [outletTimings, selectedDate, restaurant])
-  const allSlots = useMemo(() => buildSlots(selectedDayTiming), [selectedDayTiming])
+
+  const isSelectedToday = useMemo(() => {
+    return selectedDate.toDateString() === new Date().toDateString()
+  }, [selectedDate])
+
+  const allSlots = useMemo(() => {
+    const rawSlots = buildSlots(selectedDayTiming)
+    if (!isSelectedToday) return rawSlots
+
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+    return rawSlots.filter((slot) => {
+      const slotMins = parseTimeToMinutes(slot)
+      return slotMins !== null && slotMins > currentMinutes
+    })
+  }, [selectedDayTiming, isSelectedToday])
+
   const filteredSlots = useMemo(
     () => allSlots.filter((slot) => getMealPeriod(slot) === selectedMealPeriod),
     [allSlots, selectedMealPeriod]
@@ -198,11 +218,10 @@ export default function TableBooking() {
 
     if (selectedMealPeriod === "lunch" && !hasLunch && hasDinner) {
       setSelectedMealPeriod("dinner")
-    }
-    if (selectedMealPeriod === "dinner" && !hasDinner && hasLunch) {
+    } else if (selectedMealPeriod === "dinner" && !hasDinner && hasLunch) {
       setSelectedMealPeriod("lunch")
     }
-  }, [allSlots, selectedMealPeriod])
+  }, [allSlots])
 
   if (loading) return <Loader />
   if (!restaurant) return <div className="p-6 text-center">Restaurant not found</div>

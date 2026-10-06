@@ -112,23 +112,25 @@ export default function Notifications() {
       const raw = localStorage.getItem("restaurant_notifications_inbox_v1")
       if (raw) {
         const parsed = JSON.parse(raw)
-        diningNotifRows = (Array.isArray(parsed) ? parsed : []).map((item) => ({
-          id: item.id,
-          message: item.title,
-          detail: item.message,
-          source: "broadcast",
-          read: item.read,
-          timeValue: item.createdAt ? new Date(item.createdAt).getTime() : 0,
-          time: item.createdAt
-            ? new Date(item.createdAt).toLocaleString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              })
-            : "N/A",
-        }))
+        diningNotifRows = (Array.isArray(parsed) ? parsed : [])
+          .filter((item) => item.id && !dismissedIds.includes(item.id))
+          .map((item) => ({
+            id: item.id,
+            message: item.title,
+            detail: item.message,
+            source: "dining",
+            read: item.read,
+            timeValue: item.createdAt ? new Date(item.createdAt).getTime() : 0,
+            time: item.createdAt
+              ? new Date(item.createdAt).toLocaleString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                })
+              : "N/A",
+          }))
       }
     } catch {}
 
@@ -136,8 +138,22 @@ export default function Notifications() {
   }, [broadcastNotifications, dismissedIds, orders])
 
   const removeNotification = (id, source = "order") => {
+    if (source === "dining") {
+      try {
+        const raw = localStorage.getItem("restaurant_notifications_inbox_v1")
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          const updated = (Array.isArray(parsed) ? parsed : []).filter((item) => item.id !== id)
+          localStorage.setItem("restaurant_notifications_inbox_v1", JSON.stringify(updated))
+        }
+      } catch {}
+      setDismissedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+      return
+    }
+
     if (source === "broadcast") {
       dismissBroadcastNotification(id)
+      setDismissedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
       return
     }
     setDismissedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
@@ -145,11 +161,39 @@ export default function Notifications() {
 
   const clearAll = () => {
     dismissAllBroadcastNotifications()
+    try {
+      localStorage.setItem("restaurant_notifications_inbox_v1", "[]")
+    } catch {}
     const ids = notifications
-      .filter((item) => item.source !== "broadcast")
       .map((n) => n.id)
       .filter(Boolean)
     setDismissedIds((prev) => [...new Set([...prev, ...ids])])
+  }
+
+  const handleNotificationClick = (item) => {
+    if (item.source === "dining") {
+      try {
+        const raw = localStorage.getItem("restaurant_notifications_inbox_v1")
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          const updated = (Array.isArray(parsed) ? parsed : []).map((n) =>
+            n.id === item.id ? { ...n, read: true } : n
+          )
+          localStorage.setItem("restaurant_notifications_inbox_v1", JSON.stringify(updated))
+        }
+      } catch {}
+      navigate("/food/restaurant/reservations")
+      return
+    }
+
+    if (item.source === "broadcast") {
+      markBroadcastAsRead(item.id)
+      return
+    }
+
+    if (item.source === "order") {
+      navigate("/food/restaurant")
+    }
   }
 
   const handleRefresh = async () => {
@@ -161,7 +205,7 @@ export default function Notifications() {
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-200">
         <button
-          onClick={() => navigate("/restaurant")}
+          onClick={() => navigate("/food/restaurant")}
           className="p-2 rounded-full hover:bg-gray-100"
           aria-label="Back"
         >
@@ -198,16 +242,24 @@ export default function Notifications() {
             {notifications.map((item) => (
               <div
                 key={item.id}
-                onClick={() => item.source === "broadcast" ? markBroadcastAsRead(item.id) : undefined}
-                className={`border rounded-lg p-3 flex items-start justify-between gap-3 ${item.source === "broadcast" && !item.read ? "border-blue-200 bg-blue-50/40 cursor-pointer" : "border-gray-200"}`}
+                onClick={() => handleNotificationClick(item)}
+                className={`border rounded-lg p-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                  item.read === false ? "border-blue-200 bg-blue-50/40" : "border-gray-200"
+                }`}
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    {item.source === "broadcast" && <Bell className="w-4 h-4 text-blue-600" />}
+                    {item.source === "broadcast" ? (
+                      <Bell className="w-4 h-4 text-blue-600" />
+                    ) : item.source === "dining" ? (
+                      <span className="text-sm">🍽️</span>
+                    ) : (
+                      <Bell className="w-4 h-4 text-slate-500" />
+                    )}
                     <p className="text-sm font-medium text-gray-900">{item.message}</p>
                   </div>
-                  {item.source === "broadcast" ? (
-                    <p className="text-xs text-gray-600 mt-0.5">{item.detail || "Admin notification"}</p>
+                  {item.detail ? (
+                    <p className="text-xs text-gray-600 mt-0.5">{item.detail}</p>
                   ) : (
                     <p className="text-xs text-gray-600 mt-0.5">Order: {item.orderId}</p>
                   )}
@@ -218,10 +270,10 @@ export default function Notifications() {
                     event.stopPropagation()
                     removeNotification(item.id, item.source)
                   }}
-                  className="p-1.5 rounded-full hover:bg-gray-100"
+                  className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors"
                   aria-label="Remove notification"
                 >
-                  <X className="w-4 h-4 text-gray-600" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             ))}

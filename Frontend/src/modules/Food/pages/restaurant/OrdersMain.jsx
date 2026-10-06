@@ -994,10 +994,37 @@ function TableBookings() {
     };
 
     fetchBookings();
-    const interval = setInterval(fetchBookings, 10000);
+    const interval = setInterval(fetchBookings, 5000);
+
+    const handleRealtimeBookingEvent = () => {
+      fetchBookings();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("restaurant_dining_booked", handleRealtimeBookingEvent);
+      window.addEventListener("storage", handleRealtimeBookingEvent);
+    }
+
+    let channel = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        channel = new BroadcastChannel("eqosy_dining_notifications");
+        channel.onmessage = (msg) => {
+          if (msg.data?.type === "new_dining_booking") {
+            handleRealtimeBookingEvent();
+          }
+        };
+      } catch {}
+    }
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("restaurant_dining_booked", handleRealtimeBookingEvent);
+        window.removeEventListener("storage", handleRealtimeBookingEvent);
+      }
+      if (channel) channel.close();
     };
   }, []);
 
