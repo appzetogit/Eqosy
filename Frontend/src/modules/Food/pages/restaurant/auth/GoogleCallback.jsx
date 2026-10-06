@@ -69,7 +69,7 @@ export default function RestaurantGoogleCallback() {
 
         // Redirect to restaurant home after short delay
         setTimeout(() => {
-          navigate("/restaurant")
+          navigate("/food/restaurant")
         }, 1200)
       } catch (err) {
         debugError("Restaurant Google auth error:", err)
@@ -84,11 +84,11 @@ export default function RestaurantGoogleCallback() {
   }, [navigate, searchParams])
 
   const handleRetry = () => {
-    navigate("/restaurant/login")
+    navigate("/food/restaurant/login")
   }
 
   const handleGoHome = () => {
-    navigate("/restaurant")
+    navigate("/food/restaurant")
   }
 
   return (

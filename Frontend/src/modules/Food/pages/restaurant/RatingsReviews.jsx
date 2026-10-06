@@ -145,7 +145,7 @@ export default function RatingsReviews() {
           </div>
         </div>
         <button
-          onClick={() => navigate("/restaurant/feedback?tab=reviews")}
+          onClick={() => navigate("/food/restaurant/feedback?tab=reviews")}
           className="flex items-center gap-1 text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors"
         >
           <span>View order ratings</span>

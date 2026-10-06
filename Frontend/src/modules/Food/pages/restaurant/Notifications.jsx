@@ -22,6 +22,8 @@ const getStatusLabel = (status = "") => {
   return "Order update"
 }
 
+const INBOX_OPTIONS = { limit: 100, pollMs: 5 * 60 * 1000 }
+
 export default function Notifications() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -41,7 +43,7 @@ export default function Notifications() {
     dismiss: dismissBroadcastNotification,
     dismissAll: dismissAllBroadcastNotifications,
     refresh: refreshBroadcastNotifications,
-  } = useNotificationInbox("restaurant", { limit: 100, pollMs: 5 * 60 * 1000 })
+  } = useNotificationInbox("restaurant", INBOX_OPTIONS)
 
   const fetchNotifications = async () => {
     try {

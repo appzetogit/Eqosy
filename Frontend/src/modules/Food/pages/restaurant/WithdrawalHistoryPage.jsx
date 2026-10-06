@@ -51,7 +51,7 @@ export default function WithdrawalHistoryPage() {
       <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/restaurant/hub-finance")}
+            onClick={() => navigate("/food/restaurant/hub-finance")}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Go back"
           >

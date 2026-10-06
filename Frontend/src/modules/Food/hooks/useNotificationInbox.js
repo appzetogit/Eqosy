@@ -21,17 +21,20 @@ export const dispatchNotificationInboxRefresh = () => {
 };
 
 export default function useNotificationInbox(module, options = {}) {
+  const limit = options?.limit || 50;
+  const autoload = options?.autoload !== false;
+  const pollMs = Number(options?.pollMs || 0);
+
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(Boolean(options?.autoload !== false));
+  const [loading, setLoading] = useState(Boolean(autoload));
 
   const fetchInbox = useCallback(async () => {
     if (!module) return;
 
     try {
-      setLoading(true);
       const response = await notificationAPI.getInbox(
-        { page: 1, limit: options?.limit || 50 },
+        { page: 1, limit },
         { contextModule: module }
       );
       const payload = response?.data?.data || {};
@@ -43,12 +46,12 @@ export default function useNotificationInbox(module, options = {}) {
     } finally {
       setLoading(false);
     }
-  }, [module, options?.limit]);
+  }, [module, limit]);
 
   useEffect(() => {
-    if (options?.autoload === false || !module) return;
+    if (!autoload || !module) return;
     fetchInbox();
-  }, [fetchInbox, module, options?.autoload]);
+  }, [fetchInbox, module, autoload]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -60,13 +63,12 @@ export default function useNotificationInbox(module, options = {}) {
   }, [fetchInbox]);
 
   useEffect(() => {
-    const pollMs = Number(options?.pollMs || 0);
     if (!pollMs || pollMs < 1000 || !module) return undefined;
     const timer = window.setInterval(() => {
       fetchInbox();
     }, pollMs);
     return () => window.clearInterval(timer);
-  }, [fetchInbox, module, options?.pollMs]);
+  }, [fetchInbox, module, pollMs]);
 
   const markAsRead = useCallback(
     async (id) => {
@@ -87,18 +89,20 @@ export default function useNotificationInbox(module, options = {}) {
   const dismiss = useCallback(
     async (id) => {
       if (!id || !module) return;
-      const removed = items.find((item) => item.id === id);
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      if (removed && !removed.read) {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-      }
+      setItems((prev) => {
+        const removed = prev.find((item) => item.id === id);
+        if (removed && !removed.read) {
+          setUnreadCount((count) => Math.max(0, count - 1));
+        }
+        return prev.filter((item) => item.id !== id);
+      });
       try {
         await notificationAPI.dismiss(id, { contextModule: module });
       } catch {
         fetchInbox();
       }
     },
-    [fetchInbox, items, module]
+    [fetchInbox, module]
   );
 
   const dismissAll = useCallback(async () => {

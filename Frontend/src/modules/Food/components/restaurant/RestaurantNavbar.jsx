@@ -19,6 +19,8 @@ const extractRestaurantPayload = (response) =>
   null
 
 
+const NAVBAR_INBOX_OPTIONS = { limit: 20, pollMs: 5 * 60 * 1000 }
+
 export default function RestaurantNavbar({
   restaurantName: propRestaurantName,
   location: propLocation,
@@ -34,7 +36,7 @@ export default function RestaurantNavbar({
   const [loading, setLoading] = useState(true)
   const [companyName, setCompanyName] = useState("")
   const [logoUrl, setLogoUrl] = useState(null)
-  const { unreadCount } = useNotificationInbox("restaurant", { limit: 20, pollMs: 5 * 60 * 1000 })
+  const { unreadCount } = useNotificationInbox("restaurant", NAVBAR_INBOX_OPTIONS)
   const [showReviewsModal, setShowReviewsModal] = useState(false)
   const [reviewsData, setReviewsData] = useState({ rating: 0, totalRatings: 0, reviews: [] })
   const [loadingReviews, setLoadingReviews] = useState(false)
@@ -270,7 +272,7 @@ export default function RestaurantNavbar({
   }, [restaurantData])
 
   const handleStatusClick = () => {
-    navigate("/restaurant/status")
+    navigate("/food/restaurant/status")
   }
 
   const handleSearchClick = () => {
@@ -289,7 +291,7 @@ export default function RestaurantNavbar({
 
 
   const handleNotificationsClick = () => {
-    navigate("/restaurant/notifications")
+    navigate("/food/restaurant/notifications")
   }
 
   // Show search input when search is active

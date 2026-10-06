@@ -92,7 +92,7 @@ export default function AddCouponPage(props) {
       }
       await restaurantAPI.createMyOffer(payload)
       toast.success("Coupon created successfully!")
-      navigate("/restaurant/coupon")
+      navigate("/food/restaurant/coupon")
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || "Failed to save coupon")
     } finally {

@@ -404,32 +404,57 @@ export const useRestaurantNotifications = () => {
   }, [restaurantId]);
 
   useEffect(() => {
-    if (!supportsBrowserNotifications()) return;
+    if (typeof window === 'undefined') return;
 
-    if (Notification.permission !== 'default') return;
-    if (localStorage.getItem(NOTIFICATION_PERMISSION_ASKED_KEY) === 'true') return;
+    // 1. Auto request Notification permission if default
+    if (supportsBrowserNotifications() && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
 
-    const requestPermissionOnce = async () => {
-      localStorage.setItem(NOTIFICATION_PERMISSION_ASKED_KEY, 'true');
+    // 2. Dynamic permission change listener (notifications & geolocation)
+    let notifPerm = null;
+    let geoPerm = null;
+
+    const setupPermissionListeners = async () => {
       try {
-        await Notification.requestPermission();
-      } catch (error) {
-        debugWarn('Failed to request restaurant notification permission:', error);
-      }
+        if (navigator.permissions?.query) {
+          try {
+            notifPerm = await navigator.permissions.query({ name: 'notifications' });
+            notifPerm.onchange = () => {
+              if (notifPerm.state === 'granted') {
+                toast.success('Notification permission granted!');
+                try {
+                  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                  if (AudioCtx) {
+                    if (!window.__restaurantAudioCtx || window.__restaurantAudioCtx.state === 'closed') {
+                      window.__restaurantAudioCtx = new AudioCtx();
+                    }
+                    if (window.__restaurantAudioCtx.state === 'suspended') {
+                      window.__restaurantAudioCtx.resume().catch(() => {});
+                    }
+                  }
+                } catch {}
+              }
+            };
+          } catch {}
+
+          try {
+            geoPerm = await navigator.permissions.query({ name: 'geolocation' });
+            geoPerm.onchange = () => {
+              if (geoPerm.state === 'granted') {
+                toast.success('Location permission granted!');
+              }
+            };
+          } catch {}
+        }
+      } catch {}
     };
 
-    const askOnInteraction = () => {
-      requestPermissionOnce();
-      window.removeEventListener('pointerdown', askOnInteraction);
-      window.removeEventListener('keydown', askOnInteraction);
-    };
-
-    window.addEventListener('pointerdown', askOnInteraction, { once: true, passive: true });
-    window.addEventListener('keydown', askOnInteraction, { once: true });
+    setupPermissionListeners();
 
     return () => {
-      window.removeEventListener('pointerdown', askOnInteraction);
-      window.removeEventListener('keydown', askOnInteraction);
+      if (notifPerm) notifPerm.onchange = null;
+      if (geoPerm) geoPerm.onchange = null;
     };
   }, []);
 

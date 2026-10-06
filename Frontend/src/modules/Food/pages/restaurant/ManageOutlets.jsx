@@ -28,22 +28,22 @@ export default function ManageOutlets() {
     // Navigate based on option selected
     switch (option) {
       case "Timings":
-        navigate("/restaurant/outlet-timings")
+        navigate("/food/restaurant/outlet-timings")
         break
       case "FSSAI Food License":
-        navigate("/restaurant/fssai")
+        navigate("/food/restaurant/fssai")
         break
       case "Bank account details":
-        navigate("/restaurant/update-bank-details")
+        navigate("/food/restaurant/update-bank-details")
         break
       case "Profile picture":
-        navigate("/restaurant/outlet-info")
+        navigate("/food/restaurant/outlet-info")
         break
       case "Name, address, location":
-        navigate("/restaurant/outlet-info")
+        navigate("/food/restaurant/outlet-info")
         break
       case "Ratings, reviews":
-        navigate("/restaurant/ratings-reviews")
+        navigate("/food/restaurant/ratings-reviews")
         break
       case "Delivery area changes":
         setShowToast(true)

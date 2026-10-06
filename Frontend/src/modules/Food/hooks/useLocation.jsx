@@ -1627,12 +1627,24 @@ export function useLocation() {
           if (storedRaw) {
             try {
               const parsedStored = JSON.parse(storedRaw)
-              if (parsedStored?.latitude && parsedStored?.longitude) {
-                debugLog("?? Using existing stored location on startup/focus, skipping auto GPS fetch:", parsedStored)
+              const isUsable = parsedStored?.latitude &&
+                parsedStored?.longitude &&
+                parsedStored.address !== "Select location" &&
+                parsedStored.city !== "Select location" &&
+                parsedStored.formattedAddress !== "Select location";
+
+              if (isUsable) {
+                debugLog("?? Using existing valid stored location on startup/focus:", parsedStored)
                 setLocation(parsedStored)
                 setPermissionGranted(true)
                 setLoading(false)
                 if (AUTO_START_LIVE_WATCH) startWatchingLocation()
+                // Still do a quiet background fresh fetch if permission is granted
+                if (permissionGranted) {
+                  getLocation(true, false, false).then((freshLoc) => {
+                    if (freshLoc?.latitude && freshLoc?.longitude) setLocation(freshLoc);
+                  }).catch(() => {});
+                }
                 return
               }
             } catch {}

@@ -188,7 +188,7 @@ export default function HubFinance() {
   }, [invoiceOrders])
 
   const handleViewDetails = () => {
-    navigate("/restaurant/finance-details", { state: { financeData, restaurantData } })
+    navigate("/food/restaurant/finance-details", { state: { financeData, restaurantData } })
   }
 
   const getWithdrawalStatusClass = (statusRaw) => {
@@ -819,20 +819,20 @@ export default function HubFinance() {
           <div className="flex items-center gap-1 ml-2">
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/restaurant/withdrawal-history")}
+              onClick={() => navigate("/food/restaurant/withdrawal-history")}
               title="Withdrawal History"
             >
               <Wallet className="w-5 h-5 text-gray-700" />
             </button>
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/restaurant/notifications")}
+              onClick={() => navigate("/food/restaurant/notifications")}
             >
               <Bell className="w-5 h-5 text-gray-700" />
             </button>
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/restaurant/explore")}
+              onClick={() => navigate("/food/restaurant/explore")}
             >
               <Menu className="w-5 h-5 text-gray-700" />
             </button>
@@ -969,7 +969,7 @@ export default function HubFinance() {
                     {withdrawalRequests.length > 8 ? (
                       <button
                         type="button"
-                        onClick={() => navigate("/restaurant/withdrawal-history")}
+                        onClick={() => navigate("/food/restaurant/withdrawal-history")}
                         className="w-full text-sm font-medium text-black hover:underline pt-1"
                       >
                         View all requests
@@ -1347,7 +1347,7 @@ export default function HubFinance() {
                   <button
                     onClick={() => {
                       setShowBankDetailsPrompt(false)
-                      navigate('/restaurant/update-bank-details')
+                      navigate('/food/restaurant/update-bank-details')
                     }}
                     className="flex-1 py-3 px-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors shadow-md"
                   >

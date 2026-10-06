@@ -1250,7 +1250,7 @@ export default function ItemDetailsPage() {
                   <button
                     onClick={() => {
                       setIsCategoryPopupOpen(false)
-                      navigate('/restaurant/menu-categories')
+                      navigate('/food/restaurant/menu-categories')
                     }}
                     className="p-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors flex items-center gap-1.5"
                     title="Add Category"
@@ -1277,7 +1277,7 @@ export default function ItemDetailsPage() {
                     <button
                       onClick={() => {
                         setIsCategoryPopupOpen(false)
-                        navigate('/restaurant/menu-categories')
+                        navigate('/food/restaurant/menu-categories')
                       }}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition-colors"
                     >

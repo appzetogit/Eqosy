@@ -1089,6 +1089,39 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     };
   }, [isOnline, activeOrder, goOnline, setRiderLocation]);
 
+  // 3.2 Auto Permission Granted Listener: Automatically fetch position & close GPS modal when user allows location permission
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.permissions?.query) return;
+
+    let permResult = null;
+    const listenPermissionChange = async () => {
+      try {
+        permResult = await navigator.permissions.query({ name: 'geolocation' });
+        const onPermChange = () => {
+          if (permResult.state === 'granted') {
+            setShowGpsModal(false);
+            setGpsErrorMessage('');
+            toast.success('Location permission granted!');
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const { latitude: lat, longitude: lng } = pos.coords;
+                setRiderLocation({ lat, lng });
+              },
+              () => {},
+              { enableHighAccuracy: true, timeout: 6000 }
+            );
+          }
+        };
+        permResult.onchange = onPermChange;
+      } catch {}
+    };
+
+    listenPermissionChange();
+    return () => {
+      if (permResult) permResult.onchange = null;
+    };
+  }, [setRiderLocation]);
+
   // 1-Hour Periodic Selfie Security Guard: Force re-verification every 60 minutes
   useEffect(() => {
     if (!isOnline) return;

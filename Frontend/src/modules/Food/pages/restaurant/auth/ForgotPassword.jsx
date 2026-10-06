@@ -203,7 +203,7 @@ export default function RestaurantForgotPassword() {
         throw new Error(data.message || "Failed to reset password")
       }
 
-      navigate("/restaurant/login", {
+      navigate("/food/restaurant/login", {
         state: { message: "Password reset successfully. Please login with your new password." },
       })
     } catch (err) {

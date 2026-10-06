@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from "react"
+import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { setAuthData } from "@food/utils/auth"
 import { Mail, User, Lock, Eye, EyeOff, ArrowLeft, UtensilsCrossed } from "lucide-react"
@@ -147,7 +147,7 @@ export default function RestaurantSignupEmail() {
         
         window.dispatchEvent(new Event("restaurantAuthChanged"))
         
-        navigate("/restaurant/onboarding", { replace: true })
+        navigate("/food/restaurant/onboarding", { replace: true })
       } else {
         throw new Error("Registration failed. Please try again.")
       }
@@ -449,7 +449,7 @@ export default function RestaurantSignupEmail() {
 
               <div className="pt-4 border-t">
                 <button
-                  onClick={() => navigate("/restaurant/login")}
+                  onClick={() => navigate("/food/restaurant/login")}
                   className="flex items-center gap-2 text-sm text-primary-orange hover:text-primary-orange/80 transition-colors"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -458,7 +458,7 @@ export default function RestaurantSignupEmail() {
                 <p className="text-sm text-gray-500 mt-2 text-center">
                   Already have an account?{" "}
                   <button
-                    onClick={() => navigate("/restaurant/login")}
+                    onClick={() => navigate("/food/restaurant/login")}
                     className="text-primary-orange hover:underline font-medium"
                   >
                     Sign in

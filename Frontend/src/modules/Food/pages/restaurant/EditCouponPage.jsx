@@ -7,7 +7,7 @@ export default function EditCouponPage() {
 
   // If no id, just go back to coupon list
   if (!id) {
-    navigate("/restaurant/coupon")
+    navigate("/food/restaurant/coupon")
     return null
   }
 

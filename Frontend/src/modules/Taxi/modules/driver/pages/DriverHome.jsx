@@ -792,6 +792,40 @@ const DriverHome = () => {
         };
     }, [isOnline]);
 
+    // Listen for dynamic location permission granted in browser settings
+    useEffect(() => {
+        if (typeof window === 'undefined' || !navigator.permissions?.query) return;
+
+        let permResult = null;
+        const listenPermChange = async () => {
+            try {
+                permResult = await navigator.permissions.query({ name: 'geolocation' });
+                const onStateChange = async () => {
+                    if (permResult.state === 'granted') {
+                        try {
+                            const coords = await getCurrentCoords({ purpose: 'online' });
+                            setDriverCoords(coords);
+                            driverCoordsRef.current = coords;
+                            if (isOnline) {
+                                socketService.emit('driver_location_update', {
+                                    coordinates: coords,
+                                    latitude: coords[1],
+                                    longitude: coords[0]
+                                });
+                            }
+                        } catch {}
+                    }
+                };
+                permResult.onchange = onStateChange;
+            } catch {}
+        };
+
+        listenPermChange();
+        return () => {
+            if (permResult) permResult.onchange = null;
+        };
+    }, [isOnline]);
+
     // Live continuous GPS watcher for Taxi Driver (runs in background & syncs Socket + REST API + Firebase)
     useEffect(() => {
         if (!isOnline || typeof navigator === 'undefined' || !navigator.geolocation) {

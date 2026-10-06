@@ -440,7 +440,7 @@ export default function OutletInfo() {
         <div className="px-4 pt-[50px] pb-4 bg-white">
           <div className="flex items-start gap-4">
             <div className="flex flex-col gap-2">
-              <button onClick={() => navigate("/restaurant/ratings-reviews")} className="flex items-center gap-2 text-left w-full">
+              <button onClick={() => navigate("/food/restaurant/ratings-reviews")} className="flex items-center gap-2 text-left w-full">
                 <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
                   <span className="text-white text-sm font-bold">{restaurantData?.rating?.toFixed(1) || "0.0"}</span>
                   <Star className="w-3.5 h-3.5 text-white fill-white" />

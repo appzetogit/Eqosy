@@ -1451,7 +1451,7 @@ export default function OrdersMain() {
             // Onboarding is incomplete, redirect to onboarding page
             const incompleteStep = await checkOnboardingStatus();
             if (incompleteStep) {
-              navigate(`/restaurant/onboarding?step=${incompleteStep}`, {
+              navigate(`/food/restaurant/onboarding?step=${incompleteStep}`, {
                 replace: true,
               });
               return;
@@ -1535,7 +1535,7 @@ export default function OrdersMain() {
         if (!error.response?.data?.message?.includes("inactive")) {
           // Only redirect if it's not an "inactive" error (which we handle differently)
           setTimeout(() => {
-            window.location.href = "/restaurant/login";
+            window.location.href = "/food/restaurant/login";
           }, 1500);
         }
       } else {

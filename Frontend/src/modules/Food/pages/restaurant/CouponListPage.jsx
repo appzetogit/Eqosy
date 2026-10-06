@@ -86,7 +86,7 @@ export default function CouponListPage() {
             <p className="text-xs text-gray-500">Restaurant-sponsored discounts</p>
           </div>
           <button
-            onClick={() => navigate("/restaurant/coupon/new")}
+            onClick={() => navigate("/food/restaurant/coupon/new")}
             className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -115,7 +115,7 @@ export default function CouponListPage() {
                 <p className="text-gray-500 text-xs mt-1">Create your first offer to attract customers</p>
               </div>
               <button
-                onClick={() => navigate("/restaurant/coupon/new")}
+                onClick={() => navigate("/food/restaurant/coupon/new")}
                 className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" />
@@ -250,7 +250,7 @@ export default function CouponListPage() {
         transition={{ type: "spring", stiffness: 200, damping: 15 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => navigate("/restaurant/coupon/new")}
+        onClick={() => navigate("/food/restaurant/coupon/new")}
         className="fixed bottom-6 right-4 w-14 h-14 bg-gray-900 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center z-40 transition-colors"
       >
         <Plus className="w-6 h-6" />

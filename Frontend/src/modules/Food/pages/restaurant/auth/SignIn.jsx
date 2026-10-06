@@ -24,7 +24,7 @@ export default function RestaurantSignIn() {
   useEffect(() => {
     const isAuthenticated = isModuleAuthenticated("restaurant")
     if (isAuthenticated) {
-      navigate("/restaurant", { replace: true })
+      navigate("/food/restaurant", { replace: true })
     }
   }, [navigate])
 
@@ -45,7 +45,7 @@ export default function RestaurantSignIn() {
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event('restaurantAuthChanged'))
         
-        navigate("/restaurant", { replace: true })
+        navigate("/food/restaurant", { replace: true })
       } else {
         throw new Error("Login failed. Please try again.")
       }
@@ -200,7 +200,7 @@ export default function RestaurantSignIn() {
               </label>
               <button
                 type="button"
-                onClick={() => navigate("/restaurant/forgot-password")}
+                onClick={() => navigate("/food/restaurant/forgot-password")}
                 className="text-primary-orange hover:underline font-medium"
               >
                 Forgot Password
@@ -221,7 +221,7 @@ export default function RestaurantSignIn() {
           <div className="mt-6 text-center text-sm text-gray-600">
             Don't have an account?{" "}
             <button
-              onClick={() => navigate("/restaurant/signup-email")}
+              onClick={() => navigate("/food/restaurant/signup-email")}
               className="text-primary-orange hover:underline font-medium"
             >
               Sign up

@@ -276,7 +276,7 @@ export default function EditOwner() {
       
       // Navigate to welcome page
       setTimeout(() => {
-        navigate("/restaurant/welcome", { replace: true })
+        navigate("/food/restaurant/welcome", { replace: true })
       }, 300)
     } catch (error) {
       debugError("Error deleting account:", error)

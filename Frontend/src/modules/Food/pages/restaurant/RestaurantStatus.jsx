@@ -259,7 +259,7 @@ export default function RestaurantStatus() {
   // Handle dialog close and navigate to outlet timings
   const handleGoToOutletTimings = () => {
     setShowOutletClosedDialog(false)
-    navigate("/restaurant/outlet-timings")
+    navigate("/food/restaurant/outlet-timings")
   }
 
   // Format time from 24-hour to 12-hour format
@@ -375,7 +375,7 @@ export default function RestaurantStatus() {
               <button
                 onClick={() => {
                   // Navigate to restaurant settings
-                  navigate("/restaurant/explore")
+                  navigate("/food/restaurant/explore")
                 }}
                 className="ml-3 p-2 bg-gray-200 hover:bg-gray-300 rounded-full transition-colors shrink-0"
                 aria-label="Explore more"
@@ -421,7 +421,7 @@ export default function RestaurantStatus() {
             </p>
             {!isDayClosed && (
               <button
-                onClick={() => navigate("/restaurant/outlet-timings")}
+                onClick={() => navigate("/food/restaurant/outlet-timings")}
                 className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
               >
                 Details
@@ -501,7 +501,7 @@ export default function RestaurantStatus() {
             <Button
               onClick={() => {
                 setShowOutsideTimingsDialog(false)
-                navigate("/restaurant/outlet-timings")
+                navigate("/food/restaurant/outlet-timings")
               }}
               className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
             >
