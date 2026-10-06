@@ -148,6 +148,25 @@ const filterSidebarSectionsByAccess = (sections = [], adminProfile = {}) =>
     }))
     .filter((section) => section.items.length > 0);
 
+const findFirstAvailablePath = (sections = []) => {
+  for (const sec of sections) {
+    for (const item of sec.items || []) {
+      if (item.path) return item.path;
+      if (Array.isArray(item.subItems)) {
+        for (const sub of item.subItems) {
+          if (sub.path) return sub.path;
+          if (Array.isArray(sub.subItems)) {
+            for (const nested of sub.subItems) {
+              if (nested.path) return nested.path;
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+};
+
 const NOTIFICATION_PAGE_SIZE = 5;
 
 const readDismissedNotifications = () => {
@@ -1035,10 +1054,25 @@ const AdminLayout = () => {
 
   const isOwnerRoute = location.pathname.startsWith('/taxi/admin/owners') || location.pathname.startsWith('/taxi/admin/fleet');
   const isAdminChatRoute = pathMatches(location.pathname, '/taxi/admin/chat');
-  const mode = isOwnerRoute ? OWNER_MODE : ADMIN_MODE;
+  const mode = (!isSubadmin && isOwnerRoute) ? OWNER_MODE : ADMIN_MODE;
   const sidebarSections = useMemo(
     () => filterSidebarSectionsByAccess(mode === OWNER_MODE ? ownerSections : adminSections, adminProfile),
     [adminProfile, adminSections, mode, ownerSections],
+  );
+
+  const handleModeChange = useCallback(
+    (newMode) => {
+      if (newMode === OWNER_MODE) {
+        const filteredOwner = filterSidebarSectionsByAccess(ownerSections, adminProfile);
+        const firstOwnerPath = findFirstAvailablePath(filteredOwner) || '/taxi/admin/owners/dashboard';
+        navigate(firstOwnerPath);
+      } else {
+        const filteredAdmin = filterSidebarSectionsByAccess(adminSections, adminProfile);
+        const firstAdminPath = findFirstAvailablePath(filteredAdmin) || '/taxi/admin/dashboard';
+        navigate(firstAdminPath);
+      }
+    },
+    [adminProfile, adminSections, ownerSections, navigate],
   );
 
   // Auto-redirect if subadmin accesses an unauthorized route or root /taxi/admin without dashboard permission
@@ -1069,20 +1103,6 @@ const AdminLayout = () => {
     const lacksDashboard = isRootAdminPath && !hasAdminPermission(adminProfile, 'dashboard.view');
 
     if (lacksDashboard || lacksPermission) {
-      const findFirstAvailablePath = (sections) => {
-        for (const sec of sections) {
-          for (const item of sec.items || []) {
-            if (item.path) return item.path;
-            if (item.subItems) {
-              for (const sub of item.subItems) {
-                if (sub.path) return sub.path;
-              }
-            }
-          }
-        }
-        return null;
-      };
-
       const firstAvailable = findFirstAvailablePath(sidebarSections);
       if (firstAvailable && firstAvailable !== location.pathname) {
         navigate(firstAvailable, { replace: true });
@@ -1762,8 +1782,8 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {(!isSubadmin || hasAdminPermission(adminProfile, 'owners')) && (
-              <ModeSwitcher mode={mode} setMode={setMode} />
+            {!isSubadmin && (
+              <ModeSwitcher mode={mode} setMode={handleModeChange} />
             )}
 
             <div className="mr-1 flex items-center gap-1 border-r border-gray-100 pr-4 leading-none">
