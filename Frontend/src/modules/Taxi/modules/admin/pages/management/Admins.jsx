@@ -13,6 +13,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
+import { resourcePermissionsFromFlat } from '../../constants/adminAccess';
 
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-100';
@@ -23,10 +24,10 @@ const ScopeBadgeList = ({ items = [], emptyLabel }) => {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {items.map((item) => (
         <span
-          key={item.id}
+          key={item.id || item._id || item.name}
           className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-blue-700"
         >
           {item.name}
@@ -115,7 +116,7 @@ const Admins = () => {
             </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-950">Scoped Admin Control</h1>
             <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
-              Create subadmins, assign sidebar permissions, and lock them to specific service locations and zones.
+              Create subadmins, assign read/write permissions per section, and lock them to specific service locations and working zones.
             </p>
           </div>
 
@@ -196,7 +197,7 @@ const Admins = () => {
                 </div>
                 <p className="text-sm font-bold text-slate-900">No admin accounts matched your search.</p>
                 <p className="max-w-md text-xs font-semibold text-slate-500">
-                  Create a new subadmin and assign their sidebar permissions, service locations, and zones here.
+                  Create a new subadmin and assign read/write section permissions, service locations, and working zones here.
                 </p>
               </div>
             ) : (
@@ -205,9 +206,9 @@ const Admins = () => {
                   <tr className="border-b border-slate-100 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
                     <th className="px-6 py-4">Admin</th>
                     <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4">Permissions</th>
+                    <th className="px-6 py-4">Read / Write Access</th>
                     <th className="px-6 py-4">Service Locations</th>
-                    <th className="px-6 py-4">Zones</th>
+                    <th className="px-6 py-4">Working Zones</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -216,6 +217,11 @@ const Admins = () => {
                   {filteredAdmins.map((admin) => {
                     const isSuperadmin = admin.admin_type === 'superadmin';
                     const isDeleting = deletingId === String(admin.id || admin._id || '');
+
+                    const resourceMap = resourcePermissionsFromFlat(admin.permissions || []);
+                    const totalResources = Object.keys(resourceMap).length;
+                    const writeCount = Object.values(resourceMap).filter((acc) => acc.write).length;
+                    const readCount = Object.values(resourceMap).filter((acc) => acc.read && !acc.write).length;
 
                     return (
                       <tr key={admin.id || admin._id} className="align-top transition-colors hover:bg-slate-50/80">
@@ -244,10 +250,23 @@ const Admins = () => {
                         </td>
                         <td className="px-6 py-5">
                           <p className="text-sm font-bold text-slate-900">
-                            {isSuperadmin ? 'Full sidebar access' : `${(admin.permissions || []).length} modules`}
+                            {isSuperadmin ? 'Full access' : `${totalResources} section${totalResources === 1 ? '' : 's'}`}
                           </p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">
-                            {isSuperadmin ? 'Every menu, every API scope.' : (admin.permissions || []).slice(0, 3).join(', ') || 'No modules'}
+                            {isSuperadmin ? (
+                              'Read & write everywhere'
+                            ) : totalResources > 0 ? (
+                              <span className="flex flex-wrap gap-1.5 items-center mt-1">
+                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                  {writeCount} Write
+                                </span>
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                                  {readCount} Read-only
+                                </span>
+                              </span>
+                            ) : (
+                              'No permissions assigned'
+                            )}
                           </p>
                         </td>
                         <td className="px-6 py-5">
@@ -259,7 +278,7 @@ const Admins = () => {
                         <td className="px-6 py-5">
                           <ScopeBadgeList
                             items={admin.zones || []}
-                            emptyLabel={isSuperadmin ? 'All zones' : 'All zones in assigned service locations'}
+                            emptyLabel={isSuperadmin ? 'All zones' : 'All zones in scope'}
                           />
                         </td>
                         <td className="px-6 py-5">
@@ -279,6 +298,7 @@ const Admins = () => {
                               type="button"
                               onClick={() => navigate(`/taxi/admin/management/admins/edit/${admin.id || admin._id}`)}
                               className="rounded-2xl border border-slate-200 p-2.5 text-slate-500 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                              title="Edit Admin"
                             >
                               <Pencil size={15} />
                             </button>
@@ -288,6 +308,7 @@ const Admins = () => {
                                 disabled={isDeleting}
                                 onClick={() => handleDelete(admin)}
                                 className="rounded-2xl border border-slate-200 p-2.5 text-slate-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                title="Delete Admin"
                               >
                                 {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                               </button>

@@ -155,13 +155,13 @@ const getAdminScope = (admin = {}) => ({
 
 const isSuperAdmin = (admin = {}) => {
   const level = resolveAdminLevel(admin);
+  if (level === ADMIN_LEVELS.SUBADMIN) return false;
   if (level === ADMIN_LEVELS.TAXI_SUPERADMIN || level === ADMIN_LEVELS.PLATFORM_SUPERADMIN || level === ADMIN_LEVELS.FOOD_SUPERADMIN) {
     return true;
   }
   const roleLower = String(admin.role || admin.admin_type || '').toLowerCase();
-  if (roleLower === 'superadmin' || roleLower === 'admin') {
-    return true;
-  }
+  if (roleLower.includes('sub')) return false;
+  if (roleLower === 'superadmin') return true;
   return getAdminScope(admin).adminType === 'superadmin';
 };
 
@@ -170,7 +170,7 @@ const buildNoAccessQuery = (field) => ({ [field]: { $in: [] } });
 const getScopedZoneIds = async (admin = {}) => {
   const { adminType, zoneIds, serviceLocationIds } = getAdminScope(admin);
 
-  if (adminType === 'superadmin') {
+  if (adminType === 'superadmin' || isSuperAdmin(admin)) {
     return [];
   }
 
@@ -189,24 +189,37 @@ const getScopedZoneIds = async (admin = {}) => {
   return zoneIdsFromLocations.map((value) => toObjectId(value)).filter(Boolean);
 };
 
-const buildServiceLocationScopeQuery = (admin = {}, field = 'service_location_id') => {
-  const { adminType, serviceLocationIds } = getAdminScope(admin);
+const buildServiceLocationScopeQuery = async (admin = {}, field = 'service_location_id') => {
+  const { adminType, serviceLocationIds, zoneIds } = getAdminScope(admin);
 
-  if (adminType === 'superadmin') {
+  if (adminType === 'superadmin' || isSuperAdmin(admin)) {
     return {};
   }
 
-  if (serviceLocationIds.length === 0) {
-    return buildNoAccessQuery(field);
+  if (serviceLocationIds.length === 0 && zoneIds.length === 0) {
+    return {};
   }
 
-  return { [field]: { $in: serviceLocationIds } };
+  if (serviceLocationIds.length > 0) {
+    return { [field]: { $in: serviceLocationIds } };
+  }
+
+  const zoneDocs = await Zone.find({ _id: { $in: zoneIds } }).distinct('service_location_id');
+  const locIds = zoneDocs.map(toObjectId).filter(Boolean);
+  if (locIds.length === 0) {
+    return buildNoAccessQuery(field);
+  }
+  return { [field]: { $in: locIds } };
 };
 
 const buildZoneScopeQuery = async (admin = {}, field = 'zone_id') => {
-  const { adminType } = getAdminScope(admin);
+  const { adminType, serviceLocationIds, zoneIds } = getAdminScope(admin);
 
-  if (adminType === 'superadmin') {
+  if (adminType === 'superadmin' || isSuperAdmin(admin)) {
+    return {};
+  }
+
+  if (serviceLocationIds.length === 0 && zoneIds.length === 0) {
     return {};
   }
 
@@ -266,10 +279,31 @@ const assertZoneAccess = async (admin = {}, zoneId) => {
 const serializeAdminSummary = (admin, serviceLocationMap = new Map(), zoneMap = new Map()) => {
   const serviceLocationIds = normalizeObjectIdList(admin.service_location_ids).map(String);
   const zoneIds = normalizeObjectIdList(admin.zone_ids).map(String);
+  const foodZoneIds = normalizeObjectIdList(admin.food_zone_ids).map(String);
+  const isSuper = isSuperAdminLike(admin);
+
+  let servicesAccess = Array.isArray(admin.servicesAccess) ? [...admin.servicesAccess] : [];
+  if (servicesAccess.length === 0 && !isSuper) {
+    const rawPerms = (admin.permissions || []).map((p) => String(p || '').toLowerCase());
+    const hasTaxiPerm = rawPerms.some((p) => ['cancellation', 'trip', 'delivery', 'ongoing', 'driver', 'owner', 'location', 'airport', 'store', 'vehicle', 'price', 'goods', 'rental', 'bus', 'pooling', 'geofencing', 'chat'].some((kw) => p.includes(kw)));
+    const hasFoodPerm = rawPerms.some((p) => ['pos', 'order', 'restaurant', 'food', 'category', 'delivery', 'dining', 'fee', 'cms'].some((kw) => p.includes(kw)));
+
+    if (hasTaxiPerm || serviceLocationIds.length > 0 || zoneIds.length > 0) {
+      servicesAccess.push('taxi');
+    }
+    if (hasFoodPerm || foodZoneIds.length > 0) {
+      servicesAccess.push('food');
+    }
+    if (servicesAccess.length === 0) {
+      servicesAccess = [admin.module || 'taxi'];
+    }
+  }
+
+  const adminId = admin?._id || admin?.id || null;
 
   return {
-    _id: admin._id,
-    id: admin._id,
+    _id: adminId,
+    id: adminId,
     name: admin.name || '',
     email: admin.email || '',
     phone: admin.phone || '',
@@ -277,10 +311,12 @@ const serializeAdminSummary = (admin, serviceLocationMap = new Map(), zoneMap = 
     adminLevel: resolveAdminLevel(admin),
     module: resolveAdminModule(admin),
     parentAdminId: admin.parentAdminId ? String(admin.parentAdminId) : null,
-    admin_type: normalizeAdminType(admin.admin_type || admin.role),
+    admin_type: isSuper ? 'superadmin' : 'subadmin',
     permissions: normalizeAdminPermissions(admin.permissions || []),
     service_location_ids: serviceLocationIds,
     zone_ids: zoneIds,
+    food_zone_ids: foodZoneIds,
+    servicesAccess: isSuper ? ['food', 'taxi'] : servicesAccess,
     service_locations: serviceLocationIds
       .map((id) => serviceLocationMap.get(id))
       .filter(Boolean)
@@ -3012,7 +3048,7 @@ export const listAdminPermissions = async () =>
   ADMIN_PERMISSIONS.map((key) => ({ key, label: key }));
 
 export const listAdmins = async (currentAdmin) => {
-  assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
+  assertAdminPermission(currentAdmin, 'subadmins', 'subadmins');
 
   const descendantQuery = await buildDescendantAdminQuery(Admin, currentAdmin);
   const admins = await Admin.find(descendantQuery)
@@ -3020,7 +3056,18 @@ export const listAdmins = async (currentAdmin) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  return enrichAdminSummaries(admins);
+  const taxiAdmins = admins.filter((admin) => {
+    if (isSuperAdminLike(admin)) return true;
+    const services = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+    if (services.length > 0) return services.includes('taxi');
+    return (
+      (Array.isArray(admin.service_location_ids) && admin.service_location_ids.length > 0) ||
+      (Array.isArray(admin.zone_ids) && admin.zone_ids.length > 0) ||
+      admin.module === 'taxi'
+    );
+  });
+
+  return enrichAdminSummaries(taxiAdmins);
 };
 
 const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existingAdminId = null) => {
@@ -3078,10 +3125,6 @@ const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existing
     throw new ApiError(400, 'Select at least one permission for the subadmin');
   }
 
-  if (adminType === 'subadmin' && serviceLocationIds.length === 0) {
-    throw new ApiError(400, 'Assign at least one service location to the subadmin');
-  }
-
   if (!isSuperAdminLike(currentAdmin)) {
     try {
       assertPermissionsSubset(currentAdmin.permissions || [], permissions);
@@ -3131,24 +3174,48 @@ const validateSubadminPayload = async (currentAdmin = {}, payload = {}, existing
     permissions,
     service_location_ids: adminType === 'superadmin' ? [] : serviceLocationIds,
     zone_ids: adminType === 'superadmin' ? [] : zoneIds,
-    servicesAccess: isCreatingModuleSuperAdmin ? [module] : ['food', 'taxi'],
+    servicesAccess: isCreatingModuleSuperAdmin ? [module] : Array.isArray(payload.servicesAccess) ? [...new Set([...payload.servicesAccess, 'taxi'])] : ['taxi'],
     active,
     status,
     isActive: active,
   };
 };
 
+export const getAdminById = async (currentAdmin, id) => {
+  assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
+
+  const descendantQuery = await buildDescendantAdminQuery(Admin, currentAdmin);
+  const admin = await Admin.findOne({
+    ...descendantQuery,
+    _id: toObjectId(id),
+  })
+    .select('-password -resetPasswordOtp -resetPasswordExpires')
+    .lean();
+
+  if (!admin) {
+    throw new ApiError(404, 'Admin account not found');
+  }
+
+  const [serializedAdmin] = await enrichAdminSummaries([admin]);
+  return serializedAdmin;
+};
+
 export const createAdminAccount = async (currentAdmin, payload = {}) => {
   assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
 
   const email = String(payload.email || '').trim().toLowerCase();
+  const phone = String(payload.phone || '').trim();
   const password = String(payload.password || '').trim();
   const passwordConfirmation = String(payload.password_confirmation || payload.passwordConfirmation || '').trim();
 
-  const existingAdmin = await Admin.findOne({ email });
+  const matchQuery = [];
+  if (email) matchQuery.push({ email });
+  if (phone) matchQuery.push({ phone });
+
+  const existingAdmin = matchQuery.length > 0 ? await Admin.findOne({ $or: matchQuery }) : null;
   if (existingAdmin) {
     const existingServices = Array.isArray(existingAdmin.servicesAccess) ? existingAdmin.servicesAccess : [];
-    existingAdmin.servicesAccess = [...new Set([...existingServices, 'taxi', 'food'])];
+    existingAdmin.servicesAccess = [...new Set([...existingServices, 'taxi'])];
 
     const newPermissions = normalizeAdminPermissions(payload.permissions || []);
     existingAdmin.permissions = [...new Set([...(existingAdmin.permissions || []), ...newPermissions])];
@@ -3189,7 +3256,9 @@ export const createAdminAccount = async (currentAdmin, payload = {}) => {
   if (createPayload.parentAdminId) {
     createPayload.parentAdminId = toObjectId(createPayload.parentAdminId);
   }
-  createPayload.servicesAccess = [...new Set([...(createPayload.servicesAccess || []), 'taxi', 'food'])];
+  createPayload.servicesAccess = Array.isArray(createPayload.servicesAccess) && createPayload.servicesAccess.length > 0
+    ? [...new Set([...createPayload.servicesAccess, 'taxi'])]
+    : ['taxi'];
 
   const created = await Admin.create({
     ...createPayload,
@@ -3216,7 +3285,12 @@ export const updateAdminAccount = async (currentAdmin, id, payload = {}) => {
 
   const validated = await validateSubadminPayload(currentAdmin, payload, admin._id);
   const { parentAdminId, ...updateFields } = validated;
-  updateFields.servicesAccess = [...new Set([...(admin.servicesAccess || []), 'taxi', 'food'])];
+  const existingServices = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  updateFields.servicesAccess = [...new Set([...existingServices, 'taxi'])];
+  const existingFoodPermissions = (admin.permissions || []).filter(
+    (p) => !ADMIN_PERMISSIONS.includes(p) && p !== '*' && p !== 'all',
+  );
+  updateFields.permissions = [...new Set([...(updateFields.permissions || []), ...existingFoodPermissions])];
   Object.assign(admin, updateFields);
 
   if (payload.password) {
@@ -3239,7 +3313,7 @@ export const updateAdminAccount = async (currentAdmin, id, payload = {}) => {
 export const deleteAdminAccount = async (currentAdmin, id) => {
   assertAdminPermission(currentAdmin, 'subadmins.manage', 'subadmins');
 
-  const admin = await Admin.findById(id).lean();
+  const admin = await Admin.findById(id);
   if (!admin) {
     throw new ApiError(404, 'Admin account not found');
   }
@@ -3252,6 +3326,27 @@ export const deleteAdminAccount = async (currentAdmin, id) => {
 
   if (normalizeAdminType(admin.admin_type) === 'superadmin' && resolveAdminLevel(admin) !== ADMIN_LEVELS.SUBADMIN) {
     throw new ApiError(400, 'Super admin accounts cannot be deleted through this endpoint');
+  }
+
+  const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  const hasFoodAccess =
+    servicesAccess.includes('food') ||
+    (Array.isArray(admin.food_zone_ids) && admin.food_zone_ids.length > 0) ||
+    admin.module === 'food';
+
+  if (hasFoodAccess) {
+    admin.servicesAccess = servicesAccess.filter((s) => s !== 'taxi');
+    if (admin.servicesAccess.length === 0) {
+      admin.servicesAccess = ['food'];
+    }
+    admin.service_location_ids = [];
+    admin.zone_ids = [];
+    if (admin.module === 'taxi') {
+      admin.module = 'food';
+    }
+
+    await admin.save();
+    return { deleted: true, removedAccess: 'taxi' };
   }
 
   await Admin.deleteOne({ _id: admin._id });
@@ -3986,7 +4081,7 @@ export const adjustUserWallet = async (id, payload = {}) => {
   return { balance: Number(nextBalance.toFixed(2)) };
 };
 
-export const listDrivers = async ({ page = 1, limit = 50, status, search, approve, isOnline } = {}, currentAdmin = null) => {
+export const listDrivers = async ({ page = 1, limit = 50, status, search, approve, isOnline, tab } = {}, currentAdmin = null) => {
   const safePage = Number(page) || 1;
   const safeLimit = Number(limit) || 50;
   const start = (safePage - 1) * safeLimit;
@@ -3994,10 +4089,13 @@ export const listDrivers = async ({ page = 1, limit = 50, status, search, approv
   const query = { deletedAt: null };
   if (currentAdmin) {
     assertAdminPermission(currentAdmin, 'drivers.view', 'drivers');
-    Object.assign(query, buildServiceLocationScopeQuery(currentAdmin));
+    Object.assign(query, await buildServiceLocationScopeQuery(currentAdmin));
   }
 
-  if (status) {
+  const requestedTab = String(tab || '').toLowerCase();
+  if (requestedTab === 'pending' || status === 'pending') {
+    query.$or = [{ status: 'pending' }, { approve: false }];
+  } else if (status) {
     query.status = status;
   }
   
@@ -5347,10 +5445,7 @@ export const listUserSubscriptionsByUserId = async (userId) => {
 
 export const listServiceLocations = async (currentAdmin = null) => {
   await ensureServiceLocationsSeeded();
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'service_locations.view', 'service locations');
-  }
-  const query = currentAdmin ? buildServiceLocationScopeQuery(currentAdmin, '_id') : {};
+  const query = currentAdmin ? await buildServiceLocationScopeQuery(currentAdmin, '_id') : {};
   return ServiceLocation.find(query).sort({ createdAt: -1 }).lean();
 };
 
@@ -6460,7 +6555,7 @@ export const listOwners = async (queryArgs = {}, currentAdmin = null) => {
   }
   const search = String(queryArgs.search || '').trim();
 
-  const query = currentAdmin ? buildServiceLocationScopeQuery(currentAdmin) : {};
+  const query = currentAdmin ? await buildServiceLocationScopeQuery(currentAdmin) : {};
   if (search) {
     const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     query.$or = [{ name: regex }, { mobile: regex }, { email: regex }, { company_name: regex }];
@@ -7195,6 +7290,10 @@ export const deleteOwner = async (id) => {
   };
 
 export const getDashboardData = async (currentAdmin = {}) => {
+  if (currentAdmin && Object.keys(currentAdmin).length > 0 && !isSuperAdminLike(currentAdmin)) {
+    assertAdminPermission(currentAdmin, 'dashboard.read', 'dashboard');
+  }
+
   const isSuper = isSuperAdminLike(currentAdmin);
   const serviceLocationIds = normalizeObjectIdList(currentAdmin?.service_location_ids || []);
   const zoneIds = normalizeObjectIdList(currentAdmin?.zone_ids || []);
@@ -7217,13 +7316,6 @@ export const getDashboardData = async (currentAdmin = {}) => {
       driverFilter.zone_id = { $in: zoneIds };
       approvedDriverFilter.zone_id = { $in: zoneIds };
       rideFilter.zone_id = { $in: zoneIds };
-    } else {
-      driverFilter._id = null;
-      approvedDriverFilter._id = null;
-      userFilter._id = null;
-      ownerFilter._id = null;
-      rideFilter._id = null;
-      supportTicketMatch._id = null;
     }
   }
 

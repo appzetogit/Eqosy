@@ -45,12 +45,54 @@ export default function FoodsList() {
   const [foods, setFoods] = useState([])
   const [restaurantsForFilter, setRestaurantsForFilter] = useState([])
 
+  const isSubadmin = useMemo(() => {
+    const role = String(adminProfile?.role || adminProfile?.type || "").toLowerCase()
+    if (role.includes("super")) return false
+    const assigned = adminProfile?.food_zone_ids || adminProfile?.zone_ids || []
+    if (Array.isArray(assigned) && assigned.length > 0) return true
+    if (role.includes("subadmin") || role.includes("sub_admin") || role.includes("sub-admin")) return true
+    return false
+  }, [adminProfile])
+
+  const subadminAssignedZoneIds = useMemo(() => {
+    const raw = adminProfile?.food_zone_ids || adminProfile?.zone_ids || []
+    return Array.isArray(raw) ? raw.map(String) : []
+  }, [adminProfile])
+
+  const displayZones = useMemo(() => {
+    if (!isSubadmin || subadminAssignedZoneIds.length === 0) return zones
+    return zones.filter((z) => subadminAssignedZoneIds.includes(String(z._id || z.id)))
+  }, [zones, isSubadmin, subadminAssignedZoneIds])
+
   useEffect(() => {
-    adminAPI.getZones({ limit: 1000 }).then((res) => {
-      const list = res?.data?.data?.zones || res?.data?.zones || res?.data?.data || []
-      setZones(Array.isArray(list) ? list : [])
-    }).catch(() => setZones([]))
+    adminAPI
+      .getZones({ limit: 1000 })
+      .then((res) => {
+        const raw = res?.data?.data || res?.data
+        const list = Array.isArray(raw?.zones)
+          ? raw.zones
+          : Array.isArray(raw)
+          ? raw
+          : Array.isArray(res?.data?.zones)
+          ? res.data.zones
+          : []
+        setZones(list)
+      })
+      .catch(() => setZones([]))
   }, [])
+
+  useEffect(() => {
+    if (isSubadmin) {
+      if (displayZones.length > 0) {
+        const validIds = displayZones.map((z) => String(z._id || z.id))
+        if (!validIds.includes(selectedZone)) {
+          setSelectedZone(validIds[0])
+        }
+      } else if (subadminAssignedZoneIds.length > 0 && selectedZone === "all") {
+        setSelectedZone(subadminAssignedZoneIds[0])
+      }
+    }
+  }, [displayZones, isSubadmin, selectedZone, subadminAssignedZoneIds])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [selectedFood, setSelectedFood] = useState(null)
@@ -535,18 +577,44 @@ export default function FoodsList() {
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
-            <select
-              value={selectedZone}
-              onChange={(e) => setSelectedZone(e.target.value)}
-              className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-            >
-              <option value="all">All Areas / Zones</option>
-              {zones.map((zone) => (
-                <option key={zone._id || zone.id} value={zone._id || zone.id}>
-                  {zone.name || zone.zoneName}
-                </option>
-              ))}
-            </select>
+            {isSubadmin ? (
+              displayZones.length === 1 || zones.length === 1 ? (
+                <div className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-blue-200 bg-blue-50/90 font-bold text-blue-900 flex items-center justify-between gap-2 shadow-sm">
+                  <span>📍 {(displayZones[0] || zones[0])?.name || (displayZones[0] || zones[0])?.zoneName || "Salar Zone"}</span>
+                  <span className="text-[10px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-300">Assigned</span>
+                </div>
+              ) : displayZones.length > 1 ? (
+                <select
+                  value={displayZones.some(z => String(z._id || z.id) === selectedZone) ? selectedZone : String(displayZones[0]._id || displayZones[0].id)}
+                  onChange={(e) => setSelectedZone(e.target.value)}
+                  className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-blue-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 font-bold"
+                >
+                  {displayZones.map((zone) => (
+                    <option key={zone._id || zone.id} value={zone._id || zone.id} className="text-slate-900 font-bold">
+                      📍 {zone.name || zone.zoneName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-blue-200 bg-blue-50/90 font-bold text-blue-900 flex items-center justify-between gap-2 shadow-sm">
+                  <span>📍 Salar Zone</span>
+                  <span className="text-[10px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-300">Assigned</span>
+                </div>
+              )
+            ) : (
+              <select
+                value={selectedZone}
+                onChange={(e) => setSelectedZone(e.target.value)}
+                className="px-4 py-2.5 min-w-[180px] text-sm rounded-lg border border-slate-300 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 font-semibold"
+              >
+                <option value="all" className="text-slate-900">All Areas / Zones</option>
+                {zones.map((zone) => (
+                  <option key={zone._id || zone.id} value={zone._id || zone.id} className="text-slate-900">
+                    📍 {zone.name || zone.zoneName}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               value={selectedRestaurant}
               onChange={(e) => setSelectedRestaurant(e.target.value)}

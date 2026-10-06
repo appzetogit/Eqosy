@@ -28,43 +28,55 @@ export const normalizeObjectIdList = (values = []) =>
   [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || '').trim()).filter(Boolean))];
 
 export const resolveAdminLevel = (admin = {}) => {
+  const adminTypeLower = String(admin.admin_type || '').trim().toLowerCase();
+  const roleLower = String(admin.role || '').trim().toLowerCase();
   const explicit = String(admin.adminLevel || admin.admin_level || '').trim().toLowerCase();
+  const permissions = Array.isArray(admin.permissions) ? admin.permissions.map((p) => String(p || '').trim()) : [];
+  const hasWildcard = permissions.includes('*') || permissions.includes('all');
+
+  const isExplicitSubadmin =
+    adminTypeLower === 'subadmin' ||
+    adminTypeLower.includes('sub') ||
+    explicit === ADMIN_LEVELS.SUBADMIN ||
+    roleLower === 'subadmin' ||
+    roleLower.includes('sub');
+
+  if (isExplicitSubadmin || (permissions.length > 0 && !hasWildcard)) {
+    return ADMIN_LEVELS.SUBADMIN;
+  }
+
   if (Object.values(ADMIN_LEVELS).includes(explicit)) {
     return explicit;
   }
 
-  const adminType = normalizeAdminType(admin.admin_type || admin.role);
   const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
   const hasAllServices =
     servicesAccess.includes(ADMIN_MODULES.FOOD) &&
     servicesAccess.includes(ADMIN_MODULES.TAXI);
 
-  const roleLower = String(admin.role || '').toLowerCase();
-  const adminTypeLower = String(admin.admin_type || '').toLowerCase();
-  const isExplicitSubadmin = adminTypeLower === 'subadmin' || roleLower === 'subadmin';
-
-  if (!isExplicitSubadmin || roleLower === 'superadmin' || roleLower === 'admin' || adminTypeLower === 'superadmin' || adminTypeLower === 'admin') {
-    if (hasAllServices || servicesAccess.length >= 2 || servicesAccess.length === 0) {
-      return ADMIN_LEVELS.PLATFORM_SUPERADMIN;
-    }
-    if (servicesAccess.includes(ADMIN_MODULES.TAXI) && !servicesAccess.includes(ADMIN_MODULES.FOOD)) {
-      return ADMIN_LEVELS.TAXI_SUPERADMIN;
-    }
-    return ADMIN_LEVELS.FOOD_SUPERADMIN;
-  }
-
   if (hasAllServices || servicesAccess.length >= 2) {
     return ADMIN_LEVELS.PLATFORM_SUPERADMIN;
   }
-
-  if (servicesAccess.includes(ADMIN_MODULES.TAXI)) {
+  if (servicesAccess.includes(ADMIN_MODULES.TAXI) && !servicesAccess.includes(ADMIN_MODULES.FOOD)) {
     return ADMIN_LEVELS.TAXI_SUPERADMIN;
   }
+  if (servicesAccess.includes(ADMIN_MODULES.FOOD) && !servicesAccess.includes(ADMIN_MODULES.TAXI)) {
+    return ADMIN_LEVELS.FOOD_SUPERADMIN;
+  }
 
-  return ADMIN_LEVELS.FOOD_SUPERADMIN;
+  if (adminTypeLower === 'superadmin' || roleLower === 'superadmin' || roleLower === 'admin') {
+    return ADMIN_LEVELS.PLATFORM_SUPERADMIN;
+  }
+
+  return ADMIN_LEVELS.SUBADMIN;
 };
 
 export const resolveAdminModule = (admin = {}) => {
+  const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  if (servicesAccess.includes(ADMIN_MODULES.FOOD) && servicesAccess.includes(ADMIN_MODULES.TAXI)) {
+    return null;
+  }
+
   const explicit = String(admin.module || '').trim().toLowerCase();
   if (explicit && Object.values(ADMIN_MODULES).includes(explicit)) {
     return explicit;
@@ -98,18 +110,56 @@ export const isModuleSuperAdmin = (admin = {}, module = null) => {
 };
 
 export const isSuperAdminLike = (admin = {}) => {
+  if (!admin || typeof admin !== 'object') return false;
+
+  const adminTypeLower = String(admin.admin_type || '').trim().toLowerCase();
+  const roleLower = String(admin.role || '').trim().toLowerCase();
+  const explicit = String(admin.adminLevel || admin.admin_level || '').trim().toLowerCase();
+  const permissions = Array.isArray(admin.permissions) ? admin.permissions.map((p) => String(p || '').trim()) : [];
+
+  const isExplicitSubadmin =
+    adminTypeLower === 'subadmin' ||
+    adminTypeLower.includes('sub') ||
+    explicit === ADMIN_LEVELS.SUBADMIN ||
+    roleLower === 'subadmin' ||
+    roleLower.includes('sub');
+
+  if (isExplicitSubadmin) {
+    return false;
+  }
+
+  if (
+    adminTypeLower === 'superadmin' ||
+    roleLower === 'superadmin' ||
+    explicit === ADMIN_LEVELS.PLATFORM_SUPERADMIN ||
+    explicit === ADMIN_LEVELS.TAXI_SUPERADMIN ||
+    explicit === ADMIN_LEVELS.FOOD_SUPERADMIN ||
+    permissions.includes('*') ||
+    permissions.includes('all')
+  ) {
+    return true;
+  }
+
+  if (permissions.length > 0 && !permissions.includes('*')) {
+    return false;
+  }
+
   const level = resolveAdminLevel(admin);
   return (
     level === ADMIN_LEVELS.PLATFORM_SUPERADMIN ||
     level === ADMIN_LEVELS.FOOD_SUPERADMIN ||
-    level === ADMIN_LEVELS.TAXI_SUPERADMIN ||
-    normalizeAdminType(admin.admin_type || admin.role) === 'superadmin'
+    level === ADMIN_LEVELS.TAXI_SUPERADMIN
   );
 };
 
 export const hasModuleAccess = (admin = {}, module) => {
   if (!module) return true;
   if (isPlatformSuperAdmin(admin)) return true;
+
+  const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  if (servicesAccess.length > 0) {
+    return servicesAccess.includes(module);
+  }
 
   const adminTypeLower = String(admin.admin_type || admin.role || '').trim().toLowerCase();
   const levelLower = String(admin.adminLevel || admin.admin_level || '').trim().toLowerCase();
@@ -140,7 +190,8 @@ export const hasModuleAccess = (admin = {}, module) => {
           raw.includes('promotion') ||
           raw.includes('wallet') ||
           raw.includes('report') ||
-          raw.includes('setting')
+          raw.includes('setting') ||
+          raw.includes('subadmin')
         );
       });
 
@@ -158,7 +209,15 @@ export const hasModuleAccess = (admin = {}, module) => {
       const permissions = Array.isArray(admin.permissions) ? admin.permissions : [];
       const hasFoodPermissions = permissions.some((p) => {
         const raw = String(p || '').toLowerCase();
-        return raw.includes('food') || raw.includes('restaurant') || raw.includes('order');
+        return (
+          raw.includes('food') ||
+          raw.includes('restaurant') ||
+          raw.includes('order') ||
+          raw.includes('pos') ||
+          raw.includes('category') ||
+          raw.includes('dining') ||
+          raw.includes('subadmin')
+        );
       });
       const hasFoodScope = (Array.isArray(admin.food_zone_ids) && admin.food_zone_ids.length > 0) || admin.module === ADMIN_MODULES.FOOD;
       if (hasFoodPermissions || hasFoodScope) {
@@ -169,14 +228,6 @@ export const hasModuleAccess = (admin = {}, module) => {
 
   const adminModule = resolveAdminModule(admin);
   if (adminModule && adminModule !== module) {
-    return false;
-  }
-
-  const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
-  if (servicesAccess.length > 0 && !servicesAccess.includes(module)) {
-    if (isExplicitSubadmin && Array.isArray(admin.permissions) && admin.permissions.length > 0) {
-      return true;
-    }
     return false;
   }
 
@@ -276,9 +327,9 @@ export const assertCanCreateAdmin = (currentAdmin = {}, payload = {}) => {
   }
 
   const targetModule = resolveTargetModule(currentAdmin, payload);
-  if (targetLevel === ADMIN_LEVELS.SUBADMIN) {
+  if (targetLevel === ADMIN_LEVELS.SUBADMIN && !isSuperAdminLike(currentAdmin) && !isPlatformSuperAdmin(currentAdmin)) {
     const currentModule = resolveAdminModule(currentAdmin);
-    if (currentModule && targetModule && currentModule !== targetModule) {
+    if (currentModule && targetModule && currentModule !== targetModule && !hasModuleAccess(currentAdmin, targetModule)) {
       throw new Error('Cannot create admins outside your module');
     }
   }
@@ -358,13 +409,18 @@ export const assertCanManageTargetAdmin = async (AdminModel, currentAdmin = {}, 
 };
 
 export const buildDescendantAdminQuery = async (AdminModel, currentAdmin = {}) => {
+  if (isSuperAdminLike(currentAdmin)) {
+    return {};
+  }
+
   const currentId = String(currentAdmin.id || currentAdmin._id || '').trim();
   if (!currentId) {
     return { _id: { $in: [] } };
   }
 
   const descendantIds = await getDescendantAdminIds(AdminModel, currentId);
-  return { _id: { $in: descendantIds.map(toObjectId).filter(Boolean) } };
+  const targetIds = [toObjectId(currentId), ...descendantIds.map(toObjectId)].filter(Boolean);
+  return { _id: { $in: targetIds } };
 };
 
 export const serializeAdminContext = (admin = {}) => ({

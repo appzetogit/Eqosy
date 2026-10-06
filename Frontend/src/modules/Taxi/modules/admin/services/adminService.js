@@ -8,20 +8,22 @@ export const adminService = {
    * Admin Authentication
    */
   login: async (credentials) => {
-    const response = await api.post(`${BACKEND_ORIGIN}/api/v1/food/auth/admin/login`, credentials);
+    const response = await api.post('/admin/login', credentials);
     const payload = unwrap(response);
     return {
       data: {
-        token: payload?.accessToken || '',
-        admin: payload?.user || null,
+        token: payload?.token || payload?.accessToken || '',
+        admin: payload?.admin || payload?.user || null,
         refreshToken: payload?.refreshToken || null,
       },
     };
   },
+  getAdminProfile: () => api.get('/admin/profile'),
   forgotPassword: (email) => api.post('/admin/forgot-password', { email }),
   verifyResetOtp: (data) => api.post('/admin/verify-reset-otp', data),
   resetPassword: (data) => api.post('/admin/reset-password', data),
   getAdmins: () => api.get('/admin/admin-management/admins'),
+  getAdminById: (id) => api.get(`/admin/admin-management/admins/${id}`),
   createAdminAccount: (data) => api.post('/admin/admin-management/admins', data),
   updateAdminAccount: (id, data) => api.patch(`/admin/admin-management/admins/${id}`, data),
   deleteAdminAccount: (id) => api.delete(`/admin/admin-management/admins/${id}`),
@@ -53,7 +55,18 @@ export const adminService = {
    * Driver Management
    */
   getDrivers: (page = 1, limit = 50, filters = {}) => {
-    const params = new URLSearchParams({ page, limit, ...filters }).toString();
+    let actualPage = page;
+    let actualLimit = limit;
+    let actualFilters = filters;
+
+    if (typeof page === 'object' && page !== null) {
+      actualFilters = page;
+      actualPage = page.page || 1;
+      actualLimit = page.limit || 50;
+    }
+
+    const { page: _, limit: __, ...restFilters } = actualFilters;
+    const params = new URLSearchParams({ page: actualPage, limit: actualLimit, ...restFilters }).toString();
     return api.get(`/admin/drivers?${params}`);
   },
 

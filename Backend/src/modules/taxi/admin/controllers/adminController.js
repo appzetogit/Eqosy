@@ -327,6 +327,11 @@ const sendFile = async (res, filename, reportData, format) => {
 export const getAdminStatus = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getAdminModuleInfo()),
 );
+export const getAdminProfile = asyncHandler(async (req, res) => {
+  const targetAdmin = req.auth?.entity || req.auth?.admin;
+  const [admin] = targetAdmin ? await adminService.enrichAdminSummaries([targetAdmin]) : [null];
+  ok(res, { admin });
+});
 export const loginAdmin = asyncHandler(async (req, res) =>
   ok(res, await adminService.loginAdmin(req.body)),
 );
@@ -341,6 +346,9 @@ export const resetPassword = asyncHandler(async (req, res) =>
 );
 export const getAdmins = asyncHandler(async (req, res) =>
   ok(res, { results: await adminService.listAdmins(req.auth?.admin) }),
+);
+export const getAdminById = asyncHandler(async (req, res) =>
+  ok(res, { results: await adminService.getAdminById(req.auth?.admin, req.params.id) }),
 );
 export const getAdminPermissions = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listAdminPermissions() }),

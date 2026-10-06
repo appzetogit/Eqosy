@@ -237,10 +237,8 @@ export default function FoodSubadminCreate() {
 
       if (action === "read") {
         next[resource].read = enabled;
-        if (!enabled) next[resource].write = false;
       } else {
         next[resource].write = enabled;
-        if (enabled) next[resource].read = true;
       }
 
       if (!next[resource].read && !next[resource].write) {

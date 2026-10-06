@@ -413,7 +413,7 @@ export async function deleteFood(req, res, next) {
 export async function getCategories(req, res, next) {
     try {
         const query = validateCategoryListQuery(req.query || {});
-        const data = await adminService.getCategories(query);
+        const data = await adminService.getCategories(query, req.adminContext);
         res.status(200).json({ success: true, message: 'Categories fetched successfully', data });
     } catch (error) {
         next(error);
@@ -423,7 +423,7 @@ export async function getCategories(req, res, next) {
 export async function createCategory(req, res, next) {
     try {
         const body = validateCategoryUpsertDto(req.body || {});
-        const created = await adminService.createCategory(body);
+        const created = await adminService.createCategory(body, req.adminContext);
         res.status(201).json({ success: true, message: 'Category created successfully', data: { category: created } });
     } catch (error) {
         next(error);
@@ -437,7 +437,7 @@ export async function updateCategory(req, res, next) {
             return res.status(400).json({ success: false, message: 'Invalid category id' });
         }
         const body = validateCategoryUpsertDto(req.body || {});
-        const updated = await adminService.updateCategory(id, body);
+        const updated = await adminService.updateCategory(id, body, req.adminContext);
         if (!updated) {
             return res.status(404).json({ success: false, message: 'Category not found' });
         }
@@ -1261,7 +1261,7 @@ export async function rejectDeliveryPartner(req, res, next) {
 // ----- Zones -----
 export async function getZones(req, res, next) {
     try {
-        const data = await adminService.getZones(req.query);
+        const data = await adminService.getZones(req.query, req.adminContext);
         res.status(200).json({
             success: true,
             message: 'Zones fetched successfully',

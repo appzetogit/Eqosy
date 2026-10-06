@@ -39,22 +39,31 @@ export const checkAdminNotifAccess = (item, admin = null) => {
 
   // 2. Check Zone Scope Access
   const assignedZones = Array.isArray(currentAdmin?.food_zone_ids)
-    ? currentAdmin.food_zone_ids.map(String).filter(Boolean)
+    ? currentAdmin.food_zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
     : Array.isArray(currentAdmin?.assignedZones)
-    ? currentAdmin.assignedZones.map(String).filter(Boolean)
+    ? currentAdmin.assignedZones.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
+    : Array.isArray(currentAdmin?.zone_ids)
+    ? currentAdmin.zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
     : [];
 
   if (assignedZones.length > 0) {
     const itemZoneId = String(
+      item?.zoneId?._id ||
+      item?.zoneId?.id ||
       item?.zoneId ||
+      item?.zone_id ||
       item?.restaurantZoneId ||
       item?.rawOrder?.restaurantId?.zoneId?._id ||
       item?.rawOrder?.restaurantId?.zoneId ||
       item?.rawOrder?.zoneId ||
+      item?.restaurantId?.zoneId?._id ||
+      item?.restaurantId?.zoneId ||
+      item?.zone?._id ||
+      item?.zone ||
       ""
     );
 
-    if (itemZoneId && itemZoneId !== "undefined" && itemZoneId !== "null" && !assignedZones.includes(itemZoneId)) {
+    if (!itemZoneId || itemZoneId === "undefined" || itemZoneId === "null" || !assignedZones.includes(itemZoneId)) {
       return false;
     }
   }
@@ -425,23 +434,24 @@ export default function useAdminNotifications(options = {}) {
     try {
       setLoading(true);
 
+      const canRead = (resName) => isFoodSuperAdminLike(currentAdmin) || canReadFood(currentAdmin, resName);
+
       const results = await Promise.allSettled([
-        adminAPI.getPendingRestaurants(),
-        adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }),
-        adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }),
-        supportAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }),
-        adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }),
-        adminAPI.getExpiredFssaiNotifications(),
-        adminAPI.getPendingHandovers(),
-        adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }),
-        adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }),
-        adminAPI.getDeliveryPartners({ limit: 500, page: 1 }),
+        canRead("restaurants") ? adminAPI.getPendingRestaurants() : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("foods") ? adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("support") ? supportAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }) : Promise.resolve({ data: { data: [] } }),
+        canRead("support") ? adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("restaurants") ? adminAPI.getExpiredFssaiNotifications() : Promise.resolve({ data: { data: [] } }),
+        canRead("orders") ? adminAPI.getPendingHandovers() : Promise.resolve({ data: { data: [] } }),
+        canRead("wallet") ? adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryPartners({ limit: 500, page: 1 }) : Promise.resolve({ data: { data: [] } }),
       ]);
 
       const safeGet = (idx) => {
         const r = results[idx];
         if (r.status === "rejected") {
-          console.warn(`[AdminNotif] API call ${idx} failed:`, r.reason?.response?.data || r.reason?.message || r.reason);
           return { data: { data: [] } };
         }
         return r.value;

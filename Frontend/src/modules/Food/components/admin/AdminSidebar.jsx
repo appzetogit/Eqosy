@@ -55,7 +55,7 @@ import {
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
-import { filterFoodSidebarMenu, normalizeFoodAdminProfile } from "@food/constants/foodAdminAccess"
+import { filterFoodSidebarMenu, normalizeFoodAdminProfile, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
 import { getCurrentUser, setAuthData, getModuleToken } from "@food/utils/auth"
 import { setUnifiedAdminSession } from "../../../Taxi/modules/admin/services/adminSession"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
@@ -142,23 +142,19 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     return () => { isMounted = false }
   }, [])
 
-  const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
-                       adminProfile.adminLevel === "food_superadmin" || 
-                       adminProfile.admin_type === "superadmin" ||
-                       (adminProfile.adminLevel === "subadmin" && (
-                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
-                           ? adminProfile.servicesAccess.includes('food')
-                           : (adminProfile.module === "food" || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0))
-                       ));
+  const isSubadmin = !isFoodSuperAdminLike(adminProfile);
+  const servicesAccessList = Array.isArray(adminProfile.servicesAccess) ? adminProfile.servicesAccess : [];
 
-  const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
-                       adminProfile.adminLevel === "taxi_superadmin" || 
-                       adminProfile.admin_type === "superadmin" ||
-                       (adminProfile.adminLevel === "subadmin" && (
-                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
-                           ? adminProfile.servicesAccess.includes('taxi')
-                           : (adminProfile.module === "taxi" || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0))
-                       ));
+  const hasExplicitFood = servicesAccessList.includes('food') || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0);
+  const hasExplicitTaxi = servicesAccessList.includes('taxi') || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0);
+
+  const showFoodTab = isSubadmin
+    ? hasExplicitFood
+    : (adminProfile.adminLevel === "platform_superadmin" || adminProfile.adminLevel === "food_superadmin" || hasExplicitFood);
+
+  const showTaxiTab = isSubadmin
+    ? hasExplicitTaxi
+    : (adminProfile.adminLevel === "platform_superadmin" || adminProfile.adminLevel === "taxi_superadmin" || hasExplicitTaxi);
 
   useEffect(() => {
     if (showTaxiTab) prefetchTaxiAdmin()

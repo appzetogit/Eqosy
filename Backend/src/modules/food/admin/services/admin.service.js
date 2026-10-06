@@ -2895,27 +2895,71 @@ export async function updateRestaurantLocation(id, body = {}) {
 }
 
 // ----- Categories -----
-export async function getCategories(query) {
+export async function getCategories(query, adminContext = null) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
 
     const filter = {};
+
+    // Subadmin zone-scoping
+    const isSubadmin = adminContext && !isSuperAdminLike(adminContext);
+    let zoneObjectIds = [];
+    let zoneRestaurantIds = [];
+
+    if (isSubadmin) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return { categories: [], total: 0, page, limit };
+        }
+        const zoneRestaurants = await FoodRestaurant.find({ zoneId: { $in: zoneObjectIds } }).select('_id').lean();
+        zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+    }
+
     if (query.search && String(query.search).trim()) {
         const term = String(query.search).trim();
         filter.$or = [{ name: { $regex: term, $options: 'i' } }];
     }
+
     // Optional zone filter for admin list.
     // - zoneId=global => only global categories (zoneId missing)
-    // - zoneId=<ObjectId> => only categories bound to that zone
+    // - zoneId=<ObjectId> => only categories bound to that zone or restaurants in that zone
     if (query.zoneId && String(query.zoneId).trim()) {
         const zid = String(query.zoneId).trim();
         if (zid === 'global') {
-            filter.$or = [...(filter.$or || []), { zoneId: { $exists: false } }, { zoneId: null }];
+            filter.$and = [...(filter.$and || []), {
+                $or: [{ zoneId: { $exists: false } }, { zoneId: null }]
+            }];
         } else if (mongoose.Types.ObjectId.isValid(zid)) {
-            filter.zoneId = new mongoose.Types.ObjectId(zid);
+            const reqZoneObjectId = new mongoose.Types.ObjectId(zid);
+            if (isSubadmin && !zoneObjectIds.map(String).includes(zid)) {
+                return { categories: [], total: 0, page, limit };
+            }
+            const reqZoneRestaurants = await FoodRestaurant.find({ zoneId: reqZoneObjectId }).select('_id').lean();
+            const reqZoneRestIds = reqZoneRestaurants.map(r => r._id);
+
+            filter.$and = [...(filter.$and || []), {
+                $or: [
+                    { zoneId: reqZoneObjectId },
+                    { restaurantId: { $in: reqZoneRestIds } },
+                    { createdByRestaurantId: { $in: reqZoneRestIds } }
+                ]
+            }];
         }
+    } else if (isSubadmin) {
+        filter.$and = [...(filter.$and || []), {
+            $or: [
+                { isGlobal: true },
+                { zoneId: { $exists: false } },
+                { zoneId: null },
+                { zoneId: { $in: zoneObjectIds } },
+                { restaurantId: { $in: zoneRestaurantIds } },
+                { createdByRestaurantId: { $in: zoneRestaurantIds } }
+            ]
+        }];
     }
+
     if (query.approvalStatus) {
         const approvalStatus = String(query.approvalStatus);
         if (approvalStatus === 'pending') {
@@ -2981,9 +3025,21 @@ export async function getCategories(query) {
     return { categories, total, page, limit };
 }
 
-export async function createCategory(body) {
+export async function createCategory(body, adminContext = null) {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name) throw new ValidationError('Category name is required');
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => String(id));
+        if (body.zoneId && String(body.zoneId).trim() && String(body.zoneId).trim() !== 'global') {
+            const requestedZoneId = String(body.zoneId).trim();
+            if (!zoneObjectIds.includes(requestedZoneId)) {
+                throw new ValidationError('You do not have access to create a category in this zone');
+            }
+        }
+    }
+
     const doc = new FoodCategory({
         name,
         image: typeof body.image === 'string' ? body.image.trim() : '',
@@ -3073,10 +3129,24 @@ export async function makeCategoryGlobal(id) {
     return doc.toObject();
 }
 
-export async function updateCategory(id, body) {
+export async function updateCategory(id, body, adminContext = null) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const doc = await FoodCategory.findById(id);
     if (!doc) return null;
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => String(id));
+        if (doc.zoneId && !zoneObjectIds.includes(String(doc.zoneId))) {
+            throw new ValidationError('You do not have permission to modify categories outside your assigned zones');
+        }
+        if (body.zoneId && String(body.zoneId).trim() && String(body.zoneId).trim() !== 'global') {
+            const requestedZoneId = String(body.zoneId).trim();
+            if (!zoneObjectIds.includes(requestedZoneId)) {
+                throw new ValidationError('You do not have access to assign a category to this zone');
+            }
+        }
+    }
 
     const nextFoodTypeScope = body.foodTypeScope !== undefined
         ? normalizeCategoryFoodTypeScope(body.foodTypeScope, doc.foodTypeScope || 'Both')
@@ -3139,12 +3209,23 @@ export async function toggleCategoryStatus(id) {
 }
 
 // ----- Restaurant Add-ons approval (admin) -----
-export async function getRestaurantAddonsAdmin(query = {}) {
+export async function getRestaurantAddonsAdmin(query = {}, adminContext = null) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 200);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
 
     const filter = { isDeleted: { $ne: true } };
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return { addons: [], total: 0, page, limit };
+        }
+        const zoneRestaurants = await FoodRestaurant.find({ zoneId: { $in: zoneObjectIds } }).select('_id').lean();
+        const zoneRestaurantIds = zoneRestaurants.map(r => r._id);
+        filter.restaurantId = { $in: zoneRestaurantIds };
+    }
 
     const approvalStatus = String(query.approvalStatus || '').trim();
     if (approvalStatus && ['pending', 'approved', 'rejected'].includes(approvalStatus)) {
@@ -5074,7 +5155,7 @@ export async function rejectDeliveryPartner(id, reason) {
 }
 
 // ----- Zones CRUD -----
-export async function getZones(query) {
+export async function getZones(query, adminContext = null) {
     const isPicker = query.picker === 'true' || query.picker === '1' || query.picker === true;
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || (isPicker ? 500 : 100), 1), isPicker ? 500 : 1000);
     const page = Math.max(parseInt(query.page, 10) || 1, 1);
@@ -5083,6 +5164,15 @@ export async function getZones(query) {
     const search = typeof query.search === 'string' ? query.search.trim() : '';
 
     const filter = {};
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
+        const zoneObjectIds = normalizeObjectIdList(rawZoneIds).map(id => new mongoose.Types.ObjectId(id));
+        if (zoneObjectIds.length === 0) {
+            return { zones: [], total: 0, page, limit };
+        }
+        filter._id = { $in: zoneObjectIds };
+    }
     if (isActive !== undefined && isActive !== '') {
         filter.isActive = isActive === 'true' || isActive === '1';
     }

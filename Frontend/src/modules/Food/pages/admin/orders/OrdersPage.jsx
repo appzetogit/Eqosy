@@ -18,7 +18,7 @@ import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
 import alertSound from "@food/assets/audio/alert.mp3"
 import originalSound from "@food/assets/audio/original.mp3"
 import { getCurrentUser } from "@food/utils/auth"
-import { canWriteFood } from "@food/constants/foodAdminAccess"
+import { canWriteFood, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -612,6 +612,25 @@ export default function OrdersPage({ statusKey = "all" }) {
     socketRef.current = socket
 
     const handleIncomingRealtimeOrder = (payload = {}) => {
+      // Zone-scope check: subadmins with assigned food zones only see orders in their zones
+      const currentAdmin = getCurrentUser("admin")
+      if (currentAdmin && !isFoodSuperAdminLike(currentAdmin)) {
+        const assignedZones = Array.isArray(currentAdmin?.food_zone_ids)
+          ? currentAdmin.food_zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
+          : Array.isArray(currentAdmin?.zone_ids)
+          ? currentAdmin.zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
+          : []
+        if (assignedZones.length > 0) {
+          const orderZoneId = String(
+            payload?.zoneId?._id || payload?.zoneId?.id || payload?.zoneId ||
+            payload?.restaurantZoneId || payload?.zone_id || ""
+          )
+          if (!orderZoneId || orderZoneId === "undefined" || !assignedZones.includes(orderZoneId)) {
+            return // not in admin's zone — skip notification entirely
+          }
+        }
+      }
+
       const orderId = payload?.orderId || payload?.orderMongoId || ""
       if (!orderId) {
         activeOrderAlertRef.current = payload || { orderId: "socket-new-order" }

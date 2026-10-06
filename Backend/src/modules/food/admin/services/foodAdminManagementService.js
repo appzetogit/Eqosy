@@ -196,8 +196,7 @@ const validateFoodAdminPayload = async (currentAdmin = {}, payload = {}, existin
     phone,
     role,
     permissions,
-    food_zone_ids: adminType === 'superadmin' ? [] : foodZoneIds,
-    servicesAccess: isCreatingModuleSuperAdmin ? [ADMIN_MODULES.FOOD] : undefined,
+    servicesAccess: isCreatingModuleSuperAdmin ? [ADMIN_MODULES.FOOD] : Array.isArray(payload.servicesAccess) ? [...new Set([...payload.servicesAccess, 'food'])] : ['food'],
     active,
     status,
     isActive: active,
@@ -228,15 +227,22 @@ export const listFoodAdmins = async (currentAdmin) => {
   assertFoodAdminPermission(currentAdmin, 'subadmins', 'subadmins', 'read');
 
   const descendantQuery = await buildDescendantAdminQuery(FoodAdmin, currentAdmin);
-  const admins = await FoodAdmin.find({
-    ...descendantQuery,
-    module: ADMIN_MODULES.FOOD,
-  })
+  const admins = await FoodAdmin.find(descendantQuery)
     .select('-password -resetPasswordOtp -resetPasswordExpires')
     .sort({ createdAt: -1 })
     .lean();
 
-  return enrichFoodAdminSummaries(admins);
+  const foodAdmins = admins.filter((admin) => {
+    if (isSuperAdminLike(admin)) return true;
+    const services = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+    if (services.length > 0) return services.includes('food');
+    return (
+      (Array.isArray(admin.food_zone_ids) && admin.food_zone_ids.length > 0) ||
+      admin.module === 'food'
+    );
+  });
+
+  return enrichFoodAdminSummaries(foodAdmins);
 };
 
 export const getFoodAdminById = async (currentAdmin, adminId) => {
@@ -306,9 +312,9 @@ export const createFoodAdminAccount = async (currentAdmin, payload = {}) => {
   if (createPayload.parentAdminId) {
     createPayload.parentAdminId = toObjectId(createPayload.parentAdminId);
   }
-  if (createPayload.servicesAccess === undefined) {
-    delete createPayload.servicesAccess;
-  }
+  createPayload.servicesAccess = Array.isArray(createPayload.servicesAccess) && createPayload.servicesAccess.length > 0
+    ? [...new Set([...createPayload.servicesAccess, 'food'])]
+    : ['food'];
 
   const created = await FoodAdmin.create({
     ...createPayload,
@@ -335,6 +341,12 @@ export const updateFoodAdminAccount = async (currentAdmin, id, payload = {}) => 
 
   const validated = await validateFoodAdminPayload(currentAdmin, payload, admin._id);
   const { parentAdminId, ...updateFields } = validated;
+  const existingServices = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  updateFields.servicesAccess = [...new Set([...existingServices, 'food'])];
+  const existingTaxiPermissions = (admin.permissions || []).filter(
+    (p) => !FOOD_ADMIN_PERMISSIONS.includes(p) && p !== '*' && p !== 'all',
+  );
+  updateFields.permissions = [...new Set([...(updateFields.permissions || []), ...existingTaxiPermissions])];
   Object.assign(admin, updateFields);
 
   if (payload.password) {
@@ -357,7 +369,7 @@ export const updateFoodAdminAccount = async (currentAdmin, id, payload = {}) => 
 export const deleteFoodAdminAccount = async (currentAdmin, id) => {
   assertFoodAdminPermission(currentAdmin, 'subadmins', 'subadmins', 'write');
 
-  const admin = await FoodAdmin.findById(id).lean();
+  const admin = await FoodAdmin.findById(id);
   if (!admin) {
     throw new ApiError(404, 'Admin account not found');
   }
@@ -370,6 +382,27 @@ export const deleteFoodAdminAccount = async (currentAdmin, id) => {
 
   if (normalizeAdminType(admin.admin_type) === 'superadmin' && resolveAdminLevel(admin) !== ADMIN_LEVELS.SUBADMIN) {
     throw new ApiError(400, 'Super admin accounts cannot be deleted through this endpoint');
+  }
+
+  const servicesAccess = Array.isArray(admin.servicesAccess) ? admin.servicesAccess : [];
+  const hasTaxiAccess =
+    servicesAccess.includes('taxi') ||
+    (Array.isArray(admin.service_location_ids) && admin.service_location_ids.length > 0) ||
+    (Array.isArray(admin.zone_ids) && admin.zone_ids.length > 0) ||
+    admin.module === 'taxi';
+
+  if (hasTaxiAccess) {
+    admin.servicesAccess = servicesAccess.filter((s) => s !== 'food');
+    if (admin.servicesAccess.length === 0) {
+      admin.servicesAccess = ['taxi'];
+    }
+    admin.food_zone_ids = [];
+    if (admin.module === 'food') {
+      admin.module = 'taxi';
+    }
+
+    await admin.save();
+    return { deleted: true, removedAccess: 'food' };
   }
 
   await FoodAdmin.deleteOne({ _id: admin._id });

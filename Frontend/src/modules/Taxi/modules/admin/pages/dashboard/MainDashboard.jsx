@@ -18,6 +18,8 @@ import {
   Wallet,
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
+import { getUnifiedAdminProfile } from '../../services/adminSession';
+import { hasAdminPermission } from '../../constants/adminAccess';
 import { BACKEND_LABEL } from '../../../../shared/api/runtimeConfig';
 
 const currency = (value) => Number(value || 0).toFixed(2);
@@ -205,6 +207,9 @@ const EarningsLineChart = ({ points }) => {
 
 const MainDashboard = () => {
   const navigate = useNavigate();
+  const adminProfile = useMemo(() => getUnifiedAdminProfile() || {}, []);
+  const canViewDashboard = useMemo(() => hasAdminPermission(adminProfile, 'dashboard.view'), [adminProfile]);
+
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -212,6 +217,11 @@ const MainDashboard = () => {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
 
   useEffect(() => {
+    if (!canViewDashboard) {
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     const fetchDashboardData = async ({ silent = false } = {}) => {
@@ -291,6 +301,20 @@ const MainDashboard = () => {
   );
   const earningsChartPoints = useMemo(() => overallEarnings.chart || [], [overallEarnings.chart]);
   const cancelChartPoints = useMemo(() => cancelChart.chart || [], [cancelChart.chart]);
+
+  if (!canViewDashboard) {
+    return (
+      <div className="flex min-h-[450px] flex-col items-center justify-center rounded-[32px] border border-gray-100 bg-white p-12 text-center shadow-sm">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+          <ShieldCheck size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-950 uppercase tracking-tight">Access Restricted</h2>
+        <p className="mt-2 max-w-md text-sm font-semibold text-gray-500">
+          You do not have permission to view the main dashboard. Please select an authorized module or section from the sidebar navigation.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen -m-8 space-y-8 bg-[#f8fbff] p-8 font-sans text-gray-950 animate-in fade-in duration-700">

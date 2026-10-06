@@ -84,8 +84,13 @@ export const expandLegacyPermissions = (permissions = []) => {
   return [...expanded];
 };
 
-export const normalizeAdminType = (value = '') =>
-  String(value || '').trim().toLowerCase() === 'subadmin' ? 'subadmin' : 'superadmin';
+export const normalizeAdminType = (value = '') => {
+  const str = String(value || '').trim().toLowerCase();
+  if (str === 'superadmin' || str.includes('superadmin') || str.includes('super_admin') || str.includes('super admin')) {
+    return 'superadmin';
+  }
+  return 'subadmin';
+};
 
 export const permissionsIncludeAll = (permissions = []) =>
   normalizeAdminPermissions(permissions).includes(SUPERADMIN_PERMISSION);

@@ -139,15 +139,62 @@ export default function useAppBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
+    const explicitBackPath = toFoodPath(location.state?.backTo) || toFoodPath(location.state?.from)
+
+    // If an explicit back path was provided via navigation state
+    if (explicitBackPath && explicitBackPath !== location.pathname) {
+      // If explicit path is cart and we are on a restaurant page, prefer /food/user
+      if (
+        explicitBackPath.includes("/cart") &&
+        (location.pathname.includes("/restaurants/") || location.pathname.includes("/restaurant/"))
+      ) {
+        navigate("/food/user")
+        return
+      }
+      navigate(explicitBackPath)
+      return
+    }
+
+    // Check if resolveBackPath has a specific route rule for the current location
+    const resolvedPath = resolveBackPath(location)
+    const normalizedPath = getNormalizedUserPath(location.pathname)
+
+    // For specific structured routes, always use the resolved hierarchy path over random browser history
+    const hasSpecificRule =
+      /^\/user\/restaurants\/[^/]+$/.test(normalizedPath) ||
+      /^\/user\/profile\/(edit|favorites|support|coupons|about|report-safety-emergency|accessibility|logout|refer-earn|payments|terms|privacy|refund|shipping|cancellation)(\/|$)/.test(
+        normalizedPath,
+      ) ||
+      normalizedPath === "/user/profile/payments/new" ||
+      normalizedPath === "/user/wallet" ||
+      normalizedPath === "/user/notifications" ||
+      /^\/user\/dining\//.test(normalizedPath) ||
+      /^\/user\/orders\/[^/]+/.test(normalizedPath) ||
+      /^\/user\/cart\/(checkout|select-address|address-selector)$/.test(normalizedPath) ||
+      /^\/user\/collections\/[^/]+$/.test(normalizedPath) ||
+      /^\/user\/category\/[^/]+$/.test(normalizedPath) ||
+      /^\/user\/product\/[^/]+$/.test(normalizedPath) ||
+      /^\/user\/complaints/.test(normalizedPath)
+
+    if (hasSpecificRule) {
+      if (!isUnifiedAuthenticated() && (resolvedPath.startsWith("/food/user") || resolvedPath.startsWith("/user"))) {
+        navigate("/login", { replace: true })
+        return
+      }
+      navigate(resolvedPath)
+      return
+    }
+
+    // Fallback: If browser history is available, navigate(-1)
     if (typeof window !== "undefined" && window.history && window.history.length > 2) {
       navigate(-1)
       return
     }
-    const path = resolveBackPath(location)
-    if (!isUnifiedAuthenticated() && (path.startsWith("/food/user") || path.startsWith("/user"))) {
+
+    if (!isUnifiedAuthenticated() && (resolvedPath.startsWith("/food/user") || resolvedPath.startsWith("/user"))) {
       navigate("/login", { replace: true })
       return
     }
-    navigate(path)
+    navigate(resolvedPath)
   }, [location, navigate])
 }

@@ -63,6 +63,8 @@ import {
   downloadOwnerReport,
   downloadUserReport,
   forgotPassword,
+  loginAdmin,
+  getAdminProfile,
   getAdminStatus,
   getAdminBusBookingCalendar,
   getAdminBusBookings,
@@ -205,6 +207,7 @@ import {
   deleteVehicleType,
   getAdminPermissions,
   getAdmins,
+  getAdminById,
   getTransportTypes,
   deleteFleetVehicle,
   getTaxiCancellationAnalytics,
@@ -225,6 +228,7 @@ export const adminRouter = Router();
 
 adminRouter.get('/admin', getAdminStatus);
 adminRouter.get('/admin/status', getAdminStatus);
+adminRouter.post('/admin/login', loginAdmin);
 adminRouter.post('/admin/forgot-password', forgotPassword);
 adminRouter.post('/admin/verify-reset-otp', verifyResetOtp);
 adminRouter.post('/admin/reset-password', resetPassword);
@@ -237,8 +241,10 @@ adminRouter.get('/admin/types/set-prices', getSetPrices);
 adminRouter.get('/admin/zones', getZones);
 adminRouter.use('/admin', authenticate(['admin']));
 
+adminRouter.get('/admin/profile', getAdminProfile);
 adminRouter.get('/admin/permissions', getAdminPermissions);
 adminRouter.get('/admin/admin-management/admins', getAdmins);
+adminRouter.get('/admin/admin-management/admins/:id', getAdminById);
 adminRouter.post('/admin/admin-management/admins', createAdminAccount);
 adminRouter.patch('/admin/admin-management/admins/:id', updateAdminAccount);
 adminRouter.delete('/admin/admin-management/admins/:id', deleteAdminAccount);

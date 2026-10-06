@@ -36,29 +36,42 @@ const isTokenExpired = (token) => {
 export const normalizeAdminProfile = (profile = {}) => {
   const source = profile && typeof profile === 'object' ? profile : {};
   const adminLevel = String(source.adminLevel || source.admin_level || '').trim().toLowerCase();
-  const adminType = String(source.admin_type || source.role || 'superadmin').toLowerCase() === 'subadmin'
-    ? 'subadmin'
-    : 'superadmin';
+  const rawRole = String(source.role || '').trim().toLowerCase();
+  const rawType = String(source.admin_type || '').trim().toLowerCase();
 
   const permissions = Array.isArray(source.permissions)
     ? [...new Set(source.permissions.map((item) => String(item || '').trim()).filter(Boolean))]
     : [];
 
-  const isSuperLike =
+  const hasFullAccess = permissions.includes('*');
+
+  const isExplicitSub =
+    rawType === 'subadmin' ||
+    rawType.includes('sub') ||
+    adminLevel === 'subadmin' ||
+    rawRole === 'subadmin' ||
+    rawRole.includes('sub');
+
+  const isSuperLike = !isExplicitSub && (
+    rawType === 'superadmin' ||
+    rawRole === 'superadmin' ||
     adminLevel === 'platform_superadmin' ||
     adminLevel === 'food_superadmin' ||
     adminLevel === 'taxi_superadmin' ||
-    adminType === 'superadmin';
+    hasFullAccess
+  );
+
+  const finalType = isSuperLike ? 'superadmin' : 'subadmin';
 
   return {
     ...source,
-    adminLevel: adminLevel || (adminType === 'subadmin' ? 'subadmin' : 'taxi_superadmin'),
+    adminLevel: isSuperLike ? (adminLevel || 'taxi_superadmin') : 'subadmin',
     module: source.module || null,
     parentAdminId: source.parentAdminId ? String(source.parentAdminId) : null,
-    admin_type: adminType,
-    role: String(source.role || adminType).trim() || adminType,
+    admin_type: finalType,
+    role: String(source.role || (isSuperLike ? 'superadmin' : 'subadmin')).trim(),
     permissions: isSuperLike
-      ? (permissions.includes('*') ? permissions : ['*', ...permissions])
+      ? (hasFullAccess ? permissions : ['*', ...permissions])
       : permissions,
     service_location_ids: Array.isArray(source.service_location_ids) ? source.service_location_ids : [],
     zone_ids: Array.isArray(source.zone_ids) ? source.zone_ids : [],

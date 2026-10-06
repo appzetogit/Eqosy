@@ -11,7 +11,7 @@ import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
 import { adminService } from '../services/adminService';
 import { adminSupportService } from '../../shared/services/supportTicketService';
-import { hasAdminPermission } from '../constants/adminAccess';
+import { hasAdminPermission, normalizeTaxiAdminProfile, isTaxiSuperAdminLike } from '../constants/adminAccess';
 import {
   clearUnifiedAdminSession,
   getUnifiedAdminProfile,
@@ -20,7 +20,6 @@ import {
   normalizeAdminProfile,
   syncAdminSessionBridge,
 } from '../services/adminSession';
-import { adminAPI } from '@food/api';
 import toast from 'react-hot-toast';
 import {
   Ban,
@@ -117,7 +116,7 @@ const readAdminProfile = () => {
 
   try {
     const parsed = getUnifiedAdminProfile();
-    return parsed || { admin_type: 'superadmin', permissions: ['*'], name: 'Admin' };
+    return parsed ? normalizeTaxiAdminProfile(parsed) : { admin_type: 'superadmin', permissions: ['*'], name: 'Admin' };
   } catch {
     return { admin_type: 'superadmin', permissions: ['*'], name: 'Admin' };
   }
@@ -628,29 +627,31 @@ const AdminLayout = () => {
   const userMenuRef = useRef(null);
   const notificationsMenuRef = useRef(null);
   const [adminProfile, setAdminProfile] = useState(() => readAdminProfile());
-  const showFoodTab = adminProfile.adminLevel === "platform_superadmin" || 
-                       adminProfile.adminLevel === "food_superadmin" || 
-                       adminProfile.admin_type === "superadmin" ||
-                       (adminProfile.adminLevel === "subadmin" && (
-                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
-                           ? adminProfile.servicesAccess.includes('food')
-                           : (adminProfile.module === "food" || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0))
-                       ));
+  const isSubadmin = !isTaxiSuperAdminLike(adminProfile);
+  const servicesAccessList = Array.isArray(adminProfile.servicesAccess) ? adminProfile.servicesAccess : [];
 
-  const showTaxiTab = adminProfile.adminLevel === "platform_superadmin" || 
-                       adminProfile.adminLevel === "taxi_superadmin" || 
-                       adminProfile.admin_type === "superadmin" ||
-                       (adminProfile.adminLevel === "subadmin" && (
-                         Array.isArray(adminProfile.servicesAccess) && adminProfile.servicesAccess.length > 0
-                           ? adminProfile.servicesAccess.includes('taxi')
-                           : (adminProfile.module === "taxi" || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0))
-                       ));
+  const hasExplicitFood = servicesAccessList.includes('food') || (Array.isArray(adminProfile.food_zone_ids) && adminProfile.food_zone_ids.length > 0);
+  const hasExplicitTaxi = servicesAccessList.includes('taxi') || (Array.isArray(adminProfile.service_location_ids) && adminProfile.service_location_ids.length > 0) || (Array.isArray(adminProfile.zone_ids) && adminProfile.zone_ids.length > 0);
+
+  const showFoodTab = isSubadmin
+    ? hasExplicitFood
+    : (adminProfile.adminLevel === "platform_superadmin" || adminProfile.adminLevel === "food_superadmin" || hasExplicitFood);
+
+  const showTaxiTab = isSubadmin
+    ? hasExplicitTaxi
+    : (adminProfile.adminLevel === "platform_superadmin" || adminProfile.adminLevel === "taxi_superadmin" || hasExplicitTaxi);
 
   const appName = settings.general?.app_name || 'App';
 
   useEffect(() => {
     if (showFoodTab) prefetchFoodAdmin();
   }, [showFoodTab]);
+
+  useEffect(() => {
+    if (isSubadmin && !showTaxiTab && showFoodTab) {
+      navigate('/admin/food', { replace: true });
+    }
+  }, [isSubadmin, showTaxiTab, showFoodTab, navigate]);
 
   const switchAdminModule = (path) => {
     if (path === FOOD_ADMIN_HOME) prefetchFoodAdmin();
@@ -663,10 +664,10 @@ const AdminLayout = () => {
     let isMounted = true;
     const syncAdminProfile = async () => {
       try {
-        const res = await adminAPI.getAdminProfile();
-        const user = res?.data?.admin || res?.data?.data?.admin || res?.data?.data?.user;
+        const res = await adminService.getAdminProfile();
+        const user = res?.data?.admin || res?.data?.data?.admin || res?.data?.data?.user || res?.data;
         if (user && isMounted) {
-          const normalized = normalizeAdminProfile(user);
+          const normalized = normalizeTaxiAdminProfile(user);
           const token = getUnifiedAdminToken();
           if (token) {
             setUnifiedAdminSession({ token, user: normalized });
@@ -852,7 +853,7 @@ const AdminLayout = () => {
             ],
           },
           { icon: Car, label: 'Trip Requests', path: '/taxi/admin/trips', permission: 'trips.view' },
-          { icon: Ban, label: 'Cancellation Analytics', path: '/taxi/admin/cancellation-analytics', permission: 'dashboard.view' },
+          { icon: Ban, label: 'Cancellation Analytics', path: '/taxi/admin/cancellation-analytics', permission: 'cancellation_analytics.view' },
           { icon: Package, label: 'Delivery Requests', path: '/taxi/admin/deliveries', permission: 'deliveries.view' },
           { icon: Clock, label: 'Ongoing Requests', path: '/taxi/admin/ongoing', permission: 'ongoing.view' },
         ],
@@ -1044,7 +1045,7 @@ const AdminLayout = () => {
   useEffect(() => {
     if (!adminProfile || Object.keys(adminProfile).length === 0) return;
 
-    const isSub = String(adminProfile.admin_type || adminProfile.adminLevel || adminProfile.role || '').toLowerCase().includes('subadmin');
+    const isSub = !isTaxiSuperAdminLike(adminProfile);
     if (!isSub) return;
 
     const allItems = flattenItems(adminSections);
@@ -1334,8 +1335,27 @@ const AdminLayout = () => {
           ? busesRes.value?.data?.results || busesRes.value?.data?.data || busesRes.value?.results || busesRes.value?.data || (Array.isArray(busesRes.value) ? busesRes.value : [])
           : [];
 
+      // Zone-scope: extract assigned service_location_ids / zone_ids from current adminProfile
+      const isSubAdmin = !isTaxiSuperAdminLike(adminProfile);
+      const assignedLocIds = isSubAdmin && Array.isArray(adminProfile?.service_location_ids)
+        ? adminProfile.service_location_ids.map((loc) => String(loc?._id || loc?.id || loc)).filter(Boolean)
+        : [];
+      const assignedZoneIds = isSubAdmin && Array.isArray(adminProfile?.zone_ids)
+        ? adminProfile.zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
+        : [];
+      const scopeActive = assignedLocIds.length > 0 || assignedZoneIds.length > 0;
+
+      const isInScope = (item) => {
+        if (!scopeActive) return true;
+        const itemLocId = String(item?.service_location_id?._id || item?.service_location_id || item?.serviceLocationId || '');
+        const itemZoneId = String(item?.zone_id?._id || item?.zone_id || item?.zoneId || '');
+        const locMatch = !itemLocId || assignedLocIds.includes(itemLocId);
+        const zoneMatch = !itemZoneId || assignedZoneIds.includes(itemZoneId);
+        return locMatch || zoneMatch;
+      };
+
       const mappedPendingDrivers = driversList
-        .filter((d) => String(d.status || '').toLowerCase() === 'pending' || !d.approve)
+        .filter((d) => (String(d.status || '').toLowerCase() === 'pending' || !d.approve) && isInScope(d))
         .map((d) => ({
           id: `pending_driver:${d._id || d.id}`,
           title: 'Pending Driver Approval',
@@ -1348,7 +1368,7 @@ const AdminLayout = () => {
         }));
 
       const mappedWithdrawals = withdrawalsList
-        .filter((w) => String(w.status || 'pending').toLowerCase() === 'pending')
+        .filter((w) => String(w.status || 'pending').toLowerCase() === 'pending' && isInScope(w))
         .map((w) => ({
           id: `pending_refund:${w._id || w.id || w.latest_request_id || Date.now()}`,
           title: `Pending Refund / Payout (₹${w.pending_amount || w.amount || 0})`,
@@ -1361,7 +1381,7 @@ const AdminLayout = () => {
         }));
 
       const mappedPendingBuses = busesList
-        .filter((b) => String(b.status || '').toLowerCase() === 'pending_approval')
+        .filter((b) => String(b.status || '').toLowerCase() === 'pending_approval' && isInScope(b))
         .map((b) => ({
           id: `pending_bus:${b._id || b.id}`,
           title: 'Pending Bus Service Approval',
@@ -1382,7 +1402,7 @@ const AdminLayout = () => {
     } catch (err) {
       console.error('Failed to fetch pending drivers/refunds/buses:', err);
     }
-  }, []);
+  }, [adminProfile]);
 
   useEffect(() => {
     fetchPendingRegistrationsAndRefunds();
@@ -1490,6 +1510,29 @@ const AdminLayout = () => {
 
     const handleRegistrationAlert = (data = {}) => {
       console.log('New registration notification alert:', data);
+
+      // Zone-scope: subadmins only receive notifications for their assigned service locations / zones
+      if (!isTaxiSuperAdminLike(adminProfile)) {
+        const assignedLocIds = Array.isArray(adminProfile?.service_location_ids)
+          ? adminProfile.service_location_ids.map((loc) => String(loc?._id || loc?.id || loc)).filter(Boolean)
+          : [];
+        const assignedZoneIds = Array.isArray(adminProfile?.zone_ids)
+          ? adminProfile.zone_ids.map((z) => String(z?._id || z?.id || z)).filter(Boolean)
+          : [];
+
+        if (assignedLocIds.length > 0 || assignedZoneIds.length > 0) {
+          const dataLocId = String(data?.service_location_id?._id || data?.service_location_id || '');
+          const dataZoneId = String(data?.zone_id?._id || data?.zone_id || data?.zoneId || '');
+
+          const locMatch = !dataLocId || assignedLocIds.includes(dataLocId);
+          const zoneMatch = !dataZoneId || assignedZoneIds.includes(dataZoneId);
+
+          if (!locMatch && !zoneMatch) {
+            return; // out-of-scope registration, skip
+          }
+        }
+      }
+
       const title = data.title || `New ${data.type || 'Account'} Registered`;
       const name = data.name || data.fullName || 'New Account';
       const phone = data.phone || data.mobile || '';
@@ -1575,7 +1618,7 @@ const AdminLayout = () => {
       socketService.off('new_driver_registration', handleRegistrationAlert);
       socketService.off('chat:message', handleSupportChatNotification);
     };
-  }, [isAdminChatRoute, navigate]);
+  }, [isAdminChatRoute, navigate, adminProfile]);
 
   const handleLogout = () => {
     socketService.disconnect();
@@ -1607,7 +1650,7 @@ const AdminLayout = () => {
                   <div className="mt-1 flex items-center gap-1.5">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                     <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-                      System Admin
+                      {isSubadmin ? (adminProfile.role || 'Sub Admin') : 'System Admin'}
                     </span>
                   </div>
                 </div>
@@ -1719,7 +1762,9 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <ModeSwitcher mode={mode} setMode={setMode} />
+            {(!isSubadmin || hasAdminPermission(adminProfile, 'owners')) && (
+              <ModeSwitcher mode={mode} setMode={setMode} />
+            )}
 
             <div className="mr-1 flex items-center gap-1 border-r border-gray-100 pr-4 leading-none">
               <button

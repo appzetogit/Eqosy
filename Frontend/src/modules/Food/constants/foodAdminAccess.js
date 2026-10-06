@@ -367,18 +367,54 @@ export const parentCanAssignWrite = (parent = {}, resource) => {
   return canWriteFood(parent, resource);
 };
 
+const TAXI_RESOURCE_KEYWORDS = [
+  'cancellation', 'trip', 'delivery', 'ongoing', 'driver',
+  'owner', 'location', 'airport', 'store', 'vehicle',
+  'price', 'goods', 'rental', 'bus', 'pooling', 'geofencing', 'chat'
+];
+
+const FOOD_RESOURCE_KEYWORDS = [
+  'pos', 'order', 'restaurant', 'food', 'category', 'delivery', 'dining', 'fee', 'cms'
+];
+
 export const normalizeFoodAdminProfile = (profile = {}) => {
   const source = profile && typeof profile === 'object' ? profile : {};
   const adminLevel = resolveAdminLevel(source);
   const isSuper = isFoodSuperAdminLike(source);
   const permissions = normalizePermissions(source.permissions);
 
+  const foodZoneIds = Array.isArray(source.food_zone_ids) ? source.food_zone_ids : [];
+  const serviceLocIds = Array.isArray(source.service_location_ids) ? source.service_location_ids : [];
+  const taxiZoneIds = Array.isArray(source.zone_ids) ? source.zone_ids : [];
+
+  let servicesAccess = Array.isArray(source.servicesAccess) ? [...source.servicesAccess] : [];
+  if (servicesAccess.length === 0 && !isSuper) {
+    const permStrings = permissions.map((p) => String(p || '').toLowerCase());
+    const hasTaxiPerm = permStrings.some((p) => TAXI_RESOURCE_KEYWORDS.some((kw) => p.includes(kw)));
+    const hasFoodPerm = permStrings.some((p) => FOOD_RESOURCE_KEYWORDS.some((kw) => p.includes(kw)));
+
+    if (hasTaxiPerm || serviceLocIds.length > 0 || taxiZoneIds.length > 0) {
+      servicesAccess.push('taxi');
+    }
+    if (hasFoodPerm || foodZoneIds.length > 0) {
+      servicesAccess.push('food');
+    }
+    if (servicesAccess.length === 0) {
+      servicesAccess = [source.module || 'food'];
+    }
+  }
+
+  const derivedModule = source.module || (servicesAccess.includes('food') && !servicesAccess.includes('taxi') ? 'food' : 'taxi');
+
   return {
     ...source,
     adminLevel,
-    module: source.module || 'food',
+    module: derivedModule,
     admin_type: isSuper ? 'superadmin' : 'subadmin',
     permissions: isSuper ? (permissions.includes('*') ? permissions : ['*', ...permissions]) : expandLegacyPermissions(permissions),
-    food_zone_ids: Array.isArray(source.food_zone_ids) ? source.food_zone_ids : [],
+    food_zone_ids: foodZoneIds,
+    service_location_ids: serviceLocIds,
+    zone_ids: taxiZoneIds,
+    servicesAccess: isSuper ? ['food', 'taxi'] : servicesAccess,
   };
 };

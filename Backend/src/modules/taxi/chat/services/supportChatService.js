@@ -417,8 +417,8 @@ export const listSupportConversations = async ({ role, id }) => {
     normalizedRole === 'admin'
       ? {
           $or: [
-            { senderRole: 'admin', senderId: toObjectId(entityId) },
-            { receiverRole: 'admin', receiverId: toObjectId(entityId) },
+            { senderRole: 'admin' },
+            { receiverRole: 'admin' },
           ],
         }
       : {

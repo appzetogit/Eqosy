@@ -24,7 +24,7 @@ export const attachFoodAdminContext = async (req, _res, next) => {
 
 export const requireFoodAdminPermission = (permission, label = 'resource') => (req, _res, next) => {
   if (!hasFoodAdminPermission(req.adminContext, permission)) {
-    return next(new AuthError(`You do not have permission to access ${label}`));
+    return next(new ForbiddenError(`You do not have permission to access ${label}`));
   }
   return next();
 };
@@ -35,7 +35,7 @@ export const requireFoodResourceAccess = (resource, label = 'resource') => (req,
     if (action === 'write' && hasFoodAdminPermission(req.adminContext, resource, 'read')) {
       return next(new ForbiddenError(`You have read-only permission for this section. Actions are restricted by the admin.`));
     }
-    return next(new AuthError(`You do not have ${action} permission for ${label}`));
+    return next(new ForbiddenError(`You do not have ${action} permission for ${label}`));
   }
   return next();
 };
