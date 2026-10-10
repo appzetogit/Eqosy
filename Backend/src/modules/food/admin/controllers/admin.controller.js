@@ -322,6 +322,30 @@ export async function updateRestaurantStatus(req, res, next) {
     }
 }
 
+export async function deleteRestaurant(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid restaurant id' });
+        }
+        const deleted = await adminService.deleteRestaurant(id);
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: 'Restaurant not found' });
+        }
+        try {
+            const { invalidateCache } = await import('../../../../middleware/cache.js');
+            await invalidateCache('restaurant_menu:*');
+            await invalidateCache('restaurants:*');
+            await invalidateCache('restaurant_detail:*');
+        } catch (cacheErr) {
+            console.error('Cache invalidation error on deleteRestaurant:', cacheErr);
+        }
+        res.status(200).json({ success: true, message: 'Restaurant deleted successfully', data: { restaurant: deleted } });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function updateRestaurantLocation(req, res, next) {
     try {
         const { id } = req.params;

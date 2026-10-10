@@ -190,6 +190,7 @@ const AppRoutes = () => {
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
       <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
+      <Route path="/food/pages/:key" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
       <Route path="/refund" element={<Suspense fallback={<PageLoader />}><GlobalRefund /></Suspense>} />
       <Route path="/shipping" element={<Suspense fallback={<PageLoader />}><GlobalShipping /></Suspense>} />
       <Route path="/cancellation" element={<Suspense fallback={<PageLoader />}><GlobalCancellation /></Suspense>} />

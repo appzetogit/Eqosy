@@ -518,6 +518,11 @@ export const adminAPI = {
     apiClient.patch(`/food/admin/restaurants/${String(id)}`, body ?? {}, {
       contextModule: "admin",
     }),
+  /** Delete restaurant (admin). */
+  deleteRestaurant: (id) =>
+    apiClient.delete(`/food/admin/restaurants/${String(id)}`, {
+      contextModule: "admin",
+    }),
   /** Update restaurant status (admin). Body: { status: boolean } */
   updateRestaurantStatus: (id, status) =>
     apiClient.patch(
@@ -3003,5 +3008,11 @@ export const diningAPI = {
     });
   },
 };
-export const heroBannerAPI = createStubAPI();
-export const publicAPI = createStubAPI();
+export const publicAPI = {
+  getTerms: () => apiClient.get("/food/pages/terms"),
+  getPrivacy: () => apiClient.get("/food/pages/privacy"),
+  getRestaurantPrivacy: () => apiClient.get("/food/pages/restaurant-privacy"),
+  getDeliveryPrivacy: () => apiClient.get("/food/pages/delivery-privacy"),
+  getDriverPrivacy: () => apiClient.get("/food/pages/driver-privacy"),
+  getPageContent: (key) => apiClient.get(`/food/pages/${key}`),
+};

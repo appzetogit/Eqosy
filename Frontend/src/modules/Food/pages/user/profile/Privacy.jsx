@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation, useParams, useSearchParams } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, Lock, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -10,8 +10,11 @@ import { API_ENDPOINTS } from "@food/api/config"
 
 import { isUnifiedAuthenticated } from "@food/utils/auth"
 
-export default function Privacy() {
+export default function Privacy({ keyName }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams()
+  const [searchParams] = useSearchParams()
   const goBack = useAppBackNavigation()
   const [loading, setLoading] = useState(true)
   const [privacyData, setPrivacyData] = useState({
@@ -19,14 +22,40 @@ export default function Privacy() {
     content: ''
   })
 
+  const resolvePolicyKey = () => {
+    if (keyName) return keyName
+    if (params.key) return params.key
+    const typeParam = searchParams.get('type') || searchParams.get('key') || searchParams.get('userType')
+    if (typeParam) {
+      const lower = typeParam.toLowerCase()
+      if (['restaurant', 'delivery', 'driver', 'seller'].includes(lower)) {
+        return `${lower}-privacy`
+      }
+      return lower
+    }
+    const path = (location.pathname || '').toLowerCase()
+    if (path.includes('restaurant')) return 'restaurant-privacy'
+    if (path.includes('delivery')) return 'delivery-privacy'
+    if (path.includes('driver')) return 'driver-privacy'
+    if (path.includes('seller')) return 'seller-privacy'
+    if (location.state?.role) {
+      const r = String(location.state.role).toLowerCase()
+      if (['restaurant', 'delivery', 'driver', 'seller'].includes(r)) {
+        return `${r}-privacy`
+      }
+    }
+    return 'privacy'
+  }
+
   useEffect(() => {
     fetchPrivacyData()
-  }, [])
+  }, [location.pathname, location.search, params.key, keyName])
 
   const fetchPrivacyData = async () => {
     try {
       setLoading(true)
-      const response = await api.get(API_ENDPOINTS.ADMIN.PRIVACY_PUBLIC)
+      const targetKey = resolvePolicyKey()
+      const response = await api.get(`/food/pages/${targetKey}`)
       if (response.data.success) {
         setPrivacyData(response.data.data || { title: 'Privacy Policy', content: '' })
       }

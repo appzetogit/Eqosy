@@ -208,8 +208,14 @@ export default function RestaurantLogin() {
             </Button>
           </div>
 
-          <footer className="mt-auto pt-10 text-center">
-            <p className="text-xs text-gray-400 font-medium leading-relaxed">
+          <footer className="mt-auto pt-6 text-center space-y-2">
+            <p className="text-xs text-gray-500 font-medium">
+              By continuing, you accept our{" "}
+              <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Terms</a>
+              {" & "}
+              <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Privacy Policy</a>
+            </p>
+            <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
               Secure store login powered by<br />
               <span className="text-[#1A1A1A] font-bold">{companyName} Network</span>
             </p>

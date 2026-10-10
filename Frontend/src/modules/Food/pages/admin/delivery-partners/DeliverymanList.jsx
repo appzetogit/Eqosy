@@ -292,10 +292,25 @@ availableCashLimit: wallet?.availableCashLimit || 0,
 
     // Zone / area filter
     if (zoneFilter && zoneFilter !== "all") {
+      const selectedZoneObj = zones.find((z) => String(z._id || z.id) === String(zoneFilter))
+      const selectedZoneName = (selectedZoneObj?.name || selectedZoneObj?.zoneName || "").toLowerCase()
+
       result = result.filter((dm) => {
-        const zid = dm.zoneId || dm.zone
-        const dmZoneId = typeof zid === "string" ? zid : (zid?._id || zid?.id || "")
-        return dmZoneId === zoneFilter
+        const dmZoneIdStr = dm.zoneId ? String(dm.zoneId) : ""
+        if (dmZoneIdStr && dmZoneIdStr === String(zoneFilter)) {
+          return true
+        }
+
+        const dmZoneNameStr = (dm.zoneName || dm.zone || dm.city || "").toLowerCase()
+        if (selectedZoneName && dmZoneNameStr.includes(selectedZoneName)) {
+          return true
+        }
+
+        if (dm.zone && String(dm.zone).toLowerCase().includes(String(zoneFilter).toLowerCase())) {
+          return true
+        }
+
+        return false
       })
     }
 

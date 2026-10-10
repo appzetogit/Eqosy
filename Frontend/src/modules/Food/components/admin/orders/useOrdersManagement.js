@@ -288,17 +288,8 @@ export function useOrdersManagement(orders, statusKey, title) {
   }
 
   const handlePrintOrder = async (order) => {
+    if (!order) return
     try {
-      const { default: jsPDF } = await import("jspdf")
-      const { default: autoTable } = await import("jspdf-autotable")
-
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      })
-
-      const pageWidth = doc.internal.pageSize.getWidth()
       const orderId = order.orderId || order.id || order.subscriptionId || "N/A"
       const orderDate = order.date && order.time
         ? `${order.date}, ${order.time}`
@@ -306,8 +297,6 @@ export function useOrdersManagement(orders, statusKey, title) {
 
       const settings = getCachedSettings() || await loadBusinessSettings()
       const companyName = settings?.companyName || "Eqosy Food"
-      const logoUrl = settings?.logo?.url || quickSpicyLogo
-      const logoDataUrl = await imageUrlToDataUrl(logoUrl)
 
       const items = Array.isArray(order.items) ? order.items : []
       const itemsSubtotal = items.reduce((sum, item) => {
@@ -371,23 +360,157 @@ export function useOrdersManagement(orders, statusKey, title) {
       const restaurantName = formatDisplayText(order.restaurant)
       const deliveryType = formatDisplayText(order.deliveryType)
       const deliveryAddress = formatOrderAddress(order.address || order.customerAddress || order.deliveryAddress)
-      const itemCount = items.reduce((sum, item) => sum + toNumber(item?.quantity || 1), 0) || items.length
+      const otpCode = order.orderOtp || ""
+
+      // 1. Open browser native print window
+      try {
+        const printWindow = window.open("", "_blank", "width=850,height=900")
+        if (printWindow) {
+          const itemsRows = items.length > 0
+            ? items.map(item => `
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; font-weight: bold;">${item.quantity || 1}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.name || item.itemName || item.title || 'Item'}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;">₹${toNumber(item.price).toFixed(2)}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">₹${(toNumber(item.quantity || 1) * toNumber(item.price)).toFixed(2)}</td>
+              </tr>
+            `).join("")
+            : `<tr><td colspan="4" style="padding: 12px; text-align: center; color: #64748b;">Order Total: ₹${totalAmount.toFixed(2)}</td></tr>`
+
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Order Invoice #${orderId}</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; color: #0f172a; background: #fff; }
+                .header { background: #0f766e; color: #ffffff; padding: 20px 24px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+                .header h1 { margin: 0; font-size: 24px; font-weight: 700; }
+                .header p { margin: 4px 0 0 0; font-size: 13px; opacity: 0.9; }
+                .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+                .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
+                .card-title { font-size: 11px; font-weight: 700; color: #0f766e; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 8px; }
+                .card p { margin: 4px 0; font-size: 12px; line-height: 1.4; }
+                .card strong { color: #475569; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+                th { background: #0f766e; color: #ffffff; padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+                .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+                .totals { width: 280px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
+                .totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+                .totals-row.grand { font-weight: 700; font-size: 16px; color: #0f766e; border-top: 2px solid #0f766e; padding-top: 10px; margin-top: 6px; }
+                .otp-badge { background: #fff7ed; border: 1px solid #ffedd5; color: #c2410c; padding: 8px 14px; border-radius: 8px; font-weight: 700; display: inline-block; margin-bottom: 20px; font-size: 14px; }
+                .footer { border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #64748b; text-align: center; margin-top: 30px; }
+                @media print {
+                  body { padding: 0; }
+                  .no-print { display: none !important; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="no-print" style="margin-bottom: 20px; text-align: right;">
+                <button onclick="window.print()" style="background: #0f766e; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px;">🖨️ Print Order Invoice</button>
+              </div>
+
+              <div class="header">
+                <div>
+                  <h1>${companyName}</h1>
+                  <p>Order Summary & Billing Receipt</p>
+                </div>
+                <div style="text-align: right;">
+                  <h2 style="margin: 0; font-size: 18px; font-weight: 700;">Order #${orderId}</h2>
+                  <p>${orderDate}</p>
+                </div>
+              </div>
+
+              ${otpCode ? `<div class="otp-badge">🔑 Handover Code (OTP): <strong>${otpCode}</strong></div>` : ''}
+
+              <div class="info-grid">
+                <div class="card">
+                  <div class="card-title">Customer Info</div>
+                  <p><strong>Name:</strong> ${customerName}</p>
+                  <p><strong>Phone:</strong> ${customerPhone}</p>
+                  <p><strong>Address:</strong> ${deliveryAddress}</p>
+                </div>
+                <div class="card">
+                  <div class="card-title">Restaurant Info</div>
+                  <p><strong>Name:</strong> ${restaurantName}</p>
+                  <p><strong>Delivery:</strong> ${deliveryType}</p>
+                  <p><strong>Status:</strong> ${orderStatus}</p>
+                </div>
+                <div class="card">
+                  <div class="card-title">Delivery & Payment</div>
+                  <p><strong>Driver:</strong> ${deliveryPartnerName}</p>
+                  <p><strong>Driver Phone:</strong> ${deliveryPartnerPhone}</p>
+                  <p><strong>Payment:</strong> ${paymentType} (${paymentStatus})</p>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 60px; text-align: center;">Qty</th>
+                    <th>Item Description</th>
+                    <th style="width: 110px; text-align: right;">Unit Price</th>
+                    <th style="width: 110px; text-align: right;">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsRows}
+                </tbody>
+              </table>
+
+              <div class="totals-wrap">
+                <div class="totals">
+                  <div class="totals-row"><span>Subtotal:</span> <span>₹${subtotal.toFixed(2)}</span></div>
+                  <div class="totals-row"><span>Delivery Fee:</span> <span>₹${deliveryFee.toFixed(2)}</span></div>
+                  <div class="totals-row"><span>Tax (GST):</span> <span>₹${taxAmount.toFixed(2)}</span></div>
+                  ${discountAmount > 0 ? `<div class="totals-row"><span>Discount:</span> <span>- ₹${discountAmount.toFixed(2)}</span></div>` : ''}
+                  <div class="totals-row grand"><span>Grand Total:</span> <span>₹${totalAmount.toFixed(2)}</span></div>
+                </div>
+              </div>
+
+              <div class="footer">
+                Thank you for ordering with ${companyName}!
+              </div>
+
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.print();
+                  }, 300);
+                };
+              </script>
+            </body>
+            </html>
+          `)
+          printWindow.document.close()
+        }
+      } catch (printErr) {
+        debugError("Browser print window error:", printErr)
+      }
+
+      // 2. Also generate PDF download via jsPDF
+      const { default: jsPDF } = await import("jspdf")
+      const { default: autoTable } = await import("jspdf-autotable")
+
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      })
+
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const logoUrl = settings?.logo?.url || quickSpicyLogo
+      const logoDataUrl = await imageUrlToDataUrl(logoUrl)
 
       doc.setFillColor(15, 118, 110)
       doc.rect(0, 0, pageWidth, 46, "F")
-      doc.setFillColor(255, 255, 255)
-      doc.setGState(new doc.GState({ opacity: 0.08 }))
-      doc.circle(pageWidth - 24, 12, 18, "F")
-      doc.circle(pageWidth - 6, 36, 22, "F")
-      doc.setGState(new doc.GState({ opacity: 1 }))
 
       if (logoDataUrl) {
         try {
-          const logoFormat = logoDataUrl.includes("image/jpeg") ? "JPEG" : "PNG"
+          const logoFormat = logoDataUrl.includes("image/jpeg") || logoDataUrl.includes("image/jpg") ? "JPEG" : "PNG"
           doc.addImage(logoDataUrl, logoFormat, 14, 8, 24, 24, undefined, "FAST")
-        } catch {
-          // Ignore logo rendering issues and continue with text-only header.
-        }
+        } catch (_) {}
       }
 
       doc.setTextColor(255, 255, 255)
@@ -406,109 +529,18 @@ export function useOrdersManagement(orders, statusKey, title) {
       doc.text(`Status: ${orderStatus}`, pageWidth - 14, 26, { align: "right" })
       doc.text(`Payment: ${paymentStatus}`, pageWidth - 14, 32, { align: "right" })
 
-      doc.setDrawColor(226, 232, 240)
-      doc.setFillColor(248, 250, 252)
-
-      const drawInfoCard = (titleText, x, y, width, rows, accentColor = [15, 118, 110]) => {
-        const cardPaddingX = 4
-        const titleBarHeight = 8
-        const contentStartY = y + 14
-        const labelX = x + cardPaddingX
-        const valueX = x + 18
-        const valueWidth = width - 26
-
-        let measuredHeight = contentStartY
-        const measuredRows = rows.map((row) => {
-          const label = `${row.label}:`
-          const valueLines = doc.splitTextToSize(formatDisplayText(row.value), valueWidth)
-          const rowHeight = Math.max(5, valueLines.length * 4)
-          measuredHeight += rowHeight
-          return { label, valueLines, rowHeight }
-        })
-
-        const cardHeight = Math.max(39, measuredHeight - y + 4)
-
-        doc.setFillColor(255, 255, 255)
-        doc.roundedRect(x, y, width, cardHeight, 3, 3, "FD")
-        doc.setFillColor(...accentColor)
-        doc.roundedRect(x, y, width, titleBarHeight, 3, 3, "F")
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
-        doc.setFont(undefined, "bold")
-        doc.text(titleText, labelX, y + 5.5)
-        doc.setTextColor(71, 85, 105)
-        doc.setFont(undefined, "normal")
-        doc.setFontSize(8.5)
-
-        let currentY = contentStartY
-        measuredRows.forEach((row) => {
-          doc.setFont(undefined, "bold")
-          doc.text(row.label, labelX, currentY)
-          doc.setFont(undefined, "normal")
-          doc.text(row.valueLines, valueX, currentY)
-          currentY += row.rowHeight
-        })
-
-        return cardHeight
-      }
-
-      const customerCardHeight = drawInfoCard("Customer", 14, 53, 58, [
-        { label: "Name", value: customerName },
-        { label: "Phone", value: customerPhone },
-        { label: "Address", value: deliveryAddress },
-      ])
-      const restaurantCardHeight = drawInfoCard("Restaurant", 76, 53, 58, [
-        { label: "Name", value: restaurantName },
-        { label: "Delivery", value: deliveryType },
-        { label: "Items", value: `${itemCount} item${itemCount === 1 ? "" : "s"}` },
-      ], [37, 99, 235])
-      const deliveryCardHeight = drawInfoCard("Delivery Partner", 138, 53, 58, [
-        { label: "Name", value: deliveryPartnerName },
-        { label: "Phone", value: deliveryPartnerPhone },
-        { label: "Payment", value: paymentType },
-      ], [249, 115, 22])
-
-      const infoCardsBottomY = 53 + Math.max(customerCardHeight, restaurantCardHeight, deliveryCardHeight)
-
-      autoTable(doc, {
-        startY: infoCardsBottomY + 8,
-        body: [[
-          `Order ID: ${orderId}`,
-          `Status: ${orderStatus}`,
-          `Payment Status: ${paymentStatus}`,
-          `Grand Total: ${formatMoney(totalAmount)}`,
-        ]],
-        theme: "plain",
-        styles: {
-          fontSize: 9,
-          textColor: [30, 41, 59],
-          fillColor: [241, 245, 249],
-          cellPadding: { top: 3.5, right: 4, bottom: 3.5, left: 4 },
-          lineColor: [226, 232, 240],
-          lineWidth: 0.25,
-          fontStyle: "bold",
-        },
-        columnStyles: {
-          0: { cellWidth: 45 },
-          1: { cellWidth: 45 },
-          2: { cellWidth: 50 },
-          3: { cellWidth: 42, halign: "right", textColor: [15, 118, 110] },
-        },
-        margin: { left: 14, right: 14 },
-      })
-
       const tableBody = items.length > 0
         ? items.map((item) => {
           const qty = toNumber(item.quantity || 1)
           const title = item.name || item.itemName || item.title || "Item"
           const unitPrice = toNumber(item.price)
           const lineTotal = qty * unitPrice
-          return [qty, title, formatMoney(unitPrice), formatMoney(lineTotal)]
+          return [qty, title, `INR ${unitPrice.toFixed(2)}`, `INR ${lineTotal.toFixed(2)}`]
         })
-        : [[1, "Order Total", formatMoney(totalAmount), formatMoney(totalAmount)]]
+        : [[1, "Order Total", `INR ${totalAmount.toFixed(2)}`, `INR ${totalAmount.toFixed(2)}`]]
 
       autoTable(doc, {
-        startY: (doc.lastAutoTable?.finalY || 110) + 6,
+        startY: 55,
         head: [["Qty", "Item", "Unit Price", "Line Total"]],
         body: tableBody,
         theme: "grid",
@@ -546,11 +578,11 @@ export function useOrdersManagement(orders, statusKey, title) {
       autoTable(doc, {
         startY: summaryStartY,
         body: [
-          ["Subtotal", formatMoney(subtotal)],
-          ["Delivery Fee", formatMoney(deliveryFee)],
-          ["Tax", formatMoney(taxAmount)],
-          ["Discount", `- ${formatMoney(discountAmount)}`],
-          ["Grand Total", formatMoney(totalAmount)],
+          ["Subtotal", `INR ${subtotal.toFixed(2)}`],
+          ["Delivery Fee", `INR ${deliveryFee.toFixed(2)}`],
+          ["Tax", `INR ${taxAmount.toFixed(2)}`],
+          ["Discount", `- INR ${discountAmount.toFixed(2)}`],
+          ["Grand Total", `INR ${totalAmount.toFixed(2)}`],
         ],
         theme: "plain",
         styles: {
@@ -571,14 +603,6 @@ export function useOrdersManagement(orders, statusKey, title) {
           }
         },
       })
-
-      const footerY = Math.max((doc.lastAutoTable?.finalY || summaryStartY) + 18, 262)
-      doc.setDrawColor(226, 232, 240)
-      doc.line(14, footerY - 6, pageWidth - 14, footerY - 6)
-      doc.setFontSize(9)
-      doc.setTextColor(100, 116, 139)
-      doc.text(`Generated on ${new Date().toLocaleString()}`, 14, footerY)
-      doc.text("Includes customer, restaurant, and delivery partner details.", pageWidth - 14, footerY, { align: "right" })
 
       const filename = `Invoice_${orderId}_${new Date().toISOString().split("T")[0]}.pdf`
       doc.save(filename)

@@ -2828,6 +2828,22 @@ export async function updateRestaurantStatus(id, body = {}) {
     ).lean();
 }
 
+export async function deleteRestaurant(id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const deleted = await FoodRestaurant.findByIdAndDelete(id).lean();
+    if (!deleted) return null;
+
+    await Promise.allSettled([
+        FoodItem.deleteMany({ restaurantId: id }),
+        FoodCategory.deleteMany({ restaurantId: id }),
+        FoodAddon.deleteMany({ restaurantId: id }),
+        FoodOffer.deleteMany({ restaurantId: id }),
+        FoodRestaurantCommission.deleteMany({ restaurantId: id })
+    ]);
+
+    return deleted;
+}
+
 export async function updateRestaurantLocation(id, body = {}) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const doc = await FoodRestaurant.findById(id);
@@ -4257,7 +4273,9 @@ export async function getDeliveryPartners(query) {
         email: doc.email || '',
         phone: doc.phone || '',
         deliveryId: doc._id ? `DP-${doc._id.toString().slice(-8).toUpperCase()}` : null,
-        zone: doc.city || doc.state || doc.address || '',
+        zoneId: doc.zoneId || null,
+        zoneName: doc.zoneName || '',
+        zone: doc.zoneName || doc.city || doc.state || doc.address || '',
         vehicleType: doc.vehicleType || '',
         status: doc.status,
         availabilityStatus: doc.availabilityStatus || 'offline',
@@ -5490,7 +5508,8 @@ export async function getDeliveryWallets(query = {}) {
     if (query.search) {
         filter.$or = [
             { name: new RegExp(query.search, 'i') },
-            { phone: new RegExp(query.search, 'i') }
+            { phone: new RegExp(query.search, 'i') },
+            { email: new RegExp(query.search, 'i') }
         ];
     }
 
@@ -5503,25 +5522,102 @@ export async function getDeliveryWallets(query = {}) {
         FoodDeliveryPartner.countDocuments(filter)
     ]);
 
-    const cashLimitSettings = await FoodDeliveryCashLimit.findOne({ isActive: true }).lean();
+    const cashLimitSettings = await getDeliveryCashLimitSettings();
     const globalLimit = Number(cashLimitSettings?.deliveryCashLimit || 0);
 
-    const wallets = await Promise.all(partners.map(async (p) => {
-        const wallet = await FoodDeliveryWallet.findOne({ deliveryPartnerId: p._id }).lean();
+    const partnerObjectIds = partners
+        .map((p) => p._id)
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    // Live aggregated calculations across orders, deposits, bonuses, and withdrawals
+    const [earningsAgg, cashCollectedAgg, cashDepositsAgg, bonusAgg, withdrawalAgg] = await Promise.all([
+        // 1. Total Rider Earnings from Delivered Orders
+        FoodOrder.aggregate([
+            { $match: { 'dispatch.deliveryPartnerId': { $in: partnerObjectIds }, orderStatus: 'delivered' } },
+            { $group: { _id: '$dispatch.deliveryPartnerId', totalEarned: { $sum: { $ifNull: ['$riderEarning', '$pricing.deliveryFee', 0] } } } }
+        ]),
+        // 2. Gross COD Cash Collected (customer bill total)
+        FoodOrder.aggregate([
+            {
+                $match: {
+                    'dispatch.deliveryPartnerId': { $in: partnerObjectIds },
+                    orderStatus: 'delivered',
+                    'payment.method': 'cash'
+                }
+            },
+            { $group: { _id: '$dispatch.deliveryPartnerId', cashCollected: { $sum: { $ifNull: ['$pricing.total', '$totalAmount', 0] } } } }
+        ]),
+        // 3. Completed Cash Deposits to Admin
+        FoodDeliveryCashDeposit.aggregate([
+            {
+                $match: {
+                    deliveryPartnerId: { $in: partnerObjectIds },
+                    status: 'Completed'
+                }
+            },
+            { $group: { _id: '$deliveryPartnerId', depositedCash: { $sum: { $ifNull: ['$amount', 0] } } } }
+        ]),
+        // 4. Admin Bonuses
+        DeliveryBonusTransaction.aggregate([
+            { $match: { deliveryPartnerId: { $in: partnerObjectIds } } },
+            { $group: { _id: '$deliveryPartnerId', total: { $sum: { $ifNull: ['$amount', 0] } } } }
+        ]),
+        // 5. Withdrawals
+        FoodDeliveryWithdrawal.aggregate([
+            { $match: { deliveryPartnerId: { $in: partnerObjectIds } } },
+            {
+                $group: {
+                    _id: '$deliveryPartnerId',
+                    totalWithdrawn: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, '$amount', 0] } },
+                    pendingWithdrawals: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } }
+                }
+            }
+        ])
+    ]);
+
+    const earningsMap = new Map((earningsAgg || []).map((item) => [String(item._id), Number(item.totalEarned || 0)]));
+    const cashCollectedMap = new Map((cashCollectedAgg || []).map((item) => [String(item._id), Number(item.cashCollected || 0)]));
+    const cashDepositedMap = new Map((cashDepositsAgg || []).map((item) => [String(item._id), Number(item.depositedCash || 0)]));
+    const bonusMap = new Map((bonusAgg || []).map((item) => [String(item._id), Number(item.total || 0)]));
+    const withdrawalMap = new Map((withdrawalAgg || []).map((item) => [String(item._id), {
+        totalWithdrawn: Number(item.totalWithdrawn || 0),
+        pendingWithdrawals: Number(item.pendingWithdrawals || 0)
+    }]));
+
+    const wallets = partners.map((p) => {
+        const pIdStr = String(p._id);
+        const totalEarned = earningsMap.get(pIdStr) || 0;
+        const grossCashCollected = cashCollectedMap.get(pIdStr) || 0;
+        const totalDepositedCash = cashDepositedMap.get(pIdStr) || 0;
+        const cashInHand = Math.max(0, grossCashCollected - totalDepositedCash);
+        const totalBonus = bonusMap.get(pIdStr) || 0;
+        const wData = withdrawalMap.get(pIdStr) || { totalWithdrawn: 0, pendingWithdrawals: 0 };
+        const totalWithdrawn = wData.totalWithdrawn || 0;
+        const pendingWithdrawals = wData.pendingWithdrawals || 0;
+
+        const remainingCashLimit = globalLimit - cashInHand;
+        const availableCashLimit = Math.max(0, globalLimit - cashInHand);
+        const pocketBalance = Math.max(0, (totalEarned + totalBonus) - (totalWithdrawn + pendingWithdrawals));
 
         return {
-            walletId: wallet?._id,
+            walletId: String(p._id),
             deliveryId: p._id,
-            name: p.name,
-            deliveryIdString: p.phone, // Placeholder or sequential ID if available
-            pocketBalance: Number(wallet?.balance || 0),
-            remainingCashLimit: Math.max(0, globalLimit - Number(wallet?.cashInHand || 0)),
-            cashCollected: Number(wallet?.cashInHand || 0),
-            totalEarning: Number(wallet?.totalEarnings || 0),
-            bonus: Number(wallet?.totalBonus || 0),
-            totalWithdrawn: Number(wallet?.totalSettled || 0)
+            name: p.name || 'Delivery Partner',
+            deliveryIdString: p.phone || `DP-${String(p._id).slice(-8).toUpperCase()}`,
+            pocketBalance,
+            cashInHand,
+            cashCollected: cashInHand,
+            grossCashCollected,
+            totalDepositedCash,
+            remainingCashLimit,
+            availableCashLimit,
+            totalCashLimit: globalLimit,
+            totalEarning: totalEarned,
+            bonus: totalBonus,
+            totalWithdrawn,
+            pendingWithdrawals
         };
-    }));
+    });
 
     return {
         wallets,

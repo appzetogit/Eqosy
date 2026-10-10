@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { createPortal } from "react-dom"
-import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, CheckCircle2, Search, Loader2, Check } from "lucide-react"
+import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, CheckCircle2, Search, Loader2, Check, Printer } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { toast } from "sonner"
 import {
@@ -41,7 +41,7 @@ const getPaymentStatusColor = (paymentStatus) => {
   return "text-slate-600"
 }
 
-export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
+export default function ViewOrderDialog({ isOpen, onOpenChange, order, onPrintOrder }) {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [availablePartners, setAvailablePartners] = useState([])
   const [loadingPartners, setLoadingPartners] = useState(false)
@@ -169,14 +169,26 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] bg-white p-0 overflow-y-auto">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 sticky top-0 bg-white z-10">
-          <DialogTitle className="flex items-center gap-2">
-            <Eye className="w-5 h-5 text-orange-600" />
-            Order Details
-          </DialogTitle>
-          <DialogDescription>
-            View complete information about this order
-          </DialogDescription>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 sticky top-0 bg-white z-10 flex flex-row items-center justify-between">
+          <div>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-orange-600" />
+              Order Details
+            </DialogTitle>
+            <DialogDescription>
+              View complete information about this order
+            </DialogDescription>
+          </div>
+          {onPrintOrder && (
+            <button
+              type="button"
+              onClick={() => onPrintOrder(order)}
+              className="mr-6 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print Invoice</span>
+            </button>
+          )}
         </DialogHeader>
         <div className="px-6 py-6 space-y-6">
           {/* Basic Order Information */}

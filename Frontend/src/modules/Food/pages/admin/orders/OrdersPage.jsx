@@ -1005,6 +1005,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         isOpen={isViewOrderOpen}
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
+        onPrintOrder={handlePrintOrder}
       />
       <RefundModal
         isOpen={refundModalOpen}

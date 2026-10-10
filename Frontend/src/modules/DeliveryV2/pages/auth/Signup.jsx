@@ -312,7 +312,7 @@ export default function DeliverySignup() {
                   I agree to the{' '}
                   <Link to="/food/delivery/terms" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Delivery Partner Terms</Link>
                   {' '}and{' '}
-                  <Link to="/profile/privacy" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Privacy Policy</Link>
+                  <Link to="/food/pages/delivery-privacy" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Privacy Policy</Link>
                 </label>
               </div>
 

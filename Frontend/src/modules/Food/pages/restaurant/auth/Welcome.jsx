@@ -308,8 +308,12 @@ export default function RestaurantWelcome() {
           <p className="text-white/70 text-xs md:text-sm">
             By continuing, you agree to our
           </p>
-          <p className="text-white/70 text-xs md:text-sm underline mt-1">
-            Terms of Service | Privacy Policy | Code of Conduct
+          <p className="text-white/70 text-xs md:text-sm mt-1">
+            <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="underline hover:text-white transition-colors">Terms of Service</a>
+            {" | "}
+            <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="underline hover:text-white transition-colors">Privacy Policy</a>
+            {" | "}
+            <span className="opacity-80">Code of Conduct</span>
           </p>
         </div>
       </div>

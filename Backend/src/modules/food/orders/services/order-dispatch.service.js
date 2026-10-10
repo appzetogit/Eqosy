@@ -147,7 +147,7 @@ async function listNearbyOnlineDeliveryPartners(
         if (booking.gigId.date && booking.gigId.date !== todayStr) continue;
         const startMs = new Date(booking.gigId.startDateTime).getTime();
         const endMs = new Date(booking.gigId.endDateTime).getTime();
-        const isInWindow = (nowMs >= startMs - THIRTY_MIN_MS) && (nowMs <= endMs + THIRTY_MIN_MS);
+        const isInWindow = (nowMs >= startMs - THIRTY_MIN_MS) && (nowMs <= endMs);
         if (isInWindow) {
           partnersWithActiveGig.add(String(booking.deliveryPartnerId));
         }

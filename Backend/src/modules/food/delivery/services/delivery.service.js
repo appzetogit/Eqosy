@@ -480,7 +480,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
     const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
     // Earnings paid to rider through completed deliveries
-    const [earningsAgg, cashAgg] = await Promise.all([
+    const [earningsAgg, cashAgg, cashDepositsAgg] = await Promise.all([
         FoodOrder.aggregate([
             {
                 $match: {
@@ -500,21 +500,36 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
                 $match: {
                     'dispatch.deliveryPartnerId': partnerId,
                     orderStatus: 'delivered',
-                    'payment.method': 'cash',
-                    'payment.status': 'paid'
+                    'payment.method': 'cash'
                 }
             },
             {
                 $group: {
                     _id: null,
-                    cashInHand: { $sum: { $ifNull: ['$riderEarning', 0] } }
+                    cashCollected: { $sum: { $ifNull: ['$pricing.total', '$totalAmount', 0] } }
+                }
+            }
+        ]),
+        FoodDeliveryCashDeposit.aggregate([
+            {
+                $match: {
+                    deliveryPartnerId: partnerId,
+                    status: 'Completed'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    depositedCash: { $sum: { $ifNull: ['$amount', 0] } }
                 }
             }
         ])
     ]);
 
     const totalEarned = Number(earningsAgg?.[0]?.totalEarned) || 0;
-    const cashInHand = Number(cashAgg?.[0]?.cashInHand) || 0;
+    const grossCashCollected = Number(cashAgg?.[0]?.cashCollected) || 0;
+    const totalDepositedCash = Number(cashDepositsAgg?.[0]?.depositedCash) || 0;
+    const cashInHand = Math.max(0, grossCashCollected - totalDepositedCash);
 
     // Admin-set delivery bonuses / earning addons
     const bonusAgg = await DeliveryBonusTransaction.aggregate([

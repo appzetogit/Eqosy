@@ -486,7 +486,6 @@ export const getActiveGigForPartner = async (deliveryPartnerId) => {
   }).populate('gigId').lean();
 
   const THIRTY_MIN_BEFORE_MS = 30 * 60 * 1000; // Allow logging in online 30 minutes before gig start time
-  const THIRTY_MIN_AFTER_MS = 30 * 60 * 1000;  // 30 minute grace period after gig end time to complete work & wrap up
 
   const activeBooking = bookings.find(b => {
     if (!b.gigId || b.gigId.status !== 'active') return false;
@@ -495,8 +494,8 @@ export const getActiveGigForPartner = async (deliveryPartnerId) => {
     const startMs = new Date(b.gigId.startDateTime).getTime();
     const endMs = new Date(b.gigId.endDateTime).getTime();
 
-    // Rider can log in starting 30 minutes before gig start time up until 30 minutes after gig end time
-    const isInTimeWindow = (nowMs >= startMs - THIRTY_MIN_BEFORE_MS) && (nowMs <= endMs + THIRTY_MIN_AFTER_MS);
+    // Rider can log in starting 30 minutes before gig start time up until gig end time
+    const isInTimeWindow = (nowMs >= startMs - THIRTY_MIN_BEFORE_MS) && (nowMs <= endMs);
     return isInTimeWindow;
   });
 
@@ -650,7 +649,7 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
       if (b.gigId.date && b.gigId.date !== now.toISOString().slice(0, 10)) return false;
       const startMs = new Date(b.gigId.startDateTime).getTime();
       const endMs = new Date(b.gigId.endDateTime).getTime();
-      return (nowMs >= startMs - THIRTY_MIN_GRACE_MS) && (nowMs <= endMs + THIRTY_MIN_GRACE_MS);
+      return (nowMs >= startMs - THIRTY_MIN_GRACE_MS) && (nowMs <= endMs);
     });
 
     if (hasActiveGig) {
@@ -691,6 +690,28 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
 
       logger.info(`[AutoOffline] Partner ${partner.name || partner._id} auto-offlined (gig expired, no active orders).`);
 
+      const notificationTitle = 'Shift Ended — You are now Offline ⏰';
+      const notificationBody = 'Aapki gig shift end ho gayi hai. Dubara online aane ke liye nayi gig book karein.';
+
+      // Create Inbox Notification
+      try {
+        const { createInboxNotifications } = await import('../../../../core/notifications/notification.service.js');
+        await createInboxNotifications({
+          notifications: [
+            {
+              ownerType: 'DELIVERY_PARTNER',
+              ownerId: partner._id,
+              title: notificationTitle,
+              message: notificationBody,
+              category: 'gig_expired',
+              metadata: { reason: 'gig_expired' }
+            }
+          ]
+        });
+      } catch (inboxErr) {
+        logger.warn(`[AutoOffline] Failed to create inbox notification: ${inboxErr.message}`);
+      }
+
       // Notify partner via socket
       try {
         const io = getIO();
@@ -698,20 +719,20 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
           io.to(rooms.delivery(partner._id)).emit('availability_status_changed', {
             availabilityStatus: 'offline',
             reason: 'gig_expired',
-            message: 'Aapki shift khatam ho gayi hai. Dubara online aane ke liye nayi gig book karein.'
+            message: notificationBody
           });
         }
       } catch (socketErr) {
         // ignore socket errors
       }
 
-      // Push notification
+      // Push notification (silent/standard notification, no custom alarm sound)
       try {
         await notifyOwnerSafely(
           { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
           {
-            title: 'Shift Ended — You are now Offline ⏰',
-            body: 'Your gig shift has ended. To go online again, please book a new gig slot.',
+            title: notificationTitle,
+            body: notificationBody,
             data: { type: 'auto_offline', reason: 'gig_expired' }
           }
         );

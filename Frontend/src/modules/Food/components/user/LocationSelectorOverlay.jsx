@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react"
-import { ChevronLeft, ChevronRight, ChevronDown, Search, Target, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair, CloudRain } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, Search, Target, Plus, MapPin, MoreHorizontal, Navigation, Home, Building2, Briefcase, Phone, X, Crosshair } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
 import { Label } from "@food/components/ui/label"
@@ -2822,16 +2822,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                       </p>
                     </div>
                   </button>
-
-                  {/* Weather Alert Banner for Home address */}
-                  {isHome && (
-                    <div className="mt-3 bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-3 flex items-center gap-2.5">
-                      <CloudRain className="h-5 w-5 text-indigo-500 flex-shrink-0" />
-                      <p className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
-                        It's raining here, delivery partners may take longer to reach
-                      </p>
-                    </div>
-                  )}
                 </div>
               )
             })}

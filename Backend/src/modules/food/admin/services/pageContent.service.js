@@ -42,11 +42,11 @@ const DEFAULT_PAGES = {
     },
     'restaurant-terms': {
         title: 'Restaurant Partner Terms and Conditions',
-        content: `<h2>Restaurant Partner Terms and Conditions</h2><p>These terms govern the relationship between Eqosy and merchant restaurant partners.</p><h3>1. Merchant Onboarding</h3><p>Merchants must maintain valid food safety licenses (FSSAI/Local Authority) and accurate business documentation.</p><h3>2. Order Processing</h3><p>Restaurants agree to prepare accepted orders in accordance with safety, hygiene, and timing guidelines.</p><h3>3. Commissions & Settlements</h3><p>Platform commissions will be deducted automatically based on agreed rates. Net earnings are settled to merchant accounts per the payment schedule.</p>`
+        content: `<h2>Restaurant Partner Terms and Conditions</h2><p>These terms govern the relationship between Eqosy and merchant restaurant partners.</p><h3>1. Merchant Onboarding & Licensing</h3><p>Merchants must maintain valid food safety licenses (FSSAI/Local Authority), trade licenses, and accurate tax documentation at all times.</p><h3>2. Order Processing & Food Quality</h3><p>Restaurants agree to prepare accepted orders in accordance with safety, hygiene, and timing guidelines. All packaging must adhere to hygiene standards.</p><h3>3. Commissions & Payout Settlements</h3><p>Platform commissions will be deducted automatically based on agreed commission structure. Net earnings are settled directly to merchant bank accounts per the configured payment cycle.</p><h3>4. Menu & Price Compliance</h3><p>Merchants must keep menu items, prices, and store operational hours updated in real time. Price inflation beyond platform policy is strictly prohibited.</p>`
     },
     'delivery-terms': {
         title: 'Delivery Partner Terms and Conditions',
-        content: `<h2>Delivery Partner Terms and Conditions</h2><p>These terms apply to all registered delivery fleet partners operating on the Eqosy platform.</p><h3>1. Partner Eligibility</h3><p>Delivery partners must hold a valid driving license, active vehicle registration, and necessary insurance.</p><h3>2. Delivery Code of Conduct</h3><p>Partners are expected to handle orders safely, follow traffic guidelines, and maintain courteous behavior with customers.</p><h3>3. Payouts and Tips</h3><p>Earnings, delivery fees, and 100% of customer tips are credited to the delivery partner's wallet upon order completion.</p>`
+        content: `<h2>Delivery Partner Terms and Conditions</h2><p>These terms apply to all registered delivery fleet partners operating on the Eqosy platform.</p><h3>1. Partner Eligibility & Documentation</h3><p>Delivery partners must hold a valid driving license, active vehicle registration (RC), and necessary vehicle insurance.</p><h3>2. Delivery Code of Conduct</h3><p>Partners are expected to handle orders safely, follow traffic regulations, maintain hygiene standards, and interact politely with customers and restaurant staff.</p><h3>3. Payouts, Earnings & Tips</h3><p>Earnings, delivery fees, and 100% of customer tips are credited to the delivery partner's wallet upon order completion.</p>`
     },
     'driver-terms': {
         title: 'Driver Partner Terms and Conditions',
@@ -62,22 +62,22 @@ const DEFAULT_PAGES = {
     },
     'restaurant-privacy': {
         title: 'Restaurant Partner Privacy Policy',
-        content: `<h2>Restaurant Partner Privacy Policy</h2><p>This privacy policy outlines how merchant financial details, store locations, and operational data are handled securely by Eqosy.</p>`
+        content: `<h2>Restaurant Partner Privacy Policy</h2><p>This privacy policy outlines how merchant financial details, store locations, contact details, and operational data are handled securely by Eqosy.</p><h3>1. Merchant Data Collection</h3><p>We collect restaurant business details, store GPS locations, owner contact numbers, FSSAI licenses, and bank account details required for order fulfillment and payouts.</p><h3>2. Financial & Banking Privacy</h3><p>Bank details, tax identifiers (GST/PAN), and daily transaction payouts are encrypted and stored in compliance with banking security standards.</p><h3>3. Operational Analytics</h3><p>Store order volume, customer rating aggregations, and performance metrics are processed to provide analytics dashboards and improve service efficiency.</p><h3>4. Data Sharing Scope</h3><p>Store location and menu details are made public to app users for order placement. Contact numbers are masked during customer communication.</p>`
     },
     'delivery-privacy': {
         title: 'Delivery Partner Privacy Policy',
-        content: `<h2>Delivery Partner Privacy Policy</h2><p>Outlines delivery partner background checks, live GPS tracking during shifts, and wallet transaction privacy rules.</p>`
+        content: `<h2>Delivery Partner Privacy Policy</h2><p>Outlines delivery partner background checks, live GPS tracking during shifts, document verification, and wallet transaction privacy rules.</p><h3>1. Location Data Collection</h3><p>Background and high-accuracy GPS location data is collected ONLY when your partner app status is set to "ONLINE" or during active delivery tasks.</p><h3>2. Purpose of Location Tracking</h3><p>Location data is required to assign nearby pickup orders, route delivery paths, estimate arrival times, and provide real-time tracking to customers.</p><h3>3. Verification Documents</h3><p>Driving license, vehicle RC, identity cards, and selfie verifications are stored securely and reviewed strictly for onboarding and safety compliance.</p>`
     },
     'driver-privacy': {
         title: 'Driver Partner Privacy Policy',
-        content: `<h2>Driver Partner Privacy Policy</h2><p>Outlines driver document verification, trip route tracking, and account data security standards.</p>`
+        content: `<h2>Driver Partner Privacy Policy</h2><p>Outlines driver document verification, trip route tracking, location monitoring, and account data security standards for Eqosy Taxi.</p><h3>1. Duty Location Tracking</h3><p>High-precision location data is collected while on duty or during active ride assignments to match rider pickup points and provide trip navigation.</p><h3>2. Safety & SOS Monitoring</h3><p>Location logs during active trips are monitored to support emergency SOS features, route deviation alerts, and safety audits.</p><h3>3. Contact Masking</h3><p>Rider and driver phone numbers are masked through anonymous proxy numbers during in-app call connections.</p>`
     },
     'seller-privacy': {
         title: 'Seller Partner Privacy Policy',
-        content: `<h2>Seller Partner Privacy Policy</h2><p>Outlines seller account confidentiality, store metrics, and product catalog data protection protocols.</p>`
+        content: `<h2>Seller Partner Privacy Policy</h2><p>Outlines seller account confidentiality, store metrics, financial settlements, and product catalog data protection protocols.</p><h3>1. Merchant Confidentiality</h3><p>Store sales volume, wholesale supplier details, and private commercial metrics remain confidential and accessible only to authorized store users.</p><h3>2. Payout Security</h3><p>Bank accounts and payout transaction records are secured using standard financial data protection protocols.</p>`
     },
-    refund: { title: 'Refund Policy', content: '' },
-    shipping: { title: 'Shipping Policy', content: '' },
+    refund: { title: 'Refund Policy', content: `<h2>Refund Policy</h2><p>Orders canceled before restaurant confirmation or due to partner unavailability will be fully refunded to the original payment method within 3-5 business days.</p>` },
+    shipping: { title: 'Shipping Policy', content: `<h2>Delivery & Shipping Policy</h2><p>Orders are dispatched immediately via local delivery partners. Estimated delivery times are shown prior to order placement based on live traffic and preparation time.</p>` },
     cancellation: { title: 'Cancellation Policy', content: 'A cancellation charge will apply as per configured rules once order is confirmed.' },
     home: {
         eyebrowBadge: "INDIA'S #1 UNIFIED SUPER APP",

@@ -1054,7 +1054,7 @@ export default function RestaurantsList() {
         setDeleteConfirmDialog(null)
 
         // Show success message
-        alert(`Restaurant "${restaurant.name}" deleted successfully!`)
+        alert(`Restaurant "${restaurant.name || restaurant.restaurantName || ''}" deleted successfully!`)
       } catch (apiErr) {
         debugError("API Error:", apiErr)
         alert(apiErr.response?.data?.message || "Failed to delete restaurant. Please try again.")

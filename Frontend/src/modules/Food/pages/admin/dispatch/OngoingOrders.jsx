@@ -192,6 +192,7 @@ export default function OngoingOrders() {
         isOpen={isViewOrderOpen}
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
+        onPrintOrder={handlePrintOrder}
       />
       <DispatchOrdersTable 
         orders={filteredData} 

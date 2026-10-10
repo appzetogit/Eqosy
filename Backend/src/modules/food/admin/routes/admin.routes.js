@@ -82,6 +82,7 @@ router.patch('/restaurants/:id/zone-featured-rank', requireFoodResourceAccess('r
 router.patch('/restaurants/:id/menu', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantMenuById);
 router.patch('/restaurants/:id/approve', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.approveRestaurant);
 router.patch('/restaurants/:id/reject', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.rejectRestaurant);
+router.delete('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.deleteRestaurant);
 
 // ----- Restaurant Commission -----
 router.get('/restaurant-commissions/bootstrap', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.getRestaurantCommissionBootstrap);

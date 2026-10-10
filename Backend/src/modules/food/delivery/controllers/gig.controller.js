@@ -71,9 +71,62 @@ export const getActiveGigHandler = asyncHandler(async (req, res) => {
   if (!activeGig && partnerId) {
     const partner = await FoodDeliveryPartner.findById(partnerId);
     if (partner && partner.availabilityStatus === 'online') {
-      partner.availabilityStatus = 'offline';
-      await partner.save();
-      availabilityStatus = 'offline';
+      try {
+        const { FoodOrder } = await import('../../orders/models/order.model.js');
+        const activeOrder = await FoodOrder.findOne({
+          'dispatch.deliveryPartnerId': partner._id,
+          orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
+        }).select('_id').lean();
+
+        if (!activeOrder) {
+          partner.availabilityStatus = 'offline';
+          await partner.save();
+          availabilityStatus = 'offline';
+
+          const notificationTitle = 'Shift Ended — You are now Offline ⏰';
+          const notificationBody = 'Aapki gig shift end ho gayi hai. Dubara online aane ke liye nayi gig book karein.';
+
+          try {
+            const { getIO, rooms } = await import('../../../../config/socket.js');
+            const io = getIO();
+            if (io) {
+              io.to(rooms.delivery(partner._id)).emit('availability_status_changed', {
+                availabilityStatus: 'offline',
+                reason: 'gig_expired',
+                message: notificationBody
+              });
+            }
+          } catch (_) {}
+
+          try {
+            const { notifyOwnerSafely } = await import('../../../../core/notifications/firebase.service.js');
+            await notifyOwnerSafely(
+              { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
+              {
+                title: notificationTitle,
+                body: notificationBody,
+                data: { type: 'auto_offline', reason: 'gig_expired' }
+              }
+            );
+          } catch (_) {}
+
+          try {
+            const { createInboxNotifications } = await import('../../../../core/notifications/notification.service.js');
+            await createInboxNotifications({
+              notifications: [
+                {
+                  ownerType: 'DELIVERY_PARTNER',
+                  ownerId: partner._id,
+                  title: notificationTitle,
+                  message: notificationBody,
+                  category: 'gig_expired',
+                  metadata: { reason: 'gig_expired' }
+                }
+              ]
+            });
+          } catch (_) {}
+        }
+      } catch (err) {}
     }
   }
   res.status(200).json({ success: true, data: { activeGig, ...(availabilityStatus ? { availabilityStatus } : {}) } });
