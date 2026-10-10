@@ -196,7 +196,9 @@ export default function DeliverySignIn() {
           <footer className="mt-auto pt-10 text-center">
             <p className="text-xs text-gray-400 font-medium leading-relaxed">
               By continuing you agree to the<br />
-              <Link to="/food/delivery/terms" className="text-[#1A1A1A] font-bold">Delivery Charter</Link>
+              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Delivery Charter</Link>
+              {" & "}
+              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Privacy Policy</Link>
             </p>
           </footer>
         </div>

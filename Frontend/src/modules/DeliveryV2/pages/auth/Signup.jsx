@@ -343,7 +343,9 @@ export default function DeliverySignup() {
             </button>
             <p className="text-xs text-gray-400 font-medium text-center leading-relaxed">
               By continuing you agree to the<br />
-              <Link to="/food/delivery/terms" className="text-[#1A1A1A] font-bold">Terms and Conditions</Link>
+              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Terms and Conditions</Link>
+              {" & "}
+              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Privacy Policy</Link>
             </p>
           </div>
         </div>
