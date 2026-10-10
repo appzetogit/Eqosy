@@ -231,12 +231,23 @@ const LegalPage = () => {
   const content = legalContent[getDocumentType(location.pathname)];
   const Icon = content.icon || FileText;
 
+  const handleBack = () => {
+    // Opened directly (new tab / shared link) -> no in-app history to go back to.
+    if (window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/taxi', { replace: true });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-stone-50 text-slate-900">
       <div className="fixed top-0 left-0 right-0 z-50 border-b border-stone-200 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-6">
           <button
-            onClick={() => navigate(-1)}
+            type="button"
+            aria-label="Go back"
+            onClick={handleBack}
             className="rounded-full p-2 transition-all hover:bg-stone-100"
           >
             <ArrowLeft size={20} />

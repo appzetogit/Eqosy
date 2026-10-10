@@ -16,6 +16,17 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   })
 }
 
+// A deploy replaced the hashed chunks this tab still references (server answers
+// with index.html -> MIME error). Reload once to pick up the new build.
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  try {
+    if (sessionStorage.getItem('chunk-reload') === '1') return
+    sessionStorage.setItem('chunk-reload', '1')
+  } catch { /* ignore */ }
+  window.location.reload()
+})
+
 // ─── Quick-spicy Food Module Initialization ───────────────────────────────────
 
 // Load food module business settings (favicon, title) — non-critical
