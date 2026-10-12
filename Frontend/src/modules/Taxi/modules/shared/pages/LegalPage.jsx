@@ -244,57 +244,79 @@ const LegalPage = ({ role: propRole }) => {
       searchParams.get('returnTo') ||
       searchParams.get('from');
 
+    // Never return to terms/privacy or out-of-context food module from a taxi legal page
     if (
       explicitReturn &&
       typeof explicitReturn === 'string' &&
       explicitReturn.startsWith('/') &&
       !explicitReturn.includes('terms') &&
-      !explicitReturn.includes('privacy')
+      !explicitReturn.includes('privacy') &&
+      !explicitReturn.includes('/food/')
     ) {
       navigate(explicitReturn, { replace: true });
       return;
     }
 
+    const referrer = typeof document !== 'undefined' ? (document.referrer || '') : '';
+    const referrerIsFood = Boolean(referrer && referrer.includes('/food/'));
+    const referrerIsDriver = Boolean(referrer && (referrer.includes('/taxi/driver') || referrer.includes('/taxi/owner')));
+
+    const storedDriverToken =
+      getLocalDriverToken() ||
+      (typeof localStorage !== 'undefined' && (localStorage.getItem('driverToken') || localStorage.getItem('token'))) ||
+      (typeof sessionStorage !== 'undefined' && (sessionStorage.getItem('driverToken') || sessionStorage.getItem('token'))) ||
+      '';
+
+    const storedDriverRole = String(
+      getAuthenticatedDriverRole() ||
+      (typeof localStorage !== 'undefined' && (localStorage.getItem('driverRole') || localStorage.getItem('role'))) ||
+      (typeof sessionStorage !== 'undefined' && (sessionStorage.getItem('driverRole') || sessionStorage.getItem('role'))) ||
+      ''
+    ).toLowerCase();
+
+    const isDriverAuth = Boolean(
+      isModuleAuthenticated('driver') ||
+      (storedDriverToken && ['driver', 'owner', 'bus_driver', 'service_center', 'service_center_staff'].includes(storedDriverRole))
+    );
+
+    const lastTaxiPortal =
+      (typeof localStorage !== 'undefined' && localStorage.getItem('last_taxi_portal')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('last_taxi_portal')) ||
+      '';
+
+    const nativeLastRoute = (typeof localStorage !== 'undefined' && localStorage.getItem('native_last_route')) || '';
+    const lastDriverRoute = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('last_taxi_driver_route')) || '';
+
+    const isDriver =
+      searchRole === 'driver' ||
+      stateRole === 'driver' ||
+      location.pathname.includes('/driver') ||
+      isDriverAuth ||
+      referrerIsDriver ||
+      lastTaxiPortal === 'driver' ||
+      nativeLastRoute.includes('/taxi/driver') ||
+      nativeLastRoute.includes('/taxi/owner');
+
+    // In-app history back navigation (only if not crossing back into food module)
     const hasHistory =
       typeof window !== 'undefined' &&
       window.history &&
+      !referrerIsFood &&
       ((window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) ||
-       (window.history.length > 1 && typeof document !== 'undefined' && document.referrer && document.referrer.includes(window.location.host)));
+       (window.history.length > 1 && referrer && referrer.includes(window.location.host)));
 
     if (hasHistory) {
       navigate(-1);
       return;
     }
 
-    const driverToken = getLocalDriverToken();
-    const isDriver =
-      searchRole === 'driver' ||
-      stateRole === 'driver' ||
-      location.pathname.includes('/driver') ||
-      Boolean(driverToken) ||
-      (typeof document !== 'undefined' && document.referrer && document.referrer.includes('/taxi/driver'));
-
-    const isRestaurant =
-      searchRole === 'restaurant' ||
-      stateRole === 'restaurant' ||
-      location.pathname.includes('restaurant') ||
-      isModuleAuthenticated('restaurant');
-
     if (isDriver) {
-      if (driverToken) {
-        const driverRole = String(getAuthenticatedDriverRole() || 'driver').toLowerCase();
-        navigate(driverRole === 'owner' ? '/taxi/owner/dashboard' : '/taxi/driver/home', { replace: true });
+      if (isDriverAuth) {
+        navigate(storedDriverRole === 'owner' ? '/taxi/owner/dashboard' : '/taxi/driver/home', { replace: true });
+      } else if (lastDriverRoute && lastDriverRoute.startsWith('/taxi/driver') && !lastDriverRoute.includes('privacy') && !lastDriverRoute.includes('terms')) {
+        navigate(lastDriverRoute, { replace: true });
       } else {
         navigate('/taxi/driver/login', { replace: true });
-      }
-      return;
-    }
-
-    if (isRestaurant) {
-      if (isModuleAuthenticated('restaurant')) {
-        navigate('/food/restaurant', { replace: true });
-      } else {
-        navigate('/food/restaurant/login', { replace: true });
       }
       return;
     }

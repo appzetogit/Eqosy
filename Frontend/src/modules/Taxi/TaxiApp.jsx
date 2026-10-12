@@ -706,6 +706,27 @@ function TaxiApp() {
     installBrowserFcmRegistration();
   }, []);
 
+  useEffect(() => {
+    if (!taxiPathname) return;
+    if (taxiPathname.startsWith('/taxi/driver') || taxiPathname.startsWith('/taxi/owner')) {
+      try {
+        localStorage.setItem('last_taxi_portal', 'driver');
+        sessionStorage.setItem('last_taxi_portal', 'driver');
+        if (!taxiPathname.includes('privacy') && !taxiPathname.includes('terms')) {
+          sessionStorage.setItem('last_taxi_driver_route', taxiPathname);
+        }
+      } catch {}
+    } else if (taxiPathname.startsWith('/taxi/user')) {
+      try {
+        localStorage.setItem('last_taxi_portal', 'user');
+        sessionStorage.setItem('last_taxi_portal', 'user');
+        if (!taxiPathname.includes('privacy') && !taxiPathname.includes('terms')) {
+          sessionStorage.setItem('last_taxi_user_route', taxiPathname);
+        }
+      } catch {}
+    }
+  }, [taxiPathname]);
+
   return (
     <>
       <SettingsProvider>
