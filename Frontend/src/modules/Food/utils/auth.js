@@ -83,6 +83,14 @@ export function hasModuleAccess(role, module) {
  * @returns {string|null} - Access token or null
  */
 export function getModuleToken(module) {
+  if (module === 'driver') {
+    return (
+      localStorage.getItem('driver_accessToken') ||
+      localStorage.getItem('driverToken') ||
+      (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('driverToken') : null) ||
+      (localStorage.getItem('role') === 'driver' ? localStorage.getItem('token') : null)
+    );
+  }
   return localStorage.getItem(`${module}_accessToken`);
 }
 

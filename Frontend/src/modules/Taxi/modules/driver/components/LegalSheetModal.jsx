@@ -79,7 +79,11 @@ export default function LegalSheetModal({
     if (onNavigateFull) {
       onNavigateFull(activeTab);
     } else {
-      navigate(activeTab === 'terms' ? '/terms' : '/privacy', {
+      const isDriver = role === 'driver' || window.location.pathname.includes('/driver');
+      const targetPath = isDriver
+        ? (activeTab === 'terms' ? '/taxi/driver/terms' : '/taxi/driver/privacy')
+        : (activeTab === 'terms' ? '/taxi/terms' : '/taxi/privacy');
+      navigate(targetPath, {
         state: { role, returnTo: window.location.pathname },
       });
     }

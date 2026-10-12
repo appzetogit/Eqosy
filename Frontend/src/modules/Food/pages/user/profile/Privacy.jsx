@@ -8,7 +8,7 @@ import api from "@food/api"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { API_ENDPOINTS } from "@food/api/config"
 
-import { isUnifiedAuthenticated } from "@food/utils/auth"
+import { isUnifiedAuthenticated, isModuleAuthenticated } from "@food/utils/auth"
 
 export default function Privacy({ keyName }) {
   const navigate = useNavigate()
@@ -67,11 +67,95 @@ export default function Privacy({ keyName }) {
   }
 
   const handleBack = () => {
-    if (typeof window !== "undefined" && window.history && window.history.length > 2) {
-      navigate(-1)
-    } else {
-      navigate(isUnifiedAuthenticated() ? '/food/user' : '/login', { replace: true })
+    const policyKey = String(resolvePolicyKey() || '').toLowerCase()
+    const path = (location.pathname || '').toLowerCase()
+    const roleFromState = (location.state?.role || '').toLowerCase()
+    const roleFromQuery = (searchParams.get('role') || searchParams.get('type') || searchParams.get('userType') || '').toLowerCase()
+
+    const isRestaurant =
+      policyKey.includes('restaurant') ||
+      path.includes('restaurant') ||
+      roleFromState === 'restaurant' ||
+      roleFromQuery === 'restaurant'
+
+    const isDelivery =
+      policyKey.includes('delivery') ||
+      path.includes('delivery') ||
+      roleFromState === 'delivery' ||
+      roleFromQuery === 'delivery'
+
+    const isDriver =
+      policyKey.includes('driver') ||
+      path.includes('driver') ||
+      roleFromState === 'driver' ||
+      roleFromQuery === 'driver' ||
+      isModuleAuthenticated('driver') ||
+      Boolean(typeof localStorage !== 'undefined' && localStorage.getItem('driverToken')) ||
+      Boolean(typeof sessionStorage !== 'undefined' && sessionStorage.getItem('driverToken')) ||
+      (typeof document !== 'undefined' && document.referrer && document.referrer.includes('/taxi/driver'))
+
+    const explicitReturn =
+      location.state?.returnTo ||
+      location.state?.from ||
+      location.state?.backTo ||
+      searchParams.get('returnTo') ||
+      searchParams.get('from')
+
+    if (
+      explicitReturn &&
+      typeof explicitReturn === 'string' &&
+      explicitReturn.startsWith('/') &&
+      !explicitReturn.includes('terms') &&
+      !explicitReturn.includes('privacy')
+    ) {
+      navigate(explicitReturn, { replace: true })
+      return
     }
+
+    const hasHistory =
+      typeof window !== "undefined" &&
+      window.history &&
+      ((window.history.state && typeof window.history.state.idx === "number" && window.history.state.idx > 0) ||
+       (window.history.length > 1 && typeof document !== "undefined" && document.referrer && document.referrer.includes(window.location.host)))
+
+    if (hasHistory) {
+      navigate(-1)
+      return
+    }
+
+    if (isRestaurant) {
+      if (isModuleAuthenticated('restaurant')) {
+        navigate('/food/restaurant', { replace: true })
+      } else {
+        navigate('/food/restaurant/login', { replace: true })
+      }
+      return
+    }
+
+    if (isDelivery) {
+      if (isModuleAuthenticated('delivery')) {
+        navigate('/food/delivery', { replace: true })
+      } else {
+        navigate('/food/delivery/login', { replace: true })
+      }
+      return
+    }
+
+    if (isDriver) {
+      if (isModuleAuthenticated('driver')) {
+        const storedRole = String(
+          (typeof localStorage !== 'undefined' && (localStorage.getItem('driverRole') || localStorage.getItem('role'))) ||
+          (typeof sessionStorage !== 'undefined' && (sessionStorage.getItem('driverRole') || sessionStorage.getItem('role'))) ||
+          'driver'
+        ).toLowerCase();
+        navigate(storedRole === 'owner' ? '/taxi/owner/dashboard' : '/taxi/driver/home', { replace: true });
+      } else {
+        navigate('/taxi/driver/login', { replace: true });
+      }
+      return;
+    }
+
+    navigate(isUnifiedAuthenticated() ? '/food/user' : '/login', { replace: true })
   }
 
   if (loading) {

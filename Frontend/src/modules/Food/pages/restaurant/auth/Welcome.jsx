@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@food/components/ui/button"
 import loginBanner1 from "@food/assets/restaurant/loginbanner1.png"
@@ -309,9 +309,9 @@ export default function RestaurantWelcome() {
             By continuing, you agree to our
           </p>
           <p className="text-white/70 text-xs md:text-sm mt-1">
-            <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="underline hover:text-white transition-colors">Terms of Service</a>
+            <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/welcome" }} className="underline hover:text-white transition-colors">Terms of Service</Link>
             {" | "}
-            <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="underline hover:text-white transition-colors">Privacy Policy</a>
+            <Link to="/food/restaurant/privacy" state={{ returnTo: "/food/restaurant/welcome" }} className="underline hover:text-white transition-colors">Privacy Policy</Link>
             {" | "}
             <span className="opacity-80">Code of Conduct</span>
           </p>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { ArrowLeft, FileText, IndianRupee, ReceiptText, Scale, ScrollText, ShieldCheck } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { getLocalDriverToken, getAuthenticatedDriverRole } from '../../driver/services/registrationService';
+import { isModuleAuthenticated } from '@/modules/Food/utils/auth';
 
 const vehiclePricing = [
   { type: 'Bike', capacity: 'Up to 2 riders', price: 'Starts at Rs 49', cancellationCut: 'Admin cut up to Rs 10', note: 'Best for quick solo rides and short-distance travel.' },
@@ -225,19 +227,79 @@ const getDocumentType = (pathname = '') => {
   return 'terms';
 };
 
-const LegalPage = () => {
+const LegalPage = ({ role: propRole }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const content = legalContent[getDocumentType(location.pathname)];
   const Icon = content.icon || FileText;
 
   const handleBack = () => {
-    // Opened directly (new tab / shared link) -> no in-app history to go back to.
-    if (window.history.state?.idx > 0) {
-      navigate(-1);
-    } else {
-      navigate('/taxi', { replace: true });
+    const searchRole = (searchParams.get('role') || searchParams.get('type') || searchParams.get('userType') || '').toLowerCase();
+    const stateRole = String(location.state?.role || propRole || '').toLowerCase();
+    const explicitReturn =
+      location.state?.returnTo ||
+      location.state?.from ||
+      location.state?.backTo ||
+      searchParams.get('returnTo') ||
+      searchParams.get('from');
+
+    if (
+      explicitReturn &&
+      typeof explicitReturn === 'string' &&
+      explicitReturn.startsWith('/') &&
+      !explicitReturn.includes('terms') &&
+      !explicitReturn.includes('privacy')
+    ) {
+      navigate(explicitReturn, { replace: true });
+      return;
     }
+
+    const hasHistory =
+      typeof window !== 'undefined' &&
+      window.history &&
+      ((window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) ||
+       (window.history.length > 1 && typeof document !== 'undefined' && document.referrer && document.referrer.includes(window.location.host)));
+
+    if (hasHistory) {
+      navigate(-1);
+      return;
+    }
+
+    const driverToken = getLocalDriverToken();
+    const isDriver =
+      searchRole === 'driver' ||
+      stateRole === 'driver' ||
+      location.pathname.includes('/driver') ||
+      Boolean(driverToken) ||
+      (typeof document !== 'undefined' && document.referrer && document.referrer.includes('/taxi/driver'));
+
+    const isRestaurant =
+      searchRole === 'restaurant' ||
+      stateRole === 'restaurant' ||
+      location.pathname.includes('restaurant') ||
+      isModuleAuthenticated('restaurant');
+
+    if (isDriver) {
+      if (driverToken) {
+        const driverRole = String(getAuthenticatedDriverRole() || 'driver').toLowerCase();
+        navigate(driverRole === 'owner' ? '/taxi/owner/dashboard' : '/taxi/driver/home', { replace: true });
+      } else {
+        navigate('/taxi/driver/login', { replace: true });
+      }
+      return;
+    }
+
+    if (isRestaurant) {
+      if (isModuleAuthenticated('restaurant')) {
+        navigate('/food/restaurant', { replace: true });
+      } else {
+        navigate('/food/restaurant/login', { replace: true });
+      }
+      return;
+    }
+
+    navigate('/taxi/user', { replace: true });
   };
 
   return (

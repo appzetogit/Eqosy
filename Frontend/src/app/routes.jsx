@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
 import { toast } from 'sonner'
 import SmartRouteSkeleton from '../shared/components/skeletons/SmartRouteSkeleton'
@@ -18,6 +18,15 @@ const GlobalRefund = lazyWithRetry(() => import('../modules/Food/pages/user/prof
 const GlobalShipping = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Shipping'))
 const GlobalCancellation = lazyWithRetry(() => import('../modules/Food/pages/user/profile/Cancellation'))
 const GlobalAbout = lazyWithRetry(() => import('../modules/Food/pages/user/profile/About'))
+
+const GlobalPolicyViewer = () => {
+  const { key } = useParams()
+  const lowerKey = (key || '').toLowerCase()
+  if (lowerKey.includes('terms')) {
+    return <GlobalTerms keyName={key} />
+  }
+  return <GlobalPrivacy keyName={key} />
+}
 
 const PageLoader = () => <SmartRouteSkeleton />
 
@@ -70,6 +79,9 @@ const SmartFallbackRedirect = () => {
   const location = useLocation()
   const pathname = location.pathname.toLowerCase()
 
+  if (pathname.startsWith('/taxi/driver') || pathname.startsWith('/driver')) {
+    return <Navigate to="/taxi/driver" replace />
+  }
   if (pathname.startsWith('/taxi')) {
     return <Navigate to="/taxi/user" replace />
   }
@@ -197,7 +209,7 @@ const AppRoutes = () => {
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
       <Route path="/privacy" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
-      <Route path="/food/pages/:key" element={<Suspense fallback={<PageLoader />}><GlobalPrivacy /></Suspense>} />
+      <Route path="/food/pages/:key" element={<Suspense fallback={<PageLoader />}><GlobalPolicyViewer /></Suspense>} />
       <Route path="/refund" element={<Suspense fallback={<PageLoader />}><GlobalRefund /></Suspense>} />
       <Route path="/shipping" element={<Suspense fallback={<PageLoader />}><GlobalShipping /></Suspense>} />
       <Route path="/cancellation" element={<Suspense fallback={<PageLoader />}><GlobalCancellation /></Suspense>} />

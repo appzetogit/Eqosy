@@ -132,7 +132,7 @@ const PhoneRegistration = () => {
             phone,
             loginMode: isLoginPage,
         });
-        navigate(tab === 'terms' ? '/terms' : '/privacy', {
+        navigate(tab === 'terms' ? '/taxi/driver/terms' : '/taxi/driver/privacy', {
             state: { role, returnTo: location.pathname },
         });
     };

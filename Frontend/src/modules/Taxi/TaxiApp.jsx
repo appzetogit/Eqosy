@@ -1040,6 +1040,8 @@ function TaxiApp() {
                   element={<RegistrationStatus />}
                 />
                 <Route path="status" element={<ApplicationStatus />} />
+                <Route path="privacy" element={<LegalPage role="driver" />} />
+                <Route path="terms" element={<LegalPage role="driver" />} />
 
                 <Route path="home" element={<DriverHome />} />
                 <Route path="bus-home" element={<BusDriverHome />} />

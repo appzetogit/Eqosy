@@ -126,6 +126,7 @@ function resolveNativeInitialRoute() {
 
   if (isModuleAuthenticated('restaurant')) return '/food/restaurant'
   if (isModuleAuthenticated('delivery')) return '/food/delivery'
+  if (isModuleAuthenticated('driver')) return '/taxi/driver'
   if (isModuleAuthenticated('admin')) return '/admin'
   if (isModuleAuthenticated('user')) return '/food/user'
 

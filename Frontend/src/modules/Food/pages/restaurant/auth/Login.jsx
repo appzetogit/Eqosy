@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { restaurantAPI } from "@food/api"
@@ -211,9 +211,9 @@ export default function RestaurantLogin() {
           <footer className="mt-auto pt-6 text-center space-y-2">
             <p className="text-xs text-gray-500 font-medium">
               By continuing, you accept our{" "}
-              <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Terms</a>
+              <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/login" }} className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Terms</Link>
               {" & "}
-              <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</a>
+              <Link to="/food/restaurant/privacy" state={{ returnTo: "/food/restaurant/login" }} className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
             </p>
             <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
               Secure store login powered by<br />

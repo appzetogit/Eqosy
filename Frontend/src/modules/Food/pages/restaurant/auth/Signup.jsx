@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { Loader2, AlertCircle, User, Phone } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { restaurantAPI } from "@food/api"
@@ -239,9 +239,9 @@ export default function RestaurantSignup() {
               />
               <label htmlFor="restaurantTermsCheck" className="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none leading-relaxed">
                 I agree to the{' '}
-                <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Terms & Conditions</a>
+                <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/signup" }} className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Terms & Conditions</Link>
                 {' '}and{' '}
-                <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</a>
+                <Link to="/food/restaurant/privacy" state={{ returnTo: "/food/restaurant/signup" }} className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
               </label>
             </div>
 
