@@ -1071,6 +1071,28 @@ export function useLocation() {
             } else {
               debugError("? Geolocation error:", err.code, err.message)
             }
+
+            // If user explicitly requested fresh location (forceFresh === true) and GPS failed,
+            // do NOT silently disguise it as successful fresh location using old fallback.
+            // Reject so that caller UI can show the GPS-turn-on prompt to the user!
+            if (forceFresh) {
+              if (showLoading) setLoading(false)
+              let userFriendlyError = err.message
+              if (err.code === 1) {
+                userFriendlyError = "Location permission blocked hai. Kripya browser settings me allow karein."
+              } else if (err.code === 2) {
+                userFriendlyError = "Aapke device ki location (GPS) band hai. Kripya pehle device location chalu karein."
+              } else if (err.code === 3) {
+                userFriendlyError = "Location request timed out. Kripya GPS on karke dobara koshish karein."
+              }
+              const customErr = new Error(userFriendlyError)
+              customErr.code = err.code
+              customErr.originalError = err
+              setError(userFriendlyError)
+              reject(customErr)
+              return
+            }
+
             // Try multiple fallback strategies
             try {
               // Strategy 1: Use DB location if available

@@ -6,6 +6,8 @@ import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
+import GpsEnableModal from '@/shared/components/GpsEnableModal';
+import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
 import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
 import {
   fetchActiveRideZones,
@@ -83,6 +85,7 @@ const SelectLocation = () => {
   const [popularLocations, setPopularLocations] = useState([]);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [isLoadingPopularLocations, setIsLoadingPopularLocations] = useState(false);
+  const [gpsModalInfo, setGpsModalInfo] = useState(null);
   const mapInstanceRef = useRef(null);
   const lastCenterRef = useRef(INDIA_CENTER);
   const geocoderRef = useRef(null);
@@ -653,8 +656,11 @@ const SelectLocation = () => {
       lastCenterRef.current = newCoords;
     };
 
-    const onError = () => {
+    const onError = (err) => {
       setIsLocating(false);
+      const errorInfo = analyzeGeolocationError(err);
+      setGpsModalInfo(errorInfo);
+      toast.error(errorInfo.toastMessage || 'Location fetch nahi ho saki');
     };
 
     const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
@@ -868,8 +874,11 @@ const SelectLocation = () => {
       }
     };
 
-    const onError = () => {
+    const onError = (err) => {
       setIsLocating(false);
+      const errorInfo = analyzeGeolocationError(err);
+      setGpsModalInfo(errorInfo);
+      toast.error(errorInfo.toastMessage || 'Location fetch nahi ho saki');
     };
 
     const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
@@ -1460,6 +1469,19 @@ const SelectLocation = () => {
           </div>
         )}
       </div>
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null);
+          if (showMapPicker) {
+            handleUseCurrentLocation();
+          } else {
+            handleUseCurrentLocationResult();
+          }
+        }}
+      />
     </div>
   );
 };

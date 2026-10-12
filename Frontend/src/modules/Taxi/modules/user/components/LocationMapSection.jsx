@@ -5,6 +5,8 @@ import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { getSavedLocation, saveLocation } from '../services/locationStore';
 import api from '../../../shared/api/axiosInstance';
+import GpsEnableModal from '@/shared/components/GpsEnableModal';
+import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
 // Inline SVG data URLs used as Google Maps marker icons (no external file dependency)
 const carIcon =
   "data:image/svg+xml;utf8," +
@@ -86,6 +88,7 @@ const LocationMapSection = ({ plain = false }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [map, setMap] = useState(null);
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [gpsModalInfo, setGpsModalInfo] = useState(null);
   const isDraggingRef = useRef(false);
   const requestedLocationRef = useRef(false);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
@@ -165,8 +168,14 @@ const LocationMapSection = ({ plain = false }) => {
     };
 
     const onError = (error) => {
-      if (error?.code === 1) {
+      const errInfo = analyzeGeolocationError(error);
+      setGpsModalInfo(errInfo);
+      if (errInfo.isPermissionDenied) {
         setStatus('denied');
+        return;
+      }
+      if (errInfo.isGpsOff) {
+        setStatus('gps_off');
         return;
       }
       setStatus('error');
@@ -219,6 +228,7 @@ const LocationMapSection = ({ plain = false }) => {
   const helperText = (() => {
     if (status === 'loading') return 'Pinning your current location...';
     if (status === 'denied') return 'Location permission denied. Tap to try again.';
+    if (status === 'gps_off') return 'Device GPS band hai. Kripya phone location on karein.';
     if (status === 'error') return 'Unable to fetch location. Tap to retry.';
     if (isDragging) return 'Move the map to set the pin.';
     if (status === 'ready') return 'Drag the map to fine-tune. Tap Update to refresh GPS.';
@@ -475,6 +485,15 @@ const LocationMapSection = ({ plain = false }) => {
           </div>
         </div>
       </div>
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null);
+          requestLocation();
+        }}
+      />
     </motion.section>
   );
 };

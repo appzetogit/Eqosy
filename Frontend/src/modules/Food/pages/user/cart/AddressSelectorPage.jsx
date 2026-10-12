@@ -12,6 +12,8 @@ import { locationAPI, userAPI } from "@food/api"
 import { Loader } from '@googlemaps/js-api-loader'
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
+import GpsEnableModal from "@/shared/components/GpsEnableModal"
+import { analyzeGeolocationError } from "@/shared/utils/geolocationHelper"
 
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -96,6 +98,7 @@ export default function AddressSelectorPage() {
   const [topSearchQuery, setTopSearchQuery] = useState("")
   const [topSearchResults, setTopSearchResults] = useState([])
   const [isTopSearching, setIsTopSearching] = useState(false)
+  const [gpsModalInfo, setGpsModalInfo] = useState(null)
 
   const dismissSuggestions = useCallback(() => {
     setIsSearchFocused(false)
@@ -615,15 +618,29 @@ export default function AddressSelectorPage() {
       if (!apiKey) throw new Error("Google Maps API key not configured")
 
       if (typeof navigator === "undefined" || !navigator.geolocation) {
-        throw new Error("Geolocation not supported in this browser")
+        const errInfo = {
+          type: "UNSUPPORTED",
+          isGpsOff: false,
+          title: "Browser Me Location Support Nahi Hai",
+          subtitle: "Geolocation Not Supported",
+          message: "Aapke browser me geolocation supported nahi hai. Kripya dusre browser me try karein.",
+          instructionSteps: ["Kripya kisi anya browser jaise Chrome ya Safari me app kholein."]
+        }
+        setGpsModalInfo(errInfo)
+        toast.error("Geolocation not supported in this browser", { id: "geo" })
+        return
       }
 
       if (navigator.permissions?.query) {
-        const permission = await navigator.permissions.query({ name: "geolocation" })
-        if (permission.state === "denied") {
-          toast.error("Location permission is blocked. Please enable it in browser settings.", { id: "geo" })
-          return
-        }
+        try {
+          const permission = await navigator.permissions.query({ name: "geolocation" })
+          if (permission.state === "denied") {
+            const errInfo = analyzeGeolocationError({ code: 1, message: "User denied Geolocation" })
+            setGpsModalInfo(errInfo)
+            toast.error("Location permission blocked hai. Kripya browser settings se location allow karein.", { id: "geo" })
+            return
+          }
+        } catch (_) {}
       }
 
       const position = await new Promise((resolve, reject) => {
@@ -734,7 +751,9 @@ export default function AddressSelectorPage() {
       toast.success("Location updated", { id: "geo" })
     } catch (e) {
       console.error("Location error:", e)
-      toast.error(e.message || "Failed to get location", { id: "geo" })
+      const errInfo = analyzeGeolocationError(e)
+      setGpsModalInfo(errInfo)
+      toast.error(errInfo.toastMessage || e.message || "Failed to get location", { id: "geo", duration: 5000 })
     }
   }
 
@@ -1432,6 +1451,15 @@ export default function AddressSelectorPage() {
           animation: bounce-short 1s infinite ease-in-out;
         }
       `}</style>
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null)
+          handleUseCurrentLocation()
+        }}
+      />
     </AnimatedPage>
   )
 }

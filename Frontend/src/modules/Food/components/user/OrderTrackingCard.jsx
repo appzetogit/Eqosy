@@ -104,9 +104,22 @@ function ordersFingerprint(orders) {
     .join("|");
 }
 
+function purgeStaleOrderFromStorage(orderKey) {
+  if (!orderKey || typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("userOrders");
+    if (!raw) return;
+    const list = JSON.parse(raw);
+    if (Array.isArray(list)) {
+      const filtered = list.filter((o) => getOrderKey(o) !== orderKey);
+      localStorage.setItem("userOrders", JSON.stringify(filtered));
+    }
+  } catch {}
+}
+
 function OrderTrackingCardInner({ hasBottomNav = true }) {
   const navigate = useNavigate();
-  const { orders: contextOrders } = useOrders();
+  const { orders: contextOrders, removeOrder } = useOrders();
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [apiOrders, setApiOrders] = useState([]);
   const [hasFetchedApi, setHasFetchedApi] = useState(false);
@@ -143,6 +156,26 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
       }
 
       const list = Array.isArray(nextOrders) ? nextOrders : [];
+
+      // Clean up stale Mongo IDs from localStorage that do not exist on server for current user
+      try {
+        const rawSaved = localStorage.getItem("userOrders");
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const validIds = new Set(list.map((o) => String(getOrderKey(o) || "")).filter(Boolean));
+            const isMongoId = (id) => /^[a-f0-9]{24}$/i.test(String(id || ""));
+            const cleaned = parsed.filter((o) => {
+              const k = String(getOrderKey(o) || "");
+              return !isMongoId(k) || validIds.has(k);
+            });
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem("userOrders", JSON.stringify(cleaned));
+            }
+          }
+        }
+      } catch {}
+
       const fp = ordersFingerprint(list);
       if (fp !== lastApiFingerprintRef.current) {
         lastApiFingerprintRef.current = fp;
@@ -175,27 +208,28 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     );
     const seen = new Set();
 
-    return [...apiOrders, ...contextOrders].filter((order) => {
+    // Context orders from localStorage should only be included if:
+    // 1) It's a non-Mongo local order (e.g. temporary ORD-...) that hasn't synced yet, OR
+    // 2) If it's a Mongo ObjectId, it MUST be confirmed by the server (in serverKeys).
+    // This strictly prevents stale Mongo ObjectIds of other users from triggering 403 Forbidden errors.
+    const safeContextOrders = (contextOrders || []).filter((order) => {
       const key = getOrderKey(order);
-      if (!key || seen.has(key)) {
-        return false;
+      if (!key || invalidOrderIds.has(key)) return false;
+      if (isMongoObjectId(key)) {
+        return serverKeys.has(String(key));
       }
-      if (invalidOrderIds.has(key)) {
-        return false;
-      }
-      // After first API sync, ignore stale local Mongo-like ids that are absent server-side.
-      // This prevents repeated verification calls for already-deleted orders.
-      if (
-        hasFetchedApi &&
-        isMongoObjectId(key) &&
-        !serverKeys.has(String(key))
-      ) {
+      return true;
+    });
+
+    return [...apiOrders, ...safeContextOrders].filter((order) => {
+      const key = getOrderKey(order);
+      if (!key || seen.has(key) || invalidOrderIds.has(key)) {
         return false;
       }
       seen.add(key);
       return true;
     });
-  }, [contextOrders, apiOrders, invalidOrderIds, hasFetchedApi]);
+  }, [contextOrders, apiOrders, invalidOrderIds]);
 
   const activeOrder = useMemo(() => {
     const candidate = uniqueOrders.find((order) => isActiveOrder(order)) || null;
@@ -251,6 +285,8 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
             next.add(incomingKey);
             return next;
           });
+          purgeStaleOrderFromStorage(incomingKey);
+          if (typeof removeOrder === "function") removeOrder(incomingKey);
         }
       }
     };
@@ -266,7 +302,7 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
       window.removeEventListener("orderStatusNotification", handleOrderStatusNotification);
       window.removeEventListener("order-placed", handleOrderPlaced);
     };
-  }, [fetchOrders]);
+  }, [fetchOrders, removeOrder]);
 
   useEffect(() => {
     if (!activeOrder) {
@@ -287,12 +323,26 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
   // Proactive verification for active orders not found in recent API list
   useEffect(() => {
+    if (!hasFetchedApi || !activeOrder) return;
     const key = getOrderKey(activeOrder);
     if (!key || invalidOrderIds.has(key)) return;
 
     // If order is present in the recent server-provided list, we consider it valid without extra check
     const isRecentlyConfirmed = apiOrders.some((o) => getOrderKey(o) === key);
     if (isRecentlyConfirmed) return;
+
+    const isMongoObjectId = (value) => /^[a-f0-9]{24}$/i.test(String(value || ""));
+    // Mongo IDs not in apiOrders are foreign or stale; discard without making a futile HTTP call
+    if (isMongoObjectId(key)) {
+      setInvalidOrderIds((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+      purgeStaleOrderFromStorage(key);
+      if (typeof removeOrder === "function") removeOrder(key);
+      return;
+    }
 
     const verifyOrderExists = async () => {
       try {
@@ -309,12 +359,14 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
             next.add(key);
             return next;
           });
+          purgeStaleOrderFromStorage(key);
+          if (typeof removeOrder === "function") removeOrder(key);
         }
       }
     };
 
     verifyOrderExists();
-  }, [activeOrder, apiOrders, invalidOrderIds]);
+  }, [activeOrder, apiOrders, invalidOrderIds, hasFetchedApi, removeOrder]);
 
   const [dismissedKey, setDismissedKey] = useState(null);
 

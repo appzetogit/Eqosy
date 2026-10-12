@@ -24,6 +24,9 @@ import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userAuthService } from '../../services/authService';
 import api from '../../../../shared/api/axiosInstance';
+import toast from 'react-hot-toast';
+import GpsEnableModal from '@/shared/components/GpsEnableModal';
+import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
 import carIcon from '../../../../assets/icons/car.png';
 import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
@@ -514,9 +517,11 @@ const MapPickerSheet = ({ open, title, confirmLabel, value, initialCoords, mapNe
           mapRef.current.setZoom(16);
         }
       },
-      () => {
+      (err) => {
         setIsLocating(false);
-        setSelectedAddress('Could not fetch your current location.');
+        const errInfo = analyzeGeolocationError(err);
+        toast.error(errInfo.toastMessage || 'Could not fetch your current location.');
+        setSelectedAddress(errInfo.message || 'Could not fetch your current location.');
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
     );
@@ -1060,6 +1065,7 @@ const SenderReceiverDetails = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
+  const [gpsModalInfo, setGpsModalInfo] = useState(null);
   const [errors, setErrors] = useState({});
   const [recoveredSelectedVehicles, setRecoveredSelectedVehicles] = useState([]);
   const [googleDropSuggestions, setGoogleDropSuggestions] = useState([]);
@@ -1480,9 +1486,12 @@ const SenderReceiverDetails = () => {
       console.warn('High accuracy geolocation failed, trying low accuracy...', err);
       navigator.geolocation.getCurrentPosition(
         onSuccess,
-        () => {
+        (lowErr) => {
           setIsLocatingPickup(false);
-          setErrors((prev) => ({ ...prev, pickup: 'Could not detect current location' }));
+          const errInfo = analyzeGeolocationError(lowErr || err);
+          setGpsModalInfo(errInfo);
+          toast.error(errInfo.toastMessage || 'Location fetch nahi ho saki');
+          setErrors((prev) => ({ ...prev, pickup: errInfo.message }));
         },
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
       );
@@ -2357,6 +2366,15 @@ const SenderReceiverDetails = () => {
           </motion.button>
         </div>
       </div>
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null);
+          requestCurrentPickupLocation();
+        }}
+      />
     </div>
   );
 };

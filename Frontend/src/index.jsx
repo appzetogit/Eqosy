@@ -9,22 +9,50 @@ import './shared/styles/global.css'
 import { registerSW } from 'virtual:pwa-register'
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  registerSW({
-    immediate: true,
-    onNeedRefresh() {},
-    onOfflineReady() {}
-  })
+  if (import.meta.env.DEV) {
+    // In development mode, unregister any service workers so they don't cache or break Vite HMR dynamic modules
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister()
+      }
+    }).catch(() => {})
+  } else {
+    registerSW({
+      immediate: true,
+      onNeedRefresh() {},
+      onOfflineReady() {}
+    })
+  }
 }
 
-// A deploy replaced the hashed chunks this tab still references (server answers
-// with index.html -> MIME error). Reload once to pick up the new build.
-window.addEventListener('vite:preloadError', (event) => {
-  event.preventDefault()
+// Automatically recover when Vite rebuilds or updates chunk hashes during development / deployment
+const handleChunkModuleError = (event) => {
   try {
-    if (sessionStorage.getItem('chunk-reload') === '1') return
-    sessionStorage.setItem('chunk-reload', '1')
+    const lastReload = Number(sessionStorage.getItem('chunk-auto-reload-ts') || 0)
+    const now = Date.now()
+    if (now - lastReload < 3000) return
+    sessionStorage.setItem('chunk-auto-reload-ts', String(now))
   } catch { /* ignore */ }
   window.location.reload()
+}
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  handleChunkModuleError(event)
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event?.reason
+  const msg = String(reason?.message || reason || '').toLowerCase()
+  if (
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('importing a module script failed') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('dynamically imported module')
+  ) {
+    event.preventDefault()
+    handleChunkModuleError(event)
+  }
 })
 
 // ─── Quick-spicy Food Module Initialization ───────────────────────────────────
@@ -220,7 +248,11 @@ console.warn = (...args) => {
     warnStr.includes('Download the React DevTools') ||
     warnStr.includes('Failed to load Google Maps script') ||
     (warnStr.includes('attribute cx') && warnStr.includes('Expected length')) ||
-    (warnStr.includes('attribute cy') && warnStr.includes('Expected length'))
+    (warnStr.includes('attribute cy') && warnStr.includes('Expected length')) ||
+    warnStr.includes('messaging/token-unsubscribe-failed') ||
+    warnStr.includes('token-unsubscribe-failed') ||
+    warnStr.includes('fcmregistrations.googleapis.com') ||
+    warnStr.includes('The caller does not have permission')
   ) return
   originalWarn.apply(console, args)
 }
@@ -236,6 +268,10 @@ window.addEventListener('unhandledrejection', (event) => {
     errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
     errorMsg.includes('ERR_NETWORK_CHANGED') ||
     errorMsg.includes('fonts.googleapis.com') ||
+    errorMsg.includes('messaging/token-unsubscribe-failed') ||
+    errorMsg.includes('token-unsubscribe-failed') ||
+    errorMsg.includes('fcmregistrations.googleapis.com') ||
+    errorMsg.includes('The caller does not have permission') ||
     errorName === 'GeolocationPositionError'
   ) {
     event.preventDefault()

@@ -1,5 +1,18 @@
 import React from 'react'
 
+const isModuleChunkError = (error) => {
+  if (!error) return false
+  const msg = String(error?.message || error?.toString() || '').toLowerCase()
+  return (
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('importing a module script failed') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('dynamically imported module') ||
+    msg.includes('loading chunk') ||
+    msg.includes('chunkloaderror')
+  )
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
@@ -30,10 +43,40 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Unhandled React Error Boundary caught:', error, errorInfo)
+
+    // Automatically recover from module fetch / dev HMR update errors
+    if (isModuleChunkError(error)) {
+      this.triggerAutoRecovery()
+    }
+  }
+
+  triggerAutoRecovery = () => {
+    try {
+      const lastReload = Number(sessionStorage.getItem('chunk-auto-reload-ts') || 0)
+      const count = Number(sessionStorage.getItem('chunk-auto-reload-count') || 0)
+      const now = Date.now()
+
+      // Avoid rapid reload loop if server is unreachable (tried > 2 times within 6 seconds)
+      if (now - lastReload < 6000 && count >= 2) {
+        console.warn('[ErrorBoundary] Module reload limit reached, showing manual fallback.')
+        return
+      }
+
+      const nextCount = now - lastReload < 15000 ? count + 1 : 1
+      sessionStorage.setItem('chunk-auto-reload-ts', String(now))
+      sessionStorage.setItem('chunk-auto-reload-count', String(nextCount))
+
+      // Silent clean reload to fetch updated bundle
+      window.location.reload()
+    } catch {
+      window.location.reload()
+    }
   }
 
   handleReload = () => {
     try {
+      window.sessionStorage.removeItem('chunk-auto-reload-ts')
+      window.sessionStorage.removeItem('chunk-auto-reload-count')
       window.sessionStorage.removeItem('page-has-been-refreshed')
     } catch {
       // ignore
@@ -43,6 +86,8 @@ class ErrorBoundary extends React.Component {
 
   handleGoHome = () => {
     try {
+      window.sessionStorage.removeItem('chunk-auto-reload-ts')
+      window.sessionStorage.removeItem('chunk-auto-reload-count')
       window.sessionStorage.removeItem('page-has-been-refreshed')
     } catch {
       // ignore
@@ -63,10 +108,26 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      const isModuleFetchError =
-        this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
-        this.state.error?.message?.includes('Importing a module script failed') ||
-        this.state.error?.name === 'TypeError'
+      const isModuleErr = isModuleChunkError(this.state.error)
+
+      // When module fetch error happens, automatically reload in the background.
+      // While reloading, show a smooth update spinner instead of the disruptive error box!
+      if (isModuleErr) {
+        let reloadCount = 0
+        try {
+          reloadCount = Number(sessionStorage.getItem('chunk-auto-reload-count') || 0)
+        } catch { /* ignore */ }
+
+        if (reloadCount <= 2) {
+          return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+              <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-base font-semibold text-gray-800 dark:text-gray-100">Updating application...</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Applying latest changes</p>
+            </div>
+          )
+        }
+      }
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
@@ -78,11 +139,11 @@ class ErrorBoundary extends React.Component {
             </div>
             
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              {isModuleFetchError ? 'Connection or Update Issue' : 'Something went wrong'}
+              {isModuleErr ? 'Connection or Update Issue' : 'Something went wrong'}
             </h2>
             
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              {isModuleFetchError
+              {isModuleErr
                 ? 'Failed to load the required application module. The server may have updated or reconnected. Please refresh.'
                 : 'An unexpected error occurred in the application view.'}
             </p>

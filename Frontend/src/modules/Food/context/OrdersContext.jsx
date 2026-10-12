@@ -116,14 +116,32 @@ export function OrdersProvider({ children }) {
     }))
   }, [])
 
+  const removeOrder = useCallback((orderId) => {
+    if (!orderId) return;
+    const needle = String(orderId).trim().toLowerCase();
+    setOrders((prevOrders) => {
+      const filtered = prevOrders.filter((o) => {
+        const candidates = [o?.id, o?._id, o?.mongoId, o?.orderId]
+          .filter(Boolean)
+          .map((s) => String(s).trim().toLowerCase());
+        return !candidates.includes(needle);
+      });
+      try {
+        localStorage.setItem("userOrders", JSON.stringify(filtered));
+      } catch {}
+      return filtered;
+    });
+  }, []);
+
   const value = useMemo(() => ({
     orders,
     createOrder,
     addOrder,
+    removeOrder,
     getOrderById,
     getAllOrders,
     updateOrderStatus
-  }), [orders, addOrder, getOrderById, getAllOrders, updateOrderStatus])
+  }), [orders, addOrder, removeOrder, getOrderById, getAllOrders, updateOrderStatus])
 
   return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>
 }

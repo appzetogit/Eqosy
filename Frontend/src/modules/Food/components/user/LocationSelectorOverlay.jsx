@@ -9,6 +9,8 @@ import { useProfile } from "@food/context/ProfileContext"
 import { toast } from "sonner"
 import { locationAPI, userAPI } from "@food/api"
 import { Loader } from '@googlemaps/js-api-loader'
+import GpsEnableModal from "@/shared/components/GpsEnableModal"
+import { analyzeGeolocationError } from "@/shared/utils/geolocationHelper"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -58,6 +60,7 @@ const getAddressIcon = (address) => {
 export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const { location, loading, requestLocation } = useGeoLocation()
   const { addresses = [], addAddress, updateAddress, setDefaultAddress, userProfile } = useProfile()
+  const [gpsModalInfo, setGpsModalInfo] = useState(null)
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
   const [addressFormData, setAddressFormData] = useState({
@@ -926,59 +929,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         }
       } catch (raceError) {
         debugWarn("?? Location request failed or timed out:", raceError.message)
-
-        // If timeout or error, try to use cached location as fallback
-        const stored = localStorage.getItem("userLocation")
-        if (stored) {
-          try {
-            const cachedLocation = JSON.parse(stored)
-            if (cachedLocation?.latitude && cachedLocation?.longitude) {
-              debugLog("?? Using cached location as fallback:", cachedLocation)
-              locationData = cachedLocation
-
-              // Show info toast that we're using cached location
-              toast.info("Using your last known location", {
-                id: "location-request",
-                duration: 2000,
-              })
-            } else {
-              throw new Error("Invalid cached location")
-            }
-          } catch (cacheErr) {
-            debugError("? Failed to parse cached location:", cacheErr)
-            // Determine specific error message
-            let errorMessage = "Could not get location. Please try again."
-            if (raceError.message.includes("permission") || raceError.message.includes("denied")) {
-              errorMessage = "Location permission denied. Please enable location access in your browser settings."
-            } else if (raceError.message.includes("timeout") || raceError.message.includes("longer")) {
-              errorMessage = "Location request timed out. Please check your GPS settings and try again."
-            } else if (raceError.message.includes("unavailable")) {
-              errorMessage = "Location information is unavailable. Please check your device settings."
-            }
-
-            toast.error(errorMessage, {
-              id: "location-request",
-              duration: 5000,
-            })
-            return
-          }
-        } else {
-          // No cached location available
-          let errorMessage = "Could not get location. Please try again."
-          if (raceError.message.includes("permission") || raceError.message.includes("denied")) {
-            errorMessage = "Location permission denied. Please enable location access in your browser settings."
-          } else if (raceError.message.includes("timeout") || raceError.message.includes("longer")) {
-            errorMessage = "Location request timed out. Please check your GPS settings and try again."
-          } else if (raceError.message.includes("unavailable")) {
-            errorMessage = "Location information is unavailable. Please check your device settings."
-          }
-
-          toast.error(errorMessage, {
-            id: "location-request",
-            duration: 5000,
-          })
-          return
-        }
+        const errorInfo = analyzeGeolocationError(raceError)
+        setGpsModalInfo(errorInfo)
+        toast.error(errorInfo.toastMessage || "Location fetch nahi ho saki", {
+          id: "location-request",
+          duration: 5000,
+        })
+        return
       }
 
       // Validate location data
@@ -2963,6 +2920,15 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           100% { transform: scale(2.5); opacity: 0; }
         }
       `}</style>
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null)
+          handleUseCurrentLocation()
+        }}
+      />
     </div>
   )
 }

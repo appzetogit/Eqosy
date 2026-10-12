@@ -25,6 +25,8 @@ import { userService } from '../../services/userService';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY, INDIA_CENTER } from '../../../admin/utils/googleMaps';
 import toast from 'react-hot-toast';
+import GpsEnableModal from '@/shared/components/GpsEnableModal';
+import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
 
 const normalizeSearchValue = (value) => String(value || '').trim().toLowerCase();
 
@@ -79,6 +81,7 @@ const IntercityHome = () => {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [gpsModalInfo, setGpsModalInfo] = useState(null);
   const mapInstanceRef = useRef(null);
   const lastCenterRef = useRef(INDIA_CENTER);
 
@@ -173,7 +176,10 @@ const IntercityHome = () => {
   };
 
   const handleUseCurrentLocation = () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported in this browser');
+      return;
+    }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -186,7 +192,12 @@ const IntercityHome = () => {
           setMapCenter(nextCenter);
         }
       },
-      () => setIsLocating(false),
+      (err) => {
+        setIsLocating(false);
+        const errInfo = analyzeGeolocationError(err);
+        setGpsModalInfo(errInfo);
+        toast.error(errInfo.toastMessage || 'Location fetch nahi ho saki');
+      },
       { enableHighAccuracy: true }
     );
   };
@@ -763,6 +774,16 @@ const IntercityHome = () => {
 
       {/* Bottom Nav Spacer */}
       <div className="h-20" />
+
+      <GpsEnableModal
+        isOpen={!!gpsModalInfo}
+        errorInfo={gpsModalInfo}
+        onClose={() => setGpsModalInfo(null)}
+        onRetry={() => {
+          setGpsModalInfo(null);
+          handleUseCurrentLocation();
+        }}
+      />
     </div>
   );
 };

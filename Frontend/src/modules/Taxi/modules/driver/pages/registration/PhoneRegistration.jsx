@@ -13,6 +13,7 @@ import {
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import { RENTAL_ENABLED } from '../../../../shared/featureFlags';
 import loginBg from '../../../../assets/images/driver-login-bg.png';
+import LegalSheetModal from '../../components/LegalSheetModal';
 
 const PhoneRegistration = () => {
     const navigate = useNavigate();
@@ -67,6 +68,7 @@ const PhoneRegistration = () => {
     const [agreed, setAgreed] = useState(() => (isLoginPage ? true : false));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [legalModalTab, setLegalModalTab] = useState(null);
     const phoneCardRef = useRef(null);
     const phoneInputRef = useRef(null);
     const appName = settings.general?.app_name || 'App';
@@ -112,6 +114,28 @@ const PhoneRegistration = () => {
             referralCode: sharedReferralCode,
         });
     }, [isLoginPage, role, phone, sharedReferralCode]);
+
+    const handleOpenLegal = (tab) => {
+        saveDriverRegistrationSession({
+            ...storedSession,
+            role,
+            phone,
+            loginMode: isLoginPage,
+        });
+        setLegalModalTab(tab);
+    };
+
+    const handleNavigateFullLegal = (tab) => {
+        saveDriverRegistrationSession({
+            ...storedSession,
+            role,
+            phone,
+            loginMode: isLoginPage,
+        });
+        navigate(tab === 'terms' ? '/terms' : '/privacy', {
+            state: { role, returnTo: location.pathname },
+        });
+    };
 
     useEffect(() => {
         const scrollPhoneIntoView = () => {
@@ -322,7 +346,28 @@ const PhoneRegistration = () => {
                                 </div>
                             </div>
 
-                            {!isLoginPage && (
+                            {isLoginPage ? (
+                              <div className="flex items-center justify-center gap-1 px-1 pt-1 text-center">
+                                  <p className="text-[11px] font-medium text-slate-500 leading-relaxed select-none">
+                                      By logging in, you agree to our{' '}
+                                      <button
+                                          type="button"
+                                          onClick={() => handleOpenLegal('terms')}
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
+                                      >
+                                          Terms
+                                      </button>
+                                      {' '}&{' '}
+                                      <button
+                                          type="button"
+                                          onClick={() => handleOpenLegal('privacy')}
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
+                                      >
+                                          Privacy Policy
+                                      </button>.
+                                  </p>
+                              </div>
+                            ) : (
                               <div className="flex gap-2.5 px-1 items-start mt-1">
                                   <div className="relative flex items-center shrink-0 mt-0.5">
                                       <input
@@ -338,28 +383,16 @@ const PhoneRegistration = () => {
                                       I agree to the{' '}
                                       <button
                                           type="button"
-                                          onClick={() => {
-                                              saveDriverRegistrationSession({
-                                                  ...storedSession,
-                                                  role,
-                                              });
-                                              navigate('/terms', { state: { role, returnTo: location.pathname } });
-                                          }}
-                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600"
+                                          onClick={() => handleOpenLegal('terms')}
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
                                       >
                                           Terms
                                       </button>
                                       {' '}and{' '}
                                       <button
                                           type="button"
-                                          onClick={() => {
-                                              saveDriverRegistrationSession({
-                                                  ...storedSession,
-                                                  role,
-                                              });
-                                              navigate('/privacy', { state: { role, returnTo: location.pathname } });
-                                          }}
-                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600"
+                                          onClick={() => handleOpenLegal('privacy')}
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
                                       >
                                           Privacy Policy
                                       </button>.
@@ -404,8 +437,26 @@ const PhoneRegistration = () => {
                     </motion.div>
                 </motion.div>
 
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-50">
-                    <div className="mx-auto max-w-sm">
+                <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-4 bg-white/95 backdrop-blur-xl border-t border-slate-100 z-50">
+                    <div className="mx-auto max-w-sm space-y-2.5">
+                        <p className="text-[11px] text-slate-500 font-medium text-center leading-tight select-none">
+                            By continuing, you agree to our{' '}
+                            <button
+                                type="button"
+                                onClick={() => handleOpenLegal('terms')}
+                                className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
+                            >
+                                Terms of Service
+                            </button>
+                            {' '}and{' '}
+                            <button
+                                type="button"
+                                onClick={() => handleOpenLegal('privacy')}
+                                className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
+                            >
+                                Privacy Policy
+                            </button>.
+                        </p>
                         <motion.button
                             whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.98 }}
@@ -427,6 +478,14 @@ const PhoneRegistration = () => {
                         </motion.button>
                     </div>
                 </div>
+
+                <LegalSheetModal
+                    isOpen={!!legalModalTab}
+                    initialTab={legalModalTab || 'terms'}
+                    role={role}
+                    onClose={() => setLegalModalTab(null)}
+                    onNavigateFull={handleNavigateFullLegal}
+                />
             </main>
         </div>
     );
