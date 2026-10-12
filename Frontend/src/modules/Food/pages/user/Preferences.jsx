@@ -139,7 +139,7 @@ export default function Preferences() {
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-start gap-3 bg-neutral-50 dark:bg-neutral-900 rounded-2xl px-4 py-3.5 border border-neutral-100 dark:border-neutral-800">
           <div className="shrink-0 mt-0.5 w-8 h-8 bg-white dark:bg-neutral-800 rounded-xl flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700">
-            <UtensilsCrossed className="h-4 w-4 text-[#EB590E]" />
+            <UtensilsCrossed className="h-4 w-4 text-[color:var(--app-primary,#EB590E)]" />
           </div>
           <div>
             <p className="text-sm font-bold text-neutral-900 dark:text-white">Personalise your feed</p>
@@ -183,7 +183,7 @@ export default function Preferences() {
                   className={[
                     "relative flex flex-col items-center gap-2 p-2 rounded-2xl border-2 transition-all active:scale-95",
                     isSelected
-                      ? "border-[#EB590E] bg-[#EB590E]/5 dark:bg-[#EB590E]/10"
+                      ? "border-[color:var(--app-primary,#EB590E)] bg-[color:var(--app-primary,#EB590E)]/5 dark:bg-[color:var(--app-primary,#EB590E)]/10"
                       : "border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900",
                   ].join(" ")}
                 >
@@ -196,7 +196,7 @@ export default function Preferences() {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                        className="absolute top-2 right-2 w-5 h-5 bg-[#EB590E] rounded-full flex items-center justify-center z-10 shadow"
+                        className="absolute top-2 right-2 w-5 h-5 bg-[color:var(--app-primary,#EB590E)] rounded-full flex items-center justify-center z-10 shadow"
                       >
                         <Check className="h-3 w-3 text-white stroke-[3]" />
                       </motion.div>
@@ -207,7 +207,7 @@ export default function Preferences() {
                   <div
                     className={[
                       "w-full aspect-square rounded-xl overflow-hidden",
-                      isSelected ? "ring-2 ring-[#EB590E]/40" : "",
+                      isSelected ? "ring-2 ring-[color:var(--app-primary,#EB590E)]/40" : "",
                     ].join(" ")}
                   >
                     {cat.image ? (
@@ -228,7 +228,7 @@ export default function Preferences() {
                     className={[
                       "text-[11px] font-bold text-center leading-tight line-clamp-2",
                       isSelected
-                        ? "text-[#EB590E]"
+                        ? "text-[color:var(--app-primary,#EB590E)]"
                         : "text-neutral-700 dark:text-neutral-300",
                     ].join(" ")}
                   >

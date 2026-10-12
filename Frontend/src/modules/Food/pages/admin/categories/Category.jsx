@@ -25,7 +25,7 @@ import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCurrentUser } from "@food/utils/auth"
-import { canWriteFood } from "@food/constants/foodAdminAccess"
+import { canWriteFood, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
 
 const defaultFormData = {
   name: "",
@@ -34,6 +34,7 @@ const defaultFormData = {
   type: "",
   zoneId: "global",
   foodTypeScope: "Both",
+  section: "food",
 }
 
 const approvalBadgeClass = (status) => {
@@ -81,6 +82,7 @@ export default function Category() {
 
   // Granular Filters
   const [scopeFilter, setScopeFilter] = useState("all") // "all" | "global" | "restaurant"
+  const [sectionFilter, setSectionFilter] = useState("all") // "all" | "food" | "grocery"
   const [approvalFilter, setApprovalFilter] = useState("all") // "all" | "pending" | "approved" | "rejected"
   const [selectedZoneId, setSelectedZoneId] = useState("all")
   const [selectedRestaurantId, setSelectedRestaurantId] = useState("all")
@@ -131,6 +133,8 @@ export default function Category() {
   }, [])
 
   const isSubadmin = useMemo(() => {
+    // Platform/Food super admins see every zone even if a zone id is stored on their profile.
+    if (isFoodSuperAdminLike(adminProfile)) return false
     const role = String(adminProfile?.role || adminProfile?.type || "").toLowerCase()
     if (role.includes("super")) return false
     const assigned = adminProfile?.food_zone_ids || adminProfile?.zone_ids || []
@@ -250,6 +254,7 @@ export default function Category() {
 
       if (scopeFilter === "global" && !isGlobalCategory) return false
       if (scopeFilter === "restaurant" && !isRestaurantCategory) return false
+      if (sectionFilter !== "all" && (category?.section === "grocery" ? "grocery" : "food") !== sectionFilter) return false
 
       // 3. Approval Status Filter
       if (approvalFilter !== "all") {
@@ -299,11 +304,12 @@ export default function Category() {
 
       return true
     })
-  }, [categories, searchQuery, scopeFilter, approvalFilter, selectedZoneId, selectedRestaurantId, zones, restaurants])
+  }, [categories, searchQuery, scopeFilter, sectionFilter, approvalFilter, selectedZoneId, selectedRestaurantId, zones, restaurants])
 
   const hasActiveFilters =
     searchQuery !== "" ||
     scopeFilter !== "all" ||
+    sectionFilter !== "all" ||
     approvalFilter !== "all" ||
     (!isSubadmin && selectedZoneId !== "all") ||
     selectedRestaurantId !== "all"
@@ -311,6 +317,7 @@ export default function Category() {
   const resetAllFilters = () => {
     setSearchQuery("")
     setScopeFilter("all")
+    setSectionFilter("all")
     setApprovalFilter("all")
     if (isSubadmin && zones.length > 0) {
       setSelectedZoneId(String(zones[0]._id || zones[0].id || ""))
@@ -380,6 +387,7 @@ export default function Category() {
       type: category?.type || "",
       zoneId: zoneIdValue || "global",
       foodTypeScope: category?.foodTypeScope || "Both",
+      section: category?.section === "grocery" ? "grocery" : "food",
     })
     setSelectedImageFile(null)
     setImagePreview(category?.image || null)
@@ -543,6 +551,7 @@ export default function Category() {
         image: imageUrl || undefined,
         zoneId: formData.zoneId || "global",
         foodTypeScope: formData.foodTypeScope,
+        section: formData.section === "grocery" ? "grocery" : "food",
       }
 
       if (editingCategory) {
@@ -629,6 +638,28 @@ export default function Category() {
                         ? "bg-amber-600 text-white border-amber-600 shadow-sm"
                         : "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Food / Grocery Section Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1">Section:</span>
+            {[
+              { id: "all", label: "All" },
+              { id: "food", label: "🍽️ Food" },
+              { id: "grocery", label: "🛒 Grocery" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSectionFilter(tab.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${sectionFilter === tab.id
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                   }`}
               >
                 {tab.label}
@@ -943,6 +974,9 @@ export default function Category() {
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${scopeBadgeClass(category?.foodTypeScope)}`}>
                           {category?.foodTypeScope || "Both"}
                         </span>
+                        <span className={`mt-1 block text-[10px] font-bold ${category?.section === "grocery" ? "text-emerald-700" : "text-blue-700"}`}>
+                          {category?.section === "grocery" ? "🛒 Grocery" : "🍽️ Food"}
+                        </span>
                       </td>
                       <td className="px-4 py-5 text-center">
                         {canWrite ? (
@@ -1082,6 +1116,27 @@ export default function Category() {
                               )
                             })}
                           </select>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">Section</label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, section: "food" }))}
+                              className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold ${formData.section !== "grocery" ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+                            >
+                              🍽️ Food
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, section: "grocery" }))}
+                              className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold ${formData.section === "grocery" ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+                            >
+                              🛒 Grocery
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">Food categories show only for restaurants, Grocery categories only for grocery stores.</p>
                         </div>
 
                         <div>

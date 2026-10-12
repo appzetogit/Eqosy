@@ -173,7 +173,7 @@ const CountUp = ({ value = 0, duration = 1.2, decimals = 0 }) => {
 };
 
 // Animated Sparkline SVG
-const SparklineChart = ({ data = [0, 0, 0, 0, 0, 0, 0], color = '#FF6B00' }) => {
+const SparklineChart = ({ data = [0, 0, 0, 0, 0, 0, 0], color = 'var(--app-primary,#FF6B00)' }) => {
   const width = 76;
   const height = 24;
   const max = Math.max(...data, 1);
@@ -216,11 +216,11 @@ const SparklineChart = ({ data = [0, 0, 0, 0, 0, 0, 0], color = '#FF6B00' }) => 
 };
 
 // Driver Summary KPI Card (Responsive Overflow-Proof Layout)
-const DriverKpiCard = ({ icon: Icon, label, value, sub, sparkData = [0, 0, 0, 0, 0, 0, 0], accentColor = '#FF6B00', isRating = false }) => (
+const DriverKpiCard = ({ icon: Icon, label, value, sub, sparkData = [0, 0, 0, 0, 0, 0, 0], accentColor = 'var(--app-primary,#FF6B00)', isRating = false }) => (
   <motion.div
     whileHover={{ y: -3, transition: { duration: 0.2 } }}
     whileTap={{ scale: 0.98 }}
-    className="group relative cursor-pointer overflow-hidden rounded-[22px] border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm shadow-slate-900/5 transition-all hover:border-[#FF6B00]/40 hover:shadow-md flex flex-col justify-between min-w-0"
+    className="group relative cursor-pointer overflow-hidden rounded-[22px] border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-sm shadow-slate-900/5 transition-all hover:border-[color:var(--app-primary,#FF6B00)]/40 hover:shadow-md flex flex-col justify-between min-w-0"
   >
     {/* Top Row: Icon + Sparkline */}
     <div className="flex items-center justify-between gap-2 min-w-0 mb-2.5">
@@ -272,7 +272,7 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
     <section className="rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-[#0F172A] text-[#FF6B00]">
+          <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)]">
             <Bus size={16} />
           </div>
           <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">{title}</h3>
@@ -303,8 +303,8 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
                     isBooked
                       ? 'cursor-not-allowed border-rose-200 bg-rose-50 text-rose-400'
                       : isSelected
-                        ? 'border-[#FF6B00] bg-[#FF6B00] text-white shadow-md shadow-[#FF6B00]/30'
-                        : 'border-slate-200 bg-white text-slate-800 hover:border-[#FF6B00] hover:bg-orange-50/50'
+                        ? 'border-[color:var(--app-primary,#FF6B00)] bg-[color:var(--app-primary,#FF6B00)] text-white shadow-md shadow-[color:var(--app-primary,#FF6B00)]/30'
+                        : 'border-slate-200 bg-white text-slate-800 hover:border-[color:var(--app-primary,#FF6B00)] hover:bg-orange-50/50'
                   }`}
                 >
                   <span className="absolute inset-x-2 top-1 h-0.5 rounded-full bg-slate-300/60" />
@@ -581,7 +581,7 @@ const BusDriverHome = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC]">
         <div className="flex flex-col items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[#FF6B00] shadow-xl">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)] shadow-xl">
             <Loader2 size={24} className="animate-spin" />
           </div>
           <p className="text-xs font-black uppercase tracking-widest text-slate-400">
@@ -595,7 +595,7 @@ const BusDriverHome = () => {
   return (
     <div className="relative min-h-screen bg-[#F8FAFC] text-slate-900 pb-28 font-sans w-full overflow-x-hidden">
       {/* Background Decorative Gradient Blobs (5% Opacity) */}
-      <div className="pointer-events-none fixed -top-24 -right-24 h-96 w-96 rounded-full bg-[#FF6B00]/5 blur-3xl" />
+      <div className="pointer-events-none fixed -top-24 -right-24 h-96 w-96 rounded-full bg-[color:var(--app-primary,#FF6B00)]/5 blur-3xl" />
       <div className="pointer-events-none fixed top-1/3 -left-24 h-96 w-96 rounded-full bg-[#0F172A]/5 blur-3xl" />
       <div className="pointer-events-none fixed bottom-20 right-10 h-80 w-80 rounded-full bg-blue-600/5 blur-3xl" />
 
@@ -612,7 +612,7 @@ const BusDriverHome = () => {
           transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
           className="pointer-events-none absolute -bottom-20 -left-20 h-80 w-80 rounded-full bg-[#4F46E5]/30 blur-3xl"
         />
-        <div className="pointer-events-none absolute top-1/2 left-1/3 h-64 w-64 rounded-full bg-[#FF6B00]/10 blur-3xl" />
+        <div className="pointer-events-none absolute top-1/2 left-1/3 h-64 w-64 rounded-full bg-[color:var(--app-primary,#FF6B00)]/10 blur-3xl" />
 
         {/* Futuristic SVG Grid & Glowing Animated Route Path */}
         <div className="pointer-events-none absolute inset-0 opacity-20">
@@ -633,7 +633,7 @@ const BusDriverHome = () => {
               animate={{ pathLength: 1 }}
               transition={{ duration: 2, ease: 'easeInOut' }}
             />
-            <circle cx="180" cy="70" r="5" fill="#FF6B00" className="animate-pulse" />
+            <circle cx="180" cy="70" r="5" fill="var(--app-primary,#FF6B00)" className="animate-pulse" />
             <circle cx="380" cy="130" r="5" fill="#3B82F6" />
           </svg>
         </div>
@@ -643,12 +643,12 @@ const BusDriverHome = () => {
           <div className="mx-auto max-w-5xl flex items-center justify-between gap-3">
             {/* Left Identity Logo & Operator */}
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 border border-[#FF6B00]/40 p-0.5 shadow-md shrink-0 overflow-hidden">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 border border-[color:var(--app-primary,#FF6B00)]/40 p-0.5 shadow-md shrink-0 overflow-hidden">
                 <img src={eqosyLogo} alt="Eqosy" className="h-full w-full object-cover rounded-full" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">EQOSY BUS CAPTAIN</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">EQOSY BUS CAPTAIN</span>
                 </div>
                 <p className="text-xs font-black text-white truncate max-w-[180px] sm:max-w-xs">
                   {busService?.operatorName || 'Intercity Bus Lines'}
@@ -670,16 +670,16 @@ const BusDriverHome = () => {
                 type="button"
                 onClick={refreshDesk}
                 disabled={loadingDesk}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-950/50 text-slate-200 shadow-xs hover:border-[#FF6B00] hover:text-[#FF6B00] transition-all disabled:opacity-50 cursor-pointer"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-950/50 text-slate-200 shadow-xs hover:border-[color:var(--app-primary,#FF6B00)] hover:text-[color:var(--app-primary,#FF6B00)] transition-all disabled:opacity-50 cursor-pointer"
                 title="Refresh Cockpit Data"
               >
-                <RefreshCw size={16} className={loadingDesk ? 'animate-spin text-[#FF6B00]' : ''} />
+                <RefreshCw size={16} className={loadingDesk ? 'animate-spin text-[color:var(--app-primary,#FF6B00)]' : ''} />
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-950/50 text-slate-200 shadow-xs hover:border-[#FF6B00] hover:text-[#FF6B00] transition-all cursor-pointer"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-950/50 text-slate-200 shadow-xs hover:border-[color:var(--app-primary,#FF6B00)] hover:text-[color:var(--app-primary,#FF6B00)] transition-all cursor-pointer"
                 title="Driver Profile & Settings"
               >
                 <User size={16} />
@@ -694,7 +694,7 @@ const BusDriverHome = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-3.5 py-1 text-[11px] font-bold uppercase tracking-widest text-indigo-200 backdrop-blur-md">
-                  <Sparkles size={12} className="text-[#FF6B00]" />
+                  <Sparkles size={12} className="text-[color:var(--app-primary,#FF6B00)]" />
                   <span>Verified Driver Cockpit</span>
                 </div>
 
@@ -707,12 +707,12 @@ const BusDriverHome = () => {
                 </p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
-                  <span className="rounded-lg bg-[#FF6B00]/20 px-3 py-1 text-[#FF6B00] border border-[#FF6B00]/40 font-black shadow-xs uppercase tracking-wider text-[11px]">
+                  <span className="rounded-lg bg-[color:var(--app-primary,#FF6B00)]/20 px-3 py-1 text-[color:var(--app-primary,#FF6B00)] border border-[color:var(--app-primary,#FF6B00)]/40 font-black shadow-xs uppercase tracking-wider text-[11px]">
                     Bus Captain
                   </span>
                   <span className="text-indigo-400">•</span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1 text-white border border-white/15 font-extrabold backdrop-blur-md">
-                    <MapPin size={13} className="text-[#FF6B00]" />
+                    <MapPin size={13} className="text-[color:var(--app-primary,#FF6B00)]" />
                     {driverRouteText}
                   </span>
                 </div>
@@ -720,11 +720,11 @@ const BusDriverHome = () => {
 
               {/* BUS DETAILS CARD (STATIC, STABLE DESIGN) */}
               <div className="flex items-center gap-3.5 rounded-[24px] border border-indigo-500/30 bg-slate-900/75 p-4 shadow-2xl backdrop-blur-xl shrink-0 sm:max-w-xs">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-[#FF8533] text-white shadow-lg shadow-orange-500/30">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[color:var(--app-primary,#FF6B00)] to-[#FF8533] text-white shadow-lg shadow-orange-500/30">
                   <Bus size={28} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#FF6B00]">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[color:var(--app-primary,#FF6B00)]">
                     {busService?.registrationNumber || 'Coach Reg: BD-2026'}
                   </p>
                   <h4 className="text-sm font-black text-white truncate max-w-[150px]">
@@ -748,11 +748,11 @@ const BusDriverHome = () => {
                     <p className="text-sm font-black text-white mt-0.5">
                       {selectedSchedule?.departureTime || '06:30 AM'}
                     </p>
-                    <p className="text-[10px] font-semibold text-[#FF6B00] mt-0.5">
+                    <p className="text-[10px] font-semibold text-[color:var(--app-primary,#FF6B00)] mt-0.5">
                       {selectedSchedule?.label || 'Primary Schedule'}
                     </p>
                   </div>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-[#FF6B00]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/15 text-[color:var(--app-primary,#FF6B00)]">
                     <Clock size={18} />
                   </div>
                 </div>
@@ -807,7 +807,7 @@ const BusDriverHome = () => {
               >
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                   <div className="space-y-4 max-w-lg text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 border border-orange-200 px-3 py-1 text-xs font-bold text-[#FF6B00]">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 border border-orange-200 px-3 py-1 text-xs font-bold text-[color:var(--app-primary,#FF6B00)]">
                       <Bus size={16} />
                       <span>🚌 No Bus Assigned</span>
                     </div>
@@ -816,7 +816,7 @@ const BusDriverHome = () => {
                       No Bus Assigned Yet
                     </h3>
 
-                    <div className="h-0.5 w-16 bg-gradient-to-r from-[#FF6B00] to-[#E53935] mx-auto md:mx-0 rounded-full" />
+                    <div className="h-0.5 w-16 bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-[#E53935] mx-auto md:mx-0 rounded-full" />
 
                     <p className="text-sm font-medium text-slate-600 leading-relaxed">
                       Your fleet owner hasn&apos;t assigned a bus yet. You will receive a notification as soon as one is assigned to your driver cockpit.
@@ -829,7 +829,7 @@ const BusDriverHome = () => {
                         whileTap={{ scale: 0.97 }}
                         type="button"
                         onClick={() => setIsContactModalOpen(true)}
-                        className="inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#E53935] px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-xl hover:shadow-orange-500/35 cursor-pointer"
+                        className="inline-flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-[#E53935] px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-xl hover:shadow-orange-500/35 cursor-pointer"
                       >
                         <ShieldCheck size={18} />
                         <span>Contact Admin</span>
@@ -842,10 +842,10 @@ const BusDriverHome = () => {
                   <div
                     className="flex flex-col items-center justify-center p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl shadow-slate-900/10 w-full md:w-64 shrink-0 border border-slate-700"
                   >
-                    <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-[#FF6B00] to-[#E53935] flex items-center justify-center text-white shadow-lg shadow-orange-500/30 mb-3">
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-[color:var(--app-primary,#FF6B00)] to-[#E53935] flex items-center justify-center text-white shadow-lg shadow-orange-500/30 mb-3">
                       <Bus size={40} />
                     </div>
-                    <p className="text-xs font-black text-[#FF6B00] uppercase tracking-wider">Awaiting Fleet Admin</p>
+                    <p className="text-xs font-black text-[color:var(--app-primary,#FF6B00)] uppercase tracking-wider">Awaiting Fleet Admin</p>
                     <p className="text-[11px] font-medium text-slate-400 text-center mt-1">Bus route status will update live once linked.</p>
                   </div>
                 </div>
@@ -856,7 +856,7 @@ const BusDriverHome = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Award size={20} className="text-[#FF6B00]" />
+                  <Award size={20} className="text-[color:var(--app-primary,#FF6B00)]" />
                   <span>Driver Summary</span>
                 </h3>
                 <span className="text-xs font-bold text-slate-400">ID: {driverIdCode}</span>
@@ -869,7 +869,7 @@ const BusDriverHome = () => {
                   value={Number(profile?.rating ?? (busService?.rating || 0))}
                   sub={profile?.ratingCount || busService?.ratingCount ? `Based on ${profile?.ratingCount || busService?.ratingCount} reviews` : 'New Driver Account'}
                   sparkData={[0, 0, 0, 0, 0, 0, Number(profile?.rating ?? (busService?.rating || 0))]}
-                  accentColor="#FF6B00"
+                  accentColor="var(--app-primary,#FF6B00)"
                   isRating
                 />
 
@@ -906,11 +906,11 @@ const BusDriverHome = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Clock size={20} className="text-[#FF6B00]" />
+                  <Clock size={20} className="text-[color:var(--app-primary,#FF6B00)]" />
                   <span>Today&apos;s Schedule</span>
                 </h3>
                 {busService && (
-                  <span className="rounded-full bg-orange-50 border border-orange-200 px-2.5 py-0.5 text-[11px] font-black text-[#FF6B00]">
+                  <span className="rounded-full bg-orange-50 border border-orange-200 px-2.5 py-0.5 text-[11px] font-black text-[color:var(--app-primary,#FF6B00)]">
                     {selectedSchedule?.label || 'Live Schedule'}
                   </span>
                 )}
@@ -926,11 +926,11 @@ const BusDriverHome = () => {
                     🚌 No route stops configured for this assigned bus service.
                   </div>
                 ) : (
-                  <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-gradient-to-b before:from-[#FF6B00] before:via-blue-500 before:to-[#E53935]">
+                  <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2.5 before:bottom-2.5 before:w-0.5 before:bg-gradient-to-b before:from-[color:var(--app-primary,#FF6B00)] before:via-blue-500 before:to-[#E53935]">
                     {routeStops.map((stop, idx) => (
                       <div key={stop.id || idx} className="relative flex items-start justify-between gap-3">
-                        <div className="absolute -left-6 top-1 grid h-5 w-5 place-items-center rounded-full bg-white border-2 border-[#FF6B00] shadow-xs">
-                          <div className="h-1.5 w-1.5 rounded-full bg-[#FF6B00]" />
+                        <div className="absolute -left-6 top-1 grid h-5 w-5 place-items-center rounded-full bg-white border-2 border-[color:var(--app-primary,#FF6B00)] shadow-xs">
+                          <div className="h-1.5 w-1.5 rounded-full bg-[color:var(--app-primary,#FF6B00)]" />
                         </div>
 
                         <div className="min-w-0 flex-1">
@@ -964,7 +964,7 @@ const BusDriverHome = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">Schedule Management</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">Schedule Management</p>
                 <h3 className="text-base font-black text-slate-900">Bus Timings & Frequencies</h3>
               </div>
               <button
@@ -993,7 +993,7 @@ const BusDriverHome = () => {
                             curr.map((s) => (s.id === schedule.id ? { ...s, label: e.target.value } : s))
                           )
                         }
-                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                       />
                     </div>
                     <div>
@@ -1007,7 +1007,7 @@ const BusDriverHome = () => {
                             curr.map((s) => (s.id === schedule.id ? { ...s, departureTime: e.target.value } : s))
                           )
                         }
-                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                       />
                     </div>
                     <div>
@@ -1021,7 +1021,7 @@ const BusDriverHome = () => {
                             curr.map((s) => (s.id === schedule.id ? { ...s, arrivalTime: e.target.value } : s))
                           )
                         }
-                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                        className="w-full mt-1 rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                       />
                     </div>
                   </div>
@@ -1093,7 +1093,7 @@ const BusDriverHome = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">Passenger Manifest</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">Passenger Manifest</p>
                 <h3 className="text-base font-black text-slate-900">Today&apos;s Booked Tickets ({filteredBookings.length})</h3>
               </div>
             </div>
@@ -1105,7 +1105,7 @@ const BusDriverHome = () => {
                 placeholder="Search by passenger name, phone, seat number..."
                 value={bookingSearch}
                 onChange={(e) => setBookingSearch(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
               />
             </div>
 
@@ -1118,7 +1118,7 @@ const BusDriverHome = () => {
                 filteredBookings.map((b) => (
                   <div key={b._id || b.id} className="flex items-center justify-between rounded-2xl bg-slate-50/70 p-3.5 border border-slate-200 shadow-2xs">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F172A] text-[#FF6B00]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)]">
                         <Ticket size={18} />
                       </div>
                       <div>
@@ -1149,12 +1149,12 @@ const BusDriverHome = () => {
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="h-14 w-14 rounded-2xl bg-[#0F172A] text-[#FF6B00] flex items-center justify-center shadow-md">
+                <div className="h-14 w-14 rounded-2xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)] flex items-center justify-center shadow-md">
                   <User size={28} />
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900">{driverDisplayName}</h3>
-                  <p className="text-xs font-bold text-[#FF6B00]">Bus Captain • {driverIdCode}</p>
+                  <p className="text-xs font-bold text-[color:var(--app-primary,#FF6B00)]">Bus Captain • {driverIdCode}</p>
                   <p className="text-[11px] font-medium text-slate-500">{busService?.operatorName || 'EQOSY Intercity Express'}</p>
                 </div>
               </div>
@@ -1185,10 +1185,20 @@ const BusDriverHome = () => {
                 whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => toast.success('Fleet admin support contacted!')}
-                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#E53935] py-3 px-5 text-xs font-black text-white shadow-md hover:shadow-lg cursor-pointer"
+                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-[#E53935] py-3 px-5 text-xs font-black text-white shadow-md hover:shadow-lg cursor-pointer"
               >
                 <ShieldCheck size={16} />
                 <span>Contact Fleet Admin</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="button"
+                onClick={() => window.dispatchEvent(new Event('eqosy:open-language'))}
+                className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-3 px-5 text-xs font-black text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                <span>🌐 Language</span>
               </motion.button>
 
               <motion.button
@@ -1232,14 +1242,14 @@ const BusDriverHome = () => {
               {/* Profile Top Avatar Header */}
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-orange-500 text-white shadow-lg shadow-orange-500/30">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-[color:var(--app-primary,#FF6B00)] to-orange-500 text-white shadow-lg shadow-orange-500/30">
                     <User size={32} />
                   </div>
                   <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 ring-4 ring-[#0F172A]" />
                 </div>
 
                 <div>
-                  <span className="rounded-full bg-orange-500/20 border border-orange-500/30 px-2.5 py-0.5 text-[10px] font-black uppercase text-[#FF6B00]">
+                  <span className="rounded-full bg-orange-500/20 border border-orange-500/30 px-2.5 py-0.5 text-[10px] font-black uppercase text-[color:var(--app-primary,#FF6B00)]">
                     Verified Bus Captain
                   </span>
                   <h3 className="mt-1 text-xl font-black text-white">{driverDisplayName}</h3>
@@ -1251,7 +1261,7 @@ const BusDriverHome = () => {
               <div className="grid grid-cols-1 gap-3 rounded-2xl bg-slate-900/80 p-4 border border-indigo-500/20 text-xs">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                   <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                    <Phone size={14} className="text-[#FF6B00]" /> Mobile Number
+                    <Phone size={14} className="text-[color:var(--app-primary,#FF6B00)]" /> Mobile Number
                   </span>
                   <span className="font-bold text-white">{profile?.phone || 'Not available'}</span>
                 </div>
@@ -1290,7 +1300,7 @@ const BusDriverHome = () => {
                   }}
                   className="w-full flex items-center justify-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-950/60 py-3 text-xs font-black text-indigo-200 hover:bg-indigo-900/60 transition-colors cursor-pointer"
                 >
-                  <RefreshCw size={16} className={loadingDesk ? 'animate-spin text-[#FF6B00]' : ''} />
+                  <RefreshCw size={16} className={loadingDesk ? 'animate-spin text-[color:var(--app-primary,#FF6B00)]' : ''} />
                   <span>Refresh Driver Profile & Data</span>
                 </motion.button>
 
@@ -1396,7 +1406,7 @@ const BusDriverHome = () => {
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#FF6B00] to-orange-500 text-white shadow-lg shadow-orange-500/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-[color:var(--app-primary,#FF6B00)] to-orange-500 text-white shadow-lg shadow-orange-500/30">
                   <ShieldCheck size={24} />
                 </div>
                 <div>
@@ -1419,7 +1429,7 @@ const BusDriverHome = () => {
                     placeholder="e.g. Please assign me to Bhopal-Ujjain Bus Route 101."
                     value={supportNote}
                     onChange={(e) => setSupportNote(e.target.value)}
-                    className="w-full mt-1 rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs font-semibold text-white outline-none focus:border-[#FF6B00]"
+                    className="w-full mt-1 rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs font-semibold text-white outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                   />
                 </div>
               </div>
@@ -1450,7 +1460,7 @@ const BusDriverHome = () => {
                       setIsSendingSupport(false);
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF6B00] to-[#E53935] py-3.5 text-xs font-black text-white shadow-lg shadow-orange-500/30 cursor-pointer disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-[#E53935] py-3.5 text-xs font-black text-white shadow-lg shadow-orange-500/30 cursor-pointer disabled:opacity-50"
                 >
                   <Send size={16} />
                   <span>{isSendingSupport ? 'Sending Request...' : 'Send Request to Admin Panel'}</span>

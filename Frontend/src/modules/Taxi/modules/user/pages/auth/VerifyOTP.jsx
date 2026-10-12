@@ -270,7 +270,7 @@ const VerifyOTP = () => {
               animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}}
               transition={{ duration: 0.4 }}
               className={`w-full aspect-square text-center text-2xl font-bold bg-[#F8F9FA] rounded-xl outline-none transition-all text-[#1A1A1A] border 
-                ${error ? 'border-red-500 text-red-500 ring-1 ring-red-500' : 'border-gray-200 focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24]'}
+                ${error ? 'border-red-500 text-red-500 ring-1 ring-red-500' : 'border-gray-200 focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)]'}
               `}
               placeholder="-"
             />
@@ -286,7 +286,7 @@ const VerifyOTP = () => {
           ) : (
             <button
               onClick={handleResend}
-              className="text-sm font-semibold text-[#F38F24] hover:text-[#d97716] transition-colors"
+              className="text-sm font-semibold text-[color:var(--app-primary,#F38F24)] hover:text-[#d97716] transition-colors"
             >
               Resend Code
             </button>

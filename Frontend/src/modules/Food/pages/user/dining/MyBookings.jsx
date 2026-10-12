@@ -100,7 +100,7 @@ export default function MyBookings() {
         const key = String(status || "").toLowerCase()
         if (key === "confirmed") return "bg-amber-100 text-amber-700"
         if (key === "accepted") return "bg-green-100 text-green-700"
-        if (key === "checked-in") return "bg-[#FFF2EB] text-[#EB590E]"
+        if (key === "checked-in") return "bg-[#FFF2EB] text-[color:var(--app-primary,#EB590E)]"
         if (key === "completed") return "bg-blue-100 text-blue-700"
         if (key === "cancelled") return "bg-red-100 text-red-700"
         return "bg-slate-100 text-slate-700"
@@ -213,7 +213,7 @@ export default function MyBookings() {
                                 </div>
 
                                 {booking.specialRequest && (
-                                    <p className="text-[11px] text-[#EB590E] bg-[#FFF2EB] p-2 rounded-xl mt-2 font-medium border border-[#EB590E]/20">
+                                    <p className="text-[11px] text-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] p-2 rounded-xl mt-2 font-medium border border-[color:var(--app-primary,#EB590E)]/20">
                                         <span className="font-bold">Note:</span> "{booking.specialRequest}"
                                     </p>
                                 )}

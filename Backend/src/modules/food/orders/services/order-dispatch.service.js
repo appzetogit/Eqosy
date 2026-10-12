@@ -164,7 +164,13 @@ async function listNearbyOnlineDeliveryPartners(
       }
 
       if (partnersWithActiveGig.size > 0) {
-        allOnline = allOnline.filter(p => partnersWithActiveGig.has(String(p._id)));
+        const gigPartners = allOnline.filter(p => partnersWithActiveGig.has(String(p._id)));
+        // Never leave an order with nobody to offer it to: if no ONLINE partner has a gig, keep all online partners.
+        if (gigPartners.length > 0) {
+          allOnline = gigPartners;
+        } else {
+          logger.warn('[DeliveryDispatch] No online partner has an active gig; offering to all online partners instead.');
+        }
       }
       logger.info(`[DeliveryDispatch] Gig filter: ${allOnline.length} partner(s) available for order assignment.`);
     } catch (gigErr) {
@@ -414,7 +420,16 @@ export async function tryAutoAssign(orderId, options = {}) {
     // Verify complete delivery information (address, customer contact, restaurant location) before searching/notifying riders
     const deliveryValidation = validateOrderDeliveryInfo(order, order.restaurantId);
     if (!deliveryValidation.isValid) {
-      logger.warn(`[DeliveryDispatch] Cannot dispatch order ${order._id}: ${deliveryValidation.reason}`);
+      logger.error(`[DeliveryDispatch] Cannot dispatch order ${order._id} (${order.order_id || ''}): ${deliveryValidation.reason}`);
+      try {
+        await notifyAdminsSafely({
+          title: 'Order cannot be dispatched',
+          body: `Order #${order.order_id || order._id}: ${deliveryValidation.reason}`,
+          data: { type: 'admin_alert_dispatch_blocked', orderId: order._id.toString() },
+        });
+      } catch (alertErr) {
+        logger.warn(`Dispatch-blocked admin alert failed: ${alertErr.message}`);
+      }
       return order;
     }
 
@@ -428,9 +443,10 @@ export async function tryAutoAssign(orderId, options = {}) {
     if (attempt >= 4) maxKm = 60;
 
     let orderDeliveryDistance = 0;
-    if (order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+    const customerCoords = order.deliveryAddress?.location?.coordinates || order.address?.location?.coordinates;
+    if (order.restaurantId?.location?.coordinates && customerCoords) {
       const [rLng, rLat] = order.restaurantId.location.coordinates;
-      const [cLng, cLat] = order.address.location.coordinates;
+      const [cLng, cLat] = customerCoords;
       orderDeliveryDistance = haversineKm(rLat, rLng, cLat, cLng);
     }
 

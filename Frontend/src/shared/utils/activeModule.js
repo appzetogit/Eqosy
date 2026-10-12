@@ -3,6 +3,7 @@ export const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
 
 export const FOOD_ADMIN_HOME = '/admin/food'
 export const TAXI_ADMIN_HOME = '/taxi/admin/dashboard'
+export const GLOBAL_ADMIN_HOME = '/admin/global/branding'
 
 export function getModuleFromPath(pathname = '') {
   const path = String(pathname || '')
@@ -34,6 +35,15 @@ export function prefetchFoodAdmin() {
   return Promise.all([
     import('../../modules/Food/components/admin/AdminRouter.jsx'),
     import('../../modules/Food/pages/admin/AdminHome.jsx'),
+  ]).catch(() => {})
+}
+
+/** Warm Global settings chunks so switching to the Global tab does not flash a loader. */
+export function prefetchGlobalAdmin() {
+  return Promise.all([
+    prefetchFoodAdmin(),
+    import('../../modules/Taxi/modules/admin/pages/settings/GeneralSettings.jsx'),
+    import('../../modules/Taxi/shared/context/SettingsContext.jsx'),
   ]).catch(() => {})
 }
 

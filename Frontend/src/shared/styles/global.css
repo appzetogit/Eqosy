@@ -251,3 +251,25 @@ html[data-theme="dark"] {
   background: radial-gradient(circle at 100% 0%, transparent 18px, var(--active-tab-bg, #FC6C00) 18.5px);
 }
 
+
+/* Google Translate: hide its "Translated into..." banner, tooltips and popups so layouts stay untouched */
+body { top: 0 !important; }
+body > .skiptranslate,
+iframe.skiptranslate,
+.goog-te-banner-frame,
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
+.VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
+.VIpgJd-ZVi9od-l4eHX-hSRGPd,
+#goog-gt-tt,
+.goog-te-balloon-frame { display: none !important; visibility: hidden !important; height: 0 !important; }
+.goog-tooltip, .goog-tooltip:hover { display: none !important; }
+.goog-text-highlight { background: none !important; box-shadow: none !important; }
+
+/* Mobile scroll performance: live backdrop blur over scrolling content is very expensive on phones.
+   Translucent backgrounds stay, only the blur is dropped. */
+@media (hover: none), (max-width: 768px) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

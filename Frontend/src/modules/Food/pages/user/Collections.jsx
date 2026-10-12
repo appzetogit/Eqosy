@@ -90,7 +90,7 @@ export default function Collections() {
           >
             Delivery
             {activeTab === "delivery" && (
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-[#EB590E] rounded-full" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-[color:var(--app-primary,#EB590E)] rounded-full" />
             )}
           </button>
           <button
@@ -100,7 +100,7 @@ export default function Collections() {
           >
             Dining
             {activeTab === "dining" && (
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-[#EB590E] rounded-full" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-[color:var(--app-primary,#EB590E)] rounded-full" />
             )}
           </button>
         </div>
@@ -172,8 +172,8 @@ export default function Collections() {
               onClick={() => setIsCreateDialogOpen(true)}
               className="bg-white dark:bg-[#1a1a1a] border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-4 h-48 flex flex-col items-center justify-center gap-3 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <div className="w-12 h-12 rounded-full bg-[#FFF2EB] dark:bg-[#EB590E]/20 flex items-center justify-center border-2 border-[#EB590E]/30 dark:border-[#EB590E]/40">
-                <Plus className="h-6 w-6 text-[#EB590E] dark:text-[#EB590E]" />
+              <div className="w-12 h-12 rounded-full bg-[#FFF2EB] dark:bg-[color:var(--app-primary,#EB590E)]/20 flex items-center justify-center border-2 border-[color:var(--app-primary,#EB590E)]/30 dark:border-[color:var(--app-primary,#EB590E)]/40">
+                <Plus className="h-6 w-6 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)]" />
               </div>
               <div className="text-center">
                 <p className="text-gray-700 dark:text-gray-300 font-semibold">Create a new</p>
@@ -224,7 +224,7 @@ export default function Collections() {
                     handleCreateCollection()
                   }
                 }}
-                className="w-full h-12 text-base border-2 border-gray-200 dark:border-gray-700 focus:border-[#EB590E] dark:focus:border-[#EB590E] rounded-xl bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                className="w-full h-12 text-base border-2 border-gray-200 dark:border-gray-700 focus:border-[color:var(--app-primary,#EB590E)] dark:focus:border-[color:var(--app-primary,#EB590E)] rounded-xl bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 autoFocus
               />
 
@@ -252,7 +252,7 @@ export default function Collections() {
               <Button
                 onClick={handleCreateCollection}
                 disabled={!newCollectionName.trim()}
-                className="flex-1 h-11 bg-[#EB590E] hover:bg-[#D94F0C] text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 h-11 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create Collection
               </Button>

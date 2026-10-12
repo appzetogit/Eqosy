@@ -27,6 +27,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
 import { clearDriverAuthState, getCurrentDriver, updateDriverProfile } from '../services/registrationService';
+import LanguageRow from '@/shared/language/LanguageRow'
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response || null;
 const ROUTE_BOOKING_STORAGE_KEY = 'driver_route_booking_preferences';
@@ -386,6 +387,8 @@ const DriverProfile = () => {
                     </div>
                 ))}
             </main>
+
+            <div className="px-6 pt-6"><LanguageRow className="border border-slate-100" /></div>
 
             {/* Sign Out Section */}
             <div className="px-6 py-10">

@@ -2,22 +2,22 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Star, ShoppingBasket, Timer } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { publicGetOnce, restaurantAPI } from '@food/api';
+import { publicGetOnce, restaurantAPI, adminAPI } from '@food/api';
 import { API_BASE_URL } from '@food/api/config';
 import { useLocation } from '@food/hooks/useLocation';
-import { useZone } from '@food/hooks/useZone';
 
 const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 const GroceryBannerSlider = ({ zoneId }) => {
   const [banners, setBanners] = useState([]);
+  const [bannersLoaded, setBannersLoaded] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef(0);
   const isSwiping = useRef(false);
 
   useEffect(() => {
     let active = true;
-    publicGetOnce('/food/hero-banners/public')
+    publicGetOnce('/food/hero-banners/grocery/public')
       .then((res) => {
         if (!active) return;
         const list = res?.data?.data?.banners || res?.data?.data || [];
@@ -25,7 +25,10 @@ const GroceryBannerSlider = ({ zoneId }) => {
           setBanners(list);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setBannersLoaded(true);
+      });
     return () => {
       active = false;
     };
@@ -47,6 +50,9 @@ const GroceryBannerSlider = ({ zoneId }) => {
     return () => clearInterval(interval);
   }, [bannerImages.length]);
 
+  if (!bannersLoaded) {
+    return <div className="mb-5 w-full aspect-[2/1] sm:aspect-[2.4/1] rounded-2xl bg-gray-100 animate-pulse" />;
+  }
   if (bannerImages.length === 0) return null;
 
   const handleTouchStart = (e) => {
@@ -137,6 +143,160 @@ const pickStoreImage = (restaurant) => {
   ];
   const firstValid = candidates.find((value) => typeof value === 'string' && value.trim());
   return normalizeImageUrl(firstValid || '');
+};
+
+const transformStore = (restaurant) => {
+  const name = restaurant?.name || restaurant?.restaurantName || 'Store';
+  const slug = restaurant?.slug || String(name).toLowerCase().trim().replace(/\s+/g, '-');
+  return {
+    id: restaurant?._id || restaurant?.restaurantId || slug,
+    slug,
+    name,
+    cuisine: restaurant?.cuisine || restaurant?.category || restaurant?.type || '',
+    rating: Number(restaurant?.rating || 0) || 0,
+    deliveryTime:
+      restaurant?.estimatedDeliveryTime ||
+      (restaurant?.estimatedDeliveryTimeMinutes
+        ? `${restaurant.estimatedDeliveryTimeMinutes} mins`
+        : '25-30 mins'),
+    distance:
+      restaurant?.distanceInKm != null
+        ? `${Number(restaurant.distanceInKm).toFixed(1)} km`
+        : restaurant?.distance || '1.2 km',
+    offer: restaurant?.offer || '',
+    closesIn: getClosesIn(restaurant),
+    image: pickStoreImage(restaurant),
+    _raw: restaurant,
+  };
+};
+
+// ---- Shared cache so switching Food <-> Grocery shows data instantly (stale-while-revalidate) ----
+const GROCERY_CACHE_TTL_MS = 5 * 60 * 1000;
+const groceryCache = new Map(); // key -> { ts, data }
+const groceryInFlight = new Map(); // key -> Promise
+
+const readGroceryCache = (key) => groceryCache.get(key)?.data;
+const isGroceryCacheFresh = (key) => {
+  const hit = groceryCache.get(key);
+  return Boolean(hit) && Date.now() - hit.ts < GROCERY_CACHE_TTL_MS;
+};
+
+const cachedLoad = (key, loader) => {
+  if (groceryInFlight.has(key)) return groceryInFlight.get(key);
+  const p = loader()
+    .then((data) => {
+      groceryCache.set(key, { ts: Date.now(), data });
+      return data;
+    })
+    .finally(() => groceryInFlight.delete(key));
+  groceryInFlight.set(key, p);
+  return p;
+};
+
+const storesKey = (zoneId) => `stores:${zoneId || 'none'}`;
+const categoriesKey = (zoneId) => `categories:${zoneId || 'none'}`;
+
+const loadGroceryStores = (zoneId) =>
+  cachedLoad(storesKey(zoneId), async () => {
+    const response = await restaurantAPI.getRestaurants({
+      isRestaurant: 'false',
+      // If zone detection failed (GPS denied / API down) still list grocery stores, like Food does.
+      ...(zoneId ? { zoneId } : {}),
+    });
+    const list = response?.data?.data?.restaurants || response?.data?.restaurants || [];
+    return list.map(transformStore);
+  });
+
+const loadGroceryCategories = (zoneId) =>
+  cachedLoad(categoriesKey(zoneId), async () => {
+    const res = await adminAPI.getPublicCategories({
+      isRestaurant: 'false',
+      ...(zoneId ? { zoneId } : {}),
+    });
+    const list = res?.data?.data?.categories || [];
+    return Array.isArray(list) ? list : [];
+  });
+
+/** Warm the cache early (called from Home) so opening the Grocery tab is instant. */
+export const prefetchGrocery = (zoneId) => {
+  if (!isGroceryCacheFresh(storesKey(zoneId))) loadGroceryStores(zoneId).catch(() => {});
+  if (!isGroceryCacheFresh(categoriesKey(zoneId))) loadGroceryCategories(zoneId).catch(() => {});
+};
+
+const GroceryCategories = ({ zoneId, zoneChecking }) => {
+  const [categories, setCategories] = useState(() => readGroceryCache(categoriesKey(zoneId)) || []);
+  const [loading, setLoading] = useState(() => !readGroceryCache(categoriesKey(zoneId)));
+
+  useEffect(() => {
+    if (zoneChecking) return undefined;
+    let active = true;
+    const cached = readGroceryCache(categoriesKey(zoneId));
+    if (cached) {
+      setCategories(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    if (!isGroceryCacheFresh(categoriesKey(zoneId))) {
+      loadGroceryCategories(zoneId)
+        .then((list) => {
+          if (active) setCategories(list);
+        })
+        .catch(() => {
+          if (active && !cached) setCategories([]);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [zoneId, zoneChecking]);
+
+  if (loading) {
+    return (
+      <div className="mb-6 flex gap-4 overflow-hidden">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-2 animate-pulse">
+            <div className="h-16 w-16 rounded-full bg-gray-100" />
+            <div className="h-3 w-12 rounded-full bg-gray-100" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (categories.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h3 className="mb-3 text-base font-extrabold text-gray-900">Shop by category</h3>
+      <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {categories.map((cat) => {
+          const slug = cat.slug || String(cat.name || '').toLowerCase().trim().replace(/\s+/g, '-');
+          const image = normalizeImageUrl(typeof cat.image === 'string' ? cat.image : cat.image?.url || '');
+          return (
+            <Link
+              key={cat._id || slug}
+              to={`/food/user/category/${slug}`}
+              className="flex w-[72px] shrink-0 flex-col items-center gap-2"
+            >
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-[#E8F8F0]">
+                {image ? (
+                  <img src={image} alt={cat.name} loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <ShoppingBasket className="h-6 w-6 text-[#1A9E5C]" />
+                )}
+              </div>
+              <span className="line-clamp-2 text-center text-[11px] font-semibold leading-tight text-gray-700">
+                {cat.name}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 /** Compute "Closes in Xh Ym" from openingHours if available, else null */
@@ -408,76 +568,73 @@ function StoreCard({ store, index }) {
   );
 }
 
-export default function QuickSection() {
-  const { location: userLocation } = useLocation();
-  const { zoneId } = useZone(userLocation);
-  const [stores, setStores] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function QuickSection({
+  location: locationProp = null,
+  zoneId = null,
+  zoneStatus = 'loading',
+  zoneError = null,
+  refreshZone = () => {},
+}) {
+  const { location: hookLocation } = useLocation();
+  // Location and zone come from Home (already detected), so switching tabs does not re-run zone detection.
+  const userLocation =
+    Number.isFinite(Number(locationProp?.latitude)) && Number.isFinite(Number(locationProp?.longitude))
+      ? locationProp
+      : hookLocation;
+  const hasCoords = Number.isFinite(Number(userLocation?.latitude)) && Number.isFinite(Number(userLocation?.longitude));
+
+  // Zone detection can fail on a flaky connection: retry on its own (up to 3 times).
+  const autoRetriesRef = useRef(0);
+  useEffect(() => {
+    autoRetriesRef.current = 0;
+  }, [userLocation?.latitude, userLocation?.longitude]);
+  useEffect(() => {
+    if (!hasCoords || zoneId || zoneStatus === 'OUT_OF_SERVICE' || !zoneError) return undefined;
+    if (autoRetriesRef.current >= 3) return undefined;
+    const timer = setTimeout(() => {
+      autoRetriesRef.current += 1;
+      refreshZone();
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [hasCoords, zoneId, zoneStatus, zoneError, refreshZone]);
+  const zoneChecking = hasCoords && !zoneId && zoneStatus !== 'OUT_OF_SERVICE' && (!zoneError || autoRetriesRef.current < 3);
+
+  const [stores, setStores] = useState(() => readGroceryCache(storesKey(zoneId)) || []);
+  const [loading, setLoading] = useState(() => !readGroceryCache(storesKey(zoneId)));
 
   useEffect(() => {
     let cancelled = false;
+    if (zoneStatus === 'OUT_OF_SERVICE') {
+      setStores([]);
+      setLoading(false);
+      return undefined;
+    }
+    // Still detecting the zone: keep the skeleton up instead of flashing an empty state.
+    if (zoneChecking) return undefined;
 
-    const fetchGroceryStores = async () => {
-      if (!zoneId) {
-        setStores([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const response = await restaurantAPI.getRestaurants({
-          zoneId,
-          isRestaurant: 'false',
+    const cached = readGroceryCache(storesKey(zoneId));
+    if (cached) {
+      setStores(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    if (!isGroceryCacheFresh(storesKey(zoneId))) {
+      loadGroceryStores(zoneId)
+        .then((list) => {
+          if (!cancelled) setStores(list);
+        })
+        .catch(() => {
+          if (!cancelled && !cached) setStores([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
         });
-        if (cancelled) return;
-
-        const list =
-          response?.data?.data?.restaurants ||
-          response?.data?.restaurants ||
-          [];
-
-        const transformed = list.map((restaurant) => {
-          const name = restaurant?.name || restaurant?.restaurantName || 'Store';
-          const slug =
-            restaurant?.slug ||
-            String(name).toLowerCase().trim().replace(/\s+/g, '-');
-
-          const closesInVal = getClosesIn(restaurant);
-
-          return {
-            id: restaurant?._id || restaurant?.restaurantId || slug,
-            slug,
-            name,
-            cuisine: restaurant?.cuisine || restaurant?.category || restaurant?.type || '',
-            rating: Number(restaurant?.rating || 0) || 0,
-            deliveryTime:
-              restaurant?.estimatedDeliveryTime ||
-              (restaurant?.estimatedDeliveryTimeMinutes
-                ? `${restaurant.estimatedDeliveryTimeMinutes} mins`
-                : '25-30 mins'),
-            distance:
-              restaurant?.distanceInKm != null
-                ? `${Number(restaurant.distanceInKm).toFixed(1)} km`
-                : restaurant?.distance || '1.2 km',
-            offer: restaurant?.offer || '',
-            closesIn: closesInVal,
-            image: pickStoreImage(restaurant),
-            _raw: restaurant,
-          };
-        });
-
-        setStores(transformed);
-      } catch {
-        if (!cancelled) setStores([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    }
+    return () => {
+      cancelled = true;
     };
-
-    fetchGroceryStores();
-    return () => { cancelled = true; };
-  }, [zoneId]);
+  }, [zoneId, zoneStatus, zoneChecking]);
 
   const hasStores = useMemo(() => stores.length > 0, [stores.length]);
 
@@ -486,6 +643,9 @@ export default function QuickSection() {
 
       {/* Hero Banner Carousel */}
       <GroceryBannerSlider zoneId={zoneId} />
+
+      {/* Categories from admin (grocery section) */}
+      <GroceryCategories zoneId={zoneId} zoneChecking={zoneChecking} />
 
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
@@ -511,20 +671,20 @@ export default function QuickSection() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading || zoneChecking ? (
         <>
           <StoreCardSkeleton />
           <StoreCardSkeleton />
           <StoreCardSkeleton />
         </>
-      ) : !zoneId ? (
+      ) : zoneStatus === 'OUT_OF_SERVICE' ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-4">
             <ShoppingBasket className="w-8 h-8 text-green-400" />
           </div>
-          <h4 className="text-base font-bold text-gray-800 mb-1">Set your location</h4>
-          <p className="text-sm text-gray-500 max-w-[220px] leading-relaxed">
-            Enable location to see grocery stores delivering to you.
+          <h4 className="text-base font-bold text-gray-800 mb-1">Not available in your area yet</h4>
+          <p className="text-sm text-gray-500 max-w-[240px] leading-relaxed">
+            We don't deliver grocery to this location yet. Try another address.
           </p>
         </div>
       ) : !hasStores ? (

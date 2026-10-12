@@ -451,9 +451,8 @@ export function validateOrderDeliveryInfo(orderDoc, restaurantDoc = null) {
     order?.customerPhone || delAddr.phone || delAddr.contactPhone || order?.userId?.phone || order?.userPhone || ''
   ).trim();
 
-  if (!customerPhone) {
-    missingFields.push('customerPhone');
-  }
+  // A missing customer phone must not stop dispatch: riders can still deliver using the in-app address.
+  void customerPhone;
 
   const isValid = missingFields.length === 0;
   const reason = isValid ? '' : `Missing required fields: ${missingFields.join(', ')}`;

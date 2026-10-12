@@ -2447,18 +2447,18 @@ export default function Cart() {
 
                         <div className="flex items-center gap-3 md:gap-4">
                           {/* Quantity controls */}
-                          <div className="flex items-center border border-[#EB590E] dark:border-[#EB590E]/50 rounded">
+                          <div className="flex items-center border border-[color:var(--app-primary,#EB590E)] dark:border-[color:var(--app-primary,#EB590E)]/50 rounded">
                             <button
-                              className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
+                              className="px-2 md:px-3 py-1 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50 dark:hover:bg-[color:var(--app-primary,#EB590E)]/10"
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                             >
                               <Minus className="h-3 w-3 md:h-4 md:w-4" />
                             </button>
-                            <span className="px-2 md:px-3 text-sm md:text-base font-semibold text-[#EB590E] dark:text-[#EB590E] min-w-[20px] md:min-w-[24px] text-center">
+                            <span className="px-2 md:px-3 text-sm md:text-base font-semibold text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)] min-w-[20px] md:min-w-[24px] text-center">
                               {item.quantity}
                             </span>
                             <button
-                              className="px-2 md:px-3 py-1 text-[#EB590E] dark:text-[#EB590E] hover:bg-orange-50 dark:hover:bg-[#EB590E]/10"
+                              className="px-2 md:px-3 py-1 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50 dark:hover:bg-[color:var(--app-primary,#EB590E)]/10"
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
                             >
                               <Plus className="h-3 w-3 md:h-4 md:w-4" />
@@ -2484,7 +2484,7 @@ export default function Cart() {
                 {/* Add more items */}
                 <button
                   onClick={handleBack}
-                  className="flex items-center gap-2 mt-4 md:mt-6 text-[#EB590E] dark:text-[#EB590E]"
+                  className="flex items-center gap-2 mt-4 md:mt-6 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)]"
                 >
                   <Plus className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="text-sm md:text-base font-medium">Add more items</span>
@@ -2503,7 +2503,7 @@ export default function Cart() {
                 </button>
                 <button
                   onClick={() => setSendCutlery(!sendCutlery)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 border rounded-lg md:rounded-xl text-sm md:text-base ${sendCutlery ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300' : 'border-[#EB590E] dark:border-[#EB590E]/50 text-[#EB590E] dark:text-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/10'}`}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 border rounded-lg md:rounded-xl text-sm md:text-base ${sendCutlery ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300' : 'border-[color:var(--app-primary,#EB590E)] dark:border-[color:var(--app-primary,#EB590E)]/50 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-[color:var(--app-primary,#EB590E)]/10'}`}
                 >
                   <Utensils className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="whitespace-nowrap">
@@ -2522,7 +2522,7 @@ export default function Cart() {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Eg. Call when outside, ring bell once, leave at gate"
-                    className="w-full border border-gray-200 dark:border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 text-sm md:text-base resize-none h-20 md:h-24 focus:outline-none focus:border-[#EB590E] dark:focus:border-[#EB590E] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
+                    className="w-full border border-gray-200 dark:border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 text-sm md:text-base resize-none h-20 md:h-24 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)] dark:focus:border-[color:var(--app-primary,#EB590E)] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
                     maxLength={240}
                   />
                   <div className="mt-2 flex items-center justify-between gap-3">
@@ -2541,7 +2541,7 @@ export default function Cart() {
                 <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                   <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
                     <div className="w-6 h-6 md:w-8 md:h-8 bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center">
-                      <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-[#EB590E]" />
+                      <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-[color:var(--app-primary,#EB590E)]" />
                     </div>
                     <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">Complete your meal with</span>
                   </div>
@@ -2603,9 +2603,9 @@ export default function Cart() {
                                   restaurantId: cartRestaurantId
                                 });
                               }}
-                              className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-[#EB590E] rounded flex items-center justify-center shadow-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                              className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-[color:var(--app-primary,#EB590E)] rounded flex items-center justify-center shadow-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
                             >
-                              <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 text-[#EB590E]" />
+                              <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 text-[color:var(--app-primary,#EB590E)]" />
                             </button>
                           </div>
                           <p className="text-xs md:text-sm font-medium text-gray-800 dark:text-gray-200 mt-1.5 md:mt-2 line-clamp-2 leading-tight">{addon.name}</p>
@@ -2633,24 +2633,24 @@ export default function Cart() {
                 {appliedCoupon ? (
                   <div className="px-4 py-3 md:px-6 md:py-4 flex items-center justify-between">
                     <div className="flex items-start gap-3">
-                      <Percent className="h-5 w-5 text-[#EB590E] mt-0.5" />
+                      <Percent className="h-5 w-5 text-[color:var(--app-primary,#EB590E)] mt-0.5" />
                       <div>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">'{appliedCoupon.code}' applied</p>
-                        <p className="text-xs text-[#EB590E] font-medium mt-0.5">You saved {RUPEE_SYMBOL}{discount}</p>
+                        <p className="text-xs text-[color:var(--app-primary,#EB590E)] font-medium mt-0.5">You saved {RUPEE_SYMBOL}{discount}</p>
                       </div>
                     </div>
-                    <button onClick={handleRemoveCoupon} className="text-[#EB590E] text-xs font-semibold px-2 hover:underline">REMOVE</button>
+                    <button onClick={handleRemoveCoupon} className="text-[color:var(--app-primary,#EB590E)] text-xs font-semibold px-2 hover:underline">REMOVE</button>
                   </div>
                 ) : (
                   /* Available / Input View */
                   <div className="px-4 py-3 md:px-6 md:py-4 flex flex-col gap-3">
                     <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
                       <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-[#EB590E]" />
+                        <Tag className="h-4 w-4 text-[color:var(--app-primary,#EB590E)]" />
                         <span className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide">Coupons & Offers</span>
                       </div>
                       {availableCoupons.length > 0 && (
-                        <span className="bg-gradient-to-r from-[#EB590E] to-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider shadow-sm">
+                        <span className="bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-amber-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider shadow-sm">
                           {availableCoupons.length} OFFER{availableCoupons.length > 1 ? 'S' : ''} AVAILABLE
                         </span>
                       )}
@@ -2667,12 +2667,12 @@ export default function Cart() {
                           return (
                             <div key={coupon.code || idx} className="flex items-start justify-between p-3 rounded-xl bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/60 dark:border-orange-900/40">
                               <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                <div className="mt-0.5 bg-[#EB590E] text-white p-1 rounded-md shrink-0">
+                                <div className="mt-0.5 bg-[color:var(--app-primary,#EB590E)] text-white p-1 rounded-md shrink-0">
                                   <Percent className="h-3.5 w-3.5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                    <span className="bg-[#EB590E]/15 text-[#EB590E] font-black text-[10px] uppercase px-1.5 py-0.5 rounded tracking-wider">
+                                    <span className="bg-[color:var(--app-primary,#EB590E)]/15 text-[color:var(--app-primary,#EB590E)] font-black text-[10px] uppercase px-1.5 py-0.5 rounded tracking-wider">
                                       OFFER
                                     </span>
                                     <span className="text-xs font-mono font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded">
@@ -2683,7 +2683,7 @@ export default function Cart() {
                                     {coupon.discountDisplay || `Save ${RUPEE_SYMBOL}${coupon.discount}`}
                                   </p>
                                   {coupon.customerGroup === "new" ? (
-                                    <p className="text-[11px] text-[#EB590E] mt-0.5">First-time users only</p>
+                                    <p className="text-[11px] text-[color:var(--app-primary,#EB590E)] mt-0.5">First-time users only</p>
                                   ) : isLocked ? (
                                     <p className="text-xs text-blue-600 font-medium mt-0.5">Add items worth {RUPEE_SYMBOL}{(coupon.minOrder - subtotal).toFixed(0)} more to unlock</p>
                                   ) : (
@@ -2692,7 +2692,7 @@ export default function Cart() {
                                 </div>
                               </div>
                               <button
-                                className="border border-[#EB590E] text-[#EB590E] dark:hover:bg-[#EB590E]/10 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed ml-2 shrink-0 bg-white dark:bg-[#1a1a1a] shadow-sm hover:bg-orange-50"
+                                className="border border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] dark:hover:bg-[color:var(--app-primary,#EB590E)]/10 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed ml-2 shrink-0 bg-white dark:bg-[#1a1a1a] shadow-sm hover:bg-orange-50"
                                 onClick={() => handleApplyCoupon(coupon)}
                                 disabled={isLocked}
                               >
@@ -2705,7 +2705,7 @@ export default function Cart() {
                         {availableCoupons.length > 1 && (
                           <button
                             onClick={() => setShowCoupons(!showCoupons)}
-                            className="text-xs text-[#EB590E] font-bold hover:underline flex items-center justify-center gap-1 pt-1"
+                            className="text-xs text-[color:var(--app-primary,#EB590E)] font-bold hover:underline flex items-center justify-center gap-1 pt-1"
                           >
                             {showCoupons ? "Hide additional offers" : `View all ${availableCoupons.length} offers`}
                             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showCoupons ? "rotate-90" : ""}`} />
@@ -2746,7 +2746,7 @@ export default function Cart() {
                           }
                           setIsScheduled(!isScheduled);
                         }}
-                        className="border-b border-dashed border-gray-500 font-medium outline-none text-[#EB590E]"
+                        className="border-b border-dashed border-gray-500 font-medium outline-none text-[color:var(--app-primary,#EB590E)]"
                       >
                         Schedule it
                       </button>
@@ -2765,7 +2765,7 @@ export default function Cart() {
                           max={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
-                          className="w-full text-sm font-semibold p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-slate-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#EB590E]"
+                          className="w-full text-sm font-semibold p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-slate-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
                         />
                       </div>
                       <div className="flex-1">
@@ -2775,11 +2775,11 @@ export default function Cart() {
                           onClick={() => setShowTimeSlotModal(true)}
                           className={`w-full flex items-center justify-between text-sm font-bold p-3 rounded-xl transition-all shadow-sm ${!scheduledTimeAvailability.isValid
                               ? 'border-2 border-red-500 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
-                              : 'border border-[#EB590E] bg-orange-50/50 dark:bg-orange-950/20 text-[#EB590E] hover:bg-orange-100/60'
+                              : 'border border-[color:var(--app-primary,#EB590E)] bg-orange-50/50 dark:bg-orange-950/20 text-[color:var(--app-primary,#EB590E)] hover:bg-orange-100/60'
                             }`}
                         >
                           <div className="flex items-center gap-2">
-                            <Clock className={`w-4 h-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[#EB590E]'}`} />
+                            <Clock className={`w-4 h-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[color:var(--app-primary,#EB590E)]'}`} />
                             <span>
                               {(() => {
                                 if (!scheduledTime) return "Choose delivery time";
@@ -2792,7 +2792,7 @@ export default function Cart() {
                               })()}
                             </span>
                           </div>
-                          <ChevronDown className={`h-4 w-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[#EB590E]'}`} />
+                          <ChevronDown className={`h-4 w-4 ${!scheduledTimeAvailability.isValid ? 'text-red-600 dark:text-red-400' : 'text-[color:var(--app-primary,#EB590E)]'}`} />
                         </button>
                         {!scheduledTimeAvailability.isValid && (
                           <div className="mt-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs font-bold text-red-700 dark:text-red-300 flex items-center gap-1.5 shadow-xs">
@@ -2811,7 +2811,7 @@ export default function Cart() {
                 <div className="flex items-start justify-between w-full text-left">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-xl mt-0.5">
-                      <MapPin className="h-5 w-5 text-[#EB590E]" />
+                      <MapPin className="h-5 w-5 text-[color:var(--app-primary,#EB590E)]" />
                     </div>
                     <div className="flex-1">
                       <div className="flex flex-col">
@@ -2836,7 +2836,7 @@ export default function Cart() {
                               </p>
                             )}
                             <div className="mt-1 flex items-center gap-2">
-                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#FFF2EB] text-[#EB590E] dark:bg-[#EB590E]/10 dark:text-[#EB590E] border border-[#EB590E]/30">
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#FFF2EB] text-[color:var(--app-primary,#EB590E)] dark:bg-[color:var(--app-primary,#EB590E)]/10 dark:text-[color:var(--app-primary,#EB590E)] border border-[color:var(--app-primary,#EB590E)]/30">
                                 GPS enabled
                               </span>
                             </div>
@@ -2848,7 +2848,7 @@ export default function Cart() {
                         )}
                       </div>
                       {!hasSavedAddress && (
-                        <p className="text-sm text-[#EB590E] mt-2 font-medium">
+                        <p className="text-sm text-[color:var(--app-primary,#EB590E)] mt-2 font-medium">
                           Select a delivery location to continue
                         </p>
                       )}
@@ -2895,7 +2895,7 @@ export default function Cart() {
                                   handleSelectSavedAddress(address)
                                 }}
                                 className={`w-full text-left rounded-xl border-2 p-3 transition-colors ${isSelected
-                                  ? "border-[#EB590E] bg-orange-50/50 dark:bg-[#EB590E]/5"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-orange-50/50 dark:bg-[color:var(--app-primary,#EB590E)]/5"
                                   : "border-slate-100 dark:border-gray-800 hover:border-slate-200"
                                   }`}
                               >
@@ -2909,7 +2909,7 @@ export default function Cart() {
                                     </p>
                                   </div>
                                   {isSelected && (
-                                    <span className="text-[10px] bg-[#EB590E] text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
+                                    <span className="text-[10px] bg-[color:var(--app-primary,#EB590E)] text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
                                       Selected
                                     </span>
                                   )}
@@ -2924,7 +2924,7 @@ export default function Cart() {
                   <button
                     type="button"
                     onClick={openLocationSelector}
-                    className="p-2 text-[#EB590E] bg-orange-50 rounded-full hover:bg-orange-100 transition-colors dark:bg-orange-900/20 dark:hover:bg-orange-900/40"
+                    className="p-2 text-[color:var(--app-primary,#EB590E)] bg-orange-50 rounded-full hover:bg-orange-100 transition-colors dark:bg-orange-900/20 dark:hover:bg-orange-900/40"
                     aria-label="Open location selector"
                   >
                     <ChevronRight className="h-5 w-5" />
@@ -2949,7 +2949,7 @@ export default function Cart() {
                   <button
                     type="button"
                     onClick={() => setIsEditingRecipient((prev) => !prev)}
-                    className="text-[#EB590E] text-xs md:text-sm font-semibold whitespace-nowrap"
+                    className="text-[color:var(--app-primary,#EB590E)] text-xs md:text-sm font-semibold whitespace-nowrap"
                   >
                     {isEditingRecipient ? "Done" : "Change"}
                   </button>
@@ -2971,7 +2971,7 @@ export default function Cart() {
                           }))
                         }
                         placeholder="Enter recipient name"
-                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#EB590E]"
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
                       />
                     </div>
                     <div>
@@ -2988,7 +2988,7 @@ export default function Cart() {
                           }))
                         }
                         placeholder="Enter recipient phone"
-                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#EB590E]"
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
                       />
                     </div>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -3153,7 +3153,7 @@ export default function Cart() {
                         </button>
                         <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
                       </div>
-                      <span className={isPricingAvailable && deliveryFee === 0 ? "text-[#EB590E] font-medium mt-0.5" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5"}>
+                      <span className={isPricingAvailable && deliveryFee === 0 ? "text-[color:var(--app-primary,#EB590E)] font-medium mt-0.5" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5"}>
                         {isPricingAvailable ? (deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`) : "-"}
                       </span>
                     </div>
@@ -3188,7 +3188,7 @@ export default function Cart() {
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{isPricingAvailable ? `${RUPEE_SYMBOL}${gstCharges.toFixed(2)}` : "-"}</span>
                     </div>
                     {discount > 0 && (
-                      <div className="flex justify-between text-sm text-[#EB590E] font-medium">
+                      <div className="flex justify-between text-sm text-[color:var(--app-primary,#EB590E)] font-medium">
                         <span>Coupon Discount</span>
                         <span>-{RUPEE_SYMBOL}{discount.toFixed(2)}</span>
                       </div>
@@ -3217,7 +3217,7 @@ export default function Cart() {
                         <button
                           type="button"
                           onClick={handleLoginRedirect}
-                          className="text-xs font-bold bg-[#EB590E] hover:bg-[#D94F0C] text-white px-3 py-1.5 rounded-xl shadow-xs transition-transform active:scale-95 whitespace-nowrap shrink-0"
+                          className="text-xs font-bold bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white px-3 py-1.5 rounded-xl shadow-xs transition-transform active:scale-95 whitespace-nowrap shrink-0"
                         >
                           Login
                         </button>
@@ -3347,11 +3347,11 @@ export default function Cart() {
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-orange-100/80 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
                   {selectedPaymentMethod === "wallet" ? (
-                    <Wallet className="h-5 w-5 text-[#EB590E]" />
+                    <Wallet className="h-5 w-5 text-[color:var(--app-primary,#EB590E)]" />
                   ) : selectedPaymentMethod === "razorpay" ? (
-                    <Zap className="h-5 w-5 text-[#EB590E]" />
+                    <Zap className="h-5 w-5 text-[color:var(--app-primary,#EB590E)]" />
                   ) : (
-                    <Banknote className="h-5 w-5 text-[#EB590E]" />
+                    <Banknote className="h-5 w-5 text-[color:var(--app-primary,#EB590E)]" />
                   )}
                 </div>
                 <div className="leading-tight">
@@ -3371,7 +3371,7 @@ export default function Cart() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-0.5 text-[#EB590E] font-bold text-[11px] uppercase tracking-widest bg-orange-50 dark:bg-orange-900/20 px-2.5 py-1 rounded-lg">
+              <div className="flex items-center gap-0.5 text-[color:var(--app-primary,#EB590E)] font-bold text-[11px] uppercase tracking-widest bg-orange-50 dark:bg-orange-900/20 px-2.5 py-1 rounded-lg">
                 CHANGE <ChevronRight className="h-3.5 w-3.5" />
               </div>
             </div>
@@ -3391,7 +3391,7 @@ export default function Cart() {
               className={`w-full ${
                 isRestaurantOffline || pricingError
                   ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed shadow-none"
-                  : "bg-gradient-to-r from-[#EB590E] to-[#E23744] hover:from-[#D94F0C] hover:to-[#CF2834] shadow-lg shadow-[#EB590E]/30"
+                  : "bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-[#E23744] hover:from-[color:var(--app-secondary,#D94F0C)] hover:to-[#CF2834] shadow-lg shadow-[color:var(--app-primary,#EB590E)]/30"
               } text-white px-6 h-12 md:h-14 rounded-2xl font-bold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]`}
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
@@ -3477,7 +3477,7 @@ export default function Cart() {
               <div className="relative mb-6">
                 <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-[#EB590E] to-[#D94F0C] rounded-full transition-all duration-100 ease-linear"
+                    className="h-full bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-[color:var(--app-secondary,#D94F0C)] rounded-full transition-all duration-100 ease-linear"
                     style={{
                       width: `${orderProgress}%`,
                       boxShadow: '0 0 10px rgba(235, 89, 14, 0.5)'
@@ -3503,7 +3503,7 @@ export default function Cart() {
                 }}
                 className="w-full text-right"
               >
-                <span className="text-[#EB590E] font-semibold text-base hover:text-[#D94F0C] transition-colors">
+                <span className="text-[color:var(--app-primary,#EB590E)] font-semibold text-base hover:text-[color:var(--app-secondary,#D94F0C)] transition-colors">
                   CANCEL
                 </span>
               </button>
@@ -3528,7 +3528,7 @@ export default function Cart() {
                 style={{
                   left: `${Math.random() * 100}%`,
                   top: `-10%`,
-                  backgroundColor: ['#EB590E', '#3b82f6', '#f59e0b', '#ef4444', '#D94F0C', '#ec4899'][Math.floor(Math.random() * 6)],
+                  backgroundColor: ['var(--app-primary,#EB590E)', '#3b82f6', '#f59e0b', '#ef4444', 'var(--app-secondary,#D94F0C)', '#ec4899'][Math.floor(Math.random() * 6)],
                   animation: `confettiFall ${2 + Math.random() * 2}s linear ${Math.random() * 2}s infinite`,
                   transform: `rotate(${Math.random() * 360}deg)`,
                 }}
@@ -3622,14 +3622,14 @@ export default function Cart() {
               className="mt-12 text-center"
               style={{ animation: 'slideUp 0.5s ease-out 0.8s both' }}
             >
-              <h3 className="text-3xl font-bold text-[#EB590E] dark:text-orange-400 mb-2">Order Placed!</h3>
+              <h3 className="text-3xl font-bold text-[color:var(--app-primary,#EB590E)] dark:text-orange-400 mb-2">Order Placed!</h3>
               <p className="text-gray-600 dark:text-gray-300">Your delicious food is on its way</p>
             </div>
 
             {/* Action Button */}
             <button
               onClick={handleGoToOrders}
-              className="mt-10 bg-[#EB590E] hover:bg-[#D94F0C] text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-orange-200/70 dark:shadow-orange-950/40 transition-all hover:shadow-xl hover:scale-105"
+              className="mt-10 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-orange-200/70 dark:shadow-orange-950/40 transition-all hover:shadow-xl hover:scale-105"
               style={{ animation: 'slideUp 0.5s ease-out 1s both' }}
             >
               Track Your Order
@@ -3717,7 +3717,7 @@ export default function Cart() {
                         }
                       }}
                       className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 group ${selectedPaymentMethod === option.id
-                        ? 'border-[#EB590E] bg-[#EB590E] shadow-lg shadow-orange-500/30'
+                        ? 'border-[color:var(--app-primary,#EB590E)] bg-[color:var(--app-primary,#EB590E)] shadow-lg shadow-orange-500/30'
                         : 'border-gray-100 dark:border-gray-800/80 bg-white dark:bg-[#222222] hover:border-orange-200 dark:hover:border-orange-900/30 shadow-sm'
                         } ${option.disabled ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
                     >
@@ -3771,7 +3771,7 @@ export default function Cart() {
                         ? 'bg-white border-white'
                         : 'border-gray-200 dark:border-gray-700'
                         }`}>
-                        {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-[#EB590E]" strokeWidth={4} />}
+                        {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-[color:var(--app-primary,#EB590E)]" strokeWidth={4} />}
                       </div>
                     </button>
                   ))}
@@ -3783,11 +3783,11 @@ export default function Cart() {
                 >
                   <div className="flex-shrink-0">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
-                    <p className="text-xl font-black text-[#EB590E] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
+                    <p className="text-xl font-black text-[color:var(--app-primary,#EB590E)] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
                   </div>
                   <Button
                     onClick={() => setShowPaymentSheet(false)}
-                    className="flex-1 bg-[#EB590E] hover:bg-[#D94F0C] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
+                    className="flex-1 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
                   >
                     Confirm Order
                   </Button>
@@ -3963,7 +3963,7 @@ export default function Cart() {
                         setDistanceWarningResolved(true);
                         setTimeout(() => handlePlaceOrder(), 0);
                       }}
-                      className="flex-1 py-3.5 text-center text-sm font-bold text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                      className="flex-1 py-3.5 text-center text-sm font-bold text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
                     >
                       Continue Anyway
                     </button>
@@ -4175,7 +4175,7 @@ export default function Cart() {
                         setDistanceWarningResolved(true);
                         setTimeout(() => handlePlaceOrder(), 0);
                       }}
-                      className="flex-1 py-3.5 text-center text-sm font-bold text-[#EB590E] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                      className="flex-1 py-3.5 text-center text-sm font-bold text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
                     >
                       Continue Anyway
                     </button>
@@ -4349,7 +4349,7 @@ export default function Cart() {
                     <button
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
-                      className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
+                      className="w-full py-3.5 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
                     >
                       OKAY
                     </button>
@@ -4601,7 +4601,7 @@ export default function Cart() {
                     <button
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
-                      className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
+                      className="w-full py-3.5 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider"
                     >
                       OKAY
                     </button>
@@ -4626,7 +4626,7 @@ export default function Cart() {
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 dark:border-zinc-800/60">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-[#EB590E]">
+                <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-[color:var(--app-primary,#EB590E)]">
                   <Clock className="w-4 h-4" />
                 </div>
                 <div>
@@ -4646,7 +4646,7 @@ export default function Cart() {
             {/* Live Time Display Banner */}
             <div className={`mx-4 mt-3 p-3.5 rounded-2xl text-white shadow-md flex items-center justify-between transition-all ${pickerMode === 'custom' && !customTimeAvailability.isValid
                 ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600'
-                : 'bg-gradient-to-r from-[#EB590E] via-[#f76419] to-[#EB590E]'
+                : 'bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] via-[#f76419] to-[color:var(--app-primary,#EB590E)]'
               }`}>
               <div>
                 <span className="text-[10px] font-extrabold text-white/80 uppercase tracking-wider block">DELIVERY TIME</span>
@@ -4712,7 +4712,7 @@ export default function Cart() {
                       setCustomPeriod(p);
                       setPickerMode('custom');
                     }}
-                    className="whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold bg-orange-50 dark:bg-orange-950/30 text-[#EB590E] dark:text-orange-400 hover:bg-[#EB590E] hover:text-white dark:hover:text-white border border-orange-200/80 dark:border-orange-900/50 transition-all active:scale-95 shrink-0 shadow-2xs"
+                    className="whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold bg-orange-50 dark:bg-orange-950/30 text-[color:var(--app-primary,#EB590E)] dark:text-orange-400 hover:bg-[color:var(--app-primary,#EB590E)] hover:text-white dark:hover:text-white border border-orange-200/80 dark:border-orange-900/50 transition-all active:scale-95 shrink-0 shadow-2xs"
                   >
                     {preset.label}
                   </button>
@@ -4726,7 +4726,7 @@ export default function Cart() {
                 type="button"
                 onClick={() => setPickerMode('custom')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${pickerMode === 'custom'
-                    ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
+                    ? 'bg-white dark:bg-zinc-800 text-[color:var(--app-primary,#EB590E)] shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
               >
@@ -4736,7 +4736,7 @@ export default function Cart() {
                 type="button"
                 onClick={() => setPickerMode('slots')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${pickerMode === 'slots'
-                    ? 'bg-white dark:bg-zinc-800 text-[#EB590E] shadow-sm'
+                    ? 'bg-white dark:bg-zinc-800 text-[color:var(--app-primary,#EB590E)] shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
               >
@@ -4758,7 +4758,7 @@ export default function Cart() {
                   {/* 3-Column Tumbler Wheels Box */}
                   <div className="relative h-36 bg-gray-100/90 dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-700/80 overflow-hidden shadow-inner">
                     {/* Active Selection Window Band */}
-                    <div className="absolute top-1/2 -translate-y-1/2 left-2 right-2 h-10 pointer-events-none rounded-xl border-2 border-[#EB590E] bg-white dark:bg-zinc-800 shadow-sm z-0" />
+                    <div className="absolute top-1/2 -translate-y-1/2 left-2 right-2 h-10 pointer-events-none rounded-xl border-2 border-[color:var(--app-primary,#EB590E)] bg-white dark:bg-zinc-800 shadow-sm z-0" />
 
                     {/* Wheels */}
                     <div className="flex items-center justify-center h-36 relative z-10">
@@ -4787,7 +4787,7 @@ export default function Cart() {
                                   hourContainerRef.current?.scrollTo({ top: hIdx * 40, behavior: 'smooth' });
                                 }}
                                 className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${isSelected
-                                    ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
+                                    ? 'text-2xl font-black text-[color:var(--app-primary,#EB590E)] scale-110 drop-shadow-xs'
                                     : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                   }`}
                               >
@@ -4798,7 +4798,7 @@ export default function Cart() {
                         </div>
                       </div>
 
-                      <span className="text-2xl font-black text-[#EB590E] select-none px-1">:</span>
+                      <span className="text-2xl font-black text-[color:var(--app-primary,#EB590E)] select-none px-1">:</span>
 
                       {/* Minute Tumbler Column */}
                       <div className="flex-1 text-center">
@@ -4825,7 +4825,7 @@ export default function Cart() {
                                   minuteContainerRef.current?.scrollTo({ top: mIdx * 40, behavior: 'smooth' });
                                 }}
                                 className={`h-10 flex items-center justify-center snap-center cursor-pointer transition-all duration-150 select-none ${isSelected
-                                    ? 'text-2xl font-black text-[#EB590E] scale-110 drop-shadow-xs'
+                                    ? 'text-2xl font-black text-[color:var(--app-primary,#EB590E)] scale-110 drop-shadow-xs'
                                     : 'text-base font-bold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                   }`}
                               >
@@ -4843,7 +4843,7 @@ export default function Cart() {
                             type="button"
                             onClick={() => setCustomPeriod('AM')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${customPeriod === 'AM'
-                                ? 'bg-[#EB590E] text-white shadow-md scale-105'
+                                ? 'bg-[color:var(--app-primary,#EB590E)] text-white shadow-md scale-105'
                                 : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                               }`}
                           >
@@ -4853,7 +4853,7 @@ export default function Cart() {
                             type="button"
                             onClick={() => setCustomPeriod('PM')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${customPeriod === 'PM'
-                                ? 'bg-[#EB590E] text-white shadow-md scale-105'
+                                ? 'bg-[color:var(--app-primary,#EB590E)] text-white shadow-md scale-105'
                                 : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                               }`}
                           >
@@ -4882,13 +4882,13 @@ export default function Cart() {
                             setShowTimeSlotModal(false);
                           }}
                           className={`w-full flex items-center justify-between py-2.5 px-3.5 text-left rounded-2xl text-xs transition-all border ${isSelected
-                              ? 'border-[#EB590E] bg-orange-50 dark:bg-orange-950/40 text-gray-900 dark:text-white font-bold shadow-xs'
+                              ? 'border-[color:var(--app-primary,#EB590E)] bg-orange-50 dark:bg-orange-950/40 text-gray-900 dark:text-white font-bold shadow-xs'
                               : 'border-gray-100 dark:border-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-800/50 text-gray-700 dark:text-gray-300'
                             }`}
                         >
                           <span className="font-semibold">{slot.label}</span>
                           <div
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#EB590E] bg-[#EB590E]' : 'border-gray-300 dark:border-gray-600'
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[color:var(--app-primary,#EB590E)] bg-[color:var(--app-primary,#EB590E)]' : 'border-gray-300 dark:border-gray-600'
                               }`}
                           >
                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
@@ -4922,7 +4922,7 @@ export default function Cart() {
                 }}
                 className={`w-full py-3 font-extrabold rounded-2xl text-xs tracking-wider uppercase shadow-md transition-all ${pickerMode === 'custom' && !customTimeAvailability.isValid
                     ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700'
-                    : 'bg-gradient-to-r from-[#EB590E] to-[#ff7324] hover:from-[#d94f0c] hover:to-[#eb590e] text-white active:scale-[0.98]'
+                    : 'bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-[#ff7324] hover:from-[color:var(--app-secondary,#D94F0C)] hover:to-[color:var(--app-primary,#EB590E)] text-white active:scale-[0.98]'
                   }`}
               >
                 {pickerMode === 'custom' && !customTimeAvailability.isValid ? 'Invalid Delivery Time' : 'Set Delivery Time'}

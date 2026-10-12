@@ -100,6 +100,13 @@ const OwnerHeaderNav = () => {
         <div className="hidden md:flex items-center gap-3">
           <button
             type="button"
+            onClick={() => window.dispatchEvent(new Event('eqosy:open-language'))}
+            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 transition hover:bg-white/10"
+          >
+            <span>🌐 Language</span>
+          </button>
+          <button
+            type="button"
             onClick={handleLogout}
             className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/30"
             title="Sign out of Owner Account"
@@ -145,6 +152,13 @@ const OwnerHeaderNav = () => {
                 </NavLink>
               );
             })}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('eqosy:open-language'))}
+              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200"
+            >
+              <span>🌐 Language</span>
+            </button>
             <button
               type="button"
               onClick={handleLogout}

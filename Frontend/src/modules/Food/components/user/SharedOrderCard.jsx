@@ -133,7 +133,7 @@ export default function SharedOrderCard() {
           </button>
 
           <div className="relative z-10 flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#EB590E] text-lg font-bold text-white shadow-md">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[color:var(--app-primary,#EB590E)] text-lg font-bold text-white shadow-md">
               {initial}
             </div>
 
@@ -144,7 +144,7 @@ export default function SharedOrderCard() {
               <p className="mt-0.5 truncate text-sm font-medium text-gray-500">{restaurantName}</p>
             </div>
 
-            <ChevronRight className="h-5 w-5 shrink-0 text-[#EB590E]" />
+            <ChevronRight className="h-5 w-5 shrink-0 text-[color:var(--app-primary,#EB590E)]" />
           </div>
         </div>
       </motion.div>

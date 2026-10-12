@@ -449,7 +449,7 @@ const OwnerDashboard = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F4F8FC]">
         <div className="flex flex-col items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[#FF6B00] shadow-lg">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)] shadow-lg">
             <Loader2 size={22} className="animate-spin" />
           </div>
           <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
@@ -510,7 +510,7 @@ const OwnerDashboard = () => {
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-300 bg-white/90 text-slate-800 shadow-xs transition-all hover:bg-white disabled:opacity-50"
                 title="Refresh Fleet Data"
               >
-                <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-[#FF6B00]' : ''} />
+                <RefreshCw size={16} className={isRefreshing ? 'animate-spin text-[color:var(--app-primary,#FF6B00)]' : ''} />
               </button>
 
               <button
@@ -527,7 +527,7 @@ const OwnerDashboard = () => {
           {/* GREETING & HERO SUMMARY (DYNAMIC OWNER NAME FROM DB) */}
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-white/90 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-blue-900 shadow-2xs">
-              <Sparkles size={11} className="text-[#FF6B00]" />
+              <Sparkles size={11} className="text-[color:var(--app-primary,#FF6B00)]" />
               <span>Verified Fleet Owner</span>
             </div>
 
@@ -541,7 +541,7 @@ const OwnerDashboard = () => {
 
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-700">
               <span className="flex items-center gap-1 text-slate-900">
-                <MapPin size={13} className="text-[#FF6B00]" />
+                <MapPin size={13} className="text-[color:var(--app-primary,#FF6B00)]" />
                 {serviceLocation?.name || profile.city || 'Indore Hub'}
               </span>
               <span>•</span>
@@ -565,7 +565,7 @@ const OwnerDashboard = () => {
                 </p>
                 <p className="text-[10px] font-bold text-emerald-700 mt-0.5">Ready for payout</p>
               </div>
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-[#FF6B00]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-[color:var(--app-primary,#FF6B00)]">
                 <Wallet size={16} />
               </div>
             </div>
@@ -621,7 +621,7 @@ const OwnerDashboard = () => {
               onClick={() => setActiveModal('driver')}
               className="flex items-center justify-center gap-2 rounded-2xl border border-blue-200/60 bg-gradient-to-br from-white via-[#F2F7FE] to-[#E8F2FC] p-3 shadow-md shadow-blue-900/5 transition-all hover:border-blue-400"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10 text-[#FF6B00]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10 text-[color:var(--app-primary,#FF6B00)]">
                 <UserPlus size={15} />
               </div>
               <span className="text-xs font-black text-slate-900">Add Driver</span>
@@ -751,7 +751,7 @@ const OwnerDashboard = () => {
         >
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">
                 Revenue Analytics
               </p>
               <h3 className="text-base font-black text-slate-900">Weekly Earnings Overview</h3>
@@ -797,7 +797,7 @@ const OwnerDashboard = () => {
                       return (
                         <div className="rounded-xl border border-slate-800 bg-[#0F172A] p-2.5 text-white shadow-lg">
                           <p className="text-[9px] font-black uppercase text-slate-400">{label}</p>
-                          <p className="mt-0.5 text-xs font-black text-[#FF6B00]">
+                          <p className="mt-0.5 text-xs font-black text-[color:var(--app-primary,#FF6B00)]">
                             ₹{payload[0].value.toLocaleString('en-IN')}
                           </p>
                           <p className="text-[9px] font-bold text-slate-300">
@@ -827,7 +827,7 @@ const OwnerDashboard = () => {
                 <ShieldCheck size={18} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">
                   Operations Diagnostics
                 </p>
                 <h3 className="text-base font-black text-slate-900">Fleet Operations Health Index</h3>
@@ -843,7 +843,7 @@ const OwnerDashboard = () => {
               label="Active Vehicles"
               percentage={healthStats.vehicles.pct}
               countLabel={healthStats.vehicles.label}
-              color="#FF6B00"
+              color="var(--app-primary,#FF6B00)"
               icon={Car}
             />
             <HealthProgressBar
@@ -879,7 +879,7 @@ const OwnerDashboard = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">
                   Bus Operations
                 </p>
                 <h3 className="text-base font-black text-slate-900">Intercity Bus Snapshot</h3>
@@ -889,7 +889,7 @@ const OwnerDashboard = () => {
                 onClick={() => navigate('/taxi/owner/bus-service')}
                 className="flex items-center gap-1.5 rounded-xl bg-[#0F172A] px-3 py-1.5 text-xs font-black text-white shadow-sm transition-all hover:bg-slate-800"
               >
-                <Bus size={14} className="text-[#FF6B00]" />
+                <Bus size={14} className="text-[color:var(--app-primary,#FF6B00)]" />
                 Manage Buses
               </button>
             </div>
@@ -912,7 +912,7 @@ const OwnerDashboard = () => {
               </div>
               <div className="rounded-xl bg-white/90 p-3 border border-blue-100 shadow-2xs">
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-900/60">Bus Revenue</p>
-                <p className="mt-1 text-lg font-black text-[#FF6B00]">{money(busOverview.grossRevenue || 0)}</p>
+                <p className="mt-1 text-lg font-black text-[color:var(--app-primary,#FF6B00)]">{money(busOverview.grossRevenue || 0)}</p>
                 <p className="text-[10px] font-bold text-slate-500">gross ticket sales</p>
               </div>
             </div>
@@ -929,7 +929,7 @@ const OwnerDashboard = () => {
           >
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">
                   Dispatch Activity
                 </p>
                 <h3 className="text-base font-black text-slate-900">Recent Bookings Timeline</h3>
@@ -951,7 +951,7 @@ const OwnerDashboard = () => {
                     className="relative flex items-start gap-2.5 rounded-xl border border-blue-100 bg-white/90 p-3 transition-all hover:border-blue-300"
                   >
                     <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#0F172A] text-white">
-                      <Car size={15} className="text-[#FF6B00]" />
+                      <Car size={15} className="text-[color:var(--app-primary,#FF6B00)]" />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1053,7 +1053,7 @@ const OwnerDashboard = () => {
             >
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#FF6B00]">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[color:var(--app-primary,#FF6B00)]">
                     Fleet Inventory
                   </p>
                   <h3 className="text-base font-black text-slate-900">Registered Vehicles</h3>
@@ -1061,7 +1061,7 @@ const OwnerDashboard = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/taxi/owner/vehicle-fleet')}
-                  className="text-xs font-black text-[#FF6B00] hover:underline"
+                  className="text-xs font-black text-[color:var(--app-primary,#FF6B00)] hover:underline"
                 >
                   View Fleet ({displayFleet.totalVehicles})
                 </button>
@@ -1079,7 +1079,7 @@ const OwnerDashboard = () => {
                       className="flex items-center justify-between rounded-xl bg-white/90 p-2.5 border border-blue-100"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-orange-500/10 text-[#FF6B00]">
+                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-orange-500/10 text-[color:var(--app-primary,#FF6B00)]">
                           <Car size={15} />
                         </div>
                         <div>
@@ -1122,7 +1122,7 @@ const OwnerDashboard = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0F172A] text-[#FF6B00]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0F172A] text-[color:var(--app-primary,#FF6B00)]">
                     <Sparkles size={16} />
                   </div>
                   <div>
@@ -1167,7 +1167,7 @@ const OwnerDashboard = () => {
                           placeholder={`Available: ₹${displayEarnings.walletBalance}`}
                           value={withdrawAmount}
                           onChange={(e) => setWithdrawAmount(e.target.value)}
-                          className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                          className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                         />
                       </div>
                       <div>
@@ -1178,7 +1178,7 @@ const OwnerDashboard = () => {
                           placeholder="e.g. 7047716600@paytm or UPI ID"
                           value={upiId}
                           onChange={(e) => setUpiId(e.target.value)}
-                          className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[#FF6B00]"
+                          className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-slate-900 outline-none focus:border-[color:var(--app-primary,#FF6B00)]"
                         />
                       </div>
                       <button
@@ -1252,7 +1252,7 @@ const OwnerDashboard = () => {
                       className="flex items-center gap-1.5 rounded-xl bg-[#0F172A] px-4 py-2 text-xs font-black text-white shadow-sm hover:bg-slate-800"
                     >
                       <span>Proceed</span>
-                      <ArrowRight size={13} className="text-[#FF6B00]" />
+                      <ArrowRight size={13} className="text-[color:var(--app-primary,#FF6B00)]" />
                     </button>
                   </div>
                 </>

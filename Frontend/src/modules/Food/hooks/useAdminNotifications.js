@@ -422,6 +422,34 @@ const mapEmergencyOfflineRequests = (response) => {
     });
 };
 
+// The sidebar, navbar and notification pages each mount this hook. Share one in-flight request set
+// (and reuse it for a few seconds) so a single refresh does not hit every endpoint several times.
+let sharedSourcesPromise = null;
+let sharedSourcesAt = 0;
+const SHARED_SOURCES_TTL_MS = 5000;
+const fetchSharedNotificationSources = (canRead) => {
+  const now = Date.now();
+  if (sharedSourcesPromise && now - sharedSourcesAt < SHARED_SOURCES_TTL_MS) {
+    return sharedSourcesPromise;
+  }
+  sharedSourcesAt = now;
+  sharedSourcesPromise = (async () => {
+    return Promise.allSettled([
+        canRead("restaurants") ? adminAPI.getPendingRestaurants() : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("foods") ? adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("support") ? supportAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }) : Promise.resolve({ data: { data: [] } }),
+        canRead("support") ? adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("restaurants") ? adminAPI.getExpiredFssaiNotifications() : Promise.resolve({ data: { data: [] } }),
+        canRead("orders") ? adminAPI.getPendingHandovers() : Promise.resolve({ data: { data: [] } }),
+        canRead("wallet") ? adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("delivery") ? adminAPI.getDeliveryPartners({ limit: 500, page: 1 }) : Promise.resolve({ data: { data: [] } }),
+  ]);
+  })();
+  return sharedSourcesPromise;
+};
+
 export default function useAdminNotifications(options = {}) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(Boolean(options?.autoload !== false));
@@ -436,18 +464,7 @@ export default function useAdminNotifications(options = {}) {
 
       const canRead = (resName) => isFoodSuperAdminLike(currentAdmin) || canReadFood(currentAdmin, resName);
 
-      const results = await Promise.allSettled([
-        canRead("restaurants") ? adminAPI.getPendingRestaurants() : Promise.resolve({ data: { data: [] } }),
-        canRead("delivery") ? adminAPI.getDeliveryPartnerJoinRequests({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
-        canRead("foods") ? adminAPI.getPendingFoodApprovals({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
-        canRead("support") ? supportAPI.getSupportTicketsAdmin({ page: 1, limit: 50, source: "all" }) : Promise.resolve({ data: { data: [] } }),
-        canRead("support") ? adminAPI.getDeliverySupportTickets({ page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
-        canRead("restaurants") ? adminAPI.getExpiredFssaiNotifications() : Promise.resolve({ data: { data: [] } }),
-        canRead("orders") ? adminAPI.getPendingHandovers() : Promise.resolve({ data: { data: [] } }),
-        canRead("wallet") ? adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
-        canRead("delivery") ? adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
-        canRead("delivery") ? adminAPI.getDeliveryPartners({ limit: 500, page: 1 }) : Promise.resolve({ data: { data: [] } }),
-      ]);
+      const results = await fetchSharedNotificationSources(canRead);
 
       const safeGet = (idx) => {
         const r = results[idx];

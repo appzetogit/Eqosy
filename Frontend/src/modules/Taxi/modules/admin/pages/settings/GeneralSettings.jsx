@@ -11,6 +11,50 @@ import {
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+import { adminAPI as foodAdminAPI } from '@food/api';
+import { loadBusinessSettings } from '@food/utils/businessSettings';
+import { APP_COLOR_KEYS, normalizeAppColors } from '@/shared/utils/appColors';
+
+const dataUrlToFile = (dataUrl, fallbackName) => {
+  const [meta, content] = String(dataUrl).split(',');
+  const mime = meta.match(/data:(.*?)(;base64)?$/i)?.[1] || 'image/png';
+  const binary = window.atob(content || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], `${fallbackName}.${mime.split('/')[1] || 'png'}`, { type: mime });
+};
+
+// Global Settings is the single place to edit branding; mirror it into the Food
+// business settings so the Food apps use the same name, logo, favicon and colors.
+const syncFoodBusinessSettings = async ({ general, customization, appColors }) => {
+  const current = (await foodAdminAPI.getBusinessSettings())?.data?.data || {};
+  const phoneNumber = String(current.phone?.number || general.contact_phone_1 || '').replace(/\D/g, '');
+  const email = current.email || 'admin@eqosy.com';
+  const files = {};
+  if (String(general.logo || '').startsWith('data:')) files.logo = dataUrlToFile(general.logo, 'logo');
+  if (String(general.favicon || '').startsWith('data:')) files.favicon = dataUrlToFile(general.favicon, 'favicon');
+
+  await foodAdminAPI.updateBusinessSettings(
+    {
+      companyName: String(general.app_name || '').trim() || current.companyName || 'Eqosy',
+      email,
+      ...(/^\d{7,15}$/.test(phoneNumber)
+        ? { phoneCountryCode: current.phone?.countryCode || '+91', phoneNumber }
+        : {}),
+      address: current.address || '',
+      state: current.state || '',
+      pincode: current.pincode || '',
+      region: current.region || 'India',
+      themeColor: customization.admin_theme_color,
+      landingThemeColor: customization.landing_theme_color,
+      sidebarTextColor: customization.sidebar_text_color,
+      appColors,
+    },
+    files
+  );
+  window.dispatchEvent(new CustomEvent('businessSettingsUpdated'));
+  loadBusinessSettings().catch(() => {});
+};
 let liveFaviconObjectUrl = '';
 const DEFAULT_ADMIN_THEME_COLOR = '#405189';
 const DEFAULT_LANDING_THEME_COLOR = '#0AB39C';
@@ -229,6 +273,7 @@ const GeneralSettings = () => {
     general: {},
     customization: {}
   });
+  const [appColors, setAppColors] = useState(() => normalizeAppColors({}));
 
   const fetchSettings = async () => {
     try {
@@ -242,6 +287,17 @@ const GeneralSettings = () => {
         general: genRes.data?.settings || {},
         customization: cusRes.data?.settings || {}
       });
+      try {
+        const food = (await foodAdminAPI.getBusinessSettings())?.data?.data || {};
+        const stored = food.appColors || {};
+        // Admin color falls back to the Taxi admin theme color saved earlier.
+        if (!stored.admin?.primary && cusRes.data?.settings?.admin_theme_color) {
+          stored.admin = { ...(stored.admin || {}), primary: cusRes.data.settings.admin_theme_color };
+        }
+        setAppColors(normalizeAppColors(stored));
+      } catch (e) {
+        console.error('App colors load error:', e);
+      }
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load settings');
@@ -256,10 +312,6 @@ const GeneralSettings = () => {
 
   useEffect(() => {
     document.documentElement.style.setProperty(
-      '--admin-theme-color',
-      normalizeHexColor(settings.customization?.admin_theme_color, DEFAULT_ADMIN_THEME_COLOR)
-    );
-    document.documentElement.style.setProperty(
       '--landing-theme-color',
       normalizeHexColor(settings.customization?.landing_theme_color, DEFAULT_LANDING_THEME_COLOR)
     );
@@ -268,7 +320,6 @@ const GeneralSettings = () => {
       normalizeHexColor(settings.customization?.sidebar_text_color, DEFAULT_SIDEBAR_TEXT_COLOR)
     );
   }, [
-    settings.customization?.admin_theme_color,
     settings.customization?.landing_theme_color,
     settings.customization?.sidebar_text_color,
   ]);
@@ -278,10 +329,8 @@ const GeneralSettings = () => {
       setSaving(true);
       const customizationPayload = {
         ...settings.customization,
-        admin_theme_color: normalizeHexColor(
-          settings.customization?.admin_theme_color,
-          DEFAULT_ADMIN_THEME_COLOR
-        ),
+        // Admin color combination is edited in "App Color Combinations" below.
+        admin_theme_color: normalizeHexColor(appColors.admin.primary, DEFAULT_ADMIN_THEME_COLOR),
         landing_theme_color: normalizeHexColor(
           settings.customization?.landing_theme_color,
           DEFAULT_LANDING_THEME_COLOR
@@ -305,7 +354,13 @@ const GeneralSettings = () => {
         api.patch('/admin/general-settings/customize', { settings: customizationPayload })
       ]);
       await refreshSettings();
-      toast.success('Configuration saved successfully!');
+      try {
+        await syncFoodBusinessSettings({ general: settings.general, customization: customizationPayload, appColors });
+        toast.success('Configuration saved for Food and Taxi!');
+      } catch (syncErr) {
+        console.error('Food sync error:', syncErr);
+        toast.error(syncErr?.response?.data?.message || 'Saved for Taxi, but syncing to Food failed');
+      }
     } catch (err) {
       toast.error('Failed to save settings');
     } finally {
@@ -366,10 +421,30 @@ const GeneralSettings = () => {
 
       <div className="max-w-[1600px] mx-auto space-y-10 pb-32">
         
+        {/* App color combinations */}
+        <SectionCard title="App Color Combinations">
+           <p className="mb-6 text-sm text-gray-500">Pick a primary and secondary color for each app. Saved colors apply to that app straight away after you save (admin screens recolor their buttons and highlights).</p>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {APP_COLOR_KEYS.map(({ key, label, hint }) => (
+                <div key={key} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900">{label}</h4>
+                    <p className="text-[11px] text-gray-400">{hint}</p>
+                  </div>
+                  <ColorField label="Primary" name={`${key}_primary`} value={appColors[key].primary} onChange={(_, v) => setAppColors((prev) => ({ ...prev, [key]: { ...prev[key], primary: v } }))} defaultValue={appColors[key].primary} />
+                  <ColorField label="Secondary" name={`${key}_secondary`} value={appColors[key].secondary} onChange={(_, v) => setAppColors((prev) => ({ ...prev, [key]: { ...prev[key], secondary: v } }))} defaultValue={appColors[key].secondary} />
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-lg px-4 py-2 text-xs font-bold text-white" style={{ backgroundColor: appColors[key].primary }}>Primary button</span>
+                    <span className="rounded-lg px-4 py-2 text-xs font-bold text-white" style={{ backgroundColor: appColors[key].secondary }}>Secondary / hover</span>
+                  </div>
+                </div>
+              ))}
+           </div>
+        </SectionCard>
+
         {/* Basic Identification */}
         <SectionCard>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-              <ColorField label="Admin Theme Color" name="admin_theme_color" value={settings.customization.admin_theme_color} onChange={(n, v) => handleChange('customization', n, v)} placeholder={DEFAULT_ADMIN_THEME_COLOR} defaultValue={DEFAULT_ADMIN_THEME_COLOR} />
               <ColorField label="Landing Website Theme Color" name="landing_theme_color" value={settings.customization.landing_theme_color} onChange={(n, v) => handleChange('customization', n, v)} placeholder={DEFAULT_LANDING_THEME_COLOR} defaultValue={DEFAULT_LANDING_THEME_COLOR} />
               <ColorField label="Side Text Bar Color" name="sidebar_text_color" value={settings.customization.sidebar_text_color} onChange={(n, v) => handleChange('customization', n, v)} placeholder={DEFAULT_SIDEBAR_TEXT_COLOR} defaultValue={DEFAULT_SIDEBAR_TEXT_COLOR} />
               <InputField label="App Name" name="app_name" value={settings.general.app_name} onChange={(n, v) => handleChange('general', n, v)} placeholder={configuredAppName} />

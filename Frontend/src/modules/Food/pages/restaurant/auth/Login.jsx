@@ -115,7 +115,7 @@ export default function RestaurantLogin() {
       <div className="relative h-[40dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
         {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -161,7 +161,7 @@ export default function RestaurantLogin() {
                 Owner Contact Number
               </label>
               
-              <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden group">
+              <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group">
                 <div className="flex items-center px-4 h-14 bg-transparent text-gray-500 font-semibold text-lg border-r border-gray-200 dark:border-zinc-800">
                   <span>+91</span>
                 </div>
@@ -211,9 +211,9 @@ export default function RestaurantLogin() {
           <footer className="mt-auto pt-6 text-center space-y-2">
             <p className="text-xs text-gray-500 font-medium">
               By continuing, you accept our{" "}
-              <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Terms</a>
+              <a href="/food/pages/restaurant-terms" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Terms</a>
               {" & "}
-              <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Privacy Policy</a>
+              <a href="/food/pages/restaurant-privacy" target="_blank" rel="noreferrer" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</a>
             </p>
             <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
               Secure store login powered by<br />

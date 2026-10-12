@@ -337,7 +337,7 @@ export default function SignupStep1() {
               value={formData.name}
               onChange={handleChange}
               inputMode="text"
-              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] ${errors.name ? "border-red-500" : ""
+              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] ${errors.name ? "border-red-500" : ""
                 }`}
               placeholder="Enter your full name"
             />
@@ -358,7 +358,7 @@ export default function SignupStep1() {
               autoCorrect="off"
               autoComplete="email"
               inputMode="email"
-              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] ${errors.email ? "border-red-500" : ""
+              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] ${errors.email ? "border-red-500" : ""
                 }`}
               placeholder="Enter your email"
             />
@@ -375,7 +375,7 @@ export default function SignupStep1() {
               value={formData.address}
               onChange={handleChange}
               rows={3}
-              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] ${errors.address ? "border-red-500" : ""
+              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] ${errors.address ? "border-red-500" : ""
                 }`}
               placeholder="Enter your address"
             />
@@ -393,7 +393,7 @@ export default function SignupStep1() {
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] ${errors.city ? "border-red-500" : ""
+                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] ${errors.city ? "border-red-500" : ""
                   }`}
                 placeholder="City"
               />
@@ -408,7 +408,7 @@ export default function SignupStep1() {
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] ${errors.state ? "border-red-500" : ""
+                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] ${errors.state ? "border-red-500" : ""
                   }`}
                 placeholder="State"
               />
@@ -426,7 +426,7 @@ export default function SignupStep1() {
                 name="zoneId"
                 value={formData.zoneId || ""}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
+                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
               >
                 <option value="">Select Zone (Optional)</option>
                 {zones.map((zone) => (
@@ -451,7 +451,7 @@ export default function SignupStep1() {
                 name="vehicleType"
                 value={formData.vehicleType}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
+                className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] appearance-none truncate pr-10"
               >
                 {vehicleTypes.map(v => (
                   <option key={v.id} value={v.id}>{v.name}</option>
@@ -473,7 +473,7 @@ export default function SignupStep1() {
               name="vehicleName"
               value={formData.vehicleName}
               onChange={handleChange}
-              className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A]"
+              className="w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A]"
               placeholder="e.g., Honda Activa"
             />
           </div>
@@ -490,7 +490,7 @@ export default function SignupStep1() {
                 value={formData.vehicleNumber}
                 onChange={handleChange}
                 maxLength={10}
-                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.vehicleNumber ? "border-red-500" : ""
+                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.vehicleNumber ? "border-red-500" : ""
                   }`}
                 placeholder="e.g., MH12AB1234"
               />
@@ -510,7 +510,7 @@ export default function SignupStep1() {
                 value={formData.drivingLicenseNumber}
                 onChange={handleChange}
                 maxLength={16}
-                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.drivingLicenseNumber ? "border-red-500" : ""
+                className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.drivingLicenseNumber ? "border-red-500" : ""
                   }`}
                 placeholder="e.g., MH1220110012345"
               />
@@ -529,7 +529,7 @@ export default function SignupStep1() {
               value={formData.panNumber}
               onChange={handleChange}
               maxLength={10}
-              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.panNumber ? "border-red-500" : ""
+              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.panNumber ? "border-red-500" : ""
                 }`}
               placeholder="ABCDE1234F"
             />
@@ -548,7 +548,7 @@ export default function SignupStep1() {
               onChange={handleChange}
               maxLength={12}
               inputMode="numeric"
-              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.aadharNumber ? "border-red-500" : ""
+              className={`w-full px-4 py-3 border rounded-xl bg-[#F8F9FA] border-gray-200 focus:outline-none focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all font-semibold text-[#1A1A1A] uppercase ${errors.aadharNumber ? "border-red-500" : ""
                 }`}
               placeholder="123456789012"
             />

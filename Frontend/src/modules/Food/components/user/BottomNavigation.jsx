@@ -23,9 +23,9 @@ export default function BottomNavigation() {
 
   return (
     <div
-      className="md:hidden fixed bottom-6 left-5 right-5 z-50 pointer-events-none"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50"
     >
-      <div className="flex items-center justify-around h-auto px-2 py-1.5 bg-white/85 dark:bg-[#1a1a1a]/85 backdrop-blur-[20px] border border-white/50 dark:border-white/10 rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.15)] pointer-events-auto">
+      <div className="flex items-center justify-around h-auto px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-white/10 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
         
         {/* Delivery Tab */}
         <Link

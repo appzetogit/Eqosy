@@ -203,7 +203,7 @@ export default function TableBookingConfirmation() {
     return (
         <AnimatedPage className="bg-slate-50 min-h-screen pb-24">
             {/* Header */}
-            <div className="bg-[#EB590E] text-white px-4 py-4 sticky top-0 z-50 shadow-md">
+            <div className="bg-[color:var(--app-primary,#EB590E)] text-white px-4 py-4 sticky top-0 z-50 shadow-md">
                 <div className="flex items-center gap-3">
                     <button onClick={goBack} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <ArrowLeft className="w-6 h-6" />
@@ -218,7 +218,7 @@ export default function TableBookingConfirmation() {
                     <div className="p-4 space-y-4">
                         <div className="flex items-start gap-3">
                             <div className="bg-[#FFF2EB] p-2 rounded-xl">
-                                <Calendar className="w-5 h-5 text-[#EB590E]" />
+                                <Calendar className="w-5 h-5 text-[color:var(--app-primary,#EB590E)]" />
                             </div>
                             <div>
                                 <p className="font-bold text-gray-900">{formattedDate} at {timeSlot}</p>
@@ -279,7 +279,7 @@ export default function TableBookingConfirmation() {
                             <div>
                                 <span className="font-bold text-gray-700 block">Add special request</span>
                                 {specialRequest && !showSpecialRequestBox && (
-                                    <p className="text-xs text-[#EB590E] font-medium mt-0.5 line-clamp-1">
+                                    <p className="text-xs text-[color:var(--app-primary,#EB590E)] font-medium mt-0.5 line-clamp-1">
                                         "{specialRequest}"
                                     </p>
                                 )}
@@ -305,7 +305,7 @@ export default function TableBookingConfirmation() {
                                             onClick={() => handleTogglePill(pill)}
                                             className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
                                                 isSelected
-                                                    ? "bg-[#EB590E] text-white shadow-sm"
+                                                    ? "bg-[color:var(--app-primary,#EB590E)] text-white shadow-sm"
                                                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                                             }`}
                                         >
@@ -319,7 +319,7 @@ export default function TableBookingConfirmation() {
                                 value={tempRequestText}
                                 onChange={(e) => setTempRequestText(e.target.value)}
                                 placeholder="Type any specific note for the restaurant (e.g., quiet table, high chair, allergy note)..."
-                                className="w-full h-24 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                                className="w-full h-24 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs resize-none focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)]"
                             />
 
                             <div className="flex items-center justify-end gap-2 pt-1">
@@ -347,7 +347,7 @@ export default function TableBookingConfirmation() {
                                 <button
                                     type="button"
                                     onClick={handleSaveSpecialRequest}
-                                    className="px-4 py-1.5 text-xs bg-[#EB590E] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+                                    className="px-4 py-1.5 text-xs bg-[color:var(--app-primary,#EB590E)] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
                                 >
                                     Save Request
                                 </button>
@@ -375,7 +375,7 @@ export default function TableBookingConfirmation() {
                             className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 active:scale-[0.99] transition-all group"
                         >
                             <div className="flex items-start gap-3">
-                                <div className="text-[#EB590E] mt-1 group-hover:scale-110 transition-transform">
+                                <div className="text-[color:var(--app-primary,#EB590E)] mt-1 group-hover:scale-110 transition-transform">
                                     <Edit2 className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -428,7 +428,7 @@ export default function TableBookingConfirmation() {
                                         value={editName}
                                         onChange={(e) => setEditName(e.target.value)}
                                         placeholder="Enter guest name"
-                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)]"
                                     />
                                 </div>
                                 <div>
@@ -438,7 +438,7 @@ export default function TableBookingConfirmation() {
                                         value={editPhone}
                                         onChange={(e) => setEditPhone(e.target.value)}
                                         placeholder="Enter phone number"
-                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#EB590E]"
+                                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)]"
                                     />
                                 </div>
                                 <div className="flex justify-end gap-2 pt-1">
@@ -452,7 +452,7 @@ export default function TableBookingConfirmation() {
                                     <button
                                         type="button"
                                         onClick={handleSaveUserDetails}
-                                        className="px-4 py-1.5 text-xs bg-[#EB590E] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
+                                        className="px-4 py-1.5 text-xs bg-[color:var(--app-primary,#EB590E)] text-white font-bold rounded-lg hover:bg-orange-600 transition-colors shadow-sm"
                                     >
                                         Save Details
                                     </button>

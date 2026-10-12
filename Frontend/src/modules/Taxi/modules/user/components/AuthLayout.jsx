@@ -35,7 +35,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
 
         {/* Subtle orange accent glow */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-[#F38F24]/5 rounded-full blur-[120px]" />
+          <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[120px]" />
           <div className="absolute top-[60%] right-[10%] w-[50%] h-[50%] bg-white/5 rounded-full blur-[100px]" />
         </div>
 
@@ -54,7 +54,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
             )}
             <div className="flex items-center gap-2">
               <span className="text-3xl font-black tracking-tight">{appName}</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#F38F24]/20 border border-[#F38F24]/40 text-[#F38F24] text-xs font-black uppercase tracking-widest flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-[color:var(--app-primary,#F38F24)]/20 border border-[color:var(--app-primary,#F38F24)]/40 text-[color:var(--app-primary,#F38F24)] text-xs font-black uppercase tracking-widest flex items-center gap-1">
                 <Car size={12} />
                 TAXI
               </span>
@@ -69,7 +69,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
             >
               <h2 className="text-5xl font-bold tracking-tight leading-[1.1] mb-6">
                 Move with <br/>
-                <span className="text-[#F38F24]">Safety & Style.</span>
+                <span className="text-[color:var(--app-primary,#F38F24)]">Safety & Style.</span>
               </h2>
               <p className="text-gray-400 text-lg leading-relaxed mb-12">
                 Experience the next generation of urban mobility with {appName} Taxi. Reliable, fast, and always at your service.
@@ -90,7 +90,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
         
         {/* Premium Mobile Background (Hidden on Desktop) */}
         <div className="lg:hidden absolute top-0 left-0 w-full h-[300px] bg-[#1A1A1A] rounded-b-[2.5rem] z-0 overflow-hidden shadow-lg">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#F38F24]/10 rounded-full blur-[60px] -mr-20 -mt-20" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[color:var(--app-primary,#F38F24)]/10 rounded-full blur-[60px] -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full blur-[40px] -ml-10 -mb-10" />
         </div>
 
@@ -121,7 +121,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
             )}
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-black text-white tracking-tight">{appName}</h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#F38F24] text-white text-xs font-black uppercase tracking-widest flex items-center gap-1 shadow-md">
+              <span className="px-2.5 py-0.5 rounded-full bg-[color:var(--app-primary,#F38F24)] text-white text-xs font-black uppercase tracking-widest flex items-center gap-1 shadow-md">
                 <Car size={12} />
                 TAXI
               </span>
@@ -154,7 +154,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
         <div className="mt-auto lg:mt-12 text-center w-full max-w-[420px] z-20 pb-8 lg:pb-0">
             <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
               <span className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center font-bold text-[10px]">?</span>
-              Need assistance? <a href="/support" className="text-[#1A1A1A] font-semibold hover:text-[#F38F24] transition-colors ml-1">Contact Support</a>
+              Need assistance? <a href="/support" className="text-[#1A1A1A] font-semibold hover:text-[color:var(--app-primary,#F38F24)] transition-colors ml-1">Contact Support</a>
             </p>
         </div>
       </div>

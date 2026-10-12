@@ -251,7 +251,7 @@ const ActionsSection = ({ plain = false }) => {
             whileInView={{ width: '80%' }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-            className="absolute bottom-[-3px] left-0 h-[2.5px] bg-gradient-to-r from-[#FF6B00] to-transparent" 
+            className="absolute bottom-[-3px] left-0 h-[2.5px] bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-transparent" 
           />
         </h2>
       </div>
@@ -263,8 +263,8 @@ const ActionsSection = ({ plain = false }) => {
           subtitle="Bike, Auto & Cab rides"
           path={resolvePath('/ride/select-location')}
           gradient="from-[#FFFDF0]/80 via-[#FFF7F1]/80 to-[#FFE5D3]/70"
-          accentColor="#FF6B00"
-          buttonGradient="from-[#FF6B00] to-[#E53935]"
+          accentColor="var(--app-primary,#FF6B00)"
+          buttonGradient="from-[color:var(--app-primary,#FF6B00)] to-[#E53935]"
           isRide={true}
           onNavigate={navigate}
           delay={0.1}

@@ -333,7 +333,7 @@ const OTPVerification = () => {
                         </div>
                         <div>
                             <h1 className="font-sans text-[42px] font-black leading-tight tracking-tight text-[#1A1A1A]">
-                                Verify <span className="text-[#F38F24]">Phone</span>
+                                Verify <span className="text-[color:var(--app-primary,#F38F24)]">Phone</span>
                             </h1>
                             <p className="text-[14px] leading-relaxed text-slate-500 font-medium max-w-[28ch] mt-2">
                                 Enter the 4-digit code sent to<br/>
@@ -369,7 +369,7 @@ const OTPVerification = () => {
                                 className={`h-[4.5rem] w-full rounded-[1.25rem] border-2 text-center text-3xl font-black transition-all outline-none ${
                                     digit 
                                         ? 'border-[#1A1A1A] bg-white text-[#1A1A1A] shadow-sm' 
-                                        : 'border-slate-100 bg-slate-50 text-[#1A1A1A] focus:border-[#F38F24] focus:bg-white focus:ring-4 focus:ring-[#F38F24]/10'
+                                        : 'border-slate-100 bg-slate-50 text-[#1A1A1A] focus:border-[color:var(--app-primary,#F38F24)] focus:bg-white focus:ring-4 focus:ring-[color:var(--app-primary,#F38F24)]/10'
                                 }`}
                             />
                         ))}
@@ -404,7 +404,7 @@ const OTPVerification = () => {
                                 className={`flex items-center gap-2 text-[13px] font-bold uppercase tracking-widest transition-all ${
                                     timer > 0 
                                         ? 'text-slate-300' 
-                                        : 'text-[#1A1A1A] hover:text-[#F38F24]'
+                                        : 'text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]'
                                 }`}
                             >
                                 <MessageSquare size={14} strokeWidth={2.5} className={timer > 0 ? 'opacity-40' : 'opacity-100'} />

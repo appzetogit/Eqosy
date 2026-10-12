@@ -62,6 +62,7 @@ import {
   THEME_CHANGE_EVENT,
 } from "@/shared/utils/theme.js";
 import DeleteAccountModal from "@food/components/DeleteAccountModal";
+import LanguageRow from '@/shared/language/LanguageRow'
 
 export default function Profile() {
   const { userProfile, vegMode, setVegMode, getDefaultAddress, addresses } =
@@ -557,7 +558,7 @@ export default function Profile() {
                       className="bg-[#FFF2EB] dark:bg-gray-800 rounded-full p-2"
                       whileHover={{ rotate: 15, scale: 1.1 }}
                       transition={{ duration: 0.3 }}>
-                      <Utensils className="h-5 w-5 text-[#EB590E]" />
+                      <Utensils className="h-5 w-5 text-[color:var(--app-primary,#EB590E)]" />
                     </motion.div>
                     <span className="text-base font-medium text-gray-900 dark:text-white">
                       My Table Bookings
@@ -663,7 +664,7 @@ export default function Profile() {
                       e.stopPropagation();
                       handleShareReferral();
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-[#EB590E] font-medium ml-2 px-2 py-1 rounded-md"
+                    className="inline-flex items-center gap-1 text-xs text-[color:var(--app-primary,#EB590E)] font-medium ml-2 px-2 py-1 rounded-md"
                     disabled={!referralLink}>
                     <Share2 className="h-3.5 w-3.5" />
                     Refer
@@ -823,7 +824,7 @@ export default function Profile() {
         {/* Collections Section */}
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#EB590E] rounded"></div>
+            <div className="w-1 h-4 bg-[color:var(--app-primary,#EB590E)] rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Collections
             </h3>
@@ -859,7 +860,7 @@ export default function Profile() {
         {/* Food Orders Section */}
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#EB590E] rounded"></div>
+            <div className="w-1 h-4 bg-[color:var(--app-primary,#EB590E)] rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Food Orders
             </h3>
@@ -897,7 +898,7 @@ export default function Profile() {
         {/* More Section */}
         <div className="mb-8 pb-8">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#EB590E] rounded"></div>
+            <div className="w-1 h-4 bg-[color:var(--app-primary,#EB590E)] rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               More
             </h3>
@@ -983,6 +984,8 @@ export default function Profile() {
                 </Card>
               </motion.div>
             </Link>
+
+            <LanguageRow className="rounded-xl" />
 
             <motion.div
               whileHover={{ x: 4, scale: 1.01 }}

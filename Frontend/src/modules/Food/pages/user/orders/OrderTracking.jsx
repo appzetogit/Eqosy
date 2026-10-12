@@ -1683,7 +1683,7 @@ export default function OrderTracking({ isSharedView = false }) {
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4 dark:text-white">Order Not Found</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
           <Link to={isShared ? '/food/user' : '/user/orders'}>
-            <Button className="bg-[#EB590E] hover:bg-[#D44D0D] text-white">Back to Orders</Button>
+            <Button className="bg-[color:var(--app-primary,#EB590E)] hover:bg-[#D44D0D] text-white">Back to Orders</Button>
           </Link>
         </div>
       </AnimatedPage>
@@ -1811,7 +1811,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 transition={{ delay: 1.5 }}
                 className="mt-8"
               >
-                <div className="w-8 h-8 border-2 border-[#EB590E] border-t-transparent rounded-full animate-spin mx-auto" />
+                <div className="w-8 h-8 border-2 border-[color:var(--app-primary,#EB590E)] border-t-transparent rounded-full animate-spin mx-auto" />
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">Loading order details...</p>
               </motion.div>
             </motion.div>
@@ -1872,7 +1872,7 @@ export default function OrderTracking({ isSharedView = false }) {
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
           <div className="flex items-start justify-between relative z-10">
             <div>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 dark:bg-orange-950/30 text-[#EB590E] mb-3">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 dark:bg-orange-950/30 text-[color:var(--app-primary,#EB590E)] mb-3">
                 {currentStatus.title}
               </span>
               <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
@@ -1945,7 +1945,7 @@ export default function OrderTracking({ isSharedView = false }) {
                   <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center border-2 border-white dark:border-zinc-800">
                     <Store className="w-8 h-8 text-gray-400 dark:text-gray-500" />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-[#EB590E] w-4 h-4 rounded-full border-2 border-white dark:border-zinc-900" />
+                  <div className="absolute -bottom-1 -right-1 bg-[color:var(--app-primary,#EB590E)] w-4 h-4 rounded-full border-2 border-white dark:border-zinc-900" />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-white">
@@ -1969,7 +1969,7 @@ export default function OrderTracking({ isSharedView = false }) {
                       {order.deliveryPartner?.avatar || order.deliveryPartner?.profileImage ? (
                         <img src={order.deliveryPartner?.avatar || order.deliveryPartner?.profileImage} alt={order.deliveryPartner?.name || 'Rider'} className="w-full h-full object-cover" />
                       ) : (
-                        <User className="w-7 h-7 text-[#EB590E]" />
+                        <User className="w-7 h-7 text-[color:var(--app-primary,#EB590E)]" />
                       )}
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-emerald-500 w-4 h-4 rounded-full border-2 border-white dark:border-zinc-900" />
@@ -1993,7 +1993,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 {!isDeliveredOrder && !isCancelledOrder && (
                   <div className="flex items-center gap-2">
                     <Link to={`/food/user/orders/${orderId || mapOrderId}/chat`} className="relative inline-block">
-                      <Button className="bg-[#EB590E] hover:bg-[#D44D0D] text-white rounded-xl px-4 py-2 text-xs font-bold shadow-md flex items-center gap-1.5 relative">
+                      <Button className="bg-[color:var(--app-primary,#EB590E)] hover:bg-[#D44D0D] text-white rounded-xl px-4 py-2 text-xs font-bold shadow-md flex items-center gap-1.5 relative">
                         <MessageCircle className="w-4 h-4" />
                         <span>Chat</span>
                         {unreadChatCount > 0 && (
@@ -2056,7 +2056,7 @@ export default function OrderTracking({ isSharedView = false }) {
                   <button
                     type="button"
                     onClick={() => setIsRatingModalOpen(true)}
-                    className="px-4 py-2.5 bg-white text-[#EB590E] font-extrabold text-xs rounded-xl shadow-md hover:bg-orange-50 transition-all active:scale-95 flex items-center gap-1.5"
+                    className="px-4 py-2.5 bg-white text-[color:var(--app-primary,#EB590E)] font-extrabold text-xs rounded-xl shadow-md hover:bg-orange-50 transition-all active:scale-95 flex items-center gap-1.5"
                   >
                     Rate Now <ChevronRight className="w-4 h-4" />
                   </button>
@@ -2131,7 +2131,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 </button>
                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
               </div>
-              <span className={Number(order?.deliveryFee || 0) === 0 ? "font-medium text-[#EB590E] mt-0.5 text-sm uppercase" : "font-medium text-gray-900 dark:text-white mt-0.5 text-sm"}>
+              <span className={Number(order?.deliveryFee || 0) === 0 ? "font-medium text-[color:var(--app-primary,#EB590E)] mt-0.5 text-sm uppercase" : "font-medium text-gray-900 dark:text-white mt-0.5 text-sm"}>
                 {Number(order?.deliveryFee || 0) === 0 ? "FREE" : `₹${Number(order?.deliveryFee || 0).toFixed(2)}`}
               </span>
             </div>
@@ -2172,7 +2172,7 @@ export default function OrderTracking({ isSharedView = false }) {
               </div>
             )}
             {Number(order.discount || 0) > 0 && (
-              <div className="flex justify-between text-[#EB590E] font-medium">
+              <div className="flex justify-between text-[color:var(--app-primary,#EB590E)] font-medium">
                 <span>Coupon Discount</span>
                 <span>-{"\u20B9"}{Number(order.discount).toFixed(2)}</span>
               </div>
@@ -2361,7 +2361,7 @@ export default function OrderTracking({ isSharedView = false }) {
             <Button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
-              className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+              className="w-full py-3.5 h-auto bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
             </Button>
@@ -2388,7 +2388,7 @@ export default function OrderTracking({ isSharedView = false }) {
             <Button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
-              className="w-full py-3.5 h-auto bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+              className="w-full py-3.5 h-auto bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
             </Button>
@@ -2410,7 +2410,7 @@ export default function OrderTracking({ isSharedView = false }) {
             {(order?.deliveryPartnerId || order?.deliveryPartner) && (
               <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-[#EB590E] flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-[color:var(--app-primary,#EB590E)] flex items-center justify-center font-bold">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
@@ -2555,7 +2555,7 @@ export default function OrderTracking({ isSharedView = false }) {
         <DialogContent className="sm:max-w-md w-[95vw] max-w-[500px] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-zinc-900 max-h-[90vh] flex flex-col overflow-hidden z-[200]">
           <DialogHeader className="shrink-0 mb-1">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/40 text-[#EB590E] flex items-center justify-center font-bold text-lg shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/40 text-[color:var(--app-primary,#EB590E)] flex items-center justify-center font-bold text-lg shrink-0">
                 🎧
               </div>
               <div>
@@ -2615,12 +2615,12 @@ export default function OrderTracking({ isSharedView = false }) {
                       type="button"
                       onClick={() => setSupportCategory(cat)}
                       className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${isSelected
-                          ? "bg-orange-50 dark:bg-orange-950/30 border-[#EB590E] text-[#EB590E] dark:text-orange-400 shadow-sm"
+                          ? "bg-orange-50 dark:bg-orange-950/30 border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] dark:text-orange-400 shadow-sm"
                           : "bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
                         }`}
                     >
                       <span>{cat}</span>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-[#EB590E] bg-[#EB590E]" : "border-gray-300 dark:border-zinc-600"
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-[color:var(--app-primary,#EB590E)] bg-[color:var(--app-primary,#EB590E)]" : "border-gray-300 dark:border-zinc-600"
                         }`}>
                         {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
                       </div>
@@ -2639,7 +2639,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 value={supportDescription}
                 onChange={(e) => setSupportDescription(e.target.value)}
                 placeholder="Tell us what went wrong with your order..."
-                className="w-full min-h-[80px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:border-[#EB590E] focus:ring-2 focus:ring-orange-200 focus:outline-none transition-colors"
+                className="w-full min-h-[80px] resize-none border-2 border-gray-200 dark:border-zinc-700 dark:bg-zinc-800 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:border-[color:var(--app-primary,#EB590E)] focus:ring-2 focus:ring-orange-200 focus:outline-none transition-colors"
                 disabled={isSubmittingSupport}
               />
             </div>
@@ -2658,7 +2658,7 @@ export default function OrderTracking({ isSharedView = false }) {
             <Button
               onClick={handleSupportSubmit}
               disabled={isSubmittingSupport || !supportCategory}
-              className="flex-1 bg-[#EB590E] hover:bg-[#d44e0b] disabled:opacity-50 text-white border-none rounded-2xl h-11 text-xs font-bold shadow-md"
+              className="flex-1 bg-[color:var(--app-primary,#EB590E)] hover:bg-[#d44e0b] disabled:opacity-50 text-white border-none rounded-2xl h-11 text-xs font-bold shadow-md"
             >
               {isSubmittingSupport ? (
                 <>

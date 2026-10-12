@@ -168,6 +168,13 @@ export const isFoodSuperAdminLike = (admin = {}) => {
   );
 };
 
+// Global Settings holds API keys, branding and legal pages shared by every app: super admins only, never sub-admins.
+export const canAccessGlobalSettings = (admin = {}) => {
+  const level = resolveAdminLevel(admin);
+  if (level === ADMIN_LEVELS.SUBADMIN) return false;
+  return isFoodSuperAdminLike(admin) || level === ADMIN_LEVELS.TAXI_SUPERADMIN;
+};
+
 export const isPlatformSuperAdmin = (admin = {}) =>
   resolveAdminLevel(admin) === ADMIN_LEVELS.PLATFORM_SUPERADMIN;
 

@@ -17,6 +17,7 @@ import { config } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import { sendAdminResetOtpEmail } from "../../utils/email.js";
 import mongoose from "mongoose";
+import { detachTokenFromOtherOwners } from "../notifications/firebase.service.js";
 import { creditReferralReward } from "../../modules/food/user/services/userWallet.service.js";
 
 const ROLES = {
@@ -154,6 +155,7 @@ export const verifyUserOtpAndLogin = async (
         { _id: userDoc._id },
         { $addToSet: { [tokenField]: String(fcmToken).trim() } },
       );
+      await detachTokenFromOtherOwners({ token: fcmToken, keepOwnerType: "USER", keepOwnerId: userDoc._id });
       const refreshedUser = await FoodUser.findById(userDoc._id)
         .select(`${tokenField}`)
         .lean();
@@ -455,6 +457,7 @@ export const verifyRestaurantOtpAndLogin = async (phone, otp, fcmToken, platform
     if (isModified) {
       await restaurantDoc.save();
     }
+    await detachTokenFromOtherOwners({ token: fcmToken, keepOwnerType: "RESTAURANT", keepOwnerId: restaurantDoc._id });
   }
 
   // If restaurant approval status is used, only allow login for approved restaurants.
@@ -557,6 +560,7 @@ export const verifyDeliveryOtpAndLogin = async (phone, otp, fcmToken, platform) 
     if (isModified) {
       await deliveryPartner.save();
     }
+    await detachTokenFromOtherOwners({ token: fcmToken, keepOwnerType: "DELIVERY_PARTNER", keepOwnerId: deliveryPartner._id });
   }
 
   if (deliveryPartner.status && deliveryPartner.status !== "approved") {

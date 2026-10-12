@@ -403,6 +403,35 @@ export const listOwnerTokens = async ({ ownerType, ownerId, platform }) => {
     return readTokensFromDoc(doc, platform);
 };
 
+// A device token belongs to exactly one account. When someone logs in on a device, remove that
+// token from every other account so account A never receives account B's notifications.
+export const detachTokenFromOtherOwners = async ({ token, keepOwnerType, keepOwnerId }) => {
+    const normalizedToken = sanitizeString(token);
+    if (!normalizedToken) return;
+    const keepType = keepOwnerType ? normalizeOwnerType(keepOwnerType) : null;
+    const keepId = keepOwnerId ? String(resolveRoomOwnerId(keepOwnerId) || keepOwnerId) : null;
+
+    await Promise.all(
+        Object.entries(OWNER_MODELS).map(async ([ownerType, model]) => {
+            if (!model?.schema) return;
+            const except = keepType === ownerType && keepId ? { _id: { $ne: keepId } } : {};
+            for (const field of ['fcmTokens', 'fcmTokenMobile', 'fcmTokenWeb']) {
+                const schemaPath = model.schema.path(field);
+                if (!schemaPath) continue;
+                try {
+                    if (schemaPath.instance === 'Array') {
+                        await model.updateMany({ ...except, [field]: normalizedToken }, { $pull: { [field]: normalizedToken } });
+                    } else {
+                        await model.updateMany({ ...except, [field]: normalizedToken }, { $set: { [field]: '' } });
+                    }
+                } catch (error) {
+                    logger.warn(`[FCM Service] detach failed ownerType=${ownerType} field=${field}: ${error?.message || error}`);
+                }
+            }
+        })
+    );
+};
+
 export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, platform = 'web' }) => {
     const normalizedToken = sanitizeString(token);
 
@@ -441,6 +470,7 @@ export const upsertFirebaseDeviceToken = async ({ ownerType, ownerId, token, pla
     const updateValue = Array.isArray(doc[field]) ? trimmedTokens : (trimmedTokens[trimmedTokens.length - 1] || '');
 
     await model.updateOne({ _id: normalizedOwnerId }, { $set: { [field]: updateValue } });
+    await detachTokenFromOtherOwners({ token: normalizedToken, keepOwnerType: ownerType, keepOwnerId: normalizedOwnerId });
     logger.info(
         `[FCM Service] upsert success ownerType=${normalizeOwnerType(ownerType)} ownerId=${ownerId} platform=${normalizedPlatform} field=${field} newCount=${trimmedTokens.length} tokenPresent=${trimmedTokens.includes(normalizedToken)}`
     );

@@ -14,7 +14,8 @@ import {
   ThumbsUp,
   ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  Search
 } from "lucide-react"
 import { Switch } from "@food/components/ui/switch"
 // Removed getAllFoods and saveFood - now using menu API
@@ -97,6 +98,7 @@ export default function ItemDetailsPage() {
   const [direction, setDirection] = useState(0)
   const carouselRef = useRef(null)
   const [isCategoryPopupOpen, setIsCategoryPopupOpen] = useState(false)
+  const [categorySearch, setCategorySearch] = useState("")
   const [isServesPopupOpen, setIsServesPopupOpen] = useState(false)
   const [isItemSizePopupOpen, setIsItemSizePopupOpen] = useState(false)
   const [isGstPopupOpen, setIsGstPopupOpen] = useState(false)
@@ -1266,6 +1268,28 @@ export default function ItemDetailsPage() {
                   </button>
                 </div>
               </div>
+              <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={categorySearch}
+                    onChange={(e) => setCategorySearch(e.target.value)}
+                    placeholder="Search category"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-9 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+                  />
+                  {categorySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setCategorySearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-gray-200"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4 text-gray-500" />
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="flex-1 overflow-y-auto p-2">
                 {loadingCategories ? (
                   <div className="flex items-center justify-center py-12">
@@ -1287,7 +1311,9 @@ export default function ItemDetailsPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {categories.map((cat) => (
+                    {categories
+                      .filter((cat) => String(cat.name || "").toLowerCase().includes(categorySearch.trim().toLowerCase()))
+                      .map((cat) => (
                       <button
                         key={cat.id}
                         onClick={() => handleCategorySelect(cat.id, cat.name)}
@@ -1309,6 +1335,10 @@ export default function ItemDetailsPage() {
                         </div>
                       </button>
                     ))}
+                    {categorySearch.trim() &&
+                      !categories.some((cat) => String(cat.name || "").toLowerCase().includes(categorySearch.trim().toLowerCase())) && (
+                        <p className="py-8 text-center text-sm text-gray-500">No category matches "{categorySearch}"</p>
+                      )}
                   </div>
                 )}
               </div>

@@ -71,12 +71,12 @@ const Login = () => {
               required
               autoFocus
               maxLength={10}
-              className="w-full pl-16 pr-4 py-4 bg-[#F8F9FA] border border-gray-200 rounded-xl text-[#1A1A1A] focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] outline-none transition-all placeholder:text-gray-400 font-semibold text-lg"
+              className="w-full pl-16 pr-4 py-4 bg-[#F8F9FA] border border-gray-200 rounded-xl text-[#1A1A1A] focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] outline-none transition-all placeholder:text-gray-400 font-semibold text-lg"
               placeholder="00000 00000"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
             />
-            <Phone size={20} className="absolute right-4 text-gray-400 group-focus-within:text-[#F38F24] transition-colors" />
+            <Phone size={20} className="absolute right-4 text-gray-400 group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
           </div>
         </div>
 
@@ -131,8 +131,8 @@ const Login = () => {
 
         <p className="text-xs text-gray-400 font-medium text-center leading-relaxed mt-8">
            By continuing, you agree to our 
-           <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Terms</Link> & 
-           <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[#F38F24] transition-colors mx-1 font-semibold">Privacy Policy</Link>
+           <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors mx-1 font-semibold">Terms</Link> & 
+           <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors mx-1 font-semibold">Privacy Policy</Link>
         </p>
       </form>
     </AuthLayout>

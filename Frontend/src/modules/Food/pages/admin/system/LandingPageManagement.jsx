@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, UtensilsCrossed, ChefHat, Megaphone, Search } from "lucide-react"
+import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, UtensilsCrossed, ShoppingBasket, ChefHat, Megaphone, Search } from "lucide-react"
 import api from "@food/api"
 import { adminAPI } from "@food/api"
 import { getModuleToken } from "@food/utils/auth"
@@ -58,6 +58,14 @@ export default function LandingPageManagement() {
   const [diningBannersUploadProgress, setDiningBannersUploadProgress] = useState({ current: 0, total: 0 })
   const [diningBannersDeleting, setDiningBannersDeleting] = useState(null)
   const diningBannersFileInputRef = useRef(null)
+
+  // Grocery Banners
+  const [groceryBanners, setGroceryBanners] = useState([])
+  const [groceryBannersLoading, setGroceryBannersLoading] = useState(true)
+  const [groceryBannersUploading, setGroceryBannersUploading] = useState(false)
+  const [groceryBannersUploadProgress, setGroceryBannersUploadProgress] = useState({ current: 0, total: 0 })
+  const [groceryBannersDeleting, setGroceryBannersDeleting] = useState(null)
+  const groceryBannersFileInputRef = useRef(null)
 
   // Settings
   const [settings, setSettings] = useState({ exploreMoreHeading: "Explore More", recommendedRestaurantIds: [] })
@@ -140,6 +148,7 @@ export default function LandingPageManagement() {
     fetchBanners()
     fetchUnder250Banners()
     fetchDiningBanners()
+    fetchGroceryBanners()
     fetchAllRestaurants()
     fetchSettings()
   }, [])
@@ -1039,6 +1048,129 @@ export default function LandingPageManagement() {
     }
   }
 
+  // ==================== GROCERY BANNERS ====================
+  const fetchGroceryBanners = async () => {
+    try {
+      setGroceryBannersLoading(true)
+      setError(null)
+      const response = await api.get('/food/hero-banners/grocery', getAuthConfig())
+      if (response.data.success) {
+        setGroceryBanners(response.data.data.banners || [])
+      }
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setGroceryBanners([])
+        setError(null)
+      } else if (err.response?.status === 404) {
+        setGroceryBanners([])
+        setError(null)
+      } else {
+        const errorMessage = err.response?.data?.message || 'Failed to load grocery banners'
+        setErrorSafely(errorMessage)
+      }
+    } finally {
+      setGroceryBannersLoading(false)
+    }
+  }
+
+  const handleGroceryBannerFileSelect = (e) => {
+    const files = Array.from(e.target?.files || e.files || [])
+    if (files.length === 0) return
+    if (files.length > 5) {
+      setError('You can upload a maximum of 5 images at once')
+      return
+    }
+    uploadGroceryBanners(files)
+  }
+
+  const uploadGroceryBanners = async (files) => {
+    try {
+      const adminToken = getModuleToken('admin')
+      if (!adminToken || adminToken.trim() === '' || adminToken === 'null' || adminToken === 'undefined') {
+        setErrorSafely('Authentication required. Please login again.')
+        return
+      }
+
+      setGroceryBannersUploading(true)
+      setError(null)
+      setSuccess(null)
+      setGroceryBannersUploadProgress({ current: 0, total: files.length })
+
+      const formData = new FormData()
+      files.forEach((file) => {
+        formData.append('files', file)
+        formData.append('images', file)
+      })
+
+      const response = await api.post('/food/hero-banners/grocery/multiple', formData, getAuthConfig({
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }))
+
+      if (response.data.success) {
+        setSuccess(`${response.data.data.banners?.length || files.length} grocery banner(s) uploaded successfully!`)
+        await fetchGroceryBanners()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Failed to upload grocery banners'
+      setErrorSafely(errorMessage)
+      setGroceryBannersUploadProgress({ current: 0, total: 0 })
+    } finally {
+      setGroceryBannersUploading(false)
+    }
+  }
+
+  const handleDeleteGroceryBanner = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this grocery banner?')) return
+    try {
+      setGroceryBannersDeleting(id)
+      setError(null)
+      setSuccess(null)
+      const response = await api.delete(`/food/hero-banners/grocery/${id}`, getAuthConfig())
+      if (response.data.success) {
+        setSuccess('Grocery banner deleted successfully!')
+        await fetchGroceryBanners()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to delete banner.')
+    } finally {
+      setGroceryBannersDeleting(null)
+    }
+  }
+
+  const handleToggleGroceryBannerStatus = async (id, currentStatus) => {
+    try {
+      setError(null)
+      setSuccess(null)
+      const response = await api.patch(`/food/hero-banners/grocery/${id}/status`, {}, getAuthConfig())
+      if (response.data.success) {
+        setSuccess(`Banner ${currentStatus ? 'deactivated' : 'activated'} successfully!`)
+        await fetchGroceryBanners()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to update banner status.')
+    }
+  }
+
+  const handleGroceryBannerOrderChange = async (id, direction) => {
+    const index = groceryBanners.findIndex(b => b._id === id)
+    const swapIndex = direction === 'up' ? index - 1 : index + 1
+    if (index < 0 || swapIndex < 0 || swapIndex >= groceryBanners.length) return
+    const banner = groceryBanners[index]
+    const other = groceryBanners[swapIndex]
+    try {
+      setError(null)
+      // Rewrite both orders from list positions so equal/missing sortOrder values still swap.
+      await api.patch(`/food/hero-banners/grocery/${banner._id}/order`, { order: swapIndex }, getAuthConfig())
+      await api.patch(`/food/hero-banners/grocery/${other._id}/order`, { order: index }, getAuthConfig())
+      await fetchGroceryBanners()
+    } catch (err) {
+      setErrorSafely('Failed to update banner order.')
+    }
+  }
+
   // ==================== SETTINGS ====================
   const fetchSettings = async () => {
     try {
@@ -1223,6 +1355,7 @@ export default function LandingPageManagement() {
     { id: 'banners', label: 'Hero Banners', icon: ImageIcon },
     { id: 'under-250', label: '250 Banner', icon: Tag },
     { id: 'dining', label: 'Dining', icon: UtensilsCrossed },
+    { id: 'grocery', label: 'Grocery', icon: ShoppingBasket },
     { id: 'explore-more', label: 'Explore More', icon: Layout },
   ]
 
@@ -1689,6 +1822,122 @@ export default function LandingPageManagement() {
                           </button>
                           <button onClick={() => handleDeleteDiningBanner(banner._id)} disabled={diningBannersDeleting === banner._id} className="p-1.5 rounded hover:bg-red-100 text-red-600 disabled:opacity-50">
                             {diningBannersDeleting === banner._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Grocery Banner Tab */}
+        {activeTab === 'grocery' && (
+          <>
+            {/* Upload Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Upload New Grocery Banner(s)</h2>
+              <div
+                className="border-2 border-dashed border-blue-300 rounded-lg p-8 text-center bg-blue-50/30 cursor-pointer transition-colors hover:border-blue-400 hover:bg-blue-50/50"
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const files = Array.from(e.dataTransfer.files)
+                  if (files.length > 0) handleGroceryBannerFileSelect({ files })
+                }}
+                onClick={() => groceryBannersFileInputRef.current?.click()}
+              >
+                <input
+                  ref={groceryBannersFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleGroceryBannerFileSelect}
+                  className="hidden"
+                  disabled={groceryBannersUploading}
+                />
+                {groceryBannersUploading ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    <p className="text-blue-600 font-medium">
+                      Uploading image {groceryBannersUploadProgress.current} of {groceryBannersUploadProgress.total}...
+                    </p>
+                    {groceryBannersUploadProgress.total > 0 && (
+                      <div className="w-full max-w-xs">
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${(groceryBannersUploadProgress.current / groceryBannersUploadProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <Upload className="w-8 h-8 text-blue-600" />
+                    <div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); groceryBannersFileInputRef.current?.click(); }}
+                        className="text-blue-600 font-medium hover:text-blue-700 underline"
+                      >
+                        Click to upload
+                      </button>
+                      <span className="text-slate-600"> or drag and drop</span>
+                    </div>
+                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 5 images at once)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Banners List */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Banner List ({groceryBanners.length})</h2>
+              {groceryBannersLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                </div>
+              ) : groceryBanners.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <ShoppingBasket className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                  <p>No grocery banners uploaded yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {groceryBanners.map((banner, index) => (
+                    <div key={banner._id} className="border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                      <div className="relative aspect-video bg-slate-100">
+                        <img src={banner.imageUrl} alt={`Grocery Banner ${index + 1}`} className="w-full h-full object-cover" />
+                        <div className="absolute top-2 right-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${banner.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {banner.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <div className="absolute top-2 left-2">
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">Order: {index + 1}</span>
+                        </div>
+                      </div>
+                      <div className="p-4 bg-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleGroceryBannerOrderChange(banner._id, 'up')} disabled={index === 0} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
+                              <ArrowUp className="w-4 h-4 text-slate-600" />
+                            </button>
+                            <button onClick={() => handleGroceryBannerOrderChange(banner._id, 'down')} disabled={index === groceryBanners.length - 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
+                              <ArrowDown className="w-4 h-4 text-slate-600" />
+                            </button>
+                          </div>
+                          <button onClick={() => handleToggleGroceryBannerStatus(banner._id, banner.isActive)} className={`px-3 py-1.5 rounded text-sm font-medium ${banner.isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                            {banner.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => handleDeleteGroceryBanner(banner._id)} disabled={groceryBannersDeleting === banner._id} className="p-1.5 rounded hover:bg-red-100 text-red-600 disabled:opacity-50">
+                            {groceryBannersDeleting === banner._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                           </button>
                         </div>
                       </div>

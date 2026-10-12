@@ -5,6 +5,24 @@ import { Star, X, UtensilsCrossed, Car } from 'lucide-react';
 import { Button } from '@food/components/ui/button';
 import api from '@food/api';
 
+const PROMPTED_KEY = 'eqosy_rating_prompted_orders';
+const readPrompted = () => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(PROMPTED_KEY) || '[]'));
+  } catch {
+    return new Set();
+  }
+};
+const rememberPrompted = (orderId) => {
+  try {
+    const set = readPrompted();
+    set.add(String(orderId));
+    localStorage.setItem(PROMPTED_KEY, JSON.stringify(Array.from(set).slice(-50)));
+  } catch {
+    /* ignore */
+  }
+};
+
 export default function UnratedOrderPopup() {
   const [unratedOrder, setUnratedOrder] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -13,10 +31,15 @@ export default function UnratedOrderPopup() {
   useEffect(() => {
     const checkUnratedOrder = async () => {
       try {
-        const response = await api.get('/food/user/orders/unrated');
-        if (response?.data?.data?.order) {
-          setUnratedOrder(response.data.data.order);
+        const response = await api.get('/food/orders/unrated', { contextModule: 'user' });
+        const order = response?.data?.data?.order;
+        // Show the rating prompt once per order, however it was dismissed.
+        if (order && !readPrompted().has(String(order._id))) {
+          rememberPrompted(order._id);
+          setUnratedOrder(order);
           setIsOpen(true);
+          // Tell the server it was shown so it never comes back on another device/session.
+          api.patch(`/food/orders/${order._id}/skip-rating`, {}, { contextModule: 'user' }).catch(() => {});
         }
       } catch (error) {
         console.error('Error fetching unrated order:', error);
@@ -34,7 +57,7 @@ export default function UnratedOrderPopup() {
   const handleSkip = async () => {
     if (!unratedOrder) return;
     try {
-      await api.patch(`/food/user/orders/${unratedOrder._id}/skip-rating`);
+      await api.patch(`/food/orders/${unratedOrder._id}/skip-rating`, {}, { contextModule: 'user' });
     } catch (error) {
       console.error('Error skipping rating:', error);
     } finally {

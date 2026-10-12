@@ -1,4 +1,4 @@
-﻿import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, XCircle, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -88,7 +88,7 @@ export default function Cancellation() {
                 prose-headings:font-black prose-headings:text-gray-900 dark:prose-headings:text-white
                 prose-p:text-gray-600 dark:prose-p:text-gray-400 prose-p:leading-relaxed
                 prose-strong:text-gray-900 dark:prose-strong:text-white
-                prose-a:text-[#FA0272] dark:prose-a:text-[#EB590E]
+                prose-a:text-[#FA0272] dark:prose-a:text-[color:var(--app-primary,#EB590E)]
                 prose-li:text-gray-600 dark:prose-li:text-gray-400"
               dangerouslySetInnerHTML={{ __html: cancellationData.content }}
             />

@@ -194,7 +194,7 @@ export default function DeliverySignup() {
       <div className="relative h-[35dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
         {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -254,9 +254,9 @@ export default function DeliverySignup() {
                 <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                   Full Name
                 </label>
-                <div className={`flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border ${errors.name ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'} rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden group h-14`}>
+                <div className={`flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border ${errors.name ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'} rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group h-14`}>
                   <div className="flex items-center px-4 bg-transparent text-gray-400">
-                    <User size={20} className="group-focus-within:text-[#F38F24] transition-colors" />
+                    <User size={20} className="group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
                   </div>
                   <input
                     id="name"
@@ -278,7 +278,7 @@ export default function DeliverySignup() {
                 <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                   Mobile Number
                 </label>
-                <div className={`flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border ${errors.phone ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'} rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden h-14`}>
+                <div className={`flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border ${errors.phone ? 'border-red-500' : 'border-gray-200 dark:border-zinc-800'} rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden h-14`}>
                   <div className="px-5 border-r border-gray-200 dark:border-zinc-800 bg-transparent text-[#1A1A1A] dark:text-white font-black text-lg h-full flex items-center">
                     +91
                   </div>
@@ -306,13 +306,13 @@ export default function DeliverySignup() {
                   id="deliveryTermsCheck"
                   checked={acceptedTerms}
                   onChange={(e) => setAcceptedTerms(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
+                  className="h-4 w-4 rounded border-gray-300 text-[color:var(--app-primary,#F38F24)] focus:ring-[color:var(--app-primary,#F38F24)] cursor-pointer mt-0.5"
                 />
                 <label htmlFor="deliveryTermsCheck" className="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none leading-relaxed">
                   I agree to the{' '}
-                  <Link to="/food/delivery/terms" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Delivery Partner Terms</Link>
+                  <Link to="/food/delivery/terms" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Delivery Partner Terms</Link>
                   {' '}and{' '}
-                  <Link to="/food/pages/delivery-privacy" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[#F38F24]">Privacy Policy</Link>
+                  <Link to="/food/pages/delivery-privacy" target="_blank" className="font-bold text-[#1A1A1A] dark:text-white hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
                 </label>
               </div>
 
@@ -336,16 +336,16 @@ export default function DeliverySignup() {
           <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col items-center gap-4">
             <button
               onClick={() => navigate("/food/delivery/login")}
-              className="flex items-center gap-2 text-sm font-bold text-[#1A1A1A] hover:text-[#F38F24] transition-colors"
+              className="flex items-center gap-2 text-sm font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to login
             </button>
             <p className="text-xs text-gray-400 font-medium text-center leading-relaxed">
               By continuing you agree to the<br />
-              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Terms and Conditions</Link>
+              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[color:var(--app-primary,#F38F24)]">Terms and Conditions</Link>
               {" & "}
-              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Privacy Policy</Link>
+              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
             </p>
           </div>
         </div>

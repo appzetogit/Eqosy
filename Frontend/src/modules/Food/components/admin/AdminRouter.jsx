@@ -1,5 +1,10 @@
 import { Suspense, lazy } from "react";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
+import { SettingsProvider } from "../../../Taxi/shared/context/SettingsContext";
+import { getCurrentUser } from "@food/utils/auth";
+import { canAccessGlobalSettings } from "@food/constants/foodAdminAccess";
+import ErrorBoundary from "../../../../shared/components/ErrorBoundary";
+import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import FoodAdminPermissionRoute from "./FoodAdminPermissionRoute";
 import AdminLayout from "./AdminLayout";
@@ -95,7 +100,6 @@ const EmployeeRole = lazy(() => import("@food/pages/admin/employees/EmployeeRole
 const AddEmployee = lazy(() => import("@food/pages/admin/employees/AddEmployee"));
 const EmployeeList = lazy(() => import("@food/pages/admin/employees/EmployeeList"));
 // Business Settings
-const BusinessSetup = lazy(() => import("@food/pages/admin/settings/BusinessSetup"));
 const EmailTemplate = lazy(() => import("@food/pages/admin/settings/EmailTemplate"));
 const ThemeSettings = lazy(() => import("@food/pages/admin/settings/ThemeSettings"));
 const Gallery = lazy(() => import("@food/pages/admin/settings/Gallery"));
@@ -134,6 +138,24 @@ const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgo
 const FoodSubadmins = lazy(() => import("@food/pages/admin/management/FoodSubadmins"));
 const FoodSubadminCreate = lazy(() => import("@food/pages/admin/management/FoodSubadminCreate"));
 
+const GHeaderFooter = lazy(() => import("../../../Taxi/modules/admin/pages/cms/HeaderFooter"));
+const GCMSHome = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSHome"));
+const GCMSAbout = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSAbout"));
+const GCMSDriver = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSDriver"));
+const GCMSUser = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSUser"));
+const GCMSContact = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSContact"));
+const GWallet = lazy(() => import("../../../Taxi/modules/admin/pages/settings/WalletSettings"));
+const GTip = lazy(() => import("../../../Taxi/modules/admin/pages/settings/TipSettings"));
+const GOnboard = lazy(() => import("../../../Taxi/modules/admin/pages/settings/OnboardingScreens"));
+const GPayment = lazy(() => import("../../../Taxi/modules/admin/pages/settings/PaymentGateways"));
+const GSms = lazy(() => import("../../../Taxi/modules/admin/pages/settings/SMSGateways"));
+const GFirebase = lazy(() => import("../../../Taxi/modules/admin/pages/settings/FirebaseSettings"));
+const GMap = lazy(() => import("../../../Taxi/modules/admin/pages/settings/MapSettings"));
+const GMail = lazy(() => import("../../../Taxi/modules/admin/pages/settings/MailSettings"));
+const GlobalBranding = lazy(() => import("../../../Taxi/modules/admin/pages/settings/GeneralSettings"));
+const GlobalCustomization = lazy(() => import("../../../Taxi/modules/admin/pages/settings/CustomizationSettings"));
+const GlobalDriverLegal = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSLegal"));
+
 const FoodPermissionOutlet = () => (
   <FoodAdminPermissionRoute>
     <Suspense fallback={<Loader />}>
@@ -141,6 +163,27 @@ const FoodPermissionOutlet = () => (
     </Suspense>
   </FoodAdminPermissionRoute>
 );
+
+// Global pages reuse Taxi settings screens, which expect the Taxi settings context and react-hot-toast.
+const GlobalOutlet = () => {
+  const { pathname } = useLocation();
+  const adminProfile = getCurrentUser("admin") || {};
+  // Sub-admins must never reach Global Settings, even by typing the URL.
+  if (!canAccessGlobalSettings(adminProfile)) {
+    return <Navigate to="/admin/food" replace />;
+  }
+  return (
+    <SettingsProvider>
+      <Toaster position="top-right" />
+      {/* Keyed by path so one failing page never blocks navigating to the next. */}
+      <ErrorBoundary key={pathname}>
+        <Suspense fallback={<Loader />}>
+          <Outlet />
+        </Suspense>
+      </ErrorBoundary>
+    </SettingsProvider>
+  );
+};
 
 export default function AdminRouter() {
   return (
@@ -222,8 +265,8 @@ export default function AdminRouter() {
             <Route path="campaigns/food" element={<FoodCampaign />} />
             <Route path="coupons" element={<Coupons />} />
             <Route path="cashback" element={<Cashback />} />
-            <Route path="banners" element={<Banners />} />
-            <Route path="promotional-banner" element={<PromotionalBanner />} />
+            <Route path="banners" element={<Navigate to="/admin/global/banners" replace />} />
+            <Route path="promotional-banner" element={<Navigate to="/admin/global/promotional-banners" replace />} />
             <Route path="advertisement" element={<AdsList />} />
             <Route path="advertisement/new" element={<NewAdvertisement />} />
             <Route path="advertisement/requests" element={<AdRequests />} />
@@ -277,18 +320,18 @@ export default function AdminRouter() {
             <Route path="employees/add" element={<AddEmployee />} />
 
             {/* SYSTEM & BUSINESS SETTINGS */}
-            <Route path="business-setup" element={<BusinessSetup />} />
+            <Route path="business-setup" element={<Navigate to="/admin/global/branding" replace />} />
             <Route path="email-template" element={<EmailTemplate />} />
             <Route path="theme-settings" element={<ThemeSettings />} />
             <Route path="gallery" element={<Gallery />} />
             <Route path="login-setup" element={<LoginSetup />} />
             <Route path="business-settings/fcm-index" element={<FirebaseNotification />} />
-            <Route path="pages-social-media/terms" element={<TermsAndCondition />} />
-            <Route path="pages-social-media/privacy" element={<PrivacyPolicy />} />
-            <Route path="pages-social-media/about" element={<AboutUs />} />
-            <Route path="pages-social-media/refund" element={<RefundPolicy />} />
-            <Route path="pages-social-media/shipping" element={<ShippingPolicy />} />
-            <Route path="pages-social-media/cancellation" element={<CancellationPolicy />} />
+            <Route path="pages-social-media/terms" element={<Navigate to="/admin/global/legal/terms" replace />} />
+            <Route path="pages-social-media/privacy" element={<Navigate to="/admin/global/legal/privacy" replace />} />
+            <Route path="pages-social-media/about" element={<Navigate to="/admin/global/legal/about" replace />} />
+            <Route path="pages-social-media/refund" element={<Navigate to="/admin/global/legal/refund" replace />} />
+            <Route path="pages-social-media/shipping" element={<Navigate to="/admin/global/legal/shipping" replace />} />
+            <Route path="pages-social-media/cancellation" element={<Navigate to="/admin/global/legal/cancellation" replace />} />
             <Route path="pages-social-media/react-registration" element={<ReactRegistration />} />
             
             <Route path="3rd-party-configurations/party" element={<ThirdParty />} />
@@ -307,8 +350,8 @@ export default function AdminRouter() {
             <Route path="react-site" element={<ReactSite />} />
             <Route path="clean-database" element={<CleanDatabase />} />
             <Route path="addon-activation" element={<AddonActivation />} />
-            <Route path="hero-banner-management" element={<LandingPageManagement />} />
-            <Route path="eqosy-landing-settings" element={<EqosyLandingSettings />} />
+            <Route path="hero-banner-management" element={<Navigate to="/admin/global/landing-management" replace />} />
+            <Route path="eqosy-landing-settings" element={<Navigate to="/admin/global/landing-settings" replace />} />
             <Route path="dining-management" element={<DiningManagement />} />
             <Route path="dining-list" element={<DiningList />} />
 
@@ -330,6 +373,38 @@ export default function AdminRouter() {
                 </FoodAdminPermissionRoute>
               }
             />
+          </Route>
+
+          {/* GLOBAL SETTINGS - shared by Food and Taxi */}
+          <Route path="global/*" element={<GlobalOutlet />}>
+            <Route index element={<Navigate to="branding" replace />} />
+            <Route path="branding" element={<GlobalBranding />} />
+            <Route path="customization" element={<GlobalCustomization />} />
+            <Route path="landing-settings" element={<EqosyLandingSettings />} />
+            <Route path="landing-management" element={<LandingPageManagement />} />
+            <Route path="promotional-banners" element={<PromotionalBanner />} />
+            <Route path="banners" element={<Banners />} />
+            <Route path="cms/header-footer" element={<GHeaderFooter />} />
+            <Route path="cms/home" element={<GCMSHome />} />
+            <Route path="cms/about" element={<GCMSAbout />} />
+            <Route path="cms/driver" element={<GCMSDriver />} />
+            <Route path="cms/user" element={<GCMSUser />} />
+            <Route path="cms/contact" element={<GCMSContact />} />
+            <Route path="app/wallet" element={<GWallet />} />
+            <Route path="app/tip" element={<GTip />} />
+            <Route path="app/onboard" element={<GOnboard />} />
+            <Route path="third-party/payment" element={<GPayment />} />
+            <Route path="third-party/sms" element={<GSms />} />
+            <Route path="third-party/firebase" element={<GFirebase />} />
+            <Route path="third-party/map-apis" element={<GMap />} />
+            <Route path="third-party/mail" element={<GMail />} />
+            <Route path="legal/terms" element={<TermsAndCondition />} />
+            <Route path="legal/privacy" element={<PrivacyPolicy />} />
+            <Route path="legal/about" element={<AboutUs />} />
+            <Route path="legal/refund" element={<RefundPolicy />} />
+            <Route path="legal/shipping" element={<ShippingPolicy />} />
+            <Route path="legal/cancellation" element={<CancellationPolicy />} />
+            <Route path="legal/driver-dmv" element={<GlobalDriverLegal />} />
           </Route>
 
           {/* TAXI ADMIN - Redirect to integrated taxi admin */}

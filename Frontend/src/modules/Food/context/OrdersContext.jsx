@@ -2,10 +2,27 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 
 const OrdersContext = createContext(null)
 
+const currentUserId = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem("user_user") || "null")
+    return String(user?._id || user?.id || user?.userId || "")
+  } catch {
+    return ""
+  }
+}
+
 export function OrdersProvider({ children }) {
   const [orders, setOrders] = useState(() => {
     if (typeof window === "undefined") return []
     try {
+      // Orders cached for a different customer must never be reused (server answers 403 "Not your order").
+      const owner = localStorage.getItem("userOrdersOwner") || ""
+      const me = currentUserId()
+      if (owner && me && owner !== me) {
+        localStorage.removeItem("userOrders")
+        localStorage.removeItem("lastPlacedOrder")
+        return []
+      }
       const saved = localStorage.getItem("userOrders")
       return saved ? JSON.parse(saved) : []
     } catch {
@@ -19,6 +36,8 @@ export function OrdersProvider({ children }) {
       const isAuthenticated = localStorage.getItem("user_authenticated") === "true" || !!localStorage.getItem("user_accessToken");
       if (orders.length > 0 || isAuthenticated) {
         localStorage.setItem("userOrders", JSON.stringify(orders))
+        const me = currentUserId()
+        if (me) localStorage.setItem("userOrdersOwner", me)
       }
     } catch {
       // ignore storage errors

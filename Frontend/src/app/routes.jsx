@@ -21,6 +21,9 @@ const GlobalAbout = lazyWithRetry(() => import('../modules/Food/pages/user/profi
 
 const PageLoader = () => <SmartRouteSkeleton />
 
+// Switching between Food / Taxi / Global admin: keep the screen calm (no skeleton flash) while the next admin chunk mounts.
+const AdminSwitchFallback = () => <div className="min-h-screen bg-neutral-100" />
+
 const FoodAppWrapper = () => {
   const location = useLocation()
   const vertical = new URLSearchParams(location.search).get('vertical')
@@ -40,11 +43,15 @@ const FoodAppWrapper = () => {
   )
 }
 
-const TaxiAppWrapper = () => (
-  <Suspense fallback={<PageLoader />}>
-    <TaxiApp />
-  </Suspense>
-)
+const TaxiAppWrapper = () => {
+  const { pathname } = useLocation()
+  const isAdmin = pathname.startsWith('/taxi/admin')
+  return (
+    <Suspense fallback={isAdmin ? <AdminSwitchFallback /> : <PageLoader />}>
+      <TaxiApp />
+    </Suspense>
+  )
+}
 
 const RedirectToFood = () => {
   const location = useLocation()
@@ -200,7 +207,7 @@ const AppRoutes = () => {
       <Route
         path="/admin/*"
         element={
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<AdminSwitchFallback />}>
             <AdminRouter />
           </Suspense>
         }

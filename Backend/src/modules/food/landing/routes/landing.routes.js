@@ -24,6 +24,13 @@ import {
     toggleDiningBannerStatusController
 } from '../controllers/diningBanner.controller.js';
 import {
+    listGroceryBannersController,
+    uploadGroceryBannersController,
+    deleteGroceryBannerController,
+    updateGroceryBannerOrderController,
+    toggleGroceryBannerStatusController
+} from '../controllers/groceryBanner.controller.js';
+import {
     listHomePromotionBannersController,
     createHomePromotionBannerController,
     updateHomePromotionBannerController,
@@ -47,6 +54,7 @@ import {
     getPublicHeroBannersController,
     getPublicUnder250BannersController,
     getPublicDiningBannersController,
+    getPublicGroceryBannersController,
     getPublicExploreIconsController,
     getPublicHomePromotionBannersController,
     getPublicGourmetController,
@@ -107,6 +115,17 @@ router.delete('/hero-banners/dining/:id', deleteDiningBannerController);
 router.patch('/hero-banners/dining/:id/order', updateDiningBannerOrderController);
 router.patch('/hero-banners/dining/:id/status', toggleDiningBannerStatusController);
 
+// Admin grocery banners
+router.get('/hero-banners/grocery', listGroceryBannersController);
+router.post(
+    '/hero-banners/grocery/multiple',
+    upload.fields([{ name: 'files' }, { name: 'images' }]),
+    uploadGroceryBannersController
+);
+router.delete('/hero-banners/grocery/:id', deleteGroceryBannerController);
+router.patch('/hero-banners/grocery/:id/order', updateGroceryBannerOrderController);
+router.patch('/hero-banners/grocery/:id/status', toggleGroceryBannerStatusController);
+
 // Admin Home Promotion banners
 router.get('/hero-banners/home-promotion', listHomePromotionBannersController);
 router.post(
@@ -146,6 +165,7 @@ router.patch('/hero-banners/gourmet/:id/status', toggleGourmetStatusAdmin);
 router.get('/hero-banners/public', getPublicHeroBannersController);
 router.get('/hero-banners/under-250/public', getPublicUnder250BannersController);
 router.get('/hero-banners/dining/public', getPublicDiningBannersController);
+router.get('/hero-banners/grocery/public', getPublicGroceryBannersController);
 router.get('/explore-icons/public', getPublicExploreIconsController);
 router.get('/hero-banners/home-promotion/public', getPublicHomePromotionBannersController);
 router.get('/hero-banners/gourmet/public', getPublicGourmetController);

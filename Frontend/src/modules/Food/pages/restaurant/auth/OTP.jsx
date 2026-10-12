@@ -256,7 +256,7 @@ export default function RestaurantOTP() {
       {/* Top Branding Section - 35% height */}
       <div className="relative h-[35dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -312,11 +312,11 @@ export default function RestaurantOTP() {
                     onBlur={() => setFocusedIndex(null)}
                     disabled={isLoading}
                     className={`w-16 h-16 text-center text-3xl font-black bg-[#F8F9FA] dark:bg-zinc-900 border rounded-xl text-[#1A1A1A] dark:text-white transition-all outline-none shadow-sm ${
-                      focusedIndex === index ? "border-[#F38F24] ring-1 ring-[#F38F24] shadow-[#F38F24]/10" : "border-gray-200"
+                      focusedIndex === index ? "border-[color:var(--app-primary,#F38F24)] ring-1 ring-[color:var(--app-primary,#F38F24)] shadow-[color:var(--app-primary,#F38F24)]/10" : "border-gray-200"
                     }`}
                   />
                   {digit && (
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#F38F24] rounded-full" />
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[color:var(--app-primary,#F38F24)] rounded-full" />
                   )}
                 </motion.div>
               ))}
@@ -352,14 +352,14 @@ export default function RestaurantOTP() {
               <div className="flex justify-center flex-col items-center gap-4">
                 {resendTimer > 0 ? (
                   <p className="text-sm font-medium text-gray-400">
-                    Request new code in <span className="text-[#F38F24] font-semibold">{resendTimer}s</span>
+                    Request new code in <span className="text-[color:var(--app-primary,#F38F24)] font-semibold">{resendTimer}s</span>
                   </p>
                 ) : (
                   <button
                     type="button"
                     onClick={handleResend}
                     disabled={isLoading}
-                    className="text-sm font-semibold text-[#F38F24] hover:text-[#d97716] transition-colors"
+                    className="text-sm font-semibold text-[color:var(--app-primary,#F38F24)] hover:text-[#d97716] transition-colors"
                   >
                     Resend OTP
                   </button>

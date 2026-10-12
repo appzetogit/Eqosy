@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import useVoiceSearch from '@food/hooks/user/useVoiceSearch';
+import VoiceSearchOverlay from '@food/components/user/VoiceSearchOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ChevronDown, Search, Mic, Bell, CheckCircle2, Tag, AlertCircle, BellOff, X, ShoppingBag, Loader2 } from 'lucide-react';
 import { useLocation as useUserGeoLocation } from "@food/hooks/useLocation";
@@ -361,6 +364,32 @@ export default function HomeHeader({
       navigate('/food/user/grocery');
     }
   }, [handleLocationClick, isTaxi, isGrocery, navigate]);
+
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const voice = useVoiceSearch({
+    onFinal: (phrase) => {
+      const q = encodeURIComponent(phrase);
+      setTimeout(() => {
+        setVoiceOpen(false);
+        if (isGrocery) navigate(`/food/user/search?vertical=grocery&q=${q}`);
+        else navigate(`/food/user/search?q=${q}`);
+      }, 450);
+    },
+  });
+  const openVoiceSearch = (event) => {
+    event.stopPropagation();
+    if (isTaxi) return;
+    if (!voice.supported) {
+      alert('Voice search is not supported in this browser.');
+      return;
+    }
+    setVoiceOpen(true);
+    voice.start();
+  };
+  const closeVoiceSearch = () => {
+    voice.cancel();
+    setVoiceOpen(false);
+  };
 
   const onSearchFocus = useCallback(() => {
     if (handleSearchFocus) {
@@ -754,11 +783,26 @@ export default function HomeHeader({
                   </div>
                   <div className="h-5 w-px bg-gray-200 mx-2.5 flex-shrink-0" />
                   <div
+                    role="button"
+                    aria-label="Voice search"
+                    onClick={openVoiceSearch}
                     className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-all"
                     style={{ backgroundColor: verticalTheme.accentSoft }}
                   >
                     <Mic className="h-[18px] w-[18px]" strokeWidth={2.5} style={{ color: verticalTheme.accent }} />
                   </div>
+                  {typeof document !== 'undefined' &&
+                    createPortal(
+                      <VoiceSearchOverlay
+                        open={voiceOpen}
+                        isListening={voice.isListening}
+                        transcript={voice.transcript}
+                        error={voice.error}
+                        onClose={closeVoiceSearch}
+                        onRetry={voice.start}
+                      />,
+                      document.body
+                    )}
                 </div>
 
                 {isFood && (

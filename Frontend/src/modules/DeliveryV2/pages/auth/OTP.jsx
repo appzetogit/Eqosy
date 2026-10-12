@@ -234,7 +234,7 @@ export default function DeliveryOTP() {
       <div className="relative h-[35dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center text-white">
         {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -290,11 +290,11 @@ export default function DeliveryOTP() {
                             onBlur={() => setFocusedIndex(null)}
                             disabled={isLoading}
                             className={`w-14 h-16 sm:w-16 sm:h-20 text-center text-3xl font-black bg-[#F8F9FA] dark:bg-zinc-900 border-2 rounded-2xl text-[#1A1A1A] dark:text-white transition-all outline-none shadow-sm ${
-                              focusedIndex === index ? "border-[#F38F24] ring-2 ring-[#F38F24]/20" : "border-gray-200 dark:border-zinc-800"
+                              focusedIndex === index ? "border-[color:var(--app-primary,#F38F24)] ring-2 ring-[color:var(--app-primary,#F38F24)]/20" : "border-gray-200 dark:border-zinc-800"
                             }`}
                           />
                           {digit && (
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#F38F24] rounded-full" />
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[color:var(--app-primary,#F38F24)] rounded-full" />
                           )}
                         </div>
                       ))}
@@ -303,14 +303,14 @@ export default function DeliveryOTP() {
                     <div className="space-y-6 pt-4 text-center">
                       {resendTimer > 0 ? (
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-                          Re-pulse in <span className="text-[#F38F24]">{resendTimer}s</span>
+                          Re-pulse in <span className="text-[color:var(--app-primary,#F38F24)]">{resendTimer}s</span>
                         </p>
                       ) : (
                         <button
                           type="button"
                           onClick={handleResend}
                           disabled={isLoading}
-                          className="text-xs font-black text-[#F38F24] uppercase tracking-[0.2em] px-6 py-2 rounded-full bg-[#F38F24]/10 hover:bg-[#F38F24]/20 transition-colors"
+                          className="text-xs font-black text-[color:var(--app-primary,#F38F24)] uppercase tracking-[0.2em] px-6 py-2 rounded-full bg-[color:var(--app-primary,#F38F24)]/10 hover:bg-[color:var(--app-primary,#F38F24)]/20 transition-colors"
                         >
                           Resend Pin
                         </button>
@@ -332,7 +332,7 @@ export default function DeliveryOTP() {
                         <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                           Official Full Name
                         </label>
-                        <div className="bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden">
+                        <div className="bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden">
                           <Input
                             type="text" value={name} onChange={(e) => { setName(e.target.value); setNameError(""); }}
                             placeholder="e.g. Aman Kuril"

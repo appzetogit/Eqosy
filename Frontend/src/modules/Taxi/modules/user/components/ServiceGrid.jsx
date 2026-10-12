@@ -104,7 +104,7 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
 };
 
 const DEFAULT_SERVICES = [
-  { id: 'cab', icon: rideImg, label: 'Cab', description: 'Ride', iconGradient: 'from-[#FF6B00] to-[#FF8C42]', path: '/taxi/user/ride/select-location' },
+  { id: 'cab', icon: rideImg, label: 'Cab', description: 'Ride', iconGradient: 'from-[color:var(--app-primary,#FF6B00)] to-[#FF8C42]', path: '/taxi/user/ride/select-location' },
   { id: 'parcel', icon: deliveryImg, label: 'Parcel', description: 'Send Pack', iconGradient: 'from-[#FF8A65] to-[#E53935]', path: '/taxi/user/parcel/type' },
   { id: 'outstation', icon: outstationImg, label: 'Book Outstation', description: 'Intercity', iconGradient: 'from-[#1E3A8A] to-[#2563EB]', path: '/taxi/user/intercity' },
   { id: 'bus', icon: busImg, label: 'Bus', description: 'Reserve', iconGradient: 'from-[#7C3AED] to-[#A855F7]', path: '/taxi/user/bus' },
@@ -169,7 +169,7 @@ const ServiceGrid = ({ plain = false }) => {
           );
 
           let fallbackIcon = rideImg;
-          let iconGradient = 'from-[#FF6B00] to-[#FF8C42]';
+          let iconGradient = 'from-[color:var(--app-primary,#FF6B00)] to-[#FF8C42]';
           let label = m.name || 'Cab';
           let description = m.short_description || 'Ride';
 

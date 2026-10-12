@@ -340,7 +340,7 @@ const serializeAdminSummary = (admin, serviceLocationMap = new Map(), zoneMap = 
   };
 };
 
-const enrichAdminSummaries = async (admins = []) => {
+export const enrichAdminSummaries = async (admins = []) => {
   const serviceLocationIds = [
     ...new Set(
       admins.flatMap((admin) => normalizeObjectIdList(admin.service_location_ids).map(String)),

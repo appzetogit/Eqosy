@@ -27,14 +27,14 @@ export async function updateBusinessSettings(req, res, next) {
         const data = req.body.data ? JSON.parse(req.body.data) : {};
         const { companyName, email, phoneCountryCode, phoneNumber, address, state, pincode, region } = data;
 
-        // Validation
-        if (!companyName || companyName.trim().length < 2 || companyName.trim().length > 50) {
+        // Validate only the fields that were sent, so a color-only save from Global Settings works.
+        if (companyName !== undefined && (!companyName || companyName.trim().length < 2 || companyName.trim().length > 50)) {
             return res.status(400).json({ success: false, message: 'Company name must be between 2 and 50 characters' });
         }
-        if (!email || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        if (email !== undefined && (!email || email.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))) {
             return res.status(400).json({ success: false, message: 'Invalid email address (max 100 characters)' });
         }
-        if (!phoneNumber || !/^\d{7,15}$/.test(phoneNumber.trim())) {
+        if (phoneNumber !== undefined && (!phoneNumber || !/^\d{7,15}$/.test(phoneNumber.trim()))) {
             return res.status(400).json({ success: false, message: 'Invalid phone number (7-15 digits required)' });
         }
         if (address && address.length > 250) {
@@ -64,6 +64,33 @@ export async function updateBusinessSettings(req, res, next) {
         if (state !== undefined) settings.state = state;
         if (pincode !== undefined) settings.pincode = pincode;
         if (region) settings.region = region;
+
+        const hexColor = /^#([0-9a-fA-F]{6})$/;
+        for (const key of ['themeColor', 'landingThemeColor', 'sidebarTextColor']) {
+            if (data[key] === undefined) continue;
+            const value = String(data[key] || '').trim();
+            if (value && !hexColor.test(value)) {
+                return res.status(400).json({ success: false, message: `Invalid color for ${key} (use #RRGGBB)` });
+            }
+            settings[key] = value;
+        }
+
+        if (data.appColors && typeof data.appColors === 'object') {
+            const appKeys = ['admin', 'user', 'delivery', 'restaurant', 'taxiUser', 'taxiDriver'];
+            const next = {};
+            for (const key of appKeys) {
+                const entry = data.appColors[key];
+                if (!entry) continue;
+                const primary = String(entry.primary || '').trim();
+                const secondary = String(entry.secondary || '').trim();
+                if ((primary && !hexColor.test(primary)) || (secondary && !hexColor.test(secondary))) {
+                    return res.status(400).json({ success: false, message: `Invalid color for ${key} (use #RRGGBB)` });
+                }
+                next[key] = { primary, secondary };
+            }
+            settings.appColors = next;
+            settings.markModified('appColors');
+        }
 
         // Handle file uploads
         if (req.files) {

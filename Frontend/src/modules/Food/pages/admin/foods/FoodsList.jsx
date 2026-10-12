@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@food/componen
 import { Popover, PopoverContent, PopoverTrigger } from "@food/components/ui/popover"
 import { getFoodDisplayPrice, getFoodVariants } from "@food/utils/foodVariants"
 import { getCurrentUser } from "@food/utils/auth"
-import { canWriteFood } from "@food/constants/foodAdminAccess"
+import { canWriteFood, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -42,10 +42,13 @@ export default function FoodsList() {
   const [selectedZone, setSelectedZone] = useState("all")
   const [zones, setZones] = useState([])
   const [selectedRestaurant, setSelectedRestaurant] = useState("all")
+  const [selectedType, setSelectedType] = useState("all") // all | food | grocery
   const [foods, setFoods] = useState([])
   const [restaurantsForFilter, setRestaurantsForFilter] = useState([])
 
   const isSubadmin = useMemo(() => {
+    // Platform/Food super admins see every zone even if a zone id is stored on their profile.
+    if (isFoodSuperAdminLike(adminProfile)) return false
     const role = String(adminProfile?.role || adminProfile?.type || "").toLowerCase()
     if (role.includes("super")) return false
     const assigned = adminProfile?.food_zone_ids || adminProfile?.zone_ids || []
@@ -162,6 +165,7 @@ export default function FoodsList() {
           .map((restaurant) => ({
             id: String(restaurant?._id || restaurant?.id || ""),
             name: restaurant?.name || restaurant?.restaurantName || "Unknown Restaurant",
+            isRestaurant: restaurant?.isRestaurant !== false,
             zoneId: typeof restaurant?.zoneId === "string" ? restaurant.zoneId : (restaurant?.zoneId?._id || restaurant?.zoneId?.id || restaurant?.location?.zoneId || ""),
           }))
           .filter((restaurant) => restaurant.id)
@@ -264,13 +268,26 @@ export default function FoodsList() {
   }
 
   const restaurantOptions = useMemo(() => {
-    if (selectedZone === "all" || !selectedZone) {
-      return restaurantsForFilter
+    let list = restaurantsForFilter
+    if (selectedZone !== "all" && selectedZone) {
+      list = list.filter((r) => String(r.zoneId) === String(selectedZone))
     }
-    return restaurantsForFilter.filter(
-      (r) => String(r.zoneId) === String(selectedZone)
-    )
-  }, [restaurantsForFilter, selectedZone])
+    if (selectedType === "food") list = list.filter((r) => r.isRestaurant)
+    if (selectedType === "grocery") list = list.filter((r) => !r.isRestaurant)
+    return list
+  }, [restaurantsForFilter, selectedZone, selectedType])
+
+  // Only offer categories of the same section (Food / Grocery) as the selected outlet.
+  const selectedOutletSection = (() => {
+    const outlet = restaurantsForFilter.find((r) => r.id === String(foodForm.restaurantId))
+    if (!outlet) return null
+    return outlet.isRestaurant ? "food" : "grocery"
+  })()
+  const visibleCategoryOptions = selectedOutletSection
+    ? categoryOptions.filter((c) => c.section === selectedOutletSection)
+    : categoryOptions
+
+  const outletLabel = (restaurant) => `${restaurant.name} ${restaurant.isRestaurant ? "· 🍽️ Restaurant" : "· 🛒 Grocery"}`
 
   useEffect(() => {
     if (selectedRestaurant === "all") return
@@ -293,7 +310,7 @@ export default function FoodsList() {
       )
     }
 
-    if (selectedZone !== "all") {
+    if (selectedZone !== "all" || selectedType !== "all") {
       const validRestIds = new Set(restaurantOptions.map((r) => r.id))
       result = result.filter((food) => validRestIds.has(String(food.restaurantId)))
     }
@@ -304,7 +321,7 @@ export default function FoodsList() {
 
     result.sort((a, b) => getItemCreatedMs(b) - getItemCreatedMs(a))
     return result
-  }, [foods, searchQuery, selectedZone, selectedRestaurant, restaurantOptions])
+  }, [foods, searchQuery, selectedZone, selectedType, selectedRestaurant, restaurantOptions])
 
   const totalPages = useMemo(() => {
     if (filteredFoods.length === 0) return 1
@@ -372,7 +389,7 @@ export default function FoodsList() {
         const list = res?.data?.data?.categories || []
         const options = Array.isArray(list)
           ? list
-            .map((c) => ({ id: String(c.id || c._id || c.name), name: String(c.name || "").trim() }))
+            .map((c) => ({ id: String(c.id || c._id || c.name), name: String(c.name || "").trim(), section: c.section === "grocery" ? "grocery" : "food" }))
             .filter((c) => c.name)
           : []
         if (!cancelled) setCategoryOptions(options)
@@ -616,6 +633,15 @@ export default function FoodsList() {
               </select>
             )}
             <select
+              value={selectedType}
+              onChange={(e) => { setSelectedType(e.target.value); setSelectedRestaurant("all") }}
+              className="px-4 py-2.5 min-w-[150px] text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 font-semibold"
+            >
+              <option value="all">All Types</option>
+              <option value="food">🍽️ Food (Restaurants)</option>
+              <option value="grocery">🛒 Grocery (Stores)</option>
+            </select>
+            <select
               value={selectedRestaurant}
               onChange={(e) => setSelectedRestaurant(e.target.value)}
               className="px-4 py-2.5 min-w-[220px] text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -623,7 +649,7 @@ export default function FoodsList() {
               <option value="all">All Restaurants</option>
               {restaurantOptions.map((restaurant) => (
                 <option key={restaurant.id} value={restaurant.id}>
-                  {restaurant.name}
+                  {outletLabel(restaurant)}
                 </option>
               ))}
             </select>
@@ -892,10 +918,22 @@ export default function FoodsList() {
                   <option value="">Select restaurant</option>
                   {restaurantOptions.map((restaurant) => (
                     <option key={restaurant.id} value={restaurant.id}>
-                      {restaurant.name}
+                      {outletLabel(restaurant)}
                     </option>
                   ))}
                 </select>
+                {(() => {
+                  const outlet = restaurantsForFilter.find((r) => r.id === String(foodForm.restaurantId))
+                  if (!outlet) return null
+                  return (
+                    <p className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold ${outlet.isRestaurant ? "bg-orange-50 text-orange-700" : "bg-emerald-50 text-emerald-700"}`}>
+                      {outlet.isRestaurant ? "🍽️ This item will appear in the FOOD section" : "🛒 This item will appear in the GROCERY section"}
+                    </p>
+                  )
+                })()}
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Food or Grocery is decided by the outlet: Restaurants List → toggle ON = Food, OFF = Grocery.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
@@ -921,7 +959,7 @@ export default function FoodsList() {
                       autoFocus
                     />
                     <div className="max-h-56 overflow-y-auto">
-                      {categoryOptions
+                      {visibleCategoryOptions
                         .filter((c) => {
                           const q = String(categorySearch || "").trim().toLowerCase()
                           if (!q) return true
@@ -938,10 +976,10 @@ export default function FoodsList() {
                             className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 ${String(foodForm.categoryName || "") === String(c.name) ? "bg-slate-100 font-medium" : ""
                               }`}
                           >
-                            {c.name}
+                            {c.name} <span className="text-[10px] opacity-60">{c.section === "grocery" ? "🛒" : "🍽️"}</span>
                           </button>
                         ))}
-                      {categoryOptions.length === 0 && (
+                      {visibleCategoryOptions.length === 0 && (
                         <div className="px-3 py-2 text-sm text-slate-500">No categories found</div>
                       )}
                     </div>

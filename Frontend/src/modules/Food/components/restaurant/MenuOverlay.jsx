@@ -63,6 +63,7 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
       { id: 17, name: "Conversation", icon: MessageCircle, route: "/food/restaurant/conversation" },
       { id: 18, name: "Privacy Policy", icon: Shield, route: "/food/restaurant/privacy" },
       { id: 19, name: "Terms & Condition", icon: CheckSquare, route: "/food/restaurant/terms" },
+      { id: 21, name: "Language", icon: Globe, isLanguage: true },
     ]
 
     if (isAuthenticated) {
@@ -146,7 +147,9 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
                       whileTap={{ scale: 0.97 }}
                       onClick={() => {
                         setShowMenu(false)
-                        if (option.isLogout) {
+                        if (option.isLanguage) {
+                          window.dispatchEvent(new Event('eqosy:open-language'))
+                        } else if (option.isLogout) {
                           // Handle logout
                           if (window.confirm("Are you sure you want to logout?")) {
                             // Clear authentication state

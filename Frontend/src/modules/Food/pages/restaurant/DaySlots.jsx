@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import Lenis from "lenis"
 import { ArrowLeft, Clock, Edit2, Trash2, ChevronDown, AlertTriangle, X } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { Checkbox } from "@food/components/ui/checkbox"
@@ -423,25 +422,6 @@ export default function DaySlots() {
     }
   }
 
-  // Lenis smooth scrolling
-  useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
-
-    function raf(time) {
-      lenis.raf(time)
-      requestAnimationFrame(raf)
-    }
-
-    requestAnimationFrame(raf)
-
-    return () => {
-      lenis.destroy()
-    }
-  }, [])
 
   // Calculate duration for a slot
   const calculateSlotDuration = (start, end, startPeriod, endPeriod) => {

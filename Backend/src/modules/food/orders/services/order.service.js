@@ -1109,20 +1109,35 @@ export async function getUnratedOrderUser(userId) {
   if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) {
     return { order: null };
   }
-  
-  const order = await FoodOrder.findOne({
-    userId: new mongoose.Types.ObjectId(userId),
+
+  const uid = new mongoose.Types.ObjectId(userId);
+  const pending = {
+    userId: uid,
     orderStatus: "delivered",
     "ratings.isSkipped": { $ne: true },
-    "ratings.restaurant.rating": { $exists: false }
+    "ratings.restaurant.rating": { $exists: false },
+  };
+
+  // Only a freshly delivered order is worth a prompt; older unrated orders must not queue up
+  // and show one after another on every refresh.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const order = await FoodOrder.findOne({
+    ...pending,
+    $or: [
+      { "deliveryState.deliveredAt": { $gte: since } },
+      { "deliveryState.deliveredAt": null, updatedAt: { $gte: since } },
+    ],
   })
     .populate("restaurantId", "restaurantName profileImage")
     .populate("dispatch.deliveryPartnerId", "name profileImage avatar")
     .sort({ createdAt: -1 })
     .lean();
 
+  // The prompt is shown once: mark this order and every older pending one as prompted right here,
+  // so a page reload, another device or an older client build can never show it again.
+  await FoodOrder.updateMany(pending, { $set: { "ratings.isSkipped": true } });
+
   if (!order) return { order: null };
-  
   return { order: normalizeOrderForClient(order) };
 }
 

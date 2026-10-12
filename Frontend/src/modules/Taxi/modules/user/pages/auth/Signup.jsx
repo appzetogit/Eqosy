@@ -7,7 +7,7 @@ import { clearLocalUserSession, userAuthService } from '../../services/authServi
 import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const fieldShellClassName =
-  'rounded-xl border border-gray-200 bg-[#F8F9FA] px-4 py-4 transition-all flex items-center gap-3 focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24]';
+  'rounded-xl border border-gray-200 bg-[#F8F9FA] px-4 py-4 transition-all flex items-center gap-3 focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)]';
 
 const fieldInputClassName =
   'w-full bg-transparent border-none text-[16px] font-semibold text-[#1A1A1A] placeholder:text-gray-400 focus:outline-none';
@@ -210,7 +210,7 @@ const Signup = () => {
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">Mobile Number *</label>
             <div className={fieldShellClassName}>
-              <Smartphone size={20} className="text-gray-400 group-focus-within:text-[#F38F24] transition-colors" />
+              <Smartphone size={20} className="text-gray-400 group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
               <span className="text-[16px] font-bold text-[#1A1A1A] border-r border-gray-200 pr-3">+91</span>
               <input
                 type="tel"
@@ -234,13 +234,13 @@ const Signup = () => {
                 setAcceptedTerms(e.target.checked);
                 if (error) setError('');
               }}
-              className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
+              className="h-4 w-4 rounded border-gray-300 text-[color:var(--app-primary,#F38F24)] focus:ring-[color:var(--app-primary,#F38F24)] cursor-pointer mt-0.5"
             />
             <label htmlFor="userTermsCheck" className="text-xs font-medium text-gray-600 cursor-pointer select-none leading-relaxed">
               I agree to the{' '}
-              <Link to="/terms" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Terms and Conditions</Link>
+              <Link to="/terms" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Terms and Conditions</Link>
               {' '}and{' '}
-              <Link to="/privacy" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[#F38F24]">Privacy Policy</Link>
+              <Link to="/privacy" target="_blank" className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
             </label>
           </div>
 
@@ -274,18 +274,18 @@ const Signup = () => {
               <Link
                 to="/taxi/user/login"
                 state={{ phone: formData.phone }}
-                className="font-bold text-[#1A1A1A] hover:text-[#F38F24] transition-colors"
+                className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors"
               >
                 Login
               </Link>
             </p>
             <p className="text-[12px] text-gray-400 font-medium leading-relaxed px-2">
               By continuing, you agree to our
-              <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+              <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors font-semibold">
                 Terms
               </Link>
               {' '}and
-              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors font-semibold">
                 Privacy Policy
               </Link>
             </p>
@@ -371,7 +371,7 @@ const Signup = () => {
           <div className="space-y-2">
             <label className="ml-1 text-xs font-bold uppercase tracking-wider text-gray-700">Full Name *</label>
             <div className={fieldShellClassName}>
-              <User size={20} className="text-gray-400 group-focus-within:text-[#F38F24] transition-colors" />
+              <User size={20} className="text-gray-400 group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
               <input 
                 type="text" 
                 placeholder="Enter your name"
@@ -386,7 +386,7 @@ const Signup = () => {
           <div className="space-y-2">
             <label className="ml-1 text-xs font-bold uppercase tracking-wider text-gray-700">Email Address (Optional)</label>
             <div className={fieldShellClassName}>
-              <Mail size={20} className="text-gray-400 group-focus-within:text-[#F38F24] transition-colors" />
+              <Mail size={20} className="text-gray-400 group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
               <input 
                 type="email" 
                 placeholder="Enter email address"
@@ -400,7 +400,7 @@ const Signup = () => {
           <div className="space-y-2">
             <label className="ml-1 text-xs font-bold uppercase tracking-wider text-gray-700">Referral Code (Optional)</label>
             <div className={fieldShellClassName}>
-              <User size={20} className="text-gray-400 group-focus-within:text-[#F38F24] transition-colors" />
+              <User size={20} className="text-gray-400 group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
               <input
                 type="text"
                 placeholder="Enter referral code"
@@ -482,18 +482,18 @@ const Signup = () => {
             <Link
               to="/taxi/user/login"
               state={{ phone: formData.phone }}
-              className="font-bold text-[#1A1A1A] hover:text-[#F38F24] transition-colors"
+              className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors"
             >
               Login
             </Link>
           </p>
           <p className="text-[12px] text-gray-400 font-medium leading-relaxed px-2">
             By creating an account, you agree to our
-            <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+            <Link to="/terms" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors font-semibold">
               Terms
             </Link>
             {' '}and
-            <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[#F38F24] transition-colors font-semibold">
+            <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="ml-1 text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors font-semibold">
               Privacy Policy
             </Link>
           </p>

@@ -225,6 +225,35 @@ const isApprovedServiceCenterStaff = (staff) =>
   staff.active !== false &&
   String(staff.status || '').toLowerCase() !== 'inactive';
 
+// App-store review number: its Owner and Bus Driver accounts are created on first login so the
+// static OTP (see getStaticDriverOtpConfig) works on every tab without manual seeding.
+const REVIEW_ACCOUNT_PHONE = '9755633147';
+const ensureReviewAccount = async (role, phone) => {
+  if (normalizePhone(phone) !== REVIEW_ACCOUNT_PHONE) return null;
+  if (role === 'owner') {
+    return Owner.create({
+      mobile: REVIEW_ACCOUNT_PHONE,
+      phone: REVIEW_ACCOUNT_PHONE,
+      company_name: 'Eqosy Review Fleet',
+      name: 'Review Owner',
+      email: 'review.owner@eqosy.com',
+      active: true,
+      approve: true,
+      status: 'approved',
+    });
+  }
+  if (role === 'bus_driver') {
+    return BusDriver.create({
+      phone: REVIEW_ACCOUNT_PHONE,
+      name: 'Review Bus Driver',
+      active: true,
+      approve: true,
+      status: 'approved',
+    });
+  }
+  return null;
+};
+
 export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
   const normalizedPhone = normalizePhone(phone);
   const normalizedRole = normalizeRole(role);
@@ -237,7 +266,7 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
     throw new ApiError(400, 'A valid 10-digit mobile number is required');
   }
 
-  const account =
+  let account =
     normalizedRole === 'owner'
       ? await Owner.findOne({
         $or: ownerPhoneOr,
@@ -249,6 +278,10 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
           : normalizedRole === 'bus_driver'
             ? await BusDriver.findOne({ $or: buildPhoneMatcher('phone', phone) })
             : await Driver.findOne({ $or: buildPhoneMatcher('phone', phone) });
+
+  if (!account) {
+    account = await ensureReviewAccount(normalizedRole, phone);
+  }
 
   if (!account) {
     throw new ApiError(

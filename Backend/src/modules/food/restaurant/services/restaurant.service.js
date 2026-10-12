@@ -1481,9 +1481,11 @@ export const listApprovedRestaurants = async (query = {}) => {
 
     const filter = { status: 'approved' };
 
+    // Grocery stores (isRestaurant: false) must never leak into restaurant lists:
+    // restaurants are the default; grocery pages pass isRestaurant=false, "all" returns both.
     if (query.isRestaurant === 'false') {
         filter.isRestaurant = false;
-    } else if (query.isRestaurant === 'true') {
+    } else if (query.isRestaurant !== 'all') {
         filter.isRestaurant = { $ne: false };
     }
 

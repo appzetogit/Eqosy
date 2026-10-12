@@ -44,7 +44,7 @@ const RecommendedCard = ({ title, description, path, gradient, accentColor, imag
       <motion.div
         animate={isHovered ? { opacity: 0.25, scale: 1.05 } : { opacity: 0, scale: 1 }}
         transition={{ duration: 0.3 }}
-        className={`absolute -inset-1 rounded-[10px] bg-gradient-to-br from-[#FF6B00] to-[#E53935] blur-md opacity-0 pointer-events-none z-0`}
+        className={`absolute -inset-1 rounded-[10px] bg-gradient-to-br from-[color:var(--app-primary,#FF6B00)] to-[#E53935] blur-md opacity-0 pointer-events-none z-0`}
       />
 
       <motion.button
@@ -91,7 +91,7 @@ const RecommendedCard = ({ title, description, path, gradient, accentColor, imag
         <div className="relative z-10 flex justify-between items-start w-full">
           <div className="h-6 w-6 rounded-lg bg-white/60 backdrop-blur-md flex items-center justify-center shadow-sm">
             {isLeft ? (
-              <Clock3 size={12} className="text-[#FF6B00]" />
+              <Clock3 size={12} className="text-[color:var(--app-primary,#FF6B00)]" />
             ) : (
               <ShieldCheck size={12} className="text-[#2563EB]" />
             )}
@@ -116,7 +116,7 @@ const RecommendedCard = ({ title, description, path, gradient, accentColor, imag
           <motion.div
             animate={{ scale: [1, 1.05, 1] }}
             transition={{ repeat: Infinity, duration: 3, delay: isLeft ? 0 : 1.5 }}
-            className="h-8 w-8 rounded-full bg-gradient-to-br from-[#FF6B00] to-[#E53935] flex items-center justify-center text-white shadow-md shadow-orange-500/25 group-hover:shadow-orange-500/40 relative overflow-hidden"
+            className="h-8 w-8 rounded-full bg-gradient-to-br from-[color:var(--app-primary,#FF6B00)] to-[#E53935] flex items-center justify-center text-white shadow-md shadow-orange-500/25 group-hover:shadow-orange-500/40 relative overflow-hidden"
           >
             <motion.div
               animate={isHovered ? { x: 2 } : { x: 0 }}
@@ -219,8 +219,8 @@ const PromoBanners = ({ plain = false }) => {
       {/* Header with badge design */}
       <div className="mb-5 relative z-10 ml-1">
         <div className="flex items-center gap-1.5">
-          <Sparkles size={11} className="text-[#FF6B00] animate-pulse" />
-          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-[#FF6B00]">
+          <Sparkles size={11} className="text-[color:var(--app-primary,#FF6B00)] animate-pulse" />
+          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-[color:var(--app-primary,#FF6B00)]">
             Recommended for you
           </span>
         </div>
@@ -231,7 +231,7 @@ const PromoBanners = ({ plain = false }) => {
             whileInView={{ width: '80%' }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-            className="absolute bottom-[-2px] left-0 h-[2px] bg-gradient-to-r from-[#FF6B00]/40 to-transparent" 
+            className="absolute bottom-[-2px] left-0 h-[2px] bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)]/40 to-transparent" 
           />
         </h2>
       </div>
@@ -243,7 +243,7 @@ const PromoBanners = ({ plain = false }) => {
           description="Auto for shorter wait times."
           path="/taxi/user/ride/select-location"
           gradient="from-[#FFFDF0]/80 via-[#FFF5EC]/70 to-[#FFE3CF]/70"
-          accentColor="#FF6B00"
+          accentColor="var(--app-primary,#FF6B00)"
           image={autoImg}
           isLeft={true}
           onNavigate={navigate}

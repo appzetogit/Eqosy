@@ -15,6 +15,8 @@ import OutOfServiceView from "@food/components/user/OutOfServiceView"
 import { searchAPI } from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
 import CategoryDishCardSlider from "@food/components/user/CategoryDishCardSlider"
+import useVoiceSearch from "@food/hooks/user/useVoiceSearch"
+import VoiceSearchOverlay from "@food/components/user/VoiceSearchOverlay"
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -283,24 +285,28 @@ export default function ProfessionalSearch() {
     }
   }, [debouncedQuery, selectedCategoryId, performSearch, setSearchParams, buildSearchParams])
 
-  // Speech Recognition Implementation
+  // Voice search: live transcript in an animated overlay, then the phrase fills the search box.
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const voice = useVoiceSearch({
+    onFinal: (phrase) => {
+      setQuery(phrase)
+      addToHistory(phrase)
+      setTimeout(() => setVoiceOpen(false), 450)
+    },
+  })
+
   const handleVoiceSearch = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
+    if (!voice.supported) {
       alert("Voice search is not supported in this browser.")
       return
     }
+    setVoiceOpen(true)
+    voice.start()
+  }
 
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-IN'
-    recognition.onstart = () => setIsListening(true)
-    recognition.onend = () => setIsListening(false)
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript
-      setQuery(transcript)
-      addToHistory(transcript)
-    }
-    recognition.start()
+  const closeVoice = () => {
+    voice.cancel()
+    setVoiceOpen(false)
   }
 
   const handleClear = () => {
@@ -361,6 +367,15 @@ export default function ProfessionalSearch() {
   }
 
   return (
+    <>
+      <VoiceSearchOverlay
+        open={voiceOpen}
+        isListening={voice.isListening}
+        transcript={voice.transcript}
+        error={voice.error}
+        onClose={closeVoice}
+        onRetry={voice.start}
+      />
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950">
       {/* Header */}
       <div className="sticky top-0 z-50 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 px-4 py-3">
@@ -385,7 +400,7 @@ export default function ProfessionalSearch() {
             )}
             <button 
               onClick={handleVoiceSearch}
-              className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full transition-all ${isListening ? 'text-rose-500 scale-125 animate-pulse' : 'text-slate-400'}`}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full transition-all ${voice.isListening ? 'text-rose-500 scale-125 animate-pulse' : 'text-slate-400'}`}
             >
               <Mic className="w-5 h-5" />
             </button>
@@ -538,7 +553,7 @@ export default function ProfessionalSearch() {
                                <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-600' : 'bg-rose-600'}`} />
                                {isVeg ? 'VEG' : 'NON-VEG'}
                              </span>
-                             <span className="text-sm font-extrabold text-[#EB590E]">
+                             <span className="text-sm font-extrabold text-[color:var(--app-primary,#EB590E)]">
                                ₹{Math.round(dishPrice)}
                              </span>
                            </div>
@@ -604,5 +619,6 @@ export default function ProfessionalSearch() {
         </div>
       )}
     </div>
+    </>
   )
 }

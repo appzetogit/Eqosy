@@ -166,7 +166,7 @@ export default function SubmitComplaint() {
         <button
           type="button"
           onClick={() => navigate("/user/profile/support")}
-          className="ml-auto text-sm font-semibold text-[#EB590E]"
+          className="ml-auto text-sm font-semibold text-[color:var(--app-primary,#EB590E)]"
         >
           View History
         </button>
@@ -208,7 +208,7 @@ export default function SubmitComplaint() {
           <select
             value={formData.complaintType}
             onChange={(e) => setFormData({ ...formData, complaintType: e.target.value })}
-            className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-[#EB590E] focus:border-transparent text-gray-800 dark:text-white"
+            className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)] focus:border-transparent text-gray-800 dark:text-white"
             required
           >
             <option value="" className="dark:bg-zinc-900">Select complaint type</option>
@@ -230,7 +230,7 @@ export default function SubmitComplaint() {
             value={formData.subject}
             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
             placeholder="Brief description of your complaint"
-            className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-[#EB590E] focus:border-transparent text-gray-800 dark:text-white"
+            className="w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)] focus:border-transparent text-gray-800 dark:text-white"
             required
             maxLength={200}
           />
@@ -246,7 +246,7 @@ export default function SubmitComplaint() {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Please provide detailed information about your complaint..."
             rows={6}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#EB590E] focus:border-transparent resize-none"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)] focus:border-transparent resize-none"
             required
             maxLength={1000}
           />
@@ -271,7 +271,7 @@ export default function SubmitComplaint() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#EB590E] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[#D94F0C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[color:var(--app-primary,#EB590E)] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[color:var(--app-secondary,#D94F0C)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>

@@ -71,6 +71,7 @@ const normalizeDetailsFormFromRestaurant = (restaurant) => {
       typeof restaurant?.pureVegRestaurant === "boolean"
         ? restaurant.pureVegRestaurant
         : false,
+    isRestaurant: restaurant?.isRestaurant !== false,
     pricingAttributes: Array.isArray(restaurant?.pricingAttributes) ? restaurant.pricingAttributes : [],
     ownerName: restaurant?.ownerName || "",
     ownerEmail: restaurant?.ownerEmail || "",
@@ -304,6 +305,7 @@ export default function EditRestaurant() {
       const payload = {
         name: detailsForm.name,
         pureVegRestaurant: detailsForm.pureVegRestaurant === true,
+        isRestaurant: detailsForm.isRestaurant !== false,
         pricingAttributes: detailsForm.pricingAttributes || [],
         ownerName: detailsForm.ownerName,
         ownerEmail: detailsForm.ownerEmail,
@@ -460,6 +462,36 @@ export default function EditRestaurant() {
                       No
                     </button>
                   </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Section (where this outlet is shown)</Label>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDetailsForm((p) => ({ ...p, isRestaurant: true }))}
+                      className={`px-4 py-2 text-xs font-bold rounded-full border ${
+                        detailsForm.isRestaurant !== false
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      🍽️ Food (Restaurant)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailsForm((p) => ({ ...p, isRestaurant: false }))}
+                      className={`px-4 py-2 text-xs font-bold rounded-full border ${
+                        detailsForm.isRestaurant === false
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-slate-700 border-slate-300"
+                      }`}
+                    >
+                      🛒 Grocery (Store)
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Grocery stores and all their items appear only in the Grocery section; Food outlets only in Food. Click "Save" after changing.
+                  </p>
                 </div>
                 <div>
                   <Label>Pricing Perks (Optional)</Label>

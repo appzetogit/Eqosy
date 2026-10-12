@@ -11,7 +11,6 @@ import { FoodItem } from '../../admin/models/food.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { haversineKm } from './order.helpers.js';
-
 function extractCoords(addressLike) {
   const coords = addressLike?.location?.coordinates;
   if (!Array.isArray(coords) || coords.length !== 2) return null;

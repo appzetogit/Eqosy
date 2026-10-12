@@ -104,10 +104,10 @@ export default function NotificationsV2() {
           <ArrowLeft className="w-5 h-5 text-gray-900" />
         </button>
         <div className="flex items-center gap-2 flex-1">
-          <Bell className="w-5 h-5 text-[#EB590E]" />
+          <Bell className="w-5 h-5 text-[color:var(--app-primary,#EB590E)]" />
           <h1 className="text-base font-semibold text-gray-900">Notifications</h1>
           {unreadCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-[#EB590E] text-white text-[10px] font-semibold">
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-[color:var(--app-primary,#EB590E)] text-white text-[10px] font-semibold">
               {unreadCount}
             </span>
           )}

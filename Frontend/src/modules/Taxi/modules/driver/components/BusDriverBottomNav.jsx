@@ -31,7 +31,7 @@ const BusDriverBottomNav = ({ activeTab = 'overview', onChangeTab }) => (
               {isActive ? (
                 <motion.div
                   layoutId="busNavActivePill"
-                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF8533] shadow-lg shadow-[#FF6B00]/40"
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-[color:var(--app-primary,#FF6B00)] to-[#FF8533] shadow-lg shadow-[color:var(--app-primary,#FF6B00)]/40"
                   transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                 />
               ) : null}

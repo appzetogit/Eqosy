@@ -145,12 +145,27 @@ export function isModuleAuthenticated(module) {
  * Clear authentication data for a specific module
  * @param {string} module - Module name (admin, restaurant, delivery, user)
  */
+/**
+ * Per-account order caches. Left behind after switching accounts they make the app request orders of
+ * the previous user, which the server rightly rejects with 403 "Not your order".
+ */
+export function clearUserSessionCache() {
+  ["userOrders", "lastPlacedOrder", "shownRatingForOrders"].forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 export function clearModuleAuth(module) {
   localStorage.removeItem(`${module}_accessToken`);
   localStorage.removeItem(`${module}_refreshToken`);
   localStorage.removeItem(`${module}_authenticated`);
   localStorage.removeItem(`${module}_user`);
   if (module === "user") {
+    clearUserSessionCache();
     localStorage.removeItem("userToken");
     localStorage.removeItem("token");
     localStorage.removeItem("userInfo");
@@ -254,6 +269,18 @@ export function setAuthData(module, token, user, refreshToken = null) {
     // Prevent stale restaurant profile data from previous account after re-login.
     if (module === "restaurant") {
       clearRestaurantSessionCache();
+    }
+
+    // Logging in as a different customer without logging out first: drop the previous customer's orders.
+    if (module === "user") {
+      try {
+        const previous = JSON.parse(localStorage.getItem("user_user") || "null");
+        const previousId = String(previous?._id || previous?.id || previous?.userId || "");
+        const nextId = String(user?._id || user?.id || user?.userId || "");
+        if (previousId && nextId && previousId !== nextId) clearUserSessionCache();
+      } catch {
+        /* ignore */
+      }
     }
 
     localStorage.setItem(tokenKey, token);

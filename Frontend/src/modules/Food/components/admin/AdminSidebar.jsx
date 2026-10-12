@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import {
   FOOD_ADMIN_HOME,
   TAXI_ADMIN_HOME,
+  GLOBAL_ADMIN_HOME,
+  prefetchGlobalAdmin,
   prefetchTaxiAdmin,
 } from "@/shared/utils/activeModule.js"
 import {
@@ -54,8 +56,8 @@ import {
 } from "lucide-react"
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
-import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
-import { filterFoodSidebarMenu, normalizeFoodAdminProfile, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
+import { adminSidebarMenu, globalSidebarMenu } from "@food/utils/adminSidebarMenu"
+import { filterFoodSidebarMenu, normalizeFoodAdminProfile, isFoodSuperAdminLike, canAccessGlobalSettings } from "@food/constants/foodAdminAccess"
 import { getCurrentUser, setAuthData, getModuleToken } from "@food/utils/auth"
 import { setUnifiedAdminSession } from "../../../Taxi/modules/admin/services/adminSession"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
@@ -162,6 +164,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
   const switchAdminModule = (path) => {
     if (path === TAXI_ADMIN_HOME) prefetchTaxiAdmin()
+    if (path === GLOBAL_ADMIN_HOME) prefetchGlobalAdmin()
     startTransition(() => {
       navigate(path)
     })
@@ -378,10 +381,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   // expandedSections state is initialized above in getInitialStates consolidation
 
 
+  const isGlobalPath = location.pathname.startsWith("/admin/global")
+
   // Filter menu items based on search query and admin permissions
   const permissionFilteredMenu = useMemo(() => {
+    if (isGlobalPath) return globalSidebarMenu
     return filterFoodSidebarMenu(adminSidebarMenu, adminProfile)
-  }, [adminProfile])
+  }, [adminProfile, isGlobalPath])
 
   const filteredMenuData = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -858,7 +864,7 @@ const SidebarBadge = ({ count, isActive = false }) => {
                   onClick={() => switchAdminModule(FOOD_ADMIN_HOME)}
                   className={cn(
                     "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
-                    location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
+                    !isGlobalPath && (location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/")
                       ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
                   )}
@@ -866,7 +872,7 @@ const SidebarBadge = ({ count, isActive = false }) => {
                   <UtensilsCrossed
                     className={cn(
                       "w-3.5 h-3.5",
-                      location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/"
+                      !isGlobalPath && (location.pathname.includes("/admin/food") || location.pathname === "/admin" || location.pathname === "/admin/")
                         ? "text-black"
                         : "text-neutral-500"
                     )}
@@ -894,6 +900,23 @@ const SidebarBadge = ({ count, isActive = false }) => {
                     )}
                   />
                   Taxi
+                </button>
+              )}
+              {canAccessGlobalSettings(adminProfile) && (
+                <button
+                  type="button"
+                  onClick={() => switchAdminModule(GLOBAL_ADMIN_HOME)}
+                  onMouseEnter={prefetchGlobalAdmin}
+                  onFocus={prefetchGlobalAdmin}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
+                    isGlobalPath
+                      ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] scale-[1.02]"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
+                  )}
+                >
+                  <Globe className={cn("w-3.5 h-3.5", isGlobalPath ? "text-black" : "text-neutral-500")} />
+                  Global
                 </button>
               )}
             </div>

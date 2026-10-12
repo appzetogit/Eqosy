@@ -208,7 +208,7 @@ const PhoneRegistration = () => {
         >
             <div className="fixed inset-0 z-0 bg-slate-50">
                 <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none" />
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#F38F24]/5 rounded-full blur-[80px] pointer-events-none" />
+                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] pointer-events-none" />
             </div>
 
             <main className="relative z-10 mx-auto max-w-sm px-6 pt-8 pb-20 flex flex-col min-h-[100dvh] justify-center">
@@ -240,16 +240,16 @@ const PhoneRegistration = () => {
                     >
                         <div className="flex items-center gap-2.5">
                             <div
-                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#F38F24]/10 text-[#F38F24] shadow-sm border border-[#F38F24]/20"
+                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-[color:var(--app-primary,#F38F24)]/10 text-[color:var(--app-primary,#F38F24)] shadow-sm border border-[color:var(--app-primary,#F38F24)]/20"
                             >
                                 <modeConfig.Icon size={16} strokeWidth={2.5} />
                             </div>
-                            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#F38F24]">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[color:var(--app-primary,#F38F24)]">
                                 {modeConfig.badge}
                             </span>
                         </div>
                         <h1 className="font-sans text-[32px] font-black leading-tight tracking-tight text-slate-900 mt-1">
-                            {modeConfig.title.split(' ')[0]} <span className="text-[#F38F24]">{modeConfig.title.split(' ').slice(1).join(' ')}</span>
+                            {modeConfig.title.split(' ')[0]} <span className="text-[color:var(--app-primary,#F38F24)]">{modeConfig.title.split(' ').slice(1).join(' ')}</span>
                         </h1>
                         <p className="text-[13px] leading-relaxed text-slate-500 font-medium max-w-[28ch]">
                             {modeConfig.subtitle}
@@ -265,7 +265,7 @@ const PhoneRegistration = () => {
                 >
                     <motion.div
                         variants={itemVariants}
-                        className="flex items-center gap-1.5 mb-6 bg-[#F38F24]/5 p-1.5 rounded-[1rem] overflow-x-auto scroll-smooth w-full border border-[#F38F24]/10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                        className="flex items-center gap-1.5 mb-6 bg-[color:var(--app-primary,#F38F24)]/5 p-1.5 rounded-[1rem] overflow-x-auto scroll-smooth w-full border border-[color:var(--app-primary,#F38F24)]/10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
                     >
                         {roleOptions.map((option) => {
                             const active = role === option.id;
@@ -276,11 +276,11 @@ const PhoneRegistration = () => {
                                     whileTap={{ scale: 0.97 }}
                                     onClick={() => setRole(option.id)}
                                     className={`flex-1 min-w-max flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all whitespace-nowrap ${active
-                                            ? 'bg-white text-[#F38F24] shadow-sm border border-[#F38F24]/20'
+                                            ? 'bg-white text-[color:var(--app-primary,#F38F24)] shadow-sm border border-[color:var(--app-primary,#F38F24)]/20'
                                             : 'text-slate-500 hover:text-slate-700'
                                         }`}
                                 >
-                                    <option.Icon size={14} strokeWidth={active ? 2.5 : 2} className={active ? 'text-[#F38F24]' : ''} />
+                                    <option.Icon size={14} strokeWidth={active ? 2.5 : 2} className={active ? 'text-[color:var(--app-primary,#F38F24)]' : ''} />
                                     <span className="text-[11px] font-bold uppercase tracking-wide">{option.label}</span>
                                 </motion.button>
                             );
@@ -298,7 +298,7 @@ const PhoneRegistration = () => {
                                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-1">
                                     Mobile Number
                                 </label>
-                                <div className={`flex items-center gap-0 bg-slate-50 border ${error ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200'} rounded-[1rem] focus-within:border-[#F38F24] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#F38F24]/10 transition-all overflow-hidden h-14`}>
+                                <div className={`flex items-center gap-0 bg-slate-50 border ${error ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200'} rounded-[1rem] focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:bg-white focus-within:ring-4 focus-within:ring-[color:var(--app-primary,#F38F24)]/10 transition-all overflow-hidden h-14`}>
                                     <div className="px-4 border-r border-slate-200 bg-transparent text-slate-900 font-bold text-lg h-full flex items-center">
                                         +91
                                     </div>
@@ -330,7 +330,7 @@ const PhoneRegistration = () => {
                                           id="terms"
                                           checked={agreed}
                                           onChange={() => setAgreed(!agreed)}
-                                          className="peer h-[16px] w-[16px] cursor-pointer appearance-none rounded-[4px] border-[1.5px] border-slate-300 bg-white transition-all checked:bg-[#F38F24] checked:border-[#F38F24]"
+                                          className="peer h-[16px] w-[16px] cursor-pointer appearance-none rounded-[4px] border-[1.5px] border-slate-300 bg-white transition-all checked:bg-[color:var(--app-primary,#F38F24)] checked:border-[color:var(--app-primary,#F38F24)]"
                                       />
                                       <CheckCircle2 className="pointer-events-none absolute inset-0 m-auto h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
                                   </div>
@@ -345,7 +345,7 @@ const PhoneRegistration = () => {
                                               });
                                               navigate('/terms', { state: { role, returnTo: location.pathname } });
                                           }}
-                                          className="text-[#F38F24] font-bold hover:text-orange-600"
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600"
                                       >
                                           Terms
                                       </button>
@@ -359,7 +359,7 @@ const PhoneRegistration = () => {
                                               });
                                               navigate('/privacy', { state: { role, returnTo: location.pathname } });
                                           }}
-                                          className="text-[#F38F24] font-bold hover:text-orange-600"
+                                          className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600"
                                       >
                                           Privacy Policy
                                       </button>.
@@ -385,7 +385,7 @@ const PhoneRegistration = () => {
 
                     <motion.div variants={itemVariants} className="space-y-4 pt-2">
                         <div className="flex items-center justify-center gap-2 py-1 w-full flex-wrap mx-auto px-2 text-slate-500 text-center">
-                            <Sparkles size={12} className="text-[#F38F24] shrink-0" />
+                            <Sparkles size={12} className="text-[color:var(--app-primary,#F38F24)] shrink-0" />
                             <span className="text-[9px] font-bold tracking-widest uppercase text-slate-400 leading-tight">{modeConfig.highlight}</span>
                         </div>
 
@@ -396,9 +396,9 @@ const PhoneRegistration = () => {
                             className="w-full text-[12px] font-medium text-slate-500 transition-all pb-4"
                         >
                             {isLoginPage ? (
-                                <>Don't have an account? <span className="text-[#F38F24] font-bold hover:text-orange-600">Join Now</span></>
+                                <>Don't have an account? <span className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600">Join Now</span></>
                             ) : (
-                                <>Already a captain? <span className="text-[#F38F24] font-bold hover:text-orange-600">Sign in</span></>
+                                <>Already a captain? <span className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600">Sign in</span></>
                             )}
                         </motion.button>
                     </motion.div>

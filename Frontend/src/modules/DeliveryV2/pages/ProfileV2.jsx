@@ -19,6 +19,7 @@ import DeleteAccountModal from "@food/components/DeleteAccountModal";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner"
 import { clearModuleAuth } from "@food/utils/auth"
+import LanguageRow from '@/shared/language/LanguageRow'
 
 /**
  * ProfileV2 - 1:1 EXACT Restoration of the Legacy Profile Hub.
@@ -224,6 +225,8 @@ export const ProfileV2 = () => {
           </div>
 
           {/* Partner options Section */}
+          <LanguageRow className="border border-gray-100" />
+
           {/* Logout & Account Section */}
           <div className="space-y-3">
             {/* Delete Account */}

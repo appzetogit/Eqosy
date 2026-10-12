@@ -101,7 +101,7 @@ import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailabil
 import HomeHeader from "@food/components/user/home/HomeHeader";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
 import { syncThemeForPath } from "@/shared/utils/theme.js";
-import GrocerySection from "@food/components/user/home/QuickSection";
+import GrocerySection, { prefetchGrocery } from "@food/components/user/home/QuickSection";
 import PromoRow from "@food/components/user/home/PromoRow";
 import PromotionBannerCarousel from "@food/components/user/home/PromotionBannerCarousel";
 import OutOfServiceView from "@food/components/user/OutOfServiceView";
@@ -1578,6 +1578,10 @@ export default function Home() {
     error: zoneError,
     refreshZone,
   } = useZone(effectiveLocation);
+  // Warm the Grocery cache as soon as the zone is known so switching to the Grocery tab is instant.
+  useEffect(() => {
+    if (zoneId) prefetchGrocery(zoneId);
+  }, [zoneId]);
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
@@ -3088,7 +3092,7 @@ export default function Home() {
               className="flex-shrink-0 flex flex-col items-center gap-2 group transition-all duration-300 hover:-translate-y-1"
               style={{ animation: `fade-in-up 0.5s ease-out forwards ${index * 0.05}s`, opacity: 0 }}
             >
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 group-hover:border-[#EB590E] transition-colors">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 group-hover:border-[color:var(--app-primary,#EB590E)] transition-colors">
                 <OptimizedImage
                   src={category.image}
                   alt={category.name}
@@ -3109,8 +3113,8 @@ export default function Home() {
             className="flex-shrink-0 flex flex-col items-center gap-2 cursor-pointer group"
             onClick={() => navigate("/food/user/categories")}
           >
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-orange-50 dark:bg-orange-950 flex items-center justify-center border border-orange-100 group-hover:border-[#EB590E] transition-all">
-              <Plus className="w-6 h-6 text-[#EB590E]" />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-orange-50 dark:bg-orange-950 flex items-center justify-center border border-orange-100 group-hover:border-[color:var(--app-primary,#EB590E)] transition-all">
+              <Plus className="w-6 h-6 text-[color:var(--app-primary,#EB590E)]" />
             </div>
             <span className="text-xs font-medium text-gray-700">See All</span>
           </div>
@@ -3152,7 +3156,7 @@ export default function Home() {
                 key={filter.id}
                 onClick={() => handleToggleHorizontalFilter(filter.id)}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 shadow-sm flex-shrink-0 ${isActive
-                    ? "bg-[#EB590E] border-[#EB590E] text-white hover:bg-[#D94F0C]"
+                    ? "bg-[color:var(--app-primary,#EB590E)] border-[color:var(--app-primary,#EB590E)] text-white hover:bg-[color:var(--app-secondary,#D94F0C)]"
                     : "bg-white dark:bg-[#1a1a1a] border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
               >
@@ -3286,7 +3290,7 @@ export default function Home() {
       />
 
       <AnimatePresence mode="wait">
-        {zoneLoading && (
+        {zoneLoading && superAppVertical === "food" && (
           <div key="zone-loading" className="px-4 py-6 max-w-7xl mx-auto space-y-6">
             <RestaurantGridSkeleton />
           </div>
@@ -3480,8 +3484,8 @@ export default function Home() {
                             onClick={() => setSelectedCategory(null)}
                             className="flex flex-col items-center gap-1.5 flex-shrink-0 group cursor-pointer"
                           >
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] flex items-center justify-center shadow-sm group-hover:border-[#EB590E] transition-all">
-                              <Grid2x2 className="w-6 h-6 text-gray-500 group-hover:text-[#EB590E]" />
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] flex items-center justify-center shadow-sm group-hover:border-[color:var(--app-primary,#EB590E)] transition-all">
+                              <Grid2x2 className="w-6 h-6 text-gray-500 group-hover:text-[color:var(--app-primary,#EB590E)]" />
                             </div>
                             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">All</span>
                           </button>
@@ -3498,11 +3502,11 @@ export default function Home() {
                                 type="button"
                                 onClick={(e) => handleCategoryClick(cat, e)}
                                 className={`flex flex-col items-center gap-1.5 flex-shrink-0 group cursor-pointer transition-all ${
-                                  isSelectedCat ? "border-b-2 border-[#EB590E] pb-1" : ""
+                                  isSelectedCat ? "border-b-2 border-[color:var(--app-primary,#EB590E)] pb-1" : ""
                                 }`}
                               >
                                 <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 transition-all shadow-sm ${
-                                  isSelectedCat ? "border-[#EB590E] shadow-md ring-2 ring-[#EB590E]/30 scale-105" : "border-transparent group-hover:border-[#EB590E]"
+                                  isSelectedCat ? "border-[color:var(--app-primary,#EB590E)] shadow-md ring-2 ring-[color:var(--app-primary,#EB590E)]/30 scale-105" : "border-transparent group-hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                                   <OptimizedImage
                                     src={cat.image || foodImages[0]}
@@ -3511,7 +3515,7 @@ export default function Home() {
                                   />
                                 </div>
                                 <span className={`text-xs font-semibold whitespace-nowrap transition-colors ${
-                                  isSelectedCat ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400 group-hover:text-[#EB590E]"
+                                  isSelectedCat ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400 group-hover:text-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                                   {cat.name}
                                 </span>
@@ -3547,7 +3551,7 @@ export default function Home() {
                                 onClick={() => handleToggleHorizontalFilter(filter.id)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex-shrink-0 ${
                                   isActive
-                                    ? "bg-[#EB590E] border-[#EB590E] text-white shadow-sm"
+                                    ? "bg-[color:var(--app-primary,#EB590E)] border-[color:var(--app-primary,#EB590E)] text-white shadow-sm"
                                     : "bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50"
                                 }`}
                               >
@@ -3636,7 +3640,7 @@ export default function Home() {
 
                 {recommendedForYouRestaurants.length > 0 && (
                   <motion.section
-                    className="content-auto space-y-3 pt-2 sm:pt-4"
+                    className="space-y-3 pt-2 sm:pt-4"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -3698,7 +3702,7 @@ export default function Home() {
 
                 {/* Restaurants - Enhanced with Animations */}
                 <motion.section
-                  className="content-auto space-y-0 pt-3 sm:pt-4 lg:pt-6 pb-8 md:pb-10"
+                  className="space-y-0 pt-3 sm:pt-4 lg:pt-6 pb-8 md:pb-10"
                   initial={false}
                   animate={{ opacity: 1 }}>
                   <div className="px-4 mb-3 lg:mb-4">
@@ -4016,7 +4020,7 @@ export default function Home() {
                           setSortBy(null);
                           setSelectedCuisine(null);
                         }}
-                        className="text-[#EB590E] font-medium text-sm">
+                        className="text-[color:var(--app-primary,#EB590E)] font-medium text-sm">
                         Clear all
                       </button>
                     </div>
@@ -4053,11 +4057,11 @@ export default function Home() {
                                 }
                               }}
                               className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive
-                                  ? "bg-white dark:bg-[#1a1a1a] text-[#EB590E]"
+                                  ? "bg-white dark:bg-[#1a1a1a] text-[color:var(--app-primary,#EB590E)]"
                                   : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                                 }`}>
                               {isActive && (
-                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#EB590E] rounded-r" />
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[color:var(--app-primary,#EB590E)] rounded-r" />
                               )}
                               <Icon className="h-5 w-5" strokeWidth={1.5} />
                               <span className="text-xs font-medium leading-tight">
@@ -4092,11 +4096,11 @@ export default function Home() {
                                 key={option.id || "relevance"}
                                 onClick={() => setSortBy(option.id)}
                                 className={`px-4 py-3 rounded-xl border text-left transition-colors ${sortBy === option.id
-                                    ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                    : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                    ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                    : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                   }`}>
                                 <span
-                                  className={`text-sm font-medium ${sortBy === option.id ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                  className={`text-sm font-medium ${sortBy === option.id ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                   {option.label}
                                 </span>
                               </button>
@@ -4116,30 +4120,30 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("pricing-same-price")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("pricing-same-price")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Tag
-                                className={`h-6 w-6 ${activeFilters.has("pricing-same-price") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("pricing-same-price") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("pricing-same-price") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("pricing-same-price") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Same price as restaurant
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("pricing-no-packaging")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("pricing-no-packaging")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Tag
-                                className={`h-6 w-6 ${activeFilters.has("pricing-no-packaging") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("pricing-no-packaging") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("pricing-no-packaging") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("pricing-no-packaging") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 No packaging charges
                               </span>
                             </button>
@@ -4158,30 +4162,30 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("delivery-under-30")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("delivery-under-30")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Timer
-                                className={`h-6 w-6 ${activeFilters.has("delivery-under-30") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("delivery-under-30") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("delivery-under-30") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("delivery-under-30") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under 30 mins
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("delivery-under-45")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("delivery-under-45")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Timer
-                                className={`h-6 w-6 ${activeFilters.has("delivery-under-45") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("delivery-under-45") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("delivery-under-45") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("delivery-under-45") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under 45 mins
                               </span>
                             </button>
@@ -4200,42 +4204,42 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("rating-35-plus")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-35-plus")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Star
-                                className={`h-6 w-6 ${activeFilters.has("rating-35-plus") ? "text-[#EB590E] fill-[#EB590E]" : "text-gray-400 dark:text-gray-500"}`}
+                                className={`h-6 w-6 ${activeFilters.has("rating-35-plus") ? "text-[color:var(--app-primary,#EB590E)] fill-[color:var(--app-primary,#EB590E)]" : "text-gray-400 dark:text-gray-500"}`}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("rating-35-plus") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("rating-35-plus") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Rated 3.5+
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("rating-4-plus")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-4-plus")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Star
-                                className={`h-6 w-6 ${activeFilters.has("rating-4-plus") ? "text-[#EB590E] fill-[#EB590E]" : "text-gray-400 dark:text-gray-500"}`}
+                                className={`h-6 w-6 ${activeFilters.has("rating-4-plus") ? "text-[color:var(--app-primary,#EB590E)] fill-[color:var(--app-primary,#EB590E)]" : "text-gray-400 dark:text-gray-500"}`}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("rating-4-plus") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("rating-4-plus") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Rated 4.0+
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("rating-45-plus")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-45-plus")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <Star
-                                className={`h-6 w-6 ${activeFilters.has("rating-45-plus") ? "text-[#EB590E] fill-[#EB590E]" : "text-gray-400 dark:text-gray-500"}`}
+                                className={`h-6 w-6 ${activeFilters.has("rating-45-plus") ? "text-[color:var(--app-primary,#EB590E)] fill-[color:var(--app-primary,#EB590E)]" : "text-gray-400 dark:text-gray-500"}`}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("rating-45-plus") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("rating-45-plus") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Rated 4.5+
                               </span>
                             </button>
@@ -4254,30 +4258,30 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("distance-under-1km")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("distance-under-1km")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <MapPin
-                                className={`h-6 w-6 ${activeFilters.has("distance-under-1km") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("distance-under-1km") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("distance-under-1km") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("distance-under-1km") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under 1 km
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("distance-under-2km")}
                               className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("distance-under-2km")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <MapPin
-                                className={`h-6 w-6 ${activeFilters.has("distance-under-2km") ? "text-[#EB590E]" : "text-gray-600 dark:text-gray-400"}`}
+                                className={`h-6 w-6 ${activeFilters.has("distance-under-2km") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-600 dark:text-gray-400"}`}
                                 strokeWidth={1.5}
                               />
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("distance-under-2km") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("distance-under-2km") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under 2 km
                               </span>
                             </button>
@@ -4296,22 +4300,22 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("price-under-200")}
                               className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-200")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("price-under-200") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("price-under-200") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under â‚¹200
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("price-under-500")}
                               className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-500")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("price-under-500") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("price-under-500") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Under â‚¹500
                               </span>
                             </button>
@@ -4332,22 +4336,22 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("top-rated")}
                               className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("top-rated")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("top-rated") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("top-rated") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Top Rated
                               </span>
                             </button>
                             <button
                               onClick={() => toggleFilter("trusted")}
                               className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("trusted")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("trusted") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("trusted") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Trusted by 1000+ users
                               </span>
                             </button>
@@ -4366,11 +4370,11 @@ export default function Home() {
                             <button
                               onClick={() => toggleFilter("has-offers")}
                               className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("has-offers")
-                                  ? "border-[#EB590E] bg-[#FFF2EB] dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-800 hover:border-[#EB590E]"
+                                  ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-green-900/20"
+                                  : "border-gray-200 dark:border-gray-800 hover:border-[color:var(--app-primary,#EB590E)]"
                                 }`}>
                               <span
-                                className={`text-sm font-medium ${activeFilters.has("has-offers") ? "text-[#EB590E]" : "text-gray-700 dark:text-gray-300"}`}>
+                                className={`text-sm font-medium ${activeFilters.has("has-offers") ? "text-[color:var(--app-primary,#EB590E)]" : "text-gray-700 dark:text-gray-300"}`}>
                                 Restaurants with offers
                               </span>
                             </button>
@@ -4396,7 +4400,7 @@ export default function Home() {
                           );
                         }}
                         className={`flex-1 py-3 font-semibold rounded-xl transition-colors ${activeFilters.size > 0 || sortBy || selectedCuisine
-                            ? "bg-[#EB590E] text-white hover:bg-[#D94F0C]"
+                            ? "bg-[color:var(--app-primary,#EB590E)] text-white hover:bg-[color:var(--app-secondary,#D94F0C)]"
                             : "bg-gray-200 text-gray-500"
                           }`}
                         disabled={isLoadingFilterResults}>
@@ -4526,7 +4530,7 @@ export default function Home() {
                           setIsApplyingVegMode(false);
                         }, 2000);
                       }}
-                      className="w-full bg-[#EB590E] text-white font-semibold py-2.5 rounded-xl hover:bg-[#D94F0C] transition-colors mb-2 text-sm">
+                      className="w-full bg-[color:var(--app-primary,#EB590E)] text-white font-semibold py-2.5 rounded-xl hover:bg-[color:var(--app-secondary,#D94F0C)] transition-colors mb-2 text-sm">
                       Apply
                     </button>
                   </div>
@@ -5097,7 +5101,7 @@ export default function Home() {
           </motion.div>
         )}
 
-        {!zoneLoading && !isOutOfService && superAppVertical === "grocery" && (
+        {!isOutOfService && superAppVertical === "grocery" && (
           <motion.div
             key="grocery-panel"
             initial={{ opacity: 0 }}
@@ -5105,7 +5109,13 @@ export default function Home() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
-            <GrocerySection />
+            <GrocerySection
+              location={effectiveLocation}
+              zoneId={zoneId}
+              zoneStatus={zoneStatus}
+              zoneError={zoneError}
+              refreshZone={refreshZone}
+            />
           </motion.div>
         )}
       </AnimatePresence>

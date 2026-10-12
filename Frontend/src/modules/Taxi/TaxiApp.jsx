@@ -287,10 +287,8 @@ const AdminCMSAbout = lazy(() => import('./modules/admin/pages/cms/CMSAbout'));
 const AdminCMSDriver = lazy(() => import('./modules/admin/pages/cms/CMSDriver'));
 const AdminCMSUser = lazy(() => import('./modules/admin/pages/cms/CMSUser'));
 const AdminCMSContact = lazy(() => import('./modules/admin/pages/cms/CMSContact'));
-const AdminCMSLegal = lazy(() => import('./modules/admin/pages/cms/CMSLegal'));
 const AdminGlobalSettings = lazy(() => import('./modules/admin/pages/settings/GlobalSettings'));
 const AdminGeneralSettings = lazy(() => import('./modules/admin/pages/settings/GeneralSettings'));
-const AdminCustomizationSettings = lazy(() => import('./modules/admin/pages/settings/CustomizationSettings'));
 const AdminTransportRideSettings = lazy(() => import('./modules/admin/pages/settings/TransportRideSettings'));
 const AdminBidRideSettings = lazy(() => import('./modules/admin/pages/settings/BidRideSettings'));
 const AdminWalletSettings = lazy(() => import('./modules/admin/pages/settings/WalletSettings'));
@@ -701,6 +699,8 @@ const DriverEntryRedirect = () => {
 };
 
 function TaxiApp() {
+  const { pathname: taxiPathname } = useLocation();
+  const isTaxiAdminPath = taxiPathname.startsWith('/taxi/admin');
   useEffect(() => {
     installNativeFcmBridge();
     installBrowserFcmRegistration();
@@ -715,7 +715,7 @@ function TaxiApp() {
         <UserAccountInvalidationListener />
         <UserUpcomingRideReminderBootstrap />
         <MainLayout>
-          <Suspense fallback={<TaxiAppSkeleton />}>
+          <Suspense fallback={isTaxiAdminPath ? <div className="min-h-screen bg-neutral-100" /> : <TaxiAppSkeleton />}>
             <Toaster position="top-right" closeButton />
             <Routes>
               {/* Static / Public routes */}
@@ -1584,32 +1584,26 @@ function TaxiApp() {
                 <Route path="safety" element={<AdminSafetyCenter />} />
                 <Route path="cms" element={<AdminCMSBuilder />} />
                 <Route
-                  path="settings/cms/header-footer"
-                  element={<AdminHeaderFooter />}
+                  path="settings/cms/header-footer" element={<Navigate to="/admin/global/cms/header-footer" replace />}
                 />
                 <Route
-                  path="settings/cms/home"
-                  element={<AdminCMSHome />}
+                  path="settings/cms/home" element={<Navigate to="/admin/global/cms/home" replace />}
                 />
                 <Route
-                  path="settings/cms/about"
-                  element={<AdminCMSAbout />}
+                  path="settings/cms/about" element={<Navigate to="/admin/global/cms/about" replace />}
                 />
                 <Route
-                  path="settings/cms/driver"
-                  element={<AdminCMSDriver />}
+                  path="settings/cms/driver" element={<Navigate to="/admin/global/cms/driver" replace />}
                 />
                 <Route
-                  path="settings/cms/user"
-                  element={<AdminCMSUser />}
+                  path="settings/cms/user" element={<Navigate to="/admin/global/cms/user" replace />}
                 />
                 <Route
-                  path="settings/cms/contact"
-                  element={<AdminCMSContact />}
+                  path="settings/cms/contact" element={<Navigate to="/admin/global/cms/contact" replace />}
                 />
                 <Route
                   path="settings/cms/legal"
-                  element={<AdminCMSLegal />}
+                  element={<Navigate to="/admin/global/legal/driver-dmv" replace />}
                 />
                 <Route
                   path="support/ticket-title"
@@ -1655,11 +1649,11 @@ function TaxiApp() {
 
                 <Route
                   path="settings/business/general"
-                  element={<AdminGeneralSettings />}
+                  element={<Navigate to="/admin/global/branding" replace />}
                 />
                 <Route
                   path="settings/business/customization"
-                  element={<AdminCustomizationSettings />}
+                  element={<Navigate to="/admin/global/customization" replace />}
                 />
                 <Route
                   path="settings/business/transport-ride"
@@ -1671,17 +1665,15 @@ function TaxiApp() {
                 />
 
                 <Route
-                  path="settings/app/wallet"
-                  element={<AdminWalletSettings />}
+                  path="settings/app/wallet" element={<Navigate to="/admin/global/app/wallet" replace />}
                 />
-                <Route path="settings/app/tip" element={<AdminTipSettings />} />
+                <Route path="settings/app/tip" element={<Navigate to="/admin/global/app/tip" replace />} />
                 <Route
                   path="settings/app/country"
                   element={<AdminCountryManagement />}
                 />
                 <Route
-                  path="settings/app/onboard"
-                  element={<AdminOnboardingScreens />}
+                  path="settings/app/onboard" element={<Navigate to="/admin/global/app/onboard" replace />}
                 />
 
                 <Route
@@ -1694,24 +1686,19 @@ function TaxiApp() {
                 />
 
                 <Route
-                  path="settings/third-party/payment"
-                  element={<AdminPaymentGateways />}
+                  path="settings/third-party/payment" element={<Navigate to="/admin/global/third-party/payment" replace />}
                 />
                 <Route
-                  path="settings/third-party/sms"
-                  element={<AdminSMSGateways />}
+                  path="settings/third-party/sms" element={<Navigate to="/admin/global/third-party/sms" replace />}
                 />
                 <Route
-                  path="settings/third-party/firebase"
-                  element={<AdminFirebaseSettings />}
+                  path="settings/third-party/firebase" element={<Navigate to="/admin/global/third-party/firebase" replace />}
                 />
                 <Route
-                  path="settings/third-party/map-apis"
-                  element={<AdminMapSettings />}
+                  path="settings/third-party/map-apis" element={<Navigate to="/admin/global/third-party/map-apis" replace />}
                 />
                 <Route
-                  path="settings/third-party/mail"
-                  element={<AdminMailSettings />}
+                  path="settings/third-party/mail" element={<Navigate to="/admin/global/third-party/mail" replace />}
                 />
                 <Route
                   path="settings/third-party/notification-channel"

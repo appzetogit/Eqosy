@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
-import Lenis from "lenis"
 import { ArrowLeft, Zap } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@food/components/ui/radio-group"
 import { Label } from "@food/components/ui/label"
@@ -15,25 +14,6 @@ export default function RushHour() {
   const goBack = useRestaurantBackNavigation()
   const [selectedTime, setSelectedTime] = useState("30")
 
-  // Lenis smooth scrolling
-  useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
-
-    function raf(time) {
-      lenis.raf(time)
-      requestAnimationFrame(raf)
-    }
-
-    requestAnimationFrame(raf)
-
-    return () => {
-      lenis.destroy()
-    }
-  }, [])
 
   const handleConfirm = () => {
     // Handle rush hour confirmation logic here

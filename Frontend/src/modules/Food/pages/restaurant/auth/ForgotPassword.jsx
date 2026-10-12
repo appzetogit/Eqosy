@@ -246,7 +246,7 @@ export default function RestaurantForgotPassword() {
       <div className="relative h-[35dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
         {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -311,9 +311,9 @@ export default function RestaurantForgotPassword() {
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                     Email Address
                   </label>
-                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden group">
+                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group">
                     <div className="flex items-center px-4 h-14 bg-transparent text-gray-400">
-                      <Mail size={20} className="group-focus-within:text-[#F38F24] transition-colors" />
+                      <Mail size={20} className="group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
                     </div>
                     <input
                       id="email"
@@ -368,7 +368,7 @@ export default function RestaurantForgotPassword() {
                         onChange={(e) => handleOtpChange(index, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(index, e)}
                         onPaste={index === 0 ? handleOtpPaste : undefined}
-                        className="h-14 w-12 text-center text-2xl font-black bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 rounded-xl text-[#1A1A1A] focus:border-[#F38F24] focus:ring-1 focus:ring-[#F38F24] transition-all outline-none"
+                        className="h-14 w-12 text-center text-2xl font-black bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 rounded-xl text-[#1A1A1A] focus:border-[color:var(--app-primary,#F38F24)] focus:ring-1 focus:ring-[color:var(--app-primary,#F38F24)] transition-all outline-none"
                         disabled={isLoading}
                       />
                     ))}
@@ -382,7 +382,7 @@ export default function RestaurantForgotPassword() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="text-sm font-bold text-[#1A1A1A] hover:text-[#F38F24] transition-colors"
+                    className="text-sm font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors"
                     disabled={isLoading}
                   >
                     Change email
@@ -391,7 +391,7 @@ export default function RestaurantForgotPassword() {
                     type="button"
                     onClick={handleResendOtp}
                     disabled={resendTimer > 0 || isLoading}
-                    className="text-sm font-bold text-[#F38F24] disabled:text-gray-400 transition-colors"
+                    className="text-sm font-bold text-[color:var(--app-primary,#F38F24)] disabled:text-gray-400 transition-colors"
                   >
                     {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend code"}
                   </button>
@@ -420,9 +420,9 @@ export default function RestaurantForgotPassword() {
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                     New Password
                   </label>
-                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden group">
+                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group">
                     <div className="flex items-center px-4 h-14 bg-transparent text-gray-400">
-                      <Lock size={20} className="group-focus-within:text-[#F38F24] transition-colors" />
+                      <Lock size={20} className="group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
                     </div>
                     <input
                       type={showPassword ? "text" : "password"}
@@ -448,9 +448,9 @@ export default function RestaurantForgotPassword() {
                   <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
                     Confirm Password
                   </label>
-                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden group">
+                  <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group">
                     <div className="flex items-center px-4 h-14 bg-transparent text-gray-400">
-                      <Lock size={20} className="group-focus-within:text-[#F38F24] transition-colors" />
+                      <Lock size={20} className="group-focus-within:text-[color:var(--app-primary,#F38F24)] transition-colors" />
                     </div>
                     <input
                       type={showConfirmPassword ? "text" : "password"}
@@ -493,7 +493,7 @@ export default function RestaurantForgotPassword() {
           <div className="mt-8 pt-6 border-t border-gray-100 flex justify-center">
             <button
               onClick={() => navigate("/food/restaurant/login")}
-              className="flex items-center gap-2 text-sm font-bold text-[#1A1A1A] hover:text-[#F38F24] transition-colors"
+              className="flex items-center gap-2 text-sm font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)] transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to login

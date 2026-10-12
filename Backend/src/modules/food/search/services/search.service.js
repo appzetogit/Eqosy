@@ -1,6 +1,6 @@
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
-import { FoodCategory } from '../../admin/models/category.model.js';
+import { FoodCategory, categorySectionFilter } from '../../admin/models/category.model.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import mongoose from 'mongoose';
@@ -67,7 +67,8 @@ export const searchUnified = async (query = {}, options = {}) => {
 
     if (isRestaurant === 'false') {
         baseRestaurantConditions.isRestaurant = false;
-    } else if (isRestaurant === 'true') {
+    } else if (isRestaurant !== 'all') {
+        // Default to restaurants so grocery stores never show in restaurant search.
         baseRestaurantConditions.isRestaurant = { $ne: false };
     }
 
@@ -348,7 +349,7 @@ export const getAdminCategories = async (query = {}) => {
         }
         if (query.isRestaurant === 'false') {
             restaurantFilter.isRestaurant = false;
-        } else if (query.isRestaurant === 'true') {
+        } else if (query.isRestaurant !== 'all') {
             restaurantFilter.isRestaurant = { $ne: false };
         }
 
@@ -373,6 +374,10 @@ export const getAdminCategories = async (query = {}) => {
             ]
         };
 
+        // Global categories belong to one section; never show a grocery category in Food or vice versa.
+        const sectionForCategories = query.isRestaurant === 'false' ? 'grocery' : (query.isRestaurant === 'all' ? null : 'food');
+        const sectionClause = sectionForCategories ? [categorySectionFilter(sectionForCategories)] : [];
+
         if (query.zoneId && mongoose.Types.ObjectId.isValid(query.zoneId)) {
             filter.$and = [
                 {
@@ -384,11 +389,15 @@ export const getAdminCategories = async (query = {}) => {
                 }
             ];
         }
+        if (sectionClause.length) {
+            filter.$and = [...(filter.$and || []), ...sectionClause];
+        }
 
         let categories = await FoodCategory.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
 
         if (!categories || categories.length === 0) {
-            categories = await FoodCategory.find({ isActive: { $ne: false } }).sort({ sortOrder: 1, name: 1 }).lean();
+            // Last-resort fallback must still respect the section.
+            categories = await FoodCategory.find({ isActive: { $ne: false }, ...(sectionClause[0] || {}) }).sort({ sortOrder: 1, name: 1 }).lean();
         }
         return categories;
     } catch (err) {

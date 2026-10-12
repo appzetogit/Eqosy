@@ -394,7 +394,7 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-[#EB590E] to-[#D94E0A] shadow-lg shadow-orange-500/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-orange-200">
+            <div className="bg-gradient-to-br from-[color:var(--app-primary,#EB590E)] to-[#D94E0A] shadow-lg shadow-orange-500/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-orange-200">
               <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
                 arriving in
               </p>

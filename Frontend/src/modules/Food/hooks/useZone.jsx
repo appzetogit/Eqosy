@@ -8,6 +8,7 @@ const debugError = (...args) => {}
 // Multiple screens/components call useZone(location). Without shared caching,
 // we spam /food/zones/detect with the same coords.
 const ZONE_CACHE_TTL_MS = 30 * 1000
+const ZONE_REQUEST_TIMEOUT_MS = 12 * 1000
 const zoneCache = new Map() // key -> { ts, payload }
 const zoneInFlight = new Map() // key -> Promise<payload>
 
@@ -88,8 +89,11 @@ export function useZone(location, options = {}) {
 
       const promise = (() => {
         if (key && zoneInFlight.has(key)) return zoneInFlight.get(key)
-        const p = zoneAPI
-          .detectZone(lat, lng)
+        // Never wait forever on a slow/hung backend: fail after 12s so the UI can offer Retry.
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Zone check timed out. Please retry.')), ZONE_REQUEST_TIMEOUT_MS)
+        )
+        const p = Promise.race([zoneAPI.detectZone(lat, lng), timeout])
           .then((response) => {
             if (!response?.data?.success) {
               throw new Error(response?.data?.message || 'Failed to detect zone')
@@ -182,6 +186,13 @@ export function useZone(location, options = {}) {
     const lat = location?.latitude;
     const lng = location?.longitude;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      // A manual retry must start a fresh request, not reuse a stuck one.
+      const key = zoneKeyFromCoords(lat, lng)
+      if (key) {
+        zoneCache.delete(key)
+        zoneInFlight.delete(key)
+      }
+      setZoneStatus('loading')
       detectZone(lat, lng);
     }
   }, [location?.latitude, location?.longitude, detectZone]);

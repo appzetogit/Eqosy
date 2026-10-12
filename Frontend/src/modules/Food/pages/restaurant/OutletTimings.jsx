@@ -1,7 +1,6 @@
 ﻿import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import Lenis from "lenis"
 import { ArrowLeft, ChevronUp, ChevronDown, Clock, Edit2 } from "lucide-react"
 import { Switch } from "@food/components/ui/switch"
 import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
@@ -94,25 +93,6 @@ export default function OutletTimings() {
     setHasUnsavedChanges(true)
   }, [days, loading])
 
-  // Lenis smooth scrolling
-  useEffect(() => {
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
-
-    function raf(time) {
-      lenis.raf(time)
-      requestAnimationFrame(raf)
-    }
-
-    requestAnimationFrame(raf)
-
-    return () => {
-      lenis.destroy()
-    }
-  }, [])
 
   const toggleDay = (day) => {
     setExpandedDay(expandedDay === day ? null : day)

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
-import { FoodCategory } from '../../admin/models/category.model.js';
+import { FoodCategory, categorySectionFilter, normalizeCategorySection } from '../../admin/models/category.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import {
@@ -23,7 +23,7 @@ const getRestaurantContext = async (restaurantId) => {
     }
 
     const restaurant = await FoodRestaurant.findById(restaurantId)
-        .select('zoneId pureVegRestaurant')
+        .select('zoneId pureVegRestaurant isRestaurant')
         .lean();
     if (!restaurant?._id) {
         throw new ValidationError('Restaurant not found');
@@ -32,7 +32,8 @@ const getRestaurantContext = async (restaurantId) => {
     return {
         restaurantId: toObjectId(restaurantId),
         zoneId: restaurant.zoneId ? String(restaurant.zoneId) : '',
-        pureVegRestaurant: restaurant.pureVegRestaurant === true
+        pureVegRestaurant: restaurant.pureVegRestaurant === true,
+        section: restaurant.isRestaurant === false ? 'grocery' : 'food'
     };
 };
 
@@ -96,7 +97,7 @@ export async function listRestaurantCategories(restaurantId, query = {}) {
             ]
         };
 
-    filter.$and = [visibilityFilter];
+    filter.$and = [visibilityFilter, categorySectionFilter(context.section)];
     if (search) {
         const term = escapeRegex(search.slice(0, 80));
         filter.$and.push({ name: { $regex: term, $options: 'i' } });
@@ -113,8 +114,8 @@ export async function listRestaurantCategories(restaurantId, query = {}) {
         .limit(limit)
         .select(
             compact
-                ? 'name image type foodTypeScope approvalStatus rejectionReason zoneId restaurantId createdByRestaurantId isActive sortOrder requestedAt approvedAt rejectedAt globalizedAt'
-                : 'name image type foodTypeScope approvalStatus rejectionReason zoneId restaurantId createdByRestaurantId isActive sortOrder requestedAt approvedAt rejectedAt globalizedAt createdAt updatedAt'
+                ? 'name image type section foodTypeScope approvalStatus rejectionReason zoneId restaurantId createdByRestaurantId isActive sortOrder requestedAt approvedAt rejectedAt globalizedAt'
+                : 'name image type section foodTypeScope approvalStatus rejectionReason zoneId restaurantId createdByRestaurantId isActive sortOrder requestedAt approvedAt rejectedAt globalizedAt createdAt updatedAt'
         );
 
     const [list, total] = await Promise.all([
@@ -170,6 +171,8 @@ export async function listPublicCategories(query = {}) {
     if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
         restaurantFilter.zoneId = new mongoose.Types.ObjectId(zoneIdRaw);
     }
+    const publicSection = query.isRestaurant === 'false' ? 'grocery' : 'food';
+    restaurantFilter.isRestaurant = publicSection === 'grocery' ? false : { $ne: false };
 
     const eligibleRestaurantIds = await FoodRestaurant.distinct('_id', restaurantFilter);
 
@@ -197,6 +200,7 @@ export async function listPublicCategories(query = {}) {
         ]
     };
 
+    filter.$and.push(categorySectionFilter(publicSection));
     if (search) {
         const term = escapeRegex(search.slice(0, 80));
         filter.$and.push({ name: { $regex: term, $options: 'i' } });
@@ -208,7 +212,7 @@ export async function listPublicCategories(query = {}) {
             .sort({ sortOrder: 1, createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('name image type foodTypeScope zoneId sortOrder createdAt updatedAt')
+            .select('name image type section foodTypeScope zoneId sortOrder createdAt updatedAt')
             .lean(),
         FoodCategory.countDocuments(filter)
     ]);
@@ -242,6 +246,7 @@ export async function createRestaurantCategory(restaurantId, body = {}) {
         name,
         image: typeof body.image === 'string' ? body.image.trim() : '',
         type: typeof body.type === 'string' ? body.type.trim() : '',
+        section: context.section,
         foodTypeScope,
         isActive: body.isActive !== false,
         sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,

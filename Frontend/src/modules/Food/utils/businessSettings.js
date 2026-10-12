@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Business Settings Utility
  * Handles loading and updating business settings (favicon, title, logo)
  */
@@ -31,8 +31,22 @@ if (cachedSettings) {
   setTimeout(() => {
     updateFavicon(cachedSettings.favicon?.url);
     updateTitle(normalizeCompanyName(cachedSettings.companyName));
+    applyThemeColors(cachedSettings);
   }, 0);
 }
+
+const applyThemeColors = (settings) => {
+  if (typeof document === 'undefined' || !settings) return;
+  const root = document.documentElement;
+  const entries = [
+    ['--app-theme-color', settings.themeColor],
+    ['--landing-theme-color', settings.landingThemeColor],
+    ['--admin-sidebar-text-color', settings.sidebarTextColor],
+  ];
+  entries.forEach(([name, value]) => {
+    if (/^#([0-9a-fA-F]{6})$/.test(String(value || ''))) root.style.setProperty(name, value);
+  });
+};
 
 let inFlightSettingsPromise = null;
 
@@ -70,6 +84,7 @@ export const loadBusinessSettings = async () => {
         
         updateFavicon(normalizedSettings.favicon?.url);
         updateTitle(normalizedSettings.companyName);
+        applyThemeColors(normalizedSettings);
         return normalizedSettings;
       }
       return cachedSettings;

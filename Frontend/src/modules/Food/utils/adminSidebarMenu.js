@@ -210,16 +210,6 @@ export const adminSidebarMenu = [
   },
   {
     type: "section",
-    label: "BANNER SETTINGS",
-    items: [
-      { type: "link", label: "Eqosy Landing Settings", path: "/admin/food/eqosy-landing-settings", icon: "Settings" },
-      { type: "link", label: "Landing Page Management", path: "/admin/food/hero-banner-management", icon: "Image" },
-      { type: "link", label: "Promotional Banners", path: "/admin/food/promotional-banner", icon: "Megaphone" },
-      { type: "link", label: "General Banners", path: "/admin/food/banners", icon: "Image" },
-    ],
-  },
-  {
-    type: "section",
     label: "DINING MANAGEMENT",
     items: [
       { type: "link", label: "Dining Banners", path: "/admin/food/dining-management", icon: "UtensilsCrossed" },
@@ -231,19 +221,60 @@ export const adminSidebarMenu = [
     label: "SYSTEM SETTINGS",
     items: [
       { type: "link", label: "Broadcast Notification", path: "/admin/food/broadcast-notification", icon: "Bell" },
-      { type: "link", label: "Business Setup", path: "/admin/food/business-setup", icon: "Settings" },
+    ],
+  },
+];
+
+// Settings shared by Food and Taxi live here (opened from the "Global" tab).
+export const globalSidebarMenu = [
+  {
+    type: "section",
+    label: "APP SETTINGS",
+    items: [
+      { type: "link", label: "Branding & Colors", path: "/admin/global/branding", icon: "Palette" },
+      { type: "link", label: "Customization", path: "/admin/global/customization", icon: "Settings" },
+      { type: "link", label: "Wallet Settings", path: "/admin/global/app/wallet", icon: "Settings" },
+      { type: "link", label: "Tip Settings", path: "/admin/global/app/tip", icon: "Settings" },
+      { type: "link", label: "App Onboarding Screens", path: "/admin/global/app/onboard", icon: "Image" },
     ],
   },
   {
     type: "section",
-    label: "PAGES & SOCIAL MEDIA",
+    label: "THIRD-PARTY",
     items: [
-      { type: "link", label: "About Us", path: "/admin/food/pages-social-media/about", icon: "Globe" },
-      { type: "link", label: "Terms & Conditions", path: "/admin/food/pages-social-media/terms", icon: "FileText" },
-      { type: "link", label: "Privacy Policy", path: "/admin/food/pages-social-media/privacy", icon: "Lock" },
-      { type: "link", label: "Refund Policy", path: "/admin/food/pages-social-media/refund", icon: "Receipt" },
-      { type: "link", label: "Shipping Policy", path: "/admin/food/pages-social-media/shipping", icon: "Truck" },
-      { type: "link", label: "Cancellation Policy", path: "/admin/food/pages-social-media/cancellation", icon: "X" },
+      { type: "link", label: "Payment Gateway", path: "/admin/global/third-party/payment", icon: "CreditCard" },
+      { type: "link", label: "SMS Gateway", path: "/admin/global/third-party/sms", icon: "Bell" },
+      { type: "link", label: "Firebase", path: "/admin/global/third-party/firebase", icon: "Bell" },
+      { type: "link", label: "Maps & Map APIs", path: "/admin/global/third-party/map-apis", icon: "Globe" },
+      { type: "link", label: "Mail Configuration", path: "/admin/global/third-party/mail", icon: "Globe" },
+    ],
+  },
+  {
+    type: "section",
+    label: "LANDING & BANNERS",
+    items: [
+      { type: "link", label: "Eqosy Landing Settings", path: "/admin/global/landing-settings", icon: "Settings" },
+      { type: "link", label: "Landing Page Management", path: "/admin/global/landing-management", icon: "Image" },
+      { type: "link", label: "Promotional Banners", path: "/admin/global/promotional-banners", icon: "Megaphone" },
+      { type: "link", label: "General Banners", path: "/admin/global/banners", icon: "Image" },
+      { type: "link", label: "Website Header-Footer", path: "/admin/global/cms/header-footer", icon: "Globe" },
+      { type: "link", label: "Website Home", path: "/admin/global/cms/home", icon: "Globe" },
+      { type: "link", label: "Website About Us", path: "/admin/global/cms/about", icon: "Globe" },
+      { type: "link", label: "Website Driver Page", path: "/admin/global/cms/driver", icon: "Globe" },
+      { type: "link", label: "Website User Page", path: "/admin/global/cms/user", icon: "Globe" },
+      { type: "link", label: "Website Contact", path: "/admin/global/cms/contact", icon: "Globe" },    ],
+  },
+  {
+    type: "section",
+    label: "LEGAL & PAGES",
+    items: [
+      { type: "link", label: "About Us", path: "/admin/global/legal/about", icon: "Globe" },
+      { type: "link", label: "Terms & Conditions", path: "/admin/global/legal/terms", icon: "FileText" },
+      { type: "link", label: "Privacy Policy", path: "/admin/global/legal/privacy", icon: "Lock" },
+      { type: "link", label: "Refund Policy", path: "/admin/global/legal/refund", icon: "Receipt" },
+      { type: "link", label: "Shipping Policy", path: "/admin/global/legal/shipping", icon: "Truck" },
+      { type: "link", label: "Cancellation Policy", path: "/admin/global/legal/cancellation", icon: "X" },
+      { type: "link", label: "Driver & DMV Documents", path: "/admin/global/legal/driver-dmv", icon: "FileText" },
     ],
   },
 ];

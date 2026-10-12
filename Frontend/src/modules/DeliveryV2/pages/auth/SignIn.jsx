@@ -98,7 +98,7 @@ export default function DeliverySignIn() {
       <div className="relative h-[40dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
         {/* Subtle Decorative Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F38F24]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
             <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
         </div>
 
@@ -115,7 +115,7 @@ export default function DeliverySignIn() {
             <h1 className="font-black text-3xl tracking-tighter leading-none mb-1 italic">
               {companyName.toUpperCase()} <span className="opacity-60">PARTNER</span>
             </h1>
-                <div className="bg-[#F38F24] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-block mt-1">
+                <div className="bg-[color:var(--app-primary,#F38F24)] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-block mt-1">
                   Delivery Partner
                 </div>
           </div>
@@ -146,7 +146,7 @@ export default function DeliverySignIn() {
                 Linked Identity
               </label>
 
-              <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[#F38F24] focus-within:ring-1 focus-within:ring-[#F38F24] transition-all overflow-hidden h-14">
+              <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden h-14">
                 <div className="px-5 border-r border-gray-200 dark:border-zinc-800 bg-transparent text-[#1A1A1A] dark:text-white font-black text-lg h-full flex items-center">
                   +91
                 </div>
@@ -196,9 +196,9 @@ export default function DeliverySignIn() {
           <footer className="mt-auto pt-10 text-center">
             <p className="text-xs text-gray-400 font-medium leading-relaxed">
               By continuing you agree to the<br />
-              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Delivery Charter</Link>
+              <Link to="/food/delivery/terms" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[color:var(--app-primary,#F38F24)]">Delivery Charter</Link>
               {" & "}
-              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[#F38F24]">Privacy Policy</Link>
+              <Link to="/food/pages/delivery-privacy" target="_blank" className="text-[#1A1A1A] dark:text-white font-bold hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
             </p>
           </footer>
         </div>

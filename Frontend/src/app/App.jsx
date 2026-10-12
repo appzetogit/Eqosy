@@ -1,5 +1,7 @@
 import AppRoutes from './routes'
 import ThemeSync from './ThemeSync'
+import AppColorSync from './AppColorSync'
+import LanguageSwitcher from '../shared/language/LanguageSwitcher'
 import ErrorBoundary from '../shared/components/ErrorBoundary'
 import OfflineBanner from '../shared/components/OfflineBanner'
 
@@ -8,6 +10,8 @@ function App() {
     <ErrorBoundary>
       <OfflineBanner />
       <ThemeSync />
+      <AppColorSync />
+      <LanguageSwitcher />
       <AppRoutes />
     </ErrorBoundary>
   )

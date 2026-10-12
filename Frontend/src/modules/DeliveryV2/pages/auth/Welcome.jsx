@@ -157,7 +157,7 @@ export default function DeliveryWelcome() {
                // Navigate directly to delivery home page (map with hotspots)
                navigate("/food/delivery", { replace: true })
              }}
-             className="w-full bg-[#F38F24] hover:bg-[#F38F24]/90 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg"
+             className="w-full bg-[color:var(--app-primary,#F38F24)] hover:bg-[color:var(--app-primary,#F38F24)]/90 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg"
            >
             <span>Start earning</span>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +275,7 @@ export default function DeliveryWelcome() {
           <div className="relative mb-6 z-10">
             {/* Outer ring animation */}
             <motion.div
-              className="absolute inset-0 w-32 h-32 rounded-full border-4 border-[#F38F24]"
+              className="absolute inset-0 w-32 h-32 rounded-full border-4 border-[color:var(--app-primary,#F38F24)]"
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1.2, opacity: 0 }}
               transition={{
@@ -287,7 +287,7 @@ export default function DeliveryWelcome() {
             
             {/* Main circle with checkmark */}
             <motion.div
-              className="w-32 h-32 bg-gradient-to-br from-[#F38F24] to-orange-600 rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden"
+              className="w-32 h-32 bg-gradient-to-br from-[color:var(--app-primary,#F38F24)] to-orange-600 rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{

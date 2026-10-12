@@ -32,7 +32,9 @@ const foodCategorySchema = new mongoose.Schema(
          */
         zoneId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodZone', index: true, default: undefined },
         isActive: { type: Boolean, default: true, index: true },
-        sortOrder: { type: Number, default: 0, index: true }
+        sortOrder: { type: Number, default: 0, index: true },
+        /** Which section the category belongs to: 'food' (restaurants) or 'grocery' (stores). Legacy docs without it use type === 'grocery'. */
+        section: { type: String, enum: ['food', 'grocery'], default: 'food', index: true }
     },
     {
         collection: 'food_categories',
@@ -47,3 +49,15 @@ foodCategorySchema.index({ createdByRestaurantId: 1, createdAt: -1 });
 
 export const FoodCategory = mongoose.model('FoodCategory', foodCategorySchema);
 
+
+/** Mongo filter for a section; also matches legacy categories that only had type === 'grocery'. */
+export const categorySectionFilter = (section) =>
+    section === 'grocery'
+        ? { $or: [{ section: 'grocery' }, { type: 'grocery' }] }
+        : { section: { $ne: 'grocery' }, type: { $ne: 'grocery' } };
+
+export const normalizeCategorySection = (value, fallback = 'food') => {
+    const v = String(value || '').trim().toLowerCase();
+    if (v === 'grocery' || v === 'food') return v;
+    return fallback;
+};

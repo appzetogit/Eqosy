@@ -5,7 +5,7 @@ import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
 import { FoodZone } from '../models/zone.model.js';
-import { FoodCategory } from '../models/category.model.js';
+import { FoodCategory, categorySectionFilter, normalizeCategorySection } from '../models/category.model.js';
 import { FoodItem } from '../models/food.model.js';
 import { FoodOffer } from '../models/offer.model.js';
 import { FoodOfferUsage } from '../models/offerUsage.model.js';
@@ -2938,6 +2938,10 @@ export async function getCategories(query, adminContext = null) {
         filter.$or = [{ name: { $regex: term, $options: 'i' } }];
     }
 
+    if (query.section === 'food' || query.section === 'grocery') {
+        filter.$and = [...(filter.$and || []), categorySectionFilter(query.section)];
+    }
+
     // Optional zone filter for admin list.
     // - zoneId=global => only global categories (zoneId missing)
     // - zoneId=<ObjectId> => only categories bound to that zone or restaurants in that zone
@@ -3060,6 +3064,7 @@ export async function createCategory(body, adminContext = null) {
         name,
         image: typeof body.image === 'string' ? body.image.trim() : '',
         type: typeof body.type === 'string' ? body.type.trim() : '',
+        section: normalizeCategorySection(body.section),
         foodTypeScope: normalizeCategoryFoodTypeScope(body.foodTypeScope, 'Both'),
         zoneId:
             body.zoneId && String(body.zoneId).trim()
@@ -3181,6 +3186,7 @@ export async function updateCategory(id, body, adminContext = null) {
     if (body.name !== undefined) doc.name = String(body.name || '').trim();
     if (body.image !== undefined) doc.image = String(body.image || '').trim();
     if (body.type !== undefined) doc.type = String(body.type || '').trim();
+    if (body.section !== undefined) doc.section = normalizeCategorySection(body.section, doc.section || 'food');
     if (body.foodTypeScope !== undefined) doc.foodTypeScope = nextFoodTypeScope;
     if (!doc.restaurantId && doc.createdByRestaurantId) {
         doc.zoneId = undefined;

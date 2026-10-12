@@ -1264,7 +1264,7 @@ export default function RestaurantsList() {
                     <th
                       className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider"
                     >
-                      isRestaurant
+                      Food / Grocery
                     </th>
                     <th
                       className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider"
@@ -1362,6 +1362,9 @@ export default function RestaurantsList() {
                               }`}
                             />
                           </button>
+                          <p className={`mt-1 text-[10px] font-bold ${restaurant.isRestaurant ? "text-blue-700" : "text-emerald-700"}`}>
+                            {restaurant.isRestaurant ? "🍽️ Food" : "🛒 Grocery"}
+                          </p>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center">
                           <button

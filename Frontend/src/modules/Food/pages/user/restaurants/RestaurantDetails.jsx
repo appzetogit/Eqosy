@@ -202,7 +202,7 @@ function RestaurantDetailsContent() {
       const isGroceryStore = restaurant?.isRestaurant === false
       return isGroceryStore
         ? "bg-emerald-50 ring-2 ring-[#1A9E5C] ring-inset dark:bg-emerald-950/20"
-        : "bg-orange-50 ring-2 ring-[#EB590E] ring-inset dark:bg-orange-950/20"
+        : "bg-orange-50 ring-2 ring-[color:var(--app-primary,#EB590E)] ring-inset dark:bg-orange-950/20"
     },
     [getMenuItemKey, highlightedDishId, restaurant?.isRestaurant],
   )
@@ -2051,7 +2051,7 @@ function RestaurantDetailsContent() {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
-              className="w-full pl-9 pr-8 py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#252525] text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#EB590E] focus:bg-white dark:focus:bg-[#1a1a1a] transition-all placeholder:text-gray-400"
+              className="w-full pl-9 pr-8 py-2 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#252525] text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[color:var(--app-primary,#EB590E)] focus:bg-white dark:focus:bg-[#1a1a1a] transition-all placeholder:text-gray-400"
             />
             {searchQuery && (
               <button
@@ -2107,8 +2107,8 @@ function RestaurantDetailsContent() {
                   onClick={() => setShowRatingInfoSheet(true)}
                   title="View Rating & Restaurant Info"
                 >
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-[#EB590E] transition-colors">{restaurant?.name || "Unknown Restaurant"}</h1>
-                  <Info className="h-5 w-5 text-gray-400 group-hover:text-[#EB590E] transition-colors" />
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white group-hover:text-[color:var(--app-primary,#EB590E)] transition-colors">{restaurant?.name || "Unknown Restaurant"}</h1>
+                  <Info className="h-5 w-5 text-gray-400 group-hover:text-[color:var(--app-primary,#EB590E)] transition-colors" />
                 </div>
                 <div
                   className="flex flex-col items-end cursor-pointer group hover:scale-105 transition-transform"
@@ -2119,7 +2119,7 @@ function RestaurantDetailsContent() {
                     <Star className="h-3 w-3 fill-white" />
                     {restaurant?.rating ? Number(restaurant.rating).toFixed(1) : "NEW"}
                   </Badge>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 underline decoration-dashed underline-offset-2 group-hover:text-[#EB590E]">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 underline decoration-dashed underline-offset-2 group-hover:text-[color:var(--app-primary,#EB590E)]">
                     {(restaurant?.reviews || 0) > 0 ? `${(restaurant.reviews).toLocaleString()} Ratings` : "Rating Info"}
                   </span>
                 </div>
@@ -2181,7 +2181,7 @@ function RestaurantDetailsContent() {
               {/* Offers */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm overflow-hidden">
-                  <Tag className="h-4 w-4 text-[#EB590E]" />
+                  <Tag className="h-4 w-4 text-[color:var(--app-primary,#EB590E)]" />
                   <div className="relative h-5 overflow-hidden">
                     <AnimatePresence mode="wait">
                       <motion.span
@@ -2190,7 +2190,7 @@ function RestaurantDetailsContent() {
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: -16, opacity: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="text-[#EB590E] font-medium inline-block"
+                        className="text-[color:var(--app-primary,#EB590E)] font-medium inline-block"
                       >
                         {highlightOffers[highlightIndex]}
                       </motion.span>
@@ -2264,7 +2264,7 @@ function RestaurantDetailsContent() {
                     type="button"
                     onClick={() => setSelectedMenuCategory("all")}
                     className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${selectedMenuCategory === "all"
-                        ? "border-[#EB590E] bg-[#FFF1E8] text-[#EB590E]"
+                        ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF1E8] text-[color:var(--app-primary,#EB590E)]"
                         : "border-gray-300 bg-white text-gray-700"
                       }`}
                   >
@@ -2276,7 +2276,7 @@ function RestaurantDetailsContent() {
                       type="button"
                       onClick={() => setSelectedMenuCategory(category.id)}
                       className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${selectedMenuCategory === category.id
-                          ? "border-[#EB590E] bg-[#FFF1E8] text-[#EB590E]"
+                          ? "border-[color:var(--app-primary,#EB590E)] bg-[#FFF1E8] text-[color:var(--app-primary,#EB590E)]"
                           : "border-gray-300 bg-white text-gray-700"
                         }`}
                     >
@@ -2329,7 +2329,7 @@ function RestaurantDetailsContent() {
                 </p>
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="text-xs font-semibold text-[#EB590E] hover:underline"
+                  className="text-xs font-semibold text-[color:var(--app-primary,#EB590E)] hover:underline"
                 >
                   Clear Search
                 </button>
@@ -2475,7 +2475,7 @@ function RestaurantDetailsContent() {
                               {isRecommendedItem(item) && (
                                 <div className="flex items-center gap-2 mt-1">
                                   <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-[#EB590E] w-3/4"></div>
+                                    <div className="h-full bg-[color:var(--app-primary,#EB590E)] w-3/4"></div>
                                   </div>
                                   <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Highly reordered</span>
                                 </div>
@@ -2577,7 +2577,7 @@ function RestaurantDetailsContent() {
                                   animate={{ opacity: 1, scale: 1 }}
                                   className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
                                     ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                                    : 'border-[#EB590E] text-[#EB590E] hover:bg-orange-50'
+                                    : 'border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50'
                                     }`}
                                 >
                                   <button
@@ -2592,7 +2592,7 @@ function RestaurantDetailsContent() {
                                       }
                                     }}
                                     disabled={shouldShowGrayscale}
-                                    className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[#EB590E] hover:text-[#D94F0C]'}
+                                    className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[color:var(--app-primary,#EB590E)] hover:text-[color:var(--app-secondary,#D94F0C)]'}
                                   >
                                     <Minus size={14} />
                                   </button>
@@ -2609,7 +2609,7 @@ function RestaurantDetailsContent() {
                                       }
                                     }}
                                     disabled={shouldShowGrayscale}
-                                    className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[#EB590E] hover:text-[#D94F0C]'}
+                                    className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[color:var(--app-primary,#EB590E)] hover:text-[color:var(--app-secondary,#D94F0C)]'}
                                   >
                                     <Plus size={14} className="stroke-[3px]" />
                                   </button>
@@ -2633,7 +2633,7 @@ function RestaurantDetailsContent() {
                                   disabled={shouldShowGrayscale}
                                   className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
                                     ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                                    : 'border-[#EB590E] text-[#EB590E] hover:bg-orange-50'
+                                    : 'border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50'
                                     }`}
                                 >
                                   ADD <Plus size={14} className="stroke-[3px]" />
@@ -2725,7 +2725,7 @@ function RestaurantDetailsContent() {
                                         {isRecommendedItem(item) && (
                                           <div className="flex items-center gap-2 mt-1">
                                             <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                              <div className="h-full bg-[#EB590E] w-3/4"></div>
+                                              <div className="h-full bg-[color:var(--app-primary,#EB590E)] w-3/4"></div>
                                             </div>
                                             <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Highly reordered</span>
                                           </div>
@@ -2804,7 +2804,7 @@ function RestaurantDetailsContent() {
                                             animate={{ opacity: 1, scale: 1 }}
                                             className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
                                               ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                                              : 'border-[#EB590E] text-[#EB590E] hover:bg-orange-50'
+                                              : 'border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50'
                                               }`}
                                           >
                                             <button
@@ -2819,7 +2819,7 @@ function RestaurantDetailsContent() {
                                                 }
                                               }}
                                               disabled={shouldShowGrayscale}
-                                              className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[#EB590E] hover:text-[#D94F0C]'}
+                                              className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[color:var(--app-primary,#EB590E)] hover:text-[color:var(--app-secondary,#D94F0C)]'}
                                             >
                                               <Minus size={14} />
                                             </button>
@@ -2836,7 +2836,7 @@ function RestaurantDetailsContent() {
                                                 }
                                               }}
                                               disabled={shouldShowGrayscale}
-                                              className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[#EB590E] hover:text-[#D94F0C]'}
+                                              className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-[color:var(--app-primary,#EB590E)] hover:text-[color:var(--app-secondary,#D94F0C)]'}
                                             >
                                               <Plus size={14} className="stroke-[3px]" />
                                             </button>
@@ -2860,7 +2860,7 @@ function RestaurantDetailsContent() {
                                             disabled={shouldShowGrayscale}
                                             className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
                                               ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                                              : 'border-[#EB590E] text-[#EB590E] hover:bg-orange-50'
+                                              : 'border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] hover:bg-orange-50'
                                               }`}
                                           >
                                             ADD <Plus size={14} className="stroke-[3px]" />
@@ -2915,7 +2915,7 @@ function RestaurantDetailsContent() {
             size="lg"
             onClick={() => setShowMenuSheet(true)}
           >
-            <Utensils className="h-5 w-5 text-[#EB590E] dark:text-white group-hover:rotate-12 transition-transform" />
+            <Utensils className="h-5 w-5 text-[color:var(--app-primary,#EB590E)] dark:text-white group-hover:rotate-12 transition-transform" />
             <span className="tracking-wide">MENU</span>
           </Button>
         </div>
@@ -2955,6 +2955,9 @@ function RestaurantDetailsContent() {
                           className="w-full flex items-center justify-between py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left"
                           onClick={() => {
                             setShowMenuSheet(false)
+                            // Make sure every category is reachable: show all sections and open the chosen one
+                            setSelectedMenuCategory("all")
+                            setExpandedSections((prev) => new Set(prev).add(category.sectionIndex))
                             // Scroll to category section
                             setTimeout(() => {
                               const sectionId = `menu-section-${category.sectionIndex}`
@@ -2965,7 +2968,7 @@ function RestaurantDetailsContent() {
                                   block: 'start'
                                 })
                               }
-                            }, 300) // Small delay to allow sheet to close
+                            }, 450) // Small delay to allow the sheet to close and the section to expand
                           }}
                         >
                           <div className="flex items-center gap-3 min-w-0">
@@ -2989,7 +2992,7 @@ function RestaurantDetailsContent() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {category.count}
+                              {category.count > 0 ? category.count : ""}
                             </span>
                           </div>
                         </button>
@@ -3000,7 +3003,7 @@ function RestaurantDetailsContent() {
                   {/* Close Button */}
                   <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
                     <Button
-                      className="w-full bg-[#1a1a1a] dark:bg-[#EB590E] hover:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white border-0 flex items-center justify-center gap-2 py-6 rounded-xl font-bold transition-all shadow-lg"
+                      className="w-full bg-[#1a1a1a] dark:bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-primary,#EB590E)] dark:hover:bg-[color:var(--app-secondary,#D94F0C)] text-white border-0 flex items-center justify-center gap-2 py-6 rounded-xl font-bold transition-all shadow-lg"
                       onClick={() => setShowMenuSheet(false)}
                     >
                       <X className="h-5 w-5" />
@@ -3135,7 +3138,7 @@ function RestaurantDetailsContent() {
                           }))
                         }
                         className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${filters.highlyReordered
-                          ? "border-[#EB590E] dark:border-[#EB590E] bg-[#FFF2EB] dark:bg-[#EB590E]/20 text-[#EB590E] dark:text-[#EB590E]"
+                          ? "border-[color:var(--app-primary,#EB590E)] dark:border-[color:var(--app-primary,#EB590E)] bg-[#FFF2EB] dark:bg-[color:var(--app-primary,#EB590E)]/20 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)]"
                           : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                           }`}
                       >
@@ -3181,7 +3184,7 @@ function RestaurantDetailsContent() {
                       Clear All
                     </button>
                     <Button
-                      className="bg-[#EB590E] hover:bg-[#D94F0C] text-white px-6 py-2.5 rounded-lg font-bold"
+                      className="bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white px-6 py-2.5 rounded-lg font-bold"
                       onClick={() => setShowFilterSheet(false)}
                     >
                       Apply {activeFilterCount > 0 && `(${activeFilterCount})`}
@@ -3240,9 +3243,9 @@ function RestaurantDetailsContent() {
                             className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a]"
                           >
                             {outlet?.isNearest && (
-                              <div className="flex items-center gap-1.5 mb-2 px-2 py-1 bg-[#FFF2EB] dark:bg-[#EB590E]/20 rounded-md">
-                                <Zap className="h-3.5 w-3.5 text-[#EB590E] dark:text-[#EB590E] fill-[#EB590E] dark:fill-[#EB590E]" />
-                                <span className="text-xs font-semibold text-[#EB590E] dark:text-[#EB590E]">
+                              <div className="flex items-center gap-1.5 mb-2 px-2 py-1 bg-[#FFF2EB] dark:bg-[color:var(--app-primary,#EB590E)]/20 rounded-md">
+                                <Zap className="h-3.5 w-3.5 text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)] fill-[color:var(--app-primary,#EB590E)] dark:fill-[color:var(--app-primary,#EB590E)]" />
+                                <span className="text-xs font-semibold text-[color:var(--app-primary,#EB590E)] dark:text-[color:var(--app-primary,#EB590E)]">
                                   Nearest available outlet
                                 </span>
                               </div>
@@ -3395,7 +3398,7 @@ function RestaurantDetailsContent() {
                   {/* Done Button */}
                   <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4">
                     <Button
-                      className="w-full bg-[#EB590E] hover:bg-[#D94F0C] text-white py-3 rounded-lg font-bold"
+                      className="w-full bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white py-3 rounded-lg font-bold"
                       onClick={() => {
                         setShowManageCollections(false)
                       }}
@@ -3930,7 +3933,7 @@ function RestaurantDetailsContent() {
                   {/* Close Button */}
                   <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
                     <Button
-                      className="w-full bg-[#1a1a1a] dark:bg-[#EB590E] hover:bg-[#EB590E] dark:hover:bg-[#D94F0C] text-white border-0 flex items-center justify-center gap-2 py-6 rounded-xl font-bold transition-all shadow-lg"
+                      className="w-full bg-[#1a1a1a] dark:bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-primary,#EB590E)] dark:hover:bg-[color:var(--app-secondary,#D94F0C)] text-white border-0 flex items-center justify-center gap-2 py-6 rounded-xl font-bold transition-all shadow-lg"
                       onClick={() => setShowOffersSheet(false)}
                     >
                       <X className="h-5 w-5" />
@@ -4229,7 +4232,7 @@ function RestaurantDetailsContent() {
                     {/* Rating Policy & Quality Info */}
                     <div className="space-y-3 bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
                       <div className="flex items-center gap-2 text-xs font-bold text-gray-900 dark:text-white">
-                        <Info className="h-4 w-4 text-[#EB590E]" />
+                        <Info className="h-4 w-4 text-[color:var(--app-primary,#EB590E)]" />
                         <span>How Ratings & Reviews Work</span>
                       </div>
                       <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-2 list-disc pl-4 leading-relaxed">
@@ -4269,7 +4272,7 @@ function RestaurantDetailsContent() {
                   <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a]">
                     <Button
                       onClick={() => setShowRatingInfoSheet(false)}
-                      className="w-full bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold py-3 rounded-xl shadow-lg"
+                      className="w-full bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold py-3 rounded-xl shadow-lg"
                     >
                       Close Info
                     </Button>

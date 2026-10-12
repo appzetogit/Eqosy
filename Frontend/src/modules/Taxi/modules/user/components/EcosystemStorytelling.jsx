@@ -7,7 +7,7 @@ const EcosystemStorytelling = () => {
   const [autoActive, setAutoActive] = useState('ride');
 
   const services = [
-    { id: 'ride', label: 'Ride', icon: Car, color: '#FF6B00', desc: 'Book cabs & autos' },
+    { id: 'ride', label: 'Ride', icon: Car, color: 'var(--app-primary,#FF6B00)', desc: 'Book cabs & autos' },
     { id: 'food', label: 'Food', icon: Utensils, color: '#E53935', desc: 'Order delicious meals' },
     { id: 'parcel', label: 'Parcel', icon: Package, color: '#FFB300', desc: 'Send items instantly' },
     { id: 'bus', label: 'Bus', icon: Bus, color: '#7C3AED', desc: 'Reserve bus seats' },
@@ -61,8 +61,8 @@ const EcosystemStorytelling = () => {
       {/* 2. Headline & Storytelling Text */}
       <div className="relative z-10 px-6 pt-7 text-center">
         <div className="flex items-center justify-center gap-1.5 mb-1">
-          <Sparkles size={11} className="text-[#FF6B00]" />
-          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-[#FF6B00]">
+          <Sparkles size={11} className="text-[color:var(--app-primary,#FF6B00)]" />
+          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-[color:var(--app-primary,#FF6B00)]">
             One App. Every Journey.
           </span>
         </div>
@@ -167,19 +167,19 @@ const EcosystemStorytelling = () => {
 
           {/* Node 3: Home/Station Pin (Ride/Bus) */}
           <g className="transition-all duration-300" opacity={currentActive === 'ride' || currentActive === 'bus' ? 1 : 0.7}>
-            <circle cx="340" cy="183" r="12" fill="#FF6B00" fillOpacity="0.15" />
-            <circle cx="340" cy="183" r="5" fill="#FF6B00" />
+            <circle cx="340" cy="183" r="12" fill="var(--app-primary,#FF6B00)" fillOpacity="0.15" />
+            <circle cx="340" cy="183" r="5" fill="var(--app-primary,#FF6B00)" />
             <circle cx="340" cy="183" r="2" fill="white" />
             {(currentActive === 'ride' || currentActive === 'bus') && (
-              <circle cx="340" cy="183" r="14" stroke="#FF6B00" strokeWidth="1.5" fill="none" className="animate-ping origin-center opacity-75" />
+              <circle cx="340" cy="183" r="14" stroke="var(--app-primary,#FF6B00)" strokeWidth="1.5" fill="none" className="animate-ping origin-center opacity-75" />
             )}
           </g>
 
           {/* SVG Gradient Definitions */}
           <defs>
             <linearGradient id="route-glow-orange" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#FF6B00" stopOpacity="0.1" />
-              <stop offset="50%" stopColor="#FF6B00" stopOpacity="0.9" />
+              <stop offset="0%" stopColor="var(--app-primary,#FF6B00)" stopOpacity="0.1" />
+              <stop offset="50%" stopColor="var(--app-primary,#FF6B00)" stopOpacity="0.9" />
               <stop offset="100%" stopColor="#E53935" stopOpacity="0.1" />
             </linearGradient>
             <linearGradient id="route-glow-blue" x1="0%" y1="0%" x2="100%" y2="0%">

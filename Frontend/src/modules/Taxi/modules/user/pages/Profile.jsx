@@ -12,6 +12,7 @@ import { clearCurrentRide } from '../services/currentRideService';
 import { socketService } from '../../../shared/api/socket';
 import api from '../../../shared/api/axiosInstance';
 import { syncThemeForPath } from '@/shared/utils/theme.js';
+import LanguageRow from '@/shared/language/LanguageRow'
 
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
@@ -333,7 +334,9 @@ const Profile = () => {
 
           {/* Dangerous Zone */}
           <motion.div variants={itemVariants} className="pt-4 pb-12 space-y-4">
-             <MotionButton
+             <LanguageRow className="rounded-[24px] border border-slate-100" />
+
+            <MotionButton
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => navigate('/taxi/user/profile/delete-account')}

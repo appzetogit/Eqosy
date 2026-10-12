@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FOOD_ADMIN_HOME,
   TAXI_ADMIN_HOME,
+  GLOBAL_ADMIN_HOME,
+  prefetchGlobalAdmin,
   prefetchFoodAdmin,
 } from '@/shared/utils/activeModule.js';
 import { POOLING_ENABLED, RENTAL_ENABLED } from '../../../shared/featureFlags';
@@ -674,6 +676,7 @@ const AdminLayout = () => {
 
   const switchAdminModule = (path) => {
     if (path === FOOD_ADMIN_HOME) prefetchFoodAdmin();
+    if (path === GLOBAL_ADMIN_HOME) prefetchGlobalAdmin();
     startTransition(() => {
       navigate(path);
     });
@@ -962,33 +965,8 @@ const AdminLayout = () => {
             label: 'Business Settings',
             permission: 'settings.view',
             subItems: [
-              { label: 'General Settings', path: '/taxi/admin/settings/business/general', permission: 'settings.view' },
-              { label: 'Customization Settings', path: '/taxi/admin/settings/business/customization', permission: 'settings.view' },
               { label: 'Transport Ride Settings', path: '/taxi/admin/settings/business/transport-ride', permission: 'settings.view' },
               { label: 'Bid Ride Settings', path: '/taxi/admin/settings/business/bid-ride', permission: 'settings.view' },
-            ],
-          },
-          {
-            icon: Smartphone,
-            label: 'App Settings',
-            permission: 'settings.view',
-            subItems: [
-              { label: 'Wallet Settings', path: '/taxi/admin/settings/app/wallet', permission: 'settings.view' },
-              { label: 'Tip Settings', path: '/taxi/admin/settings/app/tip', permission: 'settings.view' },
-              { label: 'Mobile App Landing/Onboard Screens Settings', path: '/taxi/admin/settings/app/onboard', permission: 'settings.view' },
-            ],
-          },
-          {
-            icon: Settings2,
-            label: 'Third-party Settings',
-            permission: 'settings.view',
-            subItems: [
-              { label: 'Payment Gateway Settings', path: '/taxi/admin/settings/third-party/payment', permission: 'settings.view' },
-              { label: 'SMS Gateway Settings', path: '/taxi/admin/settings/third-party/sms', permission: 'settings.view' },
-              { label: 'Firebase Settings', path: '/taxi/admin/settings/third-party/firebase', permission: 'settings.view' },
-              { label: 'Map and Map APIs Settings', path: '/taxi/admin/settings/third-party/map-apis', permission: 'settings.view' },
-              { label: 'Mail Configuration', path: '/taxi/admin/settings/third-party/mail', permission: 'settings.view' },
-              // { label: 'Notification Channel', path: '/taxi/admin/settings/third-party/notification-channel' },
             ],
           },
           // {
@@ -996,20 +974,6 @@ const AdminLayout = () => {
           //   label: 'Addons',
           //   subItems: [{ label: 'Dispatcher Addons', path: '/taxi/admin/settings/addons/dispatcher' }],
           // },
-          {
-            icon: Monitor,
-            label: 'CMS-Landing Website',
-            permission: 'settings.view',
-            subItems: [
-              { label: 'Header-Footer', path: '/taxi/admin/settings/cms/header-footer', permission: 'settings.view' },
-              { label: 'Home', path: '/taxi/admin/settings/cms/home', permission: 'settings.view' },
-              { label: 'About Us', path: '/taxi/admin/settings/cms/about', permission: 'settings.view' },
-              { label: 'Driver', path: '/taxi/admin/settings/cms/driver', permission: 'settings.view' },
-              { label: 'User', path: '/taxi/admin/settings/cms/user', permission: 'settings.view' },
-              { label: 'Contact', path: '/taxi/admin/settings/cms/contact', permission: 'settings.view' },
-              { label: 'Privacy Policy, T&C and DMV', path: '/taxi/admin/settings/cms/legal', permission: 'settings.view' },
-            ],
-          },
         ],
       },
     ],
@@ -1728,6 +1692,21 @@ const AdminLayout = () => {
                     <Truck className="w-3.5 h-3.5 text-black" />
                     Taxi
                   </button>
+                )}
+                {!isSubadmin && (
+                <button
+                  type="button"
+                  onClick={() => switchAdminModule(GLOBAL_ADMIN_HOME)}
+                  onMouseEnter={prefetchGlobalAdmin}
+                  onFocus={prefetchGlobalAdmin}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all duration-300",
+                    "text-neutral-400 hover:text-neutral-200 hover:bg-white/5"
+                  )}
+                >
+                  <Globe className="w-3.5 h-3.5 text-neutral-500" />
+                  Global
+                </button>
                 )}
               </div>
             </div>

@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 
 const businessSettingsSchema = new mongoose.Schema(
     {
@@ -19,7 +19,12 @@ const businessSettingsSchema = new mongoose.Schema(
         favicon: {
             url: { type: String, default: '' },
             publicId: { type: String, default: '' }
-        }
+        },
+        themeColor: { type: String, default: '' },
+        landingThemeColor: { type: String, default: '' },
+        sidebarTextColor: { type: String, default: '' },
+        // Per-app color combinations: { admin|user|delivery|restaurant|taxiUser|taxiDriver: { primary, secondary } }
+        appColors: { type: mongoose.Schema.Types.Mixed, default: {} }
     },
     { timestamps: true }
 );

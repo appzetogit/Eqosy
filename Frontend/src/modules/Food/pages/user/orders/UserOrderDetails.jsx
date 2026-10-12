@@ -120,7 +120,7 @@ export default function UserOrderDetails() {
           <p className="text-gray-700 text-sm font-medium">Order not found</p>
           <button
             onClick={() => navigate("/user/orders")}
-            className="px-4 py-2 rounded-lg bg-[#EB590E] text-white text-sm font-semibold"
+            className="px-4 py-2 rounded-lg bg-[color:var(--app-primary,#EB590E)] text-white text-sm font-semibold"
           >
             Back to Orders
           </button>
@@ -442,7 +442,7 @@ export default function UserOrderDetails() {
             <button
               type="button"
               onClick={() => navigate(`/food/user/orders/${orderIdDisplay}/chat`)}
-              className="text-xs text-[#EB590E] font-semibold flex items-center gap-1 bg-orange-50 dark:bg-orange-950/30 px-2 py-1 rounded-md border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 transition-colors"
+              className="text-xs text-[color:var(--app-primary,#EB590E)] font-semibold flex items-center gap-1 bg-orange-50 dark:bg-orange-950/30 px-2 py-1 rounded-md border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 transition-colors"
             >
               <MessageCircle size={13} />
               Chat History
@@ -500,7 +500,7 @@ export default function UserOrderDetails() {
             <button
               type="button"
               onClick={handleDownloadSummary}
-              className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-[#EB590E] hover:bg-orange-100 dark:hover:bg-orange-900/40"
+              className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-[color:var(--app-primary,#EB590E)] hover:bg-orange-100 dark:hover:bg-orange-900/40"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -537,7 +537,7 @@ export default function UserOrderDetails() {
                 </button>
                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
               </div>
-              <span className={Number(pricing.deliveryFee) === 0 ? "text-[#EB590E] font-medium uppercase mt-0.5 text-sm" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5 text-sm"}>
+              <span className={Number(pricing.deliveryFee) === 0 ? "text-[color:var(--app-primary,#EB590E)] font-medium uppercase mt-0.5 text-sm" : "text-gray-800 dark:text-gray-200 font-medium mt-0.5 text-sm"}>
                 {Number(pricing.deliveryFee) === 0 ? "FREE" : `₹${Number(pricing.deliveryFee).toFixed(2)}`}
               </span>
             </div>
@@ -602,7 +602,7 @@ export default function UserOrderDetails() {
                 </svg>
               </div>
 
-              <div className="flex items-center justify-center gap-2 pt-1 text-[#EB590E] font-bold text-sm">
+              <div className="flex items-center justify-center gap-2 pt-1 text-[color:var(--app-primary,#EB590E)] font-bold text-sm">
                 <span>??</span>
                 <span>
                   You saved ₹{Number(savings).toFixed(2)} on this order!
@@ -677,7 +677,7 @@ export default function UserOrderDetails() {
         <button
           type="button"
           onClick={() => handleReorder(order)}
-          className="flex-1 bg-[#EB590E] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[#D94F0C] transition-colors"
+          className="flex-1 bg-[color:var(--app-primary,#EB590E)] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[color:var(--app-secondary,#D94F0C)] transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
           Reorder
@@ -685,7 +685,7 @@ export default function UserOrderDetails() {
         <button
           type="button"
           onClick={handleDownloadSummary}
-          className="flex-1 bg-white dark:bg-zinc-800 border border-[#EB590E] text-[#EB590E] py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+          className="flex-1 bg-white dark:bg-zinc-800 border border-[color:var(--app-primary,#EB590E)] text-[color:var(--app-primary,#EB590E)] py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
         >
           <Download className="w-4 h-4" />
           Invoice
@@ -756,7 +756,7 @@ export default function UserOrderDetails() {
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPlatformFeeModal(false); }}
-                className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+                className="w-full py-3.5 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
               >
                 OKAY
               </button>
@@ -795,7 +795,7 @@ export default function UserOrderDetails() {
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowDeliveryFeeModal(false); }}
-              className="w-full py-3.5 bg-[#EB590E] hover:bg-[#d94f0c] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
+              className="w-full py-3.5 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white font-bold text-base rounded-2xl transition-all shadow-md active:scale-98 uppercase tracking-wider border-none"
             >
               OKAY
             </button>

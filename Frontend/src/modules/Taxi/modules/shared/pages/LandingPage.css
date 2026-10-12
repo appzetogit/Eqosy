@@ -31,7 +31,10 @@
   --shadow-panel: 0 12px 32px rgba(23, 32, 51, 0.06), 0 2px 8px rgba(23, 32, 51, 0.02);
 }
 
-html, body {
+/* Scoped to the landing page only: these used to leak into every app once the landing chunk had loaded
+   (forced smooth scrolling, hidden overflow and colors on html/body/#root). */
+html:has(.landing-root),
+html:has(.landing-root) body {
   background-color: #F7F4EE !important;
   color: #172033 !important;
   font-family: var(--font-sans);
@@ -44,7 +47,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-#root, .redigo-landing-root, .landing-root {
+#root:has(.landing-root), .redigo-landing-root, .landing-root {
   background-color: #F7F4EE !important;
   color: #172033;
   min-height: 100vh;

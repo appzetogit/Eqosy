@@ -5,7 +5,6 @@ import {
   isRestaurantOnboardingComplete,
 } from "@food/utils/onboardingUtils";
 import { motion, AnimatePresence } from "framer-motion";
-import Lenis from "lenis";
 import {
   Printer,
   Volume2,
@@ -423,6 +422,78 @@ export const printOrderInvoice = (order) => {
 
     const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
     const blobUrl = URL.createObjectURL(blob);
+
+    // Phones and in-app webviews cannot print a hidden 0x0 iframe (blank page / no dialog).
+    // Show the bill full-screen instead, with Print, Share/Save and Close buttons.
+    const isMobileDevice =
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") ||
+      (typeof window.flutter_inappwebview !== "undefined");
+    if (isMobileDevice) {
+      toast.dismiss(toastId);
+      document.getElementById("restaurant-bill-mobile-overlay")?.remove();
+
+      const overlay = document.createElement("div");
+      overlay.id = "restaurant-bill-mobile-overlay";
+      overlay.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:#fff;display:flex;flex-direction:column;";
+
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex;gap:8px;padding:10px;border-bottom:1px solid #e5e7eb;background:#111827;";
+      const makeBtn = (label, bg) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.style.cssText = `flex:1;padding:12px;border:0;border-radius:10px;font-weight:700;font-size:14px;color:#fff;background:${bg};`;
+        return b;
+      };
+      const printBtn = makeBtn("🖨️ Print", "#16a34a");
+      const shareBtn = makeBtn("⬆️ Share / Save", "#2563eb");
+      const closeBtn = makeBtn("✖ Close", "#6b7280");
+      bar.append(printBtn, shareBtn, closeBtn);
+
+      const frame = document.createElement("iframe");
+      frame.style.cssText = "flex:1;width:100%;border:0;background:#fff;";
+      // The bill page auto-prints on load; on mobile we want the user to press Print themselves.
+      frame.srcdoc = htmlContent.replace("window.print();", "");
+
+      const closeOverlay = () => {
+        overlay.remove();
+        URL.revokeObjectURL(blobUrl);
+      };
+      closeBtn.onclick = closeOverlay;
+      printBtn.onclick = () => {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+        } catch (err) {
+          toast.error("Printing is not supported here. Use Share / Save and print from the file.");
+        }
+      };
+      shareBtn.onclick = async () => {
+        const fileName = `bill-${order?.orderId || order?._id || "order"}.html`;
+        try {
+          const file = new File([htmlContent], fileName, { type: "text/html" });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: "Bill" });
+            return;
+          }
+          if (navigator.share) {
+            await navigator.share({ title: "Bill", url: blobUrl });
+            return;
+          }
+        } catch (err) {
+          if (err?.name === "AbortError") return;
+        }
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+
+      overlay.append(bar, frame);
+      document.body.appendChild(overlay);
+      return;
+    }
 
     try {
       let iframe = document.getElementById("restaurant-bill-print-frame");
@@ -1550,29 +1621,6 @@ export default function OrdersMain() {
     }
   };
 
-  // Lenis smooth scrolling (skipped on mobile touch devices to ensure native 1-finger smooth scroll)
-  useEffect(() => {
-    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    if (isTouchDevice) return;
-
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-      syncTouch: false,
-    });
-
-    function raf(time) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-
-    requestAnimationFrame(raf);
-
-    return () => {
-      lenis.destroy();
-    };
-  }, []);
 
   // Show new order popup when real order notification arrives from Socket.IO
   useEffect(() => {
@@ -2739,6 +2787,14 @@ export default function OrdersMain() {
                       )}
                     </AnimatePresence>
                   </div>
+
+                  {/* Customer's order note / delivery instructions */}
+                  {String((popupOrder || newOrder)?.note || "").trim() && (
+                    <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-yellow-800">Customer instructions</p>
+                      <p className="mt-1 text-sm text-yellow-900">{(popupOrder || newOrder).note}</p>
+                    </div>
+                  )}
 
                   {/* Cutlery preference */}
                   <div
