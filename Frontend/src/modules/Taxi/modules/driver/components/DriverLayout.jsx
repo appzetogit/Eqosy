@@ -54,6 +54,10 @@ const onboardingRoutes = new Set([
     '/taxi/driver/step-documents',
     '/taxi/driver/registration-status',
     '/taxi/driver/status',
+    '/taxi/driver/privacy',
+    '/taxi/driver/privacy-policy',
+    '/taxi/driver/terms',
+    '/taxi/driver/terms-and-conditions',
     '/taxi/owner/lang-select',
     '/taxi/owner/login',
     '/taxi/owner/reg-phone',
@@ -64,6 +68,10 @@ const onboardingRoutes = new Set([
     '/taxi/owner/step-documents',
     '/taxi/owner/registration-status',
     '/taxi/owner/status',
+    '/taxi/owner/privacy',
+    '/taxi/owner/privacy-policy',
+    '/taxi/owner/terms',
+    '/taxi/owner/terms-and-conditions',
 ]);
 
 const softEntryRoutes = new Set([

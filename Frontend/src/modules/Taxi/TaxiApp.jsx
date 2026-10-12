@@ -368,7 +368,13 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const staticPages = ['/', '', '/taxi', '/taxi/', '/taxi/about', '/taxi/contact', '/taxi/faq', '/taxi/services', '/taxi/privacy', '/taxi/terms', '/taxi/refund', '/taxi/cancellation', '/taxi/blog', '/taxi/links'];
+  const staticPages = [
+    '/', '', '/taxi', '/taxi/', '/taxi/about', '/taxi/contact', '/taxi/faq', '/taxi/services',
+    '/taxi/privacy', '/taxi/privacy-policy', '/taxi/terms', '/taxi/terms-and-conditions',
+    '/taxi/refund', '/taxi/cancellation', '/taxi/blog', '/taxi/links',
+    '/taxi/driver/privacy', '/taxi/driver/privacy-policy', '/taxi/driver/terms', '/taxi/driver/terms-and-conditions',
+    '/taxi/owner/privacy', '/taxi/owner/privacy-policy', '/taxi/owner/terms', '/taxi/owner/terms-and-conditions'
+  ];
   const isStaticPath = staticPages.includes(location.pathname);
   const isAdminPath =
     location.pathname.startsWith('/taxi/admin') ||
@@ -1062,7 +1068,9 @@ function TaxiApp() {
                 />
                 <Route path="status" element={<ApplicationStatus />} />
                 <Route path="privacy" element={<LegalPage role="driver" />} />
+                <Route path="privacy-policy" element={<LegalPage role="driver" />} />
                 <Route path="terms" element={<LegalPage role="driver" />} />
+                <Route path="terms-and-conditions" element={<LegalPage role="driver" />} />
 
                 <Route path="home" element={<DriverHome />} />
                 <Route path="bus-home" element={<BusDriverHome />} />
@@ -1126,6 +1134,10 @@ function TaxiApp() {
                 <Route path="step-documents" element={<StepDocuments />} />
                 <Route path="registration-status" element={<RegistrationStatus />} />
                 <Route path="status" element={<ApplicationStatus />} />
+                <Route path="privacy" element={<LegalPage role="driver" />} />
+                <Route path="privacy-policy" element={<LegalPage role="driver" />} />
+                <Route path="terms" element={<LegalPage role="driver" />} />
+                <Route path="terms-and-conditions" element={<LegalPage role="driver" />} />
                 <Route path="home" element={<OwnerDashboard />} />
                 <Route path="dashboard" element={<OwnerDashboard />} />
                 <Route path="bus-service" element={<OwnerBusServicePage />} />
