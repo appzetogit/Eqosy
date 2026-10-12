@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ShieldCheck, X, ExternalLink, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../../shared/api/axiosInstance';
+import api from '../../../shared/api/axiosInstance';
 
 export default function LegalSheetModal({
   isOpen,
