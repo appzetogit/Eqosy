@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, startTransition, useDeferredValue } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
+import { useGroceryMode } from "@food/hooks/useGroceryMode"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, Star, Clock, Search, SlidersHorizontal, ChevronDown, Bookmark, BadgePercent, MapPin, ArrowDownUp, Timer, IndianRupee, UtensilsCrossed, ShieldCheck, X, Loader2, Grid2x2, Tag } from "lucide-react"
@@ -43,6 +44,7 @@ const CATEGORY_PAGE_FILTERS_STORAGE_KEY = "food-category-page-filters-v1"
 
 export default function CategoryPage() {
   const { category } = useParams()
+  const isGroceryMode = useGroceryMode()
   const navigate = useNavigate()
   const { vegMode, getDefaultAddress } = useProfile()
   const { triggerEqosyCartLoader } = useCart()
@@ -615,7 +617,7 @@ export default function CategoryPage() {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true)
-        const response = await adminAPI.getPublicCategories(zoneId ? { zoneId } : {})
+        const response = await adminAPI.getPublicCategories({ ...(zoneId ? { zoneId } : {}), ...(isGroceryMode ? { isRestaurant: "false" } : {}) })
 
         if (isCancelled) return;
 
@@ -628,7 +630,7 @@ export default function CategoryPage() {
             ...categoriesArray.map((cat) => ({
               id: cat.slug || cat.id,
               name: cat.name,
-              image: cat.image || foodImages[0],
+              image: cat.image || (isGroceryMode ? null : foodImages[0]),
               slug: cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'),
               type: cat.type,
             }))
@@ -667,7 +669,7 @@ export default function CategoryPage() {
     return () => {
       isCancelled = true;
     }
-  }, [zoneId])
+  }, [zoneId, isGroceryMode])
 
   // Helper function to check if menu has dishes matching category keywords
   const getCategoryKeywords = (categoryId) => {
@@ -851,7 +853,8 @@ export default function CategoryPage() {
     const fetchRestaurants = async () => {
       try {
         setLoadingRestaurants(true)
-        const params = zoneId ? { zoneId, isRestaurant: "true" } : { isRestaurant: "true" }
+        const isRestaurantParam = isGroceryMode ? "false" : "true"
+        const params = zoneId ? { zoneId, isRestaurant: isRestaurantParam } : { isRestaurant: isRestaurantParam }
         const response = await restaurantAPI.getRestaurants(params)
 
         if (response.data && response.data.success && response.data.data && response.data.data.restaurants) {
@@ -1099,7 +1102,7 @@ export default function CategoryPage() {
     }
 
     fetchRestaurants()
-  }, [zoneId, isOutOfService])
+  }, [zoneId, isOutOfService, isGroceryMode])
 
   // Update selected category when URL changes
   useEffect(() => {
@@ -1374,9 +1377,9 @@ export default function CategoryPage() {
     setSelectedCategory(categorySlug)
     // Update URL to reflect category change
     if (categorySlug === 'all') {
-      navigate('/user/category/all')
+      navigate(isGroceryMode ? '/food/user/category/all?vertical=grocery' : '/user/category/all')
     } else {
-      navigate(`/user/category/${categorySlug}`)
+      navigate(`/user/category/${categorySlug}${isGroceryMode ? "?vertical=grocery" : ""}`)
     }
   }
 
@@ -1392,7 +1395,7 @@ export default function CategoryPage() {
           {/* Search Bar with Back Button */}
           <div className="flex items-center gap-2 px-3 md:px-6 py-3 border-b border-gray-100 dark:border-gray-800">
             <button
-              onClick={() => navigate('/user')}
+              onClick={() => navigate(isGroceryMode ? '/food/user?vertical=grocery' : '/user')}
               className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
@@ -1574,7 +1577,7 @@ export default function CategoryPage() {
                   return (
                     <Link
                       key={restaurant.id}
-                      to={`/food/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      to={`/food/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}${isGroceryMode ? "?vertical=grocery" : ""}`}
                       onClick={() => {
                         if (triggerEqosyCartLoader) {
                           triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);

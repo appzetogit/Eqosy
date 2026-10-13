@@ -18,7 +18,7 @@ import { toast } from "sonner"
 
 export default function Checkout() {
   const navigate = useNavigate()
-  const { cart, clearCart } = useCart()
+  const { cart, clearCart, isGrocery } = useCart()
   const { getDefaultAddress, getDefaultPaymentMethod, setDefaultAddress, addresses, paymentMethods } = useProfile()
   const { createOrder } = useOrders()
   const getAddressId = (address) => address?.id || address?._id || ""
@@ -86,7 +86,7 @@ export default function Checkout() {
 
       clearCart()
       setIsPlacingOrder(false)
-      navigate(`/food/user/orders/${orderId}?confirmed=true`)
+      navigate(`/food/user/orders/${orderId}?confirmed=true${isGrocery ? "&vertical=grocery" : ""}`)
     }, 1500)
   }
 

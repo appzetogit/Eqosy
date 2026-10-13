@@ -376,7 +376,8 @@ export default function FoodOrderChatScreen({ isEmbedded = false, embeddedOrderI
     if (window.history.length > 1 && window.history.state?.idx > 0) {
       navigate(-1);
     } else {
-      const fallback = orderId ? `/food/user/orders/${orderId}` : '/food';
+      const groceryQuery = new URLSearchParams(window.location.search).get('vertical') === 'grocery' ? '?vertical=grocery' : '';
+      const fallback = orderId ? `/food/user/orders/${orderId}${groceryQuery}` : '/food';
       navigate(fallback, { replace: true });
     }
   };

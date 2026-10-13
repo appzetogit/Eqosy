@@ -139,6 +139,13 @@ export default function useAppBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
+    // Stay in the grocery panel when going back from a grocery page
+    const isGrocery = new URLSearchParams(location.search || "").get("vertical") === "grocery"
+    const keepVertical = (path) => {
+      if (!isGrocery || typeof path !== "string" || !path.startsWith("/food/user")) return path
+      if (path.includes("vertical=")) return path
+      return `${path}${path.includes("?") ? "&" : "?"}vertical=grocery`
+    }
     const explicitBackPath = toFoodPath(location.state?.backTo) || toFoodPath(location.state?.from)
 
     // If an explicit back path was provided via navigation state
@@ -148,10 +155,10 @@ export default function useAppBackNavigation() {
         explicitBackPath.includes("/cart") &&
         (location.pathname.includes("/restaurants/") || location.pathname.includes("/restaurant/"))
       ) {
-        navigate("/food/user")
+        navigate(keepVertical("/food/user"))
         return
       }
-      navigate(explicitBackPath)
+      navigate(keepVertical(explicitBackPath))
       return
     }
 
@@ -181,7 +188,7 @@ export default function useAppBackNavigation() {
         navigate("/login", { replace: true })
         return
       }
-      navigate(resolvedPath)
+      navigate(keepVertical(resolvedPath))
       return
     }
 
@@ -195,6 +202,6 @@ export default function useAppBackNavigation() {
       navigate("/login", { replace: true })
       return
     }
-    navigate(resolvedPath)
+    navigate(keepVertical(resolvedPath))
   }, [location, navigate])
 }

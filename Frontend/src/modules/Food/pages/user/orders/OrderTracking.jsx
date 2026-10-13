@@ -617,7 +617,7 @@ export default function OrderTracking({ isSharedView = false }) {
   useEffect(() => {
     const shouldOpenChat = searchParams.get("openChat") === "true" || searchParams.get("chat") === "true";
     if (shouldOpenChat && orderId) {
-      navigate(`/food/user/orders/${orderId}/chat`, { replace: true });
+      navigate(`/food/user/orders/${orderId}/chat${searchParams.get("vertical") === "grocery" ? "?vertical=grocery" : ""}`, { replace: true });
     }
   }, [searchParams, orderId, navigate]);
 
@@ -642,6 +642,10 @@ export default function OrderTracking({ isSharedView = false }) {
 
   const [showConfirmation, setShowConfirmation] = useState(confirmed)
   const [orderStatus, setOrderStatus] = useState('placed')
+  // Grocery orders come from stores flagged isRestaurant === false; wording differs from food
+  const isGrocery = searchParams.get("vertical") === "grocery" || order?.restaurantId?.isRestaurant === false
+  const storeWord = isGrocery ? "Store" : "Restaurant"
+  const ordersBackPath = isGrocery ? "/food/user/orders?vertical=grocery" : "/user/orders"
   const [estimatedTime, setEstimatedTime] = useState(29)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -1132,7 +1136,7 @@ export default function OrderTracking({ isSharedView = false }) {
     const cleanPhone = String(rawPhone).replace(/[^\d+]/g, '');
 
     if (!cleanPhone || cleanPhone.length < 5) {
-      toast.error('Restaurant phone number not available');
+      toast.error(`${storeWord} phone number not available`);
       return;
     }
 
@@ -1682,7 +1686,7 @@ export default function OrderTracking({ isSharedView = false }) {
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4 dark:text-white">Order Not Found</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
-          <Link to={isShared ? '/food/user' : '/user/orders'}>
+          <Link to={isShared ? '/food/user' : ordersBackPath}>
             <Button className="bg-[color:var(--app-primary,#EB590E)] hover:bg-[#D44D0D] text-white">Back to Orders</Button>
           </Link>
         </div>
@@ -1693,39 +1697,39 @@ export default function OrderTracking({ isSharedView = false }) {
   const statusConfig = {
     placed: {
       title: "Order Placed",
-      subtitle: "Waiting for restaurant to accept",
+      subtitle: `Waiting for ${storeWord.toLowerCase()} to accept`,
       color: "bg-green-600",
       iconType: 'food'
     },
     confirmed: {
       title: "Order Confirmed",
-      subtitle: "Restaurant has accepted your order",
+      subtitle: `${storeWord} has accepted your order`,
       color: "bg-green-600",
       iconType: 'food'
     },
     preparing: {
       title: (order?.deliveryState?.currentPhase === 'at_pickup' || order?.deliveryState?.status === 'reached_pickup')
-        ? "Food preparation in progress 🟠"
-        : "Food is being prepared",
+        ? (isGrocery ? "Order packing in progress 🟠" : "Food preparation in progress 🟠")
+        : (isGrocery ? "Your order is being packed" : "Food is being prepared"),
       subtitle: (order?.deliveryState?.currentPhase === 'at_pickup' || order?.deliveryState?.status === 'reached_pickup')
-        ? "Your delivery partner has arrived at the restaurant and is waiting for your order to be ready."
-        : formatEtaText(estimatedTime, "Cooking your meal"),
+        ? `Your delivery partner has arrived at the ${storeWord.toLowerCase()} and is waiting for your order to be ready.`
+        : formatEtaText(estimatedTime, isGrocery ? "Packing your groceries" : "Cooking your meal"),
       color: "bg-orange-500",
       iconType: 'food'
     },
     assigned: {
       title: "Rider is arriving",
-      subtitle: "A delivery partner is arriving at the restaurant",
+      subtitle: `A delivery partner is arriving at the ${storeWord.toLowerCase()}`,
       color: "bg-orange-500",
       iconType: 'rider'
     },
     at_pickup: {
       title: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
-        ? "Food is ready for pickup 🟢"
-        : "Food preparation in progress 🟠",
+        ? (isGrocery ? "Order is ready for pickup 🟢" : "Food is ready for pickup 🟢")
+        : (isGrocery ? "Order packing in progress 🟠" : "Food preparation in progress 🟠"),
       subtitle: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
         ? "Your order is ready and your delivery partner is collecting it."
-        : "Your delivery partner has arrived at the restaurant and is waiting for your order to be ready.",
+        : `Your delivery partner has arrived at the ${storeWord.toLowerCase()} and is waiting for your order to be ready.`,
       color: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready') ? "bg-emerald-600" : "bg-amber-600",
       iconType: 'rider'
     },
@@ -1879,7 +1883,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 {isDeliveredOrder
                   ? "Delivered!"
                   : (isCancelledOrder && order?.status === 'cancelled_by_restaurant')
-                    ? "Cancelled by Restaurant"
+                    ? `Cancelled by ${storeWord}`
                     : isCancelledOrder
                       ? "Order Cancelled"
                       : currentStatus.subtitle}
@@ -1949,9 +1953,9 @@ export default function OrderTracking({ isSharedView = false }) {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-white">
-                    {order?.restaurant?.restaurantName || order?.restaurantId?.restaurantName || 'Restaurant'}
+                    {order?.restaurant?.restaurantName || order?.restaurantId?.restaurantName || storeWord}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Restaurant</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{storeWord}</p>
                 </div>
               </div>
             </div>
@@ -1992,7 +1996,7 @@ export default function OrderTracking({ isSharedView = false }) {
 
                 {!isDeliveredOrder && !isCancelledOrder && (
                   <div className="flex items-center gap-2">
-                    <Link to={`/food/user/orders/${orderId || mapOrderId}/chat`} className="relative inline-block">
+                    <Link to={`/food/user/orders/${orderId || mapOrderId}/chat${isGrocery ? "?vertical=grocery" : ""}`} className="relative inline-block">
                       <Button className="bg-[color:var(--app-primary,#EB590E)] hover:bg-[#D44D0D] text-white rounded-xl px-4 py-2 text-xs font-bold shadow-md flex items-center gap-1.5 relative">
                         <MessageCircle className="w-4 h-4" />
                         <span>Chat</span>
@@ -2149,7 +2153,7 @@ export default function OrderTracking({ isSharedView = false }) {
             )}
             {Number(order.packagingFee || order.pricing?.packagingFee || 0) > 0 && (
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Restaurant Packaging Fee</span>
+                <span>{storeWord} Packaging Fee</span>
                 <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.packagingFee || order.pricing?.packagingFee).toFixed(2)}</span>
               </div>
             )}
@@ -2167,7 +2171,7 @@ export default function OrderTracking({ isSharedView = false }) {
             )}
             {Number(order.gst || order.tax || 0) > 0 && (
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>GST and Restaurant Charges</span>
+                <span>GST and {storeWord} Charges</span>
                 <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.gst || order.tax).toFixed(2)}</span>
               </div>
             )}
@@ -2212,7 +2216,7 @@ export default function OrderTracking({ isSharedView = false }) {
                 Cancellation & Wastage Policy
               </p>
               <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-relaxed">
-                {cancellationPolicyText || "In order to reduce the food wastage, once the order gets confirmed by the restaurant, it can't be cancelled"}
+                {cancellationPolicyText || (isGrocery ? "Once the order gets confirmed by the store, it can't be cancelled" : "In order to reduce the food wastage, once the order gets confirmed by the restaurant, it can't be cancelled")}
               </p>
             </div>
           </div>
@@ -2527,7 +2531,7 @@ export default function OrderTracking({ isSharedView = false }) {
               <Textarea
                 value={restaurantComment}
                 onChange={(e) => setRestaurantComment(e.target.value)}
-                placeholder="Write a review for food & restaurant (optional)..."
+                placeholder={isGrocery ? "Write a review for the store (optional)..." : "Write a review for food & restaurant (optional)..."}
                 className="min-h-[60px] text-xs resize-none rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
               />
             </div>
@@ -2579,7 +2583,7 @@ export default function OrderTracking({ isSharedView = false }) {
                   <Phone className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">Call Restaurant</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Call {storeWord}</p>
                   <p className="text-[10px] text-gray-500 dark:text-gray-400">Direct line</p>
                 </div>
               </button>

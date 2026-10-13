@@ -21,6 +21,7 @@ import {
   Clock,
   Users,
   MessageSquare,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import BottomNavOrders from "@food/components/restaurant/BottomNavOrders";
@@ -543,6 +544,96 @@ export const printOrderInvoice = (order) => {
     toast.error("Failed to generate bill print");
   }
 };
+
+// ── Packing checklist (vendor ticks each item once it is packed) ──
+const packedStorageKey = (orderKey) => `order_packed_items_${orderKey}`;
+
+const readPackedItems = (orderKey) => {
+  if (!orderKey) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(packedStorageKey(orderKey)) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writePackedItems = (orderKey, packed) => {
+  if (!orderKey) return;
+  try {
+    localStorage.setItem(packedStorageKey(orderKey), JSON.stringify(packed));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const getOrderItemLabel = (item) => {
+  const v = item?.variantName || item?.variant || item?.variation || item?.selectedVariant?.name || item?.optionName || item?.size;
+  return `${item?.quantity || 1}x ${item?.name || "Item"}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
+};
+
+/** Items of an order that the vendor has not ticked as packed yet. */
+const getUnpackedItems = (order) => {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const packed = readPackedItems(order?._id || order?.orderId);
+  return items.filter((_, idx) => !packed.includes(idx));
+};
+
+function PackingChecklist({ order }) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const orderKey = order?._id || order?.orderId;
+  const [packed, setPacked] = useState(() => readPackedItems(orderKey));
+
+  useEffect(() => {
+    setPacked(readPackedItems(orderKey));
+  }, [orderKey]);
+
+  const toggle = (idx) => {
+    setPacked((prev) => {
+      const next = prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx];
+      writePackedItems(orderKey, next);
+      return next;
+    });
+  };
+
+  const packedCount = items.filter((_, idx) => packed.includes(idx)).length;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-gray-700">Items</p>
+        <span className={`text-[11px] font-semibold ${packedCount === items.length ? "text-green-600" : "text-amber-600"}`}>
+          {packedCount}/{items.length} packed
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item, idx) => {
+          const isPacked = packed.includes(idx);
+          return (
+            <li key={item?._id || item?.itemId || idx}>
+              <button
+                type="button"
+                onClick={() => toggle(idx)}
+                className={`w-full flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
+                  isPacked ? "bg-green-50 border-green-300" : "bg-white border-gray-200"
+                }`}>
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                    isPacked ? "bg-green-600 border-green-600 text-white" : "border-gray-300 bg-white"
+                  }`}>
+                  {isPacked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                </span>
+                <span className={`text-xs leading-snug ${isPacked ? "text-gray-500 line-through" : "text-gray-800 font-medium"}`}>
+                  {getOrderItemLabel(item)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 const transformOrderForList = (order) => {
   const rawStatus = String(order.status || order.orderStatus || "pending").toLowerCase();
@@ -3222,10 +3313,16 @@ export default function OrdersMain() {
               <div className="border-t border-gray-100 my-3" />
 
               <div className="mb-3">
-                <p className="text-xs font-medium text-gray-700 mb-1">Items</p>
-                <p className="text-xs text-gray-600">
-                  {selectedOrder.itemsSummary}
-                </p>
+                {Array.isArray(selectedOrder.fullOrder?.items) && selectedOrder.fullOrder.items.length > 0 ? (
+                  <PackingChecklist order={selectedOrder.fullOrder} />
+                ) : (
+                  <>
+                    <p className="text-xs font-medium text-gray-700 mb-1">Items</p>
+                    <p className="text-xs text-gray-600">
+                      {selectedOrder.itemsSummary}
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-gray-500 mb-4">
@@ -3331,6 +3428,18 @@ function OrderCard({
         normalizedStatus === "ready" ||
         normalizedStatus === "preparing"),
   );
+  const [missingItems, setMissingItems] = useState(null);
+  const runMarkReady = () => onMarkReady?.({ orderId, mongoId, customerName });
+  // Warn the vendor if some items are not ticked as packed before marking the order ready
+  const handleMarkReadyClick = () => {
+    const unpacked = getUnpackedItems(fullOrder);
+    if (unpacked.length > 0) {
+      setMissingItems(unpacked);
+      toast.warning(`${unpacked.length} item${unpacked.length > 1 ? "s" : ""} not packed yet`);
+      return;
+    }
+    runMarkReady();
+  };
   const statusLabel = String(status || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -3408,7 +3517,7 @@ function OrderCard({
 
       {/* ── Body: photo + items ── */}
       <div
-        onClick={() => onSelect?.({ orderId, status, customerName, type, tableOrToken, timePlaced, eta, itemsSummary, paymentMethod })}
+        onClick={() => onSelect?.({ fullOrder, orderId, mongoId, status, customerName, type, tableOrToken, timePlaced, eta, itemsSummary, paymentMethod })}
         className="flex items-center gap-3 px-3 pb-3 cursor-pointer">
         {/* Food image */}
         <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0">
@@ -3467,7 +3576,7 @@ function OrderCard({
           {isPreparing && onMarkReady && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onMarkReady({ orderId, mongoId, customerName }); }}
+              onClick={(e) => { e.stopPropagation(); handleMarkReadyClick(); }}
               disabled={isMarkingReady}
               className="h-8 px-3 rounded-lg text-[11px] font-bold bg-green-600 text-white active:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
               {isMarkingReady ? "Marking…" : "Mark Ready"}
@@ -3491,6 +3600,38 @@ function OrderCard({
           )}
         </div>
       </div>
+
+      {missingItems && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => { e.stopPropagation(); setMissingItems(null); }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-bold text-gray-900">Some items are not packed</p>
+            <p className="mt-1 text-xs text-gray-500">Order #{orderId} — these items are not ticked:</p>
+            <ul className="mt-3 space-y-1.5">
+              {missingItems.map((item, idx) => (
+                <li key={idx} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  {getOrderItemLabel(item)}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setMissingItems(null)}
+                className="flex-1 rounded-xl bg-black py-2.5 text-sm font-medium text-white">
+                Go back &amp; pack
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMissingItems(null); runMarkReady(); }}
+                className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700">
+                Mark ready anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

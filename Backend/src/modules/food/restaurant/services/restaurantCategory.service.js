@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { invalidateCache } from '../../../../middleware/cache.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodCategory, categorySectionFilter, normalizeCategorySection } from '../../admin/models/category.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
@@ -10,6 +11,9 @@ import {
     serializeCategoryForResponse,
     toObjectId
 } from '../../shared/categoryWorkflow.js';
+
+/** Public category lists are cached in Redis; drop them whenever a category changes. */
+export const invalidateCategoryCache = () => invalidateCache('categories:*');
 
 const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const APPROVED_CATEGORY_FILTER = [
@@ -194,7 +198,11 @@ export async function listPublicCategories(query = {}) {
                 $or: [
                     { restaurantId: null },
                     { restaurantId: { $exists: false } },
-                    ...(approvedCategoryIds.length ? [{ _id: { $in: approvedCategoryIds } }] : [])
+                    ...(approvedCategoryIds.length ? [{ _id: { $in: approvedCategoryIds } }] : []),
+                    // Approved categories added by grocery stores show up even before the first item is added
+                    ...(publicSection === 'grocery' && eligibleRestaurantIds.length
+                        ? [{ restaurantId: { $in: eligibleRestaurantIds } }]
+                        : [])
                 ]
             }
         ]
@@ -261,6 +269,7 @@ export async function createRestaurantCategory(restaurantId, body = {}) {
             : undefined
     });
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -315,6 +324,7 @@ export async function updateRestaurantCategory(restaurantId, id, body = {}) {
     doc.rejectedAt = undefined;
 
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -333,5 +343,6 @@ export async function deleteRestaurantCategory(restaurantId, id) {
     }
 
     const deleted = await FoodCategory.findOneAndDelete({ _id: id, restaurantId: context.restaurantId }).lean();
+    await invalidateCategoryCache();
     return deleted ? { id } : null;
 }

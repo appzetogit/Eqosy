@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { invalidateCategoryCache } from '../../restaurant/services/restaurantCategory.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
@@ -3086,6 +3087,7 @@ export async function createCategory(body, adminContext = null) {
         createdByRestaurantId: undefined
     });
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -3103,6 +3105,7 @@ export async function approveCategory(id) {
     doc.rejectedAt = undefined;
     doc.rejectionReason = '';
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -3123,6 +3126,7 @@ export async function rejectCategory(id, reason) {
     doc.rejectedAt = new Date();
     doc.approvedAt = undefined;
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -3147,6 +3151,7 @@ export async function makeCategoryGlobal(id) {
     doc.globalizedAt = new Date();
     doc.approvedAt = doc.approvedAt || new Date();
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -3205,6 +3210,7 @@ export async function updateCategory(id, body, adminContext = null) {
         doc.createdByRestaurantId = doc.restaurantId;
     }
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 
@@ -3215,6 +3221,7 @@ export async function deleteCategory(id) {
         throw new ValidationError('Cannot delete category while it has items');
     }
     const deleted = await FoodCategory.findByIdAndDelete(id).lean();
+    await invalidateCategoryCache();
     return deleted ? { id } : null;
 }
 
@@ -3227,6 +3234,7 @@ export async function toggleCategoryStatus(id) {
         doc.createdByRestaurantId = doc.restaurantId;
     }
     await doc.save();
+    await invalidateCategoryCache();
     return doc.toObject();
 }
 

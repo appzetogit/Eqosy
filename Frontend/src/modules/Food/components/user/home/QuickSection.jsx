@@ -278,7 +278,7 @@ const GroceryCategories = ({ zoneId, zoneChecking }) => {
           return (
             <Link
               key={cat._id || slug}
-              to={`/food/user/category/${slug}`}
+              to={`/food/user/category/${slug}?vertical=grocery`}
               className="flex w-[72px] shrink-0 flex-col items-center gap-2"
             >
               <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-[#E8F8F0]">
@@ -522,7 +522,7 @@ function StoreCard({ store, index }) {
       transition={{ duration: 0.32, delay: index * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="mb-4"
     >
-      <Link to={`/food/user/restaurants/${store.slug}`} className="block">
+      <Link to={`/food/user/restaurants/${store.slug}?vertical=grocery`} className="block">
         <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.08)] active:scale-[0.99] transition-transform duration-150">
 
           {/* Product/Store Image Slider */}

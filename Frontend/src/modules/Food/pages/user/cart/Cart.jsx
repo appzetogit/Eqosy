@@ -8,6 +8,7 @@ import confetti from "canvas-confetti"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Button } from "@food/components/ui/button"
 import { useCart } from "@food/context/CartContext"
+import { useGroceryMode } from "@food/hooks/useGroceryMode"
 import { useProfile } from "@food/context/ProfileContext"
 import { useOrders } from "@food/context/OrdersContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
@@ -86,7 +87,7 @@ const CART_ORDER_NOTE_STORAGE_KEY = "food-cart-order-note-v1"
 const CART_TIP_PREFERENCE_KEY = "food-cart-tip-preference-v1"
 const TIP_PRESET_AMOUNTS = [15, 20, 30]
 
-export default function Cart() {
+function CartInner() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const goBack = useAppBackNavigation()
@@ -1489,7 +1490,7 @@ export default function Cart() {
     // Priority: slug > restaurantId (both work for the restaurant details route)
     const idOrSlug = restaurantData?.slug || restaurantId
     if (idOrSlug) {
-      navigate(`/food/user/restaurants/${idOrSlug}`)
+      navigate(`/food/user/restaurants/${idOrSlug}${cartContext.isGrocery ? "?vertical=grocery" : ""}`)
     } else {
       goBack()
     }
@@ -2275,10 +2276,11 @@ export default function Cart() {
 
   const handleGoToOrders = () => {
     setShowOrderSuccess(false)
+    const groceryQuery = cartContext.isGrocery ? "&vertical=grocery" : ""
     if (placedOrderId) {
-      navigate(`/food/user/orders/${placedOrderId}?confirmed=true`)
+      navigate(`/food/user/orders/${placedOrderId}?confirmed=true${groceryQuery}`)
     } else {
-      navigate('/food/user/orders')
+      navigate(`/food/user/orders${groceryQuery ? "?vertical=grocery" : ""}`)
     }
   }
 
@@ -4933,4 +4935,33 @@ export default function Cart() {
       )}
     </div>
   )
+}
+
+/** Grocery and food carts are separate: show the cart only for the vertical it belongs to. */
+export default function Cart() {
+  const isGrocery = useGroceryMode()
+  const { cart = [] } = useCart()
+  const items = Array.isArray(cart) ? cart : []
+  const cartIsGrocery = items.some((item) => item?.isGrocery)
+  if (items.length > 0 && cartIsGrocery !== isGrocery) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 text-center">
+        <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">
+          {isGrocery ? "Your grocery cart is empty" : "Your food cart is empty"}
+        </h2>
+        <p className="mb-5 max-w-xs text-sm text-gray-500">
+          {isGrocery
+            ? "Add items from a grocery store to see them here."
+            : "Add dishes from a restaurant to see them here."}
+        </p>
+        <Link
+          to={isGrocery ? "/food/user?vertical=grocery" : "/food/user"}
+          className={`rounded-full px-6 py-2.5 text-sm font-semibold text-white ${isGrocery ? "bg-[#16A34A]" : "bg-[#F97316]"}`}
+        >
+          {isGrocery ? "Browse Quick Mart" : "Browse restaurants"}
+        </Link>
+      </div>
+    )
+  }
+  return <CartInner />
 }

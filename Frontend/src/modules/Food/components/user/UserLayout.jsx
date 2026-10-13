@@ -127,13 +127,28 @@ export default function UserLayout() {
     normalizedPath === "/profile" ||
     normalizedPath === "/user/profile"
 
+  const isCategoriesRoot =
+    normalizedPath === "/categories" ||
+    normalizedPath === "/user/categories"
+
+  const isOrdersRoot =
+    normalizedPath === "/orders" ||
+    normalizedPath === "/user/orders"
+
+  const isGroceryCartRoot =
+    new URLSearchParams(location.search).get("vertical") === "grocery" &&
+    (normalizedPath === "/cart" || normalizedPath === "/user/cart")
+
   const showBottomNav = (normalizedPath === "/" ||
+    isGroceryCartRoot ||
     normalizedPath === "/user" ||
     normalizedPath === "/dining" ||
     normalizedPath === "/user/dining" ||
     normalizedPath === "/under-250" ||
     normalizedPath === "/user/under-250" ||
     isProfileRoot ||
+    isCategoriesRoot ||
+    isOrdersRoot ||
     normalizedPath === "")
 
   const isUnder250 = normalizedPath === "/under-250" || normalizedPath === "/user/under-250"

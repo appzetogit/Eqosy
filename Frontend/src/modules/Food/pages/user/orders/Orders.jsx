@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { useGroceryMode, withGrocery } from "@food/hooks/useGroceryMode"
 import { ArrowLeft, Search, MoreVertical, ChevronRight, Star, RotateCcw, AlertCircle, Loader2, Clock, X, Share2, MessageCircle, Send, Copy, Mail, MessagesSquare, Link2 } from "lucide-react"
 import { orderAPI } from "@food/api"
 import { useCart } from "@food/context/CartContext"
@@ -14,6 +15,7 @@ const debugError = (...args) => { }
 
 export default function Orders() {
   const navigate = useNavigate()
+  const isGrocery = useGroceryMode()
   const { replaceCart } = useCart()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -411,6 +413,9 @@ export default function Orders() {
 
   // Filter orders based on search query
   const filteredOrders = orders.filter(order => {
+    // Grocery and food orders are listed separately
+    const orderIsGrocery = (order.rawOrderData?.restaurantId?.isRestaurant ?? order.restaurantId?.isRestaurant) === false
+    if (orderIsGrocery !== isGrocery) return false
     if (!searchQuery.trim()) return true
 
     const query = searchQuery.toLowerCase()
@@ -463,7 +468,7 @@ export default function Orders() {
 
     replaceCart(reorderItems)
     toast.success("Items added to cart")
-    navigate(`/food/user/restaurants/${restaurantTarget}`)
+    navigate(`/food/user/restaurants/${restaurantTarget}${isGrocery ? "?vertical=grocery" : ""}`)
   }
 
   // Three-dots menu handlers
@@ -590,7 +595,7 @@ Order again from this restaurant in the ${companyName} app.`
 
   const handleViewOrderDetails = (order) => {
     setActiveMenuOrderId(null)
-    navigate(`/user/orders/${order.id}/details`)
+    navigate(withGrocery(`/user/orders/${order.id}/details`, isGrocery))
   }
 
   // Open rating modal for an order
@@ -787,7 +792,7 @@ Order again from this restaurant in the ${companyName} app.`
                             <span className="font-medium">Delivery:</span> {order.deliveryPartnerName}
                             {order.deliveryPartnerPhone && ` | ${order.deliveryPartnerPhone}`}
                           </p>
-                          <Link to={`/food/user/orders/${order.orderId || order.id}/chat`}>
+                          <Link to={`/food/user/orders/${order.orderId || order.id}/chat${isGrocery ? "?vertical=grocery" : ""}`}>
                             <button type="button" className="text-xs text-[color:var(--app-primary,#EB590E)] font-semibold flex items-center gap-1 hover:underline bg-orange-50 dark:bg-orange-950/30 px-1.5 py-0.5 rounded border border-orange-200 dark:border-orange-900/40">
                               <MessageCircle size={11} />
                               Chat
@@ -796,7 +801,7 @@ Order again from this restaurant in the ${companyName} app.`
                         </div>
                       )}
                       {order.restaurantId && (
-                        <Link to={`/food/user/restaurants/${order.restaurantId}`}>
+                        <Link to={`/food/user/restaurants/${order.restaurantId}${isGrocery ? "?vertical=grocery" : ""}`}>
                           <button className="text-xs text-[color:var(--app-primary,#EB590E)] font-medium flex items-center mt-1 hover:text-[color:var(--app-secondary,#D94F0C)]">
                             View menu <span className="ml-0.5">&gt;</span>
                           </button>
@@ -821,7 +826,7 @@ Order again from this restaurant in the ${companyName} app.`
                       type="button"
                       onClick={() => {
                         setActiveMenuOrderId(null)
-                        navigate(`/food/user/orders/${order.orderId || order.id}/chat`)
+                        navigate(`/food/user/orders/${order.orderId || order.id}/chat${isGrocery ? "?vertical=grocery" : ""}`)
                       }}
                       className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-800 flex items-center gap-2"
                     >

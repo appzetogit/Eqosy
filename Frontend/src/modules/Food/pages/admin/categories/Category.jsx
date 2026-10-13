@@ -75,6 +75,17 @@ export default function Category() {
   const [restaurants, setRestaurants] = useState([])
   const [restaurantsLoading, setRestaurantsLoading] = useState(false)
   const [formData, setFormData] = useState(defaultFormData)
+
+  // Show zone names (not raw ids) by looking the id up in the loaded zones
+  const zoneLabelWithName = (zone) => {
+    const id = typeof zone === "string" ? zone.trim() : String(zone?._id || zone?.id || "")
+    if (/^[a-f0-9]{24}$/i.test(id)) {
+      const match = zones.find((z) => String(z._id || z.id) === id)
+      const name = match?.name || match?.zoneName || match?.serviceLocation
+      if (name) return name
+    }
+    return zoneLabel(zone)
+  }
   const [selectedImageFile, setSelectedImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -238,7 +249,7 @@ export default function Category() {
       const query = String(searchQuery || "").trim().toLowerCase()
       if (query) {
         const creator = category?.createdByRestaurant?.name || category?.restaurant?.name || ""
-        const zoneTextStr = zoneLabel(category?.zoneId)
+        const zoneTextStr = zoneLabelWithName(category?.zoneId)
         const matchesSearch =
           String(category?.name || "").toLowerCase().includes(query) ||
           String(category?.foodTypeScope || "").toLowerCase().includes(query) ||
@@ -266,7 +277,7 @@ export default function Category() {
       if (selectedZoneId !== "all") {
         const catZone = category?.zoneId
         const catZoneIdStr = typeof catZone === "string" ? catZone : catZone?._id || catZone?.id || ""
-        const catZoneName = zoneLabel(catZone).toLowerCase()
+        const catZoneName = zoneLabelWithName(catZone).toLowerCase()
 
         if (selectedZoneId === "global_zone") {
           if (catZoneIdStr && catZoneIdStr !== "global" && catZoneName !== "global") return false
@@ -503,7 +514,7 @@ export default function Category() {
         category?.name || "N/A",
         category?.foodTypeScope || "Both",
         category?.isGlobal ? "Global" : "Private",
-        zoneLabel(category?.zoneId),
+        zoneLabelWithName(category?.zoneId),
         category?.approvalStatus || "pending",
       ])
 
@@ -924,7 +935,7 @@ export default function Category() {
                   const creatorName = category?.createdByRestaurant?.name || category?.restaurant?.name || "Admin"
                   const approvalStatus = category?.approvalStatus || "pending"
                   const isRestaurantCategory = Boolean(category?.createdByRestaurantId || category?.restaurantId)
-                  const zoneText = zoneLabel(category?.zoneId)
+                  const zoneText = zoneLabelWithName(category?.zoneId)
 
                   return (
                     <tr key={category.id} className="align-top hover:bg-slate-50/80">

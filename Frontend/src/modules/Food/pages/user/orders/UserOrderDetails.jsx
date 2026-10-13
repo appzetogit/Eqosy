@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { useGroceryMode } from "@food/hooks/useGroceryMode"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import {
   ArrowLeft,
@@ -32,9 +33,11 @@ export default function UserOrderDetails() {
   const goBack = useAppBackNavigation()
   const { replaceCart } = useCart()
   const { orderId } = useParams()
+  const groceryParam = useGroceryMode()
   const [order, setOrder] = useState(null)
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
+  const ordersPath = groceryParam ? "/food/user/orders?vertical=grocery" : "/user/orders"
   const [showPlatformFeeModal, setShowPlatformFeeModal] = useState(false)
   const [showDeliveryFeeModal, setShowDeliveryFeeModal] = useState(false)
   const [companyName, setCompanyName] = useState("Eqosy")
@@ -59,7 +62,7 @@ export default function UserOrderDetails() {
           orderData = response.data.order
         } else {
           toast.error("Order not found")
-          navigate("/user/orders")
+          navigate(ordersPath)
           return
         }
 
@@ -85,7 +88,7 @@ export default function UserOrderDetails() {
         toast.error(
           error?.response?.data?.message || "Failed to load order details"
         )
-        navigate("/user/orders")
+        navigate(ordersPath)
       } finally {
         setLoading(false)
       }
@@ -119,7 +122,7 @@ export default function UserOrderDetails() {
         <div className="text-center space-y-3">
           <p className="text-gray-700 text-sm font-medium">Order not found</p>
           <button
-            onClick={() => navigate("/user/orders")}
+            onClick={() => navigate(ordersPath)}
             className="px-4 py-2 rounded-lg bg-[color:var(--app-primary,#EB590E)] text-white text-sm font-semibold"
           >
             Back to Orders
@@ -132,8 +135,12 @@ export default function UserOrderDetails() {
   const orderIdDisplay = order.orderId || order._id || orderId
   // Use fetched restaurant data if available, otherwise use order.restaurantId or order.restaurant
   const restaurantObj = restaurant || order?.restaurantId || order?.restaurant || {}
+  // Grocery orders come from stores flagged isRestaurant === false
+  const isGrocery = groceryParam || restaurantObj.isRestaurant === false
+  const storeLabel = isGrocery ? "Store" : "Restaurant"
+  const accent = isGrocery ? "#16A34A" : "var(--app-primary,#EB590E)"
   const restaurantName =
-    order.restaurantName || restaurantObj.name || "Restaurant"
+    order.restaurantName || restaurantObj.name || restaurantObj.restaurantName || storeLabel
 
   // Build restaurant address (try restaurant fields first, then fall back)
   const restaurantLocation = (() => {
@@ -215,7 +222,7 @@ export default function UserOrderDetails() {
 
   const handleCallRestaurant = () => {
     if (!restaurantPhone) {
-      toast.error("Restaurant phone number not available")
+      toast.error(`${storeLabel} phone number not available`)
       return
     }
     window.location.href = `tel:${restaurantPhone}`
@@ -269,14 +276,14 @@ export default function UserOrderDetails() {
 
       // Restaurant Name
       doc.setFont('helvetica', 'bold')
-      doc.text('Restaurant Name:', 20, yPos)
+      doc.text(`${storeLabel} Name:`, 20, yPos)
       doc.setFont('helvetica', 'normal')
       doc.text(restaurantName, 60, yPos)
       yPos += 7
 
       // Restaurant Address
       doc.setFont('helvetica', 'bold')
-      doc.text('Restaurant Address:', 20, yPos)
+      doc.text(`${storeLabel} Address:`, 20, yPos)
       doc.setFont('helvetica', 'normal')
       const restaurantAddressLines = doc.splitTextToSize(restaurantLocation || 'N/A', 130)
       doc.text(restaurantAddressLines, 60, yPos)
@@ -359,6 +366,7 @@ export default function UserOrderDetails() {
           restaurantId: restaurantObj._id || restaurantObj.restaurantId || currentOrder?.restaurantId,
           description: item.description || "",
           isVeg: determineIsVeg(item),
+          isGrocery,
           quantity: Math.max(1, Number(item.quantity || item.qty) || 1),
           reorderIndex: index,
         }
@@ -372,7 +380,7 @@ export default function UserOrderDetails() {
 
     replaceCart(reorderItems)
     toast.success("Items added to cart")
-    navigate(`/food/user/restaurants/${restaurantTarget}`)
+    navigate(`/food/user/restaurants/${restaurantTarget}${isGrocery ? "?vertical=grocery" : ""}`)
   }
 
   return (
@@ -407,7 +415,7 @@ export default function UserOrderDetails() {
           </div>
         </div>
 
-        {/* Restaurant Info Card */}
+        {/* Restaurant / Store Info Card */}
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -441,15 +449,16 @@ export default function UserOrderDetails() {
             </div>
             <button
               type="button"
-              onClick={() => navigate(`/food/user/orders/${orderIdDisplay}/chat`)}
-              className="text-xs text-[color:var(--app-primary,#EB590E)] font-semibold flex items-center gap-1 bg-orange-50 dark:bg-orange-950/30 px-2 py-1 rounded-md border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 transition-colors"
+              onClick={() => navigate(`/food/user/orders/${orderIdDisplay}/chat${isGrocery ? "?vertical=grocery" : ""}`)}
+              style={{ color: accent }}
+              className="text-xs font-semibold flex items-center gap-1 bg-orange-50 dark:bg-orange-950/30 px-2 py-1 rounded-md border border-orange-200 dark:border-orange-900/40 hover:bg-orange-100 transition-colors"
             >
               <MessageCircle size={13} />
               Chat History
             </button>
           </div>
 
-          {order.status !== "delivered" && (
+          {!isGrocery && order.status !== "delivered" && (
             <div className="flex items-center gap-2 mb-4">
               <span
                 className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${sendsCutlery
@@ -469,7 +478,7 @@ export default function UserOrderDetails() {
             return (
               <div key={idx} className="flex justify-between items-start mt-2">
                 <div className="flex items-center gap-2">
-                  <div
+                  {!isGrocery && <div
                     className={`w-3 h-3 border ${isVeg ? "border-green-600" : "border-red-600"
                       } flex items-center justify-center p-[1px]`}
                   >
@@ -477,7 +486,7 @@ export default function UserOrderDetails() {
                       className={`w-full h-full rounded-full ${isVeg ? "bg-green-600" : "bg-red-600"
                         }`}
                     />
-                  </div>
+                  </div>}
                   <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                     {item.quantity || item.qty || 1} x {item.name}{item.variantName ? ` (${item.variantName})` : ""}
                   </span>
@@ -722,7 +731,7 @@ export default function UserOrderDetails() {
             className="w-full bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/30 text-orange-700 dark:text-orange-400 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors"
           >
             <FileText className="w-4 h-4" />
-            Restaurant Complaint
+            {storeLabel} Complaint
           </button>
         </div>
       )}

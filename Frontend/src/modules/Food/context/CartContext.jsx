@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useLocation } from "react-router-dom"
 import { buildCartLineId } from "@food/utils/foodVariants"
 import EqosyCartLoader from "@food/components/ui/EqosyCartLoader"
 const debugLog = (...args) => { }
@@ -144,7 +145,17 @@ const resolveCartEntryId = (items, itemId, variantId = "") => {
 
 export function CartProvider({ children }) {
   // Safe init (works with SSR and bad JSON)
-  const [cart, setCart] = useState(() => {
+  // Food and grocery keep separate carts; the context exposes the one for the current vertical.
+  const { search, pathname } = useLocation()
+  // Sticky: sub-pages like checkout / address selection don't carry the flag, so they keep the last vertical.
+  const lastVerticalRef = useRef(false)
+  if (new URLSearchParams(search).get("vertical") === "grocery") {
+    lastVerticalRef.current = true
+  } else if (/^(\/food)?\/user\/?(dining.*|under-250|restaurants.*|cart\/?|orders\/?|profile\/?|categories\/?|category\/.*)?$/.test(pathname)) {
+    lastVerticalRef.current = false
+  }
+  const isGroceryActive = lastVerticalRef.current
+  const [allCart, setAllCart] = useState(() => {
     if (typeof window === "undefined") return []
     try {
       const saved = localStorage.getItem("cart")
@@ -154,6 +165,24 @@ export function CartProvider({ children }) {
       return []
     }
   })
+
+  const cart = useMemo(
+    () => allCart.filter((item) => Boolean(item?.isGrocery) === isGroceryActive),
+    [allCart, isGroceryActive],
+  )
+
+  const setCart = useCallback(
+    (updater) => {
+      setAllCart((prevAll) => {
+        const mine = prevAll.filter((item) => Boolean(item?.isGrocery) === isGroceryActive)
+        const others = prevAll.filter((item) => Boolean(item?.isGrocery) !== isGroceryActive)
+        const next = typeof updater === "function" ? updater(mine) : updater
+        const tagged = (Array.isArray(next) ? next : []).map((item) => ({ ...item, isGrocery: isGroceryActive }))
+        return [...others, ...tagged]
+      })
+    },
+    [isGroceryActive],
+  )
 
   // Track last add event for animation
   const [lastAddEvent, setLastAddEvent] = useState(null)
@@ -181,13 +210,13 @@ export function CartProvider({ children }) {
     try {
       // Only save if we have items or user is authenticated to avoid cluttering localStorage for every guest visitor
       const isAuthenticated = localStorage.getItem("user_authenticated") === "true" || !!localStorage.getItem("user_accessToken");
-      if (cart.length > 0 || isAuthenticated) {
-        localStorage.setItem("cart", JSON.stringify(normalizeCartData(cart)))
+      if (allCart.length > 0 || isAuthenticated) {
+        localStorage.setItem("cart", JSON.stringify(normalizeCartData(allCart)))
       }
     } catch {
       // ignore storage errors (private mode, quota, etc.)
     }
-  }, [cart])
+  }, [allCart])
 
 const isItemAvailableNow = (availableTime) => {
   if (!availableTime || availableTime.isAllDay !== false) return true
@@ -570,6 +599,8 @@ const isItemAvailableNow = (availableTime) => {
       _isProvider: true, // Flag to identify this is from the actual provider
       // Keep original cart array for backward compatibility
       cart,
+      // True when the exposed cart is the grocery cart
+      isGrocery: isGroceryActive,
       // Add animation-compatible structure
       items: cartForAnimation.items,
       itemCount: cartForAnimation.itemCount,
@@ -587,7 +618,7 @@ const isItemAvailableNow = (availableTime) => {
       cleanCartForRestaurant,
       replaceCart,
     }),
-    [cart, cartForAnimation, lastAddEvent, lastRemoveEvent, triggerEqosyCartLoader]
+    [cart, isGroceryActive, cartForAnimation, lastAddEvent, lastRemoveEvent, triggerEqosyCartLoader]
   )
 
   return (

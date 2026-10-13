@@ -77,7 +77,7 @@ function RestaurantDetailsContent() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const goBack = useAppBackNavigation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const showOnlyUnder250 = searchParams.get('under250') === 'true'
   const targetDishId = useMemo(() => String(searchParams.get('dish') || searchParams.get('item') || searchParams.get('itemId') || '').trim(), [searchParams])
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart, triggerEqosyCartLoader } = useCart()
@@ -190,6 +190,18 @@ function RestaurantDetailsContent() {
 
   // Restaurant data state
   const [restaurant, setRestaurant] = useState(null)
+
+  // Keep the URL vertical in sync with the store type so the right (food / grocery) cart and nav are used
+  useEffect(() => {
+    if (typeof restaurant?.isRestaurant !== "boolean") return
+    const urlIsGrocery = searchParams.get("vertical") === "grocery"
+    const storeIsGrocery = restaurant.isRestaurant === false
+    if (urlIsGrocery === storeIsGrocery) return
+    const next = new URLSearchParams(searchParams)
+    if (storeIsGrocery) next.set("vertical", "grocery")
+    else next.delete("vertical")
+    setSearchParams(next, { replace: true })
+  }, [restaurant?.isRestaurant, searchParams, setSearchParams])
   const [loadingRestaurant, setLoadingRestaurant] = useState(true)
   const [restaurantError, setRestaurantError] = useState(null)
   const [isContentReady, setIsContentReady] = useState(false)
@@ -1184,7 +1196,8 @@ function RestaurantDetailsContent() {
       originalPrice: item.originalPrice,
       isVeg: determineIsVeg(item),
       preparationTime: item.preparationTime, // Add preparationTime property
-      availableTime: item.availableTime
+      availableTime: item.availableTime,
+      isGrocery: restaurant?.isRestaurant === false
     }
 
     // Get source position for animation from event target
