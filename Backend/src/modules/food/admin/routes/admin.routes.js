@@ -13,8 +13,19 @@ import { upload } from '../../../../middleware/upload.js';
 import { invalidateCache } from '../../../../middleware/cache.js';
 import { attachFoodAdminContext, requireFoodResourceAccess } from '../middlewares/foodAdmin.middleware.js';
 import * as foodAdminManagementController from '../controllers/foodAdminManagement.controller.js';
+import * as demoModeController from '../controllers/demoMode.controller.js';
+import { assertAdminCanManageRestaurant, assertAdminCanManageFood } from '../services/admin.service.js';
 
 const router = express.Router();
+
+// Zone-restricted subadmins can only modify restaurants/foods inside their own zones.
+const guardRestaurantZone = async (req, _res, next) => {
+    try { await assertAdminCanManageRestaurant(req.params.id, req.adminContext); next(); } catch (e) { next(e); }
+};
+const guardFoodZone = async (req, _res, next) => {
+    try { await assertAdminCanManageFood(req.params.id, req.adminContext); next(); } catch (e) { next(e); }
+};
+
 
 // ----- Public Business Settings (No Admin Required) -----
 router.get('/business-settings/public', businessSettingsController.getBusinessSettings);
@@ -75,14 +86,14 @@ router.get('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaur
 router.get('/restaurants/:id/analytics', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.getRestaurantAnalytics);
 router.get('/restaurants/:id/menu', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.getRestaurantMenuById);
 router.post('/restaurants', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.createRestaurant);
-router.patch('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantById);
-router.patch('/restaurants/:id/status', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantStatus);
-router.patch('/restaurants/:id/location', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantLocation);
+router.patch('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaurants'), guardRestaurantZone, adminController.updateRestaurantById);
+router.patch('/restaurants/:id/status', requireFoodResourceAccess('restaurants', 'restaurants'), guardRestaurantZone, adminController.updateRestaurantStatus);
+router.patch('/restaurants/:id/location', requireFoodResourceAccess('restaurants', 'restaurants'), guardRestaurantZone, adminController.updateRestaurantLocation);
 router.patch('/restaurants/:id/zone-featured-rank', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantZoneFeaturedRank);
 router.patch('/restaurants/:id/menu', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.updateRestaurantMenuById);
 router.patch('/restaurants/:id/approve', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.approveRestaurant);
 router.patch('/restaurants/:id/reject', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.rejectRestaurant);
-router.delete('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.deleteRestaurant);
+router.delete('/restaurants/:id', requireFoodResourceAccess('restaurants', 'restaurants'), guardRestaurantZone, adminController.deleteRestaurant);
 
 // ----- Restaurant Commission -----
 router.get('/restaurant-commissions/bootstrap', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.getRestaurantCommissionBootstrap);
@@ -92,6 +103,13 @@ router.get('/restaurant-commissions/:id', requireFoodResourceAccess('fee_setting
 router.patch('/restaurant-commissions/:id', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.updateRestaurantCommission);
 router.delete('/restaurant-commissions/:id', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.deleteRestaurantCommission);
 router.patch('/restaurant-commissions/:id/toggle', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.toggleRestaurantCommissionStatus);
+
+// ----- Dev Mode (demo data, location bypass) & checkout payment methods -----
+router.get('/demo-mode', demoModeController.getDemoMode);
+router.patch('/demo-mode', demoModeController.updateDemoMode);
+router.post('/demo-mode/seed', demoModeController.seedDemoData);
+router.get('/payment-methods', requireFoodResourceAccess('fee_settings', 'fee settings'), demoModeController.getPaymentMethods);
+router.patch('/payment-methods', requireFoodResourceAccess('fee_settings', 'fee settings'), demoModeController.updatePaymentMethods);
 
 // ----- Categories -----
 router.get('/categories', requireFoodResourceAccess('categories', 'categories'), adminController.getCategories);
@@ -120,7 +138,7 @@ router.post('/foods', requireFoodResourceAccess('foods', 'foods'), async (req, r
     } catch (err) { console.error('Cache invalidation error', err); }
     next();
 }, adminController.createFood);
-router.patch('/foods/:id', requireFoodResourceAccess('foods', 'foods'), async (req, res, next) => {
+router.patch('/foods/:id', requireFoodResourceAccess('foods', 'foods'), guardFoodZone, async (req, res, next) => {
     try {
         const { invalidateCache } = await import('../../../../middleware/cache.js');
         await invalidateCache('restaurant_menu:*');
@@ -129,7 +147,7 @@ router.patch('/foods/:id', requireFoodResourceAccess('foods', 'foods'), async (r
     } catch (err) { console.error('Cache invalidation error', err); }
     next();
 }, adminController.updateFood);
-router.delete('/foods/:id', requireFoodResourceAccess('foods', 'foods'), async (req, res, next) => {
+router.delete('/foods/:id', requireFoodResourceAccess('foods', 'foods'), guardFoodZone, async (req, res, next) => {
     try {
         const { invalidateCache } = await import('../../../../middleware/cache.js');
         await invalidateCache('restaurant_menu:*');
@@ -244,6 +262,7 @@ router.get('/delivery/partners', requireFoodResourceAccess('delivery', 'delivery
 router.get('/delivery/:id', requireFoodResourceAccess('delivery', 'delivery'), adminController.getDeliveryPartnerById);
 router.patch('/delivery/:id/approve', requireFoodResourceAccess('delivery', 'delivery'), adminController.approveDeliveryPartner);
 router.patch('/delivery/:id/reject', requireFoodResourceAccess('delivery', 'delivery'), adminController.rejectDeliveryPartner);
+router.delete('/delivery/:id', requireFoodResourceAccess('delivery', 'delivery'), adminController.deactivateDeliveryPartner);
 router.post('/delivery/:id/approve-emergency-offline', requireFoodResourceAccess('delivery', 'delivery'), adminController.approveEmergencyOfflineController);
 
 // ----- Zones -----
@@ -263,7 +282,10 @@ router.patch('/dining/restaurants/:restaurantId', requireFoodResourceAccess('din
 
 // ----- Orders -----
 router.get('/orders', requireFoodResourceAccess('orders', 'orders'), orderController.listOrdersAdminController);
-router.get('/orders/handover-requests/pending', orderController.listPendingHandoverRequestsAdminController);
+// Must stay above '/orders/:orderId' so "dispatch-settings" isn't treated as an order id.
+router.get('/orders/dispatch-settings', orderController.getDispatchSettingsController);
+router.patch('/orders/dispatch-settings', orderController.updateDispatchSettingsController);
+router.get('/orders/handover-requests/pending',orderController.listPendingHandoverRequestsAdminController);
 router.get('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.getOrderByIdAdminController);
 router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orders'), orderController.assignDeliveryPartnerController);
 router.post('/orders/:orderId/handover/approve', orderController.approveOrderHandoverAdminController);

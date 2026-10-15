@@ -301,13 +301,21 @@ function CartInner() {
     const fetchOpenSuggestions = async () => {
       setLoadingSuggestions(true)
       try {
-        const response = await restaurantAPI.getRestaurants({ limit: 30 })
+        // Only suggest restaurants from the same zone as the closed restaurant.
+        const zoneOf = (r) => String(r?.zoneId?._id || r?.zoneId?.id || r?.zoneId || "")
+        const currentZoneId = zoneOf(restaurantData)
+        const response = await restaurantAPI.getRestaurants({
+          limit: 30,
+          ...(currentZoneId ? { zoneId: currentZoneId } : {}),
+        })
         const list = response?.data?.data?.restaurants || response?.data?.data || []
         const currentId = String(restaurantData?._id || restaurantData?.restaurantId || "")
 
         const openRestos = list.filter((r) => {
           const rId = String(r._id || r.restaurantId || "")
           if (rId && currentId && rId === currentId) return false
+          const rZoneId = zoneOf(r)
+          if (currentZoneId && rZoneId && rZoneId !== currentZoneId) return false
           const status = getRestaurantAvailabilityStatus(r)
           return status.isOpen
         })
@@ -4939,8 +4947,11 @@ function CartInner() {
 
 /** Grocery and food carts are separate: show the cart only for the vertical it belongs to. */
 export default function Cart() {
-  const isGrocery = useGroceryMode()
-  const { cart = [] } = useCart()
+  const { cart = [], isGrocery: contextIsGrocery } = useCart()
+  // The cart context already tracks the active vertical (sticky across cart/checkout pages),
+  // so prefer it over the URL flag, which cart links often omit.
+  const urlIsGrocery = useGroceryMode()
+  const isGrocery = contextIsGrocery ?? urlIsGrocery
   const items = Array.isArray(cart) ? cart : []
   const cartIsGrocery = items.some((item) => item?.isGrocery)
   if (items.length > 0 && cartIsGrocery !== isGrocery) {

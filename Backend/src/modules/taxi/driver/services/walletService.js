@@ -6,6 +6,7 @@ import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getWalletSettings } from '../../services/appSettingsService.js';
+import { applyOwnerWalletAdjustment, resolveOwnerPayout, splitRideEarning } from '../../services/ownerPayoutService.js';
 
 const normalizeAmount = (value, fieldName = 'amount') => {
   const amount = Number(value);
@@ -297,6 +298,93 @@ export const topUpDriverWallet = async ({ driverId, amount, metadata = {} }) => 
   }
 };
 
+/**
+ * Settles one completed ride of a fleet driver (a driver that belongs to an owner).
+ * Online: owner wallet +ownerShare, driver wallet +driverShare.
+ * Cash:   owner wallet -(commission + carried cancellation fee); driver keeps driverShare and owes the owner
+ *         the rest of the cash (tracked in driver.fleetCashDue until the owner marks it received).
+ */
+const settleFleetRide = async ({
+  ride,
+  ownerId,
+  fare,
+  baseRideFare,
+  previousCancellationFee,
+  commissionAmount,
+  paymentMethod,
+  commissionConfig,
+  session,
+}) => {
+  const payout = await resolveOwnerPayout(ownerId);
+  const net = Math.max(baseRideFare - commissionAmount, 0);
+  const { ownerShare, driverShare } = splitRideEarning({ net, ownerSharePercent: payout.ownerSharePercent });
+  const metadata = {
+    fare,
+    baseRideFare,
+    previousCancellationFee,
+    commissionAmount,
+    net,
+    ownerShare,
+    driverShare,
+    paymentMethod,
+    payoutModel: payout.model,
+    ownerSharePercent: payout.ownerSharePercent,
+    commissionSource: commissionConfig.source,
+  };
+
+  // Drivers' own earnings figure reflects only what the driver keeps.
+  ride.driverEarnings = driverShare;
+  ride.ownerEarnings = ownerShare;
+  await ride.save({ session });
+
+  let driverResult = null;
+  if (paymentMethod === 'cash') {
+    const ownerDebit = Math.round((commissionAmount + previousCancellationFee) * 100) / 100;
+    if (ownerDebit > 0) {
+      await applyOwnerWalletAdjustment({
+        ownerId,
+        amount: -ownerDebit,
+        category: 'commission',
+        title: `Admin commission · cash ride`,
+        rideId: ride._id,
+        driverId: ride.driverId,
+        metadata,
+        session,
+      });
+    }
+    const cashOwedToOwner = Math.max(0, Math.round((fare - driverShare) * 100) / 100);
+    if (cashOwedToOwner > 0) {
+      await Driver.updateOne({ _id: ride.driverId }, { $inc: { fleetCashDue: cashOwedToOwner } }, { session });
+    }
+  } else {
+    if (ownerShare > 0) {
+      await applyOwnerWalletAdjustment({
+        ownerId,
+        amount: ownerShare,
+        category: 'ride_earning',
+        title: `Ride earning · online ride`,
+        rideId: ride._id,
+        driverId: ride.driverId,
+        metadata,
+        session,
+      });
+    }
+    if (driverShare > 0) {
+      driverResult = await applyDriverWalletAdjustment({
+        driverId: ride.driverId,
+        rideId: ride._id,
+        amount: driverShare,
+        type: 'ride_earning',
+        description: `Driver share (${100 - payout.ownerSharePercent}%) for online ride`,
+        metadata,
+        session,
+      });
+    }
+  }
+
+  return driverResult || { fleet: true, ownerShare, driverShare };
+};
+
 export const settleCompletedRideWallet = async ({ rideId }) => {
   const session = await mongoose.startSession();
 
@@ -351,6 +439,24 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
         { $set: { 'cancellation.payment_status': 'paid_in_next_ride' } },
         { session }
       );
+    }
+
+    // Fleet driver: the ride's net earning is shared with the owner per the owner payout settings.
+    const fleetDriver = await Driver.findById(ride.driverId).select('owner_id').session(session).lean();
+    if (fleetDriver?.owner_id) {
+      const fleetResult = await settleFleetRide({
+        ride,
+        ownerId: fleetDriver.owner_id,
+        fare,
+        baseRideFare,
+        previousCancellationFee,
+        commissionAmount,
+        paymentMethod,
+        commissionConfig,
+        session,
+      });
+      await session.commitTransaction();
+      return fleetResult ? { ...fleetResult, ride } : null;
     }
 
     if (!amount) {

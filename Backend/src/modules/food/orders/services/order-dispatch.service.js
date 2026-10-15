@@ -13,6 +13,7 @@ import {
   buildDeliverySocketPayload,
   buildOrderIdentityFilter,
   haversineKm,
+  exceedsVehicleTripLimit,
   notifyOwnerSafely,
   notifyOwnersSafely,
   notifyAdminsSafely,
@@ -100,8 +101,7 @@ async function listNearbyOnlineDeliveryPartners(
   const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
 
   const dispatchSettings = await getDispatchSettings();
-  const maxCycle = dispatchSettings.maxDistanceCycle ?? 5;
-  const maxElectric = dispatchSettings.maxDistanceElectricScooter ?? 10;
+  // A 0/blank limit would reject every order for that vehicle, so fall back to the defaults.
 
   let allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
@@ -219,10 +219,11 @@ async function listNearbyOnlineDeliveryPartners(
       if (Number.isFinite(calcD)) d = calcD;
     }
 
-    // Vehicle distance limits
-    const totalDist = (d === 999 ? 0 : d) + orderDeliveryDistance;
-    if (p.vehicleType === 'cycle' && totalDist > maxCycle) continue;
-    if (p.vehicleType === 'electric_scooter' && totalDist > maxElectric) continue;
+    // Vehicle distance limits. A stale GPS fix (e.g. from signup or an old session) says nothing
+    // about where the rider is now, so only count the pickup leg when the location is recent.
+    const locationAgeMs = p.lastLocationAt ? Date.now() - new Date(p.lastLocationAt).getTime() : Infinity;
+    const hasFreshLocation = d !== 999 && locationAgeMs <= 15 * 60 * 1000;
+    if (exceedsVehicleTripLimit(p.vehicleType, { deliveryKm: orderDeliveryDistance, pickupKm: hasFreshLocation ? d : 0 }, dispatchSettings)) continue;
 
     scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 999, status: p.status, isInZone: inZone });
   }
@@ -350,7 +351,7 @@ export async function getDispatchSettings() {
   return { 
     dispatchMode: settings?.dispatchMode || "auto",
     maxDistanceCycle: settings?.maxDistanceCycle ?? 5,
-    maxDistanceElectricScooter: settings?.maxDistanceElectricScooter ?? 10
+    maxDistanceElectricScooter: settings?.maxDistanceElectricScooter ?? 7
   };
 }
 
@@ -410,8 +411,8 @@ export async function tryAutoAssign(orderId, options = {}) {
   try {
     const forceRebroadcast = Boolean(options.forceRebroadcast);
 
-    // Decoupling: Ensure order is marked ready by restaurant before dispatching to delivery boys (unless manual forceRebroadcast)
-    const DISPATCHABLE_STATUSES = ['ready_for_pickup', 'ready', 'reached_pickup', 'picked_up', 'reached_drop'];
+    // Only dispatch once the restaurant has accepted the order (confirmed/preparing or later), unless manual forceRebroadcast
+    const DISPATCHABLE_STATUSES = ['confirmed', 'preparing', 'ready_for_pickup', 'ready', 'reached_pickup', 'picked_up', 'reached_drop'];
     if (!forceRebroadcast && !DISPATCHABLE_STATUSES.includes(order.orderStatus)) {
       logger.info(`tryAutoAssign: Skip for ${orderId} (status ${order.orderStatus} not dispatchable yet).`);
       return order;

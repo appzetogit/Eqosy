@@ -110,6 +110,12 @@ export const adminService = {
   adjustOwnerWallet: (id, data) => api.post(`/admin/wallet/owners/${id}/adjust`, data),
   getOwnerWalletHistory: (id) => api.get(`/admin/wallet/owners/${id}/history`),
   getOwnerWithdrawals: (ownerId, params = {}) => api.get(`/admin/wallet/owners/${ownerId}/withdrawals`, { params }),
+  approveOwnerWithdrawal: (requestId) => api.patch(`/admin/wallet/owners/withdrawals/${requestId}/approve`),
+  rejectOwnerWithdrawal: (requestId, reason = '') => api.patch(`/admin/wallet/owners/withdrawals/${requestId}/reject`, { reason }),
+  getOwnerPayoutSettings: () => api.get('/admin/owner-payout-settings'),
+  updateOwnerPayoutSettings: (data) => api.put('/admin/owner-payout-settings', data),
+  getOwnerPayout: (ownerId) => api.get(`/admin/owners/${ownerId}/payout`),
+  updateOwnerPayout: (ownerId, data) => api.patch(`/admin/owners/${ownerId}/payout`, data),
 
   getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 
@@ -200,8 +206,13 @@ export const adminService = {
   resolveSafetyAlert: (id, note = '') => api.patch(`/admin/safety/alerts/${id}/resolve`, { note }),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
-  getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
-    api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '', transportType = '', status = '', from = '', to = '', light = false } = {}) =>
+    api.get(
+      `/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}` +
+        (light ? '&light=1' : '') +
+        `&transportType=${encodeURIComponent(transportType)}&status=${encodeURIComponent(status)}` +
+        `&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    ),
   listRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getDeliveries: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>

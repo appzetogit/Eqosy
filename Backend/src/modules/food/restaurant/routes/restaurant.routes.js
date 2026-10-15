@@ -1,4 +1,8 @@
 import express from 'express';
+import {
+    listRestaurantDiningBookingsController,
+    updateRestaurantDiningBookingStatusController,
+} from '../../dining/controllers/diningBooking.controller.js';
 import { upload } from '../../../../middleware/upload.js';
 import {
     registerRestaurantController,
@@ -22,7 +26,8 @@ import {
     createRestaurantOfferController,
     listRestaurantOffersController,
     deleteRestaurantOfferController,
-    updateRestaurantOfferStatusController
+    updateRestaurantOfferStatusController,
+    updateRestaurantOfferController
 } from '../controllers/restaurantOffer.controller.js';
 import {
     createRestaurantSupportTicketController,
@@ -48,7 +53,8 @@ import {
 } from '../controllers/outletTimings.controller.js';
 import {
     createRestaurantFoodController,
-    updateRestaurantFoodController
+    updateRestaurantFoodController,
+    deleteRestaurantFoodController
 } from '../controllers/restaurantFood.controller.js';
 import {
     listAddonsController,
@@ -195,6 +201,15 @@ router.patch('/foods/:id', authMiddleware, requireRestaurant, async (req, res, n
     await invalidateCache('restaurants:*');
     next();
 }, updateRestaurantFoodController);
+router.delete('/foods/:id', authMiddleware, requireRestaurant, async (req, res, next) => {
+    await invalidateCache('restaurant_menu:*');
+    await invalidateCache('restaurants:*');
+    next();
+}, deleteRestaurantFoodController);
+
+// Table bookings (restaurant dashboard)
+router.get('/dining/bookings', authMiddleware, requireRestaurant, listRestaurantDiningBookingsController);
+router.patch('/dining/bookings/:id/status', authMiddleware, requireRestaurant, updateRestaurantDiningBookingStatusController);
 
 // Bulk Menu Upload
 router.get('/bulk-upload/template', authMiddleware, requireRestaurant, downloadBulkMenuTemplateController);
@@ -221,6 +236,7 @@ router.get('/support/tickets', authMiddleware, requireRestaurant, listRestaurant
 router.get('/my-offers', authMiddleware, requireRestaurant, listRestaurantOffersController);
 router.post('/my-offers', authMiddleware, requireRestaurant, createRestaurantOfferController);
 router.patch('/my-offers/:id/status', authMiddleware, requireRestaurant, updateRestaurantOfferStatusController);
+router.patch('/my-offers/:id', authMiddleware, requireRestaurant, updateRestaurantOfferController);
 router.delete('/my-offers/:id', authMiddleware, requireRestaurant, deleteRestaurantOfferController);
 
 export default router;

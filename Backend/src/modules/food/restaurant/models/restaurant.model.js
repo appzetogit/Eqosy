@@ -83,6 +83,8 @@ const restaurantSchema = new mongoose.Schema(
       required: true,
       default: false,
     },
+    /** Seeded demo/App Store review data; shown only while its Dev Mode group is switched on. */
+    isDemo: { type: Boolean, default: false, index: true },
     /** When true (default), outlet appears in Food vertical; when false, in Grocery vertical. */
     isRestaurant: {
       type: Boolean,

@@ -2955,7 +2955,7 @@ export default function Inventory() {
                             type="file"
                             ref={bulkFileInputRef}
                             onChange={onBulkFileChange}
-                            accept=".xlsx, .xls"
+                            accept=".xlsx"
                             className="hidden"
                           />
 

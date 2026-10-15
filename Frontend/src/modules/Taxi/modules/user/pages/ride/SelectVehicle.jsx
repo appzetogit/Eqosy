@@ -1399,11 +1399,15 @@ const SelectVehicle = () => {
           return;
         }
 
-        const leg = result?.routes?.[0]?.legs?.[0];
-        const distanceMeters = toFiniteNumber(leg?.distance?.value, fallbackDistanceMeters);
+        // With stops the route has several legs; the trip is the sum of all of them.
+        const legs = result?.routes?.[0]?.legs || [];
+        const leg = legs[0];
+        const totalLegMeters = legs.reduce((sum, item) => sum + Number(item?.distance?.value || 0), 0);
+        const totalLegSeconds = legs.reduce((sum, item) => sum + Number(item?.duration?.value || 0), 0);
+        const distanceMeters = toFiniteNumber(totalLegMeters || undefined, fallbackDistanceMeters);
         const durationMinutes = Math.max(
           1,
-          Math.round(toFiniteNumber(leg?.duration?.value, fallbackDurationMinutes * 60) / 60),
+          Math.round(toFiniteNumber(totalLegSeconds || undefined, fallbackDurationMinutes * 60) / 60),
         );
 
         if (status === 'OK' && leg) {
@@ -2204,7 +2208,15 @@ const SelectVehicle = () => {
                 1,
                 availability.closestDriverEtaMinutes || 3,
               );
-              const personCapacity = v.pricingRule?.capacity || v.capacity || getCapacity(v);
+              const isTwoWheeler = /bike|scooter|moped/.test(`${getIconValue(v)} ${String(v.name || '').toLowerCase()}`);
+              // Two-wheelers carry one passenger; ignore stray admin values like 150.
+              // Admin sometimes stores a weight (kg) in this field; anything above 60 is not a seat count.
+              const enteredCapacity = Number(v.pricingRule?.capacity || v.capacity);
+              const personCapacity = isTwoWheeler
+                ? 1
+                : Number.isFinite(enteredCapacity) && enteredCapacity >= 1 && enteredCapacity <= 60
+                  ? enteredCapacity
+                  : getCapacity({ ...v, capacity: 0 });
               const totalDurationMinutes = compactEta + (tripMetrics.durationMinutes || 15);
               const estimatedDropTimeLabel = getDropTime(totalDurationMinutes);
               const closestDriverDistanceLabel = availability.closestDriverDistanceMeters ? formatDistanceLabel(availability.closestDriverDistanceMeters) : null;

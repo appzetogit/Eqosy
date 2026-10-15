@@ -433,7 +433,7 @@ const PoolingConfirm = () => {
                     <div className="relative z-10 flex items-center justify-between">
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] backdrop-blur-md border border-white/5">
                         <ShieldCheck size={12} className="text-indigo-400" />
-                        Verified Ride
+                        Shared ride
                       </div>
                       <div className="flex flex-col items-end">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Seats</p>

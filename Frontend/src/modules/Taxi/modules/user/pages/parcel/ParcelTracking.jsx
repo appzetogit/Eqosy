@@ -178,6 +178,10 @@ const ParcelTracking = () => {
   const storedRide = useMemo(() => getCurrentRide(), []);
   const state = useMemo(() => location.state || storedRide || {}, [location.state, storedRide]);
   const [rideRealtime, setRideRealtime] = useState(null);
+  const [parcelPayer, setParcelPayer] = useState(() => (
+    String((location.state || storedRide || {})?.parcel?.payer || (location.state || storedRide || {})?.payer || 'sender').toLowerCase() === 'receiver' ? 'receiver' : 'sender'
+  ));
+  const [isSavingPayer, setIsSavingPayer] = useState(false);
   const [routePath, setRoutePath] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -346,6 +350,10 @@ const ParcelTracking = () => {
           feedback: payload?.feedback || latestStateRef.current.feedback || null,
           driver: mergedDriver,
         };
+
+        if (payload?.parcel?.payer) {
+          setParcelPayer(String(payload.parcel.payer).toLowerCase() === 'receiver' ? 'receiver' : 'sender');
+        }
 
         const nextStatus = String(nextRealtime.status || '').toLowerCase();
         if (COMPLETED_TRACKING_STATUSES.has(nextStatus)) {
@@ -581,13 +589,20 @@ const ParcelTracking = () => {
 
     socketService.on('ride:state', onRideState);
     socketService.on('ride:driver-location:updated', onLocationUpdated);
+    const onParcelPayerUpdated = (payload) => {
+      if (String(payload?.rideId) === String(rideId) && payload?.payer) {
+        setParcelPayer(payload.payer === 'receiver' ? 'receiver' : 'sender');
+      }
+    };
     socketService.on('ride:status:updated', onStatusUpdated);
+    socketService.on('ride:parcel:payer-updated', onParcelPayerUpdated);
     socketService.emit('ride:join', { rideId });
 
     return () => {
       socketService.off('ride:state', onRideState);
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
+      socketService.off('ride:parcel:payer-updated', onParcelPayerUpdated);
     };
   }, [rideId, navigate, routePrefix, userHomeRoute]);
 
@@ -1161,6 +1176,36 @@ const ParcelTracking = () => {
             />
             <ActionButton icon={Share2} label="Share" onClick={handleShare} />
             <ActionButton icon={ShieldCheck} label="Safety" onClick={() => navigate(`${routePrefix}/support`)} color="dark" />
+          </div>
+
+          {/* Who pays - customer can change this until the parcel is delivered */}
+          <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400">Payment will be paid by</p>
+            <div className="grid grid-cols-2 gap-2">
+              {['sender', 'receiver'].map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  disabled={isSavingPayer}
+                  onClick={async () => {
+                    if (option === parcelPayer || !rideId) return;
+                    const previous = parcelPayer;
+                    setParcelPayer(option);
+                    setIsSavingPayer(true);
+                    try {
+                      await api.patch(`/rides/${rideId}/parcel-payer`, { payer: option });
+                    } catch {
+                      setParcelPayer(previous);
+                    } finally {
+                      setIsSavingPayer(false);
+                    }
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-xs font-black capitalize transition-all ${parcelPayer === option ? 'border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500' : 'border-slate-200 bg-white text-slate-600'}`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Trip Footer */}

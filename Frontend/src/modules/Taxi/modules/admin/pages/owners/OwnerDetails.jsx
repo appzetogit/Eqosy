@@ -15,12 +15,14 @@ import {
   Phone,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import OwnerPayoutRuleTab from './OwnerPayoutRuleTab';
 
 import { adminService } from '../../services/adminService';
 import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const tabs = [
   'Owner Profile',
+  'Payout Rule',
   'Driver Details',
   'Fleet Details',
   'Payment History',
@@ -228,6 +230,8 @@ const OwnerDetails = () => {
               </div>
             </div>
           </>
+        ) : activeTab === 'Payout Rule' ? (
+          <OwnerPayoutRuleTab ownerId={id} />
         ) : (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-50 text-slate-400">

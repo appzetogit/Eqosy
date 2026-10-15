@@ -147,11 +147,11 @@ export function CartProvider({ children }) {
   // Safe init (works with SSR and bad JSON)
   // Food and grocery keep separate carts; the context exposes the one for the current vertical.
   const { search, pathname } = useLocation()
-  // Sticky: sub-pages like checkout / address selection don't carry the flag, so they keep the last vertical.
+  // Sticky: sub-pages like cart / checkout / address selection don't always carry the flag, so they keep the last vertical.
   const lastVerticalRef = useRef(false)
   if (new URLSearchParams(search).get("vertical") === "grocery") {
     lastVerticalRef.current = true
-  } else if (/^(\/food)?\/user\/?(dining.*|under-250|restaurants.*|cart\/?|orders\/?|profile\/?|categories\/?|category\/.*)?$/.test(pathname)) {
+  } else if (/^(\/food)?\/user\/?(dining.*|under-250|restaurants.*|orders\/?|profile\/?|categories\/?|category\/.*)?$/.test(pathname)) {
     lastVerticalRef.current = false
   }
   const isGroceryActive = lastVerticalRef.current

@@ -16,7 +16,7 @@ import { restaurantAPI } from "@food/api"
 import { toast } from "sonner"
 
 export default function AddCouponPage(props) {
-  const { mode = "create" } = props || {}
+  const { mode = "create", couponId } = props || {}
   const isEditMode = mode === "edit"
 
   const navigate = useNavigate()
@@ -38,6 +38,40 @@ export default function AddCouponPage(props) {
   })
 
   const [errors, setErrors] = useState({})
+
+  // Edit mode: load the existing coupon so the form shows its current values.
+  useEffect(() => {
+    if (!isEditMode || !couponId) return
+    let cancelled = false
+    const toDateInput = (value) => (value ? new Date(value).toISOString().slice(0, 10) : "")
+    ;(async () => {
+      try {
+        const res = await restaurantAPI.listMyOffers()
+        const offers = res?.data?.data?.offers || []
+        const offer = offers.find((o) => String(o.id || o._id) === String(couponId))
+        if (!offer) {
+          toast.error("Coupon not found")
+          navigate("/food/restaurant/coupon")
+          return
+        }
+        if (cancelled) return
+        setFormData({
+          couponCode: offer.couponCode || "",
+          discountType: offer.discountType || "percentage",
+          discountValue: offer.discountValue != null ? String(offer.discountValue) : "",
+          minOrderValue: offer.minOrderValue ? String(offer.minOrderValue) : "",
+          maxDiscount: offer.maxDiscount ? String(offer.maxDiscount) : "",
+          usageLimit: offer.usageLimit ? String(offer.usageLimit) : "",
+          perUserLimit: offer.perUserLimit ? String(offer.perUserLimit) : "",
+          startDate: toDateInput(offer.startDate),
+          endDate: toDateInput(offer.endDate),
+        })
+      } catch {
+        toast.error("Failed to load coupon")
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isEditMode, couponId])
 
   useEffect(() => {
     const handle = (e) => {
@@ -90,8 +124,13 @@ export default function AddCouponPage(props) {
         endDate: formData.endDate || undefined,
         status: "active"
       }
-      await restaurantAPI.createMyOffer(payload)
-      toast.success("Coupon created successfully!")
+      if (isEditMode) {
+        await restaurantAPI.updateMyOffer(couponId, payload)
+        toast.success("Coupon updated successfully!")
+      } else {
+        await restaurantAPI.createMyOffer(payload)
+        toast.success("Coupon created successfully!")
+      }
       navigate("/food/restaurant/coupon")
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || "Failed to save coupon")

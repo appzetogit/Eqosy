@@ -360,7 +360,7 @@ function DispatchSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     maxDistanceCycle: 5,
-    maxDistanceElectricScooter: 10,
+    maxDistanceElectricScooter: 7,
   });
 
   useEffect(() => {
@@ -371,7 +371,7 @@ function DispatchSettingsForm() {
         if (!cancelled && res.data?.data) {
           setSettings({
             maxDistanceCycle: res.data.data.maxDistanceCycle ?? 5,
-            maxDistanceElectricScooter: res.data.data.maxDistanceElectricScooter ?? 10,
+            maxDistanceElectricScooter: res.data.data.maxDistanceElectricScooter ?? 7,
           });
         }
       } catch (err) {

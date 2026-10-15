@@ -355,6 +355,8 @@ const generateRideOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 const DEFAULT_BID_STEP_AMOUNT = 10;
 const DEFAULT_MAX_BID_STEPS = 5;
 
+const normalizeParcelPayer = (value) => (String(value || '').trim().toLowerCase() === 'receiver' ? 'receiver' : 'sender');
+
 const normalizeParcelPayload = (parcel = {}) => ({
   category: String(parcel.category || '').trim(),
   weight: String(parcel.weight || '').trim(),
@@ -369,6 +371,7 @@ const normalizeParcelPayload = (parcel = {}) => ({
   senderMobile: String(parcel.senderMobile || '').trim(),
   receiverName: String(parcel.receiverName || '').trim(),
   receiverMobile: String(parcel.receiverMobile || '').trim(),
+  payer: normalizeParcelPayer(parcel.payer),
 });
 
 const normalizeIntercityPayload = (intercity = {}) => ({
@@ -2335,3 +2338,42 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
   return populateRideRealtime(ride._id);
 };
 
+
+/**
+ * Lets the customer choose (or later change) who pays for a parcel delivery:
+ * the sender or the receiver. Allowed until the parcel is completed or cancelled.
+ */
+export const updateParcelPayer = async ({ rideId, userId, payer }) => {
+  const normalizedPayer = String(payer || '').trim().toLowerCase();
+  if (!['sender', 'receiver'].includes(normalizedPayer)) {
+    throw new ApiError(400, "payer must be either 'sender' or 'receiver'");
+  }
+
+  const ride = await Ride.findOneAndUpdate(
+    {
+      _id: rideId,
+      userId,
+      serviceType: 'parcel',
+      status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+    },
+    { $set: { 'parcel.payer': normalizedPayer } },
+    { returnDocument: 'after' },
+  );
+
+  if (!ride) {
+    throw new ApiError(404, 'Active parcel booking not found, or payment option can no longer be changed');
+  }
+
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, { $set: { 'parcel.payer': normalizedPayer } });
+  }
+
+  const payload = { rideId: String(ride._id), payer: normalizedPayer, parcel: normalizeParcelPayload(ride.parcel) };
+  emitToRoom(getRideRoom(ride._id), 'ride:parcel:payer-updated', payload);
+  emitToRoom(getUserRoom(ride.userId), 'ride:parcel:payer-updated', payload);
+  if (ride.driverId) {
+    emitToDriver(ride.driverId, 'ride:parcel:payer-updated', payload);
+  }
+
+  return payload;
+};

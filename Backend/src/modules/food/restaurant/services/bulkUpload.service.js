@@ -90,8 +90,8 @@ export async function generateBulkMenuTemplate() {
         });
     }
 
-    // Add Sample Row
-    sheet.addRow({
+    // Add Sample Row (row 2, directly under the header)
+    const sampleRow = {
         category: 'Starters',
         name: 'Paneer Tikka',
         description: 'Spicy marinated paneer grilled to perfection',
@@ -104,9 +104,88 @@ export async function generateBulkMenuTemplate() {
         v1Price: 150,
         v2Name: 'Full',
         v2Price: 280
+    };
+    Object.entries(sampleRow).forEach(([key, value]) => {
+        sheet.getCell(2, sheet.getColumn(key).number).value = value;
     });
 
     return workbook;
+}
+
+const MAX_BULK_ITEMS = 500;
+
+function cellText(cell) {
+    const v = cell?.value;
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) return v.toISOString();
+    if (typeof v === 'object') {
+        if (Array.isArray(v.richText)) return v.richText.map((rt) => rt.text).join('').trim();
+        if (v.result !== undefined && v.result !== null) return String(v.result).trim();
+        if (v.hyperlink) return String(v.hyperlink).trim();
+        if (v.text) return String(v.text).trim();
+        return '';
+    }
+    return String(v).trim();
+}
+
+function cellNumber(cell) {
+    const n = parseFloat(cellText(cell).replace(/[^0-9.\-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Parses the first worksheet of a bulk-menu workbook into item descriptors.
+ * Exported so the parsing can be tested without a database.
+ */
+export function parseBulkMenuSheet(sheet) {
+    const items = [];
+    const parsingErrors = [];
+    let rowCount = 0;
+
+    sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // header
+        if (rowCount >= MAX_BULK_ITEMS) return;
+
+        try {
+            const hasAnyData = [1, 2, 3, 4, 5, 6, 7, 8].some((c) => cellText(row.getCell(c)) !== '');
+            if (!hasAnyData) return;
+
+            const data = {
+                category: cellText(row.getCell(1)),
+                name: cellText(row.getCell(2)),
+                description: cellText(row.getCell(3)),
+                price: cellNumber(row.getCell(4)),
+                foodType: /^veg/i.test(cellText(row.getCell(5))) ? 'Veg' : 'Non-Veg',
+                isRecommended: /^(yes|y|true|1)$/i.test(cellText(row.getCell(6))),
+                prepTime: cellText(row.getCell(7)),
+                imageUrl: cellText(row.getCell(8)),
+                variants: []
+            };
+
+            if (!data.category || !data.name) {
+                parsingErrors.push({ item: data.name || `Row ${rowNumber}`, row: rowNumber, error: 'Category and Item Name are mandatory' });
+                return;
+            }
+
+            for (let j = 0; j < 3; j++) {
+                const vName = cellText(row.getCell(9 + j * 2));
+                const vPrice = cellNumber(row.getCell(10 + j * 2));
+                if (vName && vPrice > 0) data.variants.push({ name: vName, price: vPrice });
+            }
+
+            if (data.variants.length === 0 && !(data.price > 0)) {
+                parsingErrors.push({ item: data.name, row: rowNumber, error: 'Base Price must be greater than 0 (or add a variant with a price)' });
+                return;
+            }
+
+            rowCount++;
+            items.push({ data, rowNumber });
+        } catch (err) {
+            parsingErrors.push({ item: `Row ${rowNumber}`, row: rowNumber, error: `Parsing error: ${err.message}` });
+        }
+    });
+
+    return { items, parsingErrors };
 }
 
 /**
@@ -114,91 +193,18 @@ export async function generateBulkMenuTemplate() {
  */
 export async function processBulkMenuUpload(restaurantId, fileBuffer) {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(fileBuffer);
-    const sheet = workbook.getWorksheet(1);
+    try {
+        await workbook.xlsx.load(fileBuffer);
+    } catch (e) {
+        throw new ValidationError('Could not read the file. Please upload the .xlsx template (Excel 2007+).');
+    }
+    const sheet = workbook.worksheets[0];
+    if (!sheet) throw new ValidationError('The uploaded file has no worksheet');
 
     const restaurant = await FoodRestaurant.findById(restaurantId).lean();
     if (!restaurant) throw new ValidationError('Restaurant not found');
 
-    const items = [];
-    const parsingErrors = [];
-    const maxItems = 500;
-    let rowCount = 0;
-
-    const getNumericValue = (cell) => {
-        if (!cell || cell.value === null || cell.value === undefined) return 0;
-        if (typeof cell.value === 'object' && cell.value.result !== undefined) {
-            return parseFloat(cell.value.result) || 0;
-        }
-        return parseFloat(cell.value) || 0;
-    };
-
-    const getTextValue = (cell) => {
-        if (!cell || cell.value === null || cell.value === undefined) return '';
-        
-        // Handle Hyperlinks (often how URLs are stored in Excel)
-        if (typeof cell.value === 'object') {
-            if (cell.value.hyperlink) return String(cell.value.hyperlink).trim();
-            if (cell.value.text) return String(cell.value.text).trim();
-        }
-        
-        // Handle Rich Text
-        if (cell.value.richText) {
-            return cell.value.richText.map(rt => rt.text).join('').trim();
-        }
-        
-        // Handle Formula Result
-        if (typeof cell.value === 'object' && cell.value.result !== undefined) {
-            return String(cell.value.result).trim();
-        }
-        
-        // Handle Shared Strings / Plain Values
-        return String(cell.value).trim();
-    };
-
-    sheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip Header
-        if (rowCount >= maxItems) return;
-
-        try {
-            const data = {
-                category: getTextValue(row.getCell(1)),
-                name: getTextValue(row.getCell(2)),
-                description: getTextValue(row.getCell(3)),
-                price: getNumericValue(row.getCell(4)),
-                foodType: getTextValue(row.getCell(5)),
-                isRecommended: String(row.getCell(6).value || '').toLowerCase() === 'yes',
-                prepTime: getTextValue(row.getCell(7)),
-                imageUrl: getTextValue(row.getCell(8)),
-                variants: []
-            };
-
-            // Mandatory Field Check
-            if (!data.category || !data.name) {
-                // Only report as error if row is not completely empty
-                const hasAnyData = row.values.some(v => v !== null && v !== undefined && v !== '');
-                if (hasAnyData) {
-                    parsingErrors.push({ row: rowNumber, error: 'Category and Item Name are mandatory' });
-                }
-                return;
-            }
-
-            rowCount++;
-
-            // Parse Variants (Columns 9 to 14)
-            for (let j = 0; j < 3; j++) {
-                const vName = getTextValue(row.getCell(9 + j * 2));
-                const vPrice = getNumericValue(row.getCell(10 + j * 2));
-                if (vName && vPrice > 0) {
-                    data.variants.push({ name: vName, price: vPrice });
-                }
-            }
-
-            items.push({ data, rowNumber });
-        } catch (err) {
-            parsingErrors.push({ row: rowNumber, error: `Parsing error: ${err.message}` });
-        }
-    });
+    const { items, parsingErrors } = parseBulkMenuSheet(sheet);
 
     if (items.length === 0 && parsingErrors.length === 0) {
         throw new ValidationError('No valid items found in the Excel sheet');
@@ -206,8 +212,14 @@ export async function processBulkMenuUpload(restaurantId, fileBuffer) {
 
     const results = {
         success: 0,
-        failed: 0,
+        failed: parsingErrors.length,
+        errors: [...parsingErrors],
         details: [...parsingErrors]
+    };
+    const pushError = (rowNumber, name, message) => {
+        const entry = { item: name || `Row ${rowNumber}`, row: rowNumber, error: message };
+        results.errors.push(entry);
+        results.details.push(entry);
     };
 
     // --- OPTIMIZATION: Resolve All Categories First ---
@@ -259,11 +271,14 @@ export async function processBulkMenuUpload(restaurantId, fileBuffer) {
                     // If already a Cloudinary URL, don't re-upload
                     if (trimmedUrl.includes('cloudinary.com')) {
                         finalImageUrl = trimmedUrl;
+                    } else if (/example.com/i.test(trimmedUrl)) {
+                        // template placeholder URL - nothing to upload
                     } else if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('//')) {
                         try {
                             const urlToUpload = trimmedUrl.startsWith('//') ? `https:${trimmedUrl}` : trimmedUrl;
                             const uploadRes = await cloudinary.uploader.upload(urlToUpload, {
-                                folder: `restaurants/${restaurantId}/food`
+                                folder: `restaurants/${restaurantId}/food`,
+                                timeout: 20000
                             });
                             finalImageUrl = uploadRes.secure_url;
                         } catch (imgErr) {
@@ -274,6 +289,8 @@ export async function processBulkMenuUpload(restaurantId, fileBuffer) {
 
                 // 3. Prepare Bulk Operation
                 bulkOps.push({
+                    rowNumber,
+                    itemName: data.name,
                     updateOne: {
                         filter: { name: data.name, restaurantId: restaurant._id },
                         update: {
@@ -298,10 +315,9 @@ export async function processBulkMenuUpload(restaurantId, fileBuffer) {
                     }
                 });
 
-                results.success++;
             } catch (err) {
                 results.failed++;
-                results.details.push({ row: item.rowNumber, error: err.message });
+                pushError(item.rowNumber, item.data?.name, err.message);
             }
         });
 
@@ -311,10 +327,12 @@ export async function processBulkMenuUpload(restaurantId, fileBuffer) {
     // --- OPTIMIZATION: Execute Bulk Write ---
     if (bulkOps.length > 0) {
         try {
-            await FoodItem.bulkWrite(bulkOps);
+            await FoodItem.bulkWrite(bulkOps.map(({ updateOne }) => ({ updateOne })), { ordered: false });
+            results.success += bulkOps.length;
         } catch (bulkErr) {
             console.error('Bulk write failed:', bulkErr.message);
-            results.details.push({ row: 'N/A', error: `Database saving failed: ${bulkErr.message}` });
+            results.failed += bulkOps.length;
+            bulkOps.forEach((op) => pushError(op.rowNumber, op.itemName, `Database saving failed: ${bulkErr.message}`));
         }
     }
 

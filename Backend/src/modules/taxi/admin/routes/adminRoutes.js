@@ -221,6 +221,15 @@ import {
   updatePoolingBookingStatus,
   uploadImage,
 } from '../controllers/poolingController.js';
+import {
+  approveOwnerWithdrawalController,
+  getOwnerPayoutController,
+  getOwnerPayoutSettingsController,
+  listOwnerWithdrawalsController,
+  rejectOwnerWithdrawalController,
+  updateOwnerPayoutController,
+  updateOwnerPayoutSettingsController,
+} from '../controllers/ownerPayoutController.js';
 import { promotionsRouter } from '../promotions/routes/index.js';
 import { listSafetyAlerts, resolveSafetyAlert } from '../../safety/controllers/safetyController.js';
 
@@ -287,6 +296,13 @@ adminRouter.get('/admin/wallet/drivers/:id/history', listDriverWalletHistory);
 
 adminRouter.post('/admin/wallet/owners/:id/adjust', adjustOwnerWallet);
 adminRouter.get('/admin/wallet/owners/:id/history', listOwnerWalletHistory);
+adminRouter.get('/admin/wallet/owners/:id/withdrawals', listOwnerWithdrawalsController);
+adminRouter.patch('/admin/wallet/owners/withdrawals/:requestId/approve', approveOwnerWithdrawalController);
+adminRouter.patch('/admin/wallet/owners/withdrawals/:requestId/reject', rejectOwnerWithdrawalController);
+adminRouter.get('/admin/owner-payout-settings', getOwnerPayoutSettingsController);
+adminRouter.put('/admin/owner-payout-settings', updateOwnerPayoutSettingsController);
+adminRouter.get('/admin/owners/:id/payout', getOwnerPayoutController);
+adminRouter.patch('/admin/owners/:id/payout', updateOwnerPayoutController);
 
 adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']), getNegativeBalanceDrivers);
 adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);

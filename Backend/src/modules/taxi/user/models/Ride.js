@@ -173,6 +173,13 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      payer: {
+        type: String,
+        enum: ['sender', 'receiver'],
+        default: 'sender',
+        lowercase: true,
+        trim: true,
+      },
     },
     scheduledAt: {
       type: Date,
@@ -499,6 +506,12 @@ const rideSchema = new mongoose.Schema(
       },
     },
     commissionAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // Fleet rides: the owner's share of the net earning (see ownerPayoutService).
+    ownerEarnings: {
       type: Number,
       default: 0,
       min: 0,

@@ -50,3 +50,19 @@ export const updateRestaurantOfferStatusController = async (req, res) => {
         return sendError(res, err.statusCode || 400, err.message);
     }
 };
+
+export const updateRestaurantOfferController = async (req, res) => {
+    try {
+        const restaurantId = req.user.userId;
+        const { id: offerId } = req.params;
+        const payload = validateCreateOfferDto({
+            ...req.body,
+            restaurantScope: 'selected',
+            restaurantId: restaurantId
+        });
+        const doc = await restaurantService.updateRestaurantOffer(restaurantId, offerId, payload);
+        return sendResponse(res, 200, 'Offer updated successfully', { doc });
+    } catch (err) {
+        return sendError(res, err.statusCode || 400, err.message);
+    }
+};

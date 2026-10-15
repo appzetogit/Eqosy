@@ -153,6 +153,11 @@ const ownerSchema = new mongoose.Schema(
         default: 0,
       }
     },
+    // How this owner is paid for fleet rides. 'default' follows the global Owner Payout Settings.
+    payout: {
+      model: { type: String, enum: ['default', 'salary', 'commission'], default: 'default' },
+      ownerSharePercent: { type: Number, min: 0, max: 100, default: null },
+    },
     area_snapshot: {
       type: mongoose.Schema.Types.Mixed,
       default: null,

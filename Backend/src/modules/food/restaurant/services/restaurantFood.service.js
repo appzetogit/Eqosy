@@ -428,3 +428,12 @@ export async function notifyInventoryControl({ foodItem, previousIsAvailable, cu
         console.error('Inventory control notification error:', err);
     }
 }
+
+/** Delete one of the restaurant's own food items. Returns null when it doesn't exist / isn't theirs. */
+export async function deleteRestaurantFood(restaurantId, foodId) {
+    if (!foodId || !mongoose.Types.ObjectId.isValid(String(foodId))) {
+        throw new ValidationError('Invalid food id');
+    }
+    const deleted = await FoodItem.findOneAndDelete({ _id: foodId, restaurantId }).lean();
+    return deleted ? { id: String(foodId) } : null;
+}

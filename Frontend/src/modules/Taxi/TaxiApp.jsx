@@ -176,6 +176,8 @@ const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDa
 const AdminCancellationAnalytics = lazy(() => import('./modules/admin/pages/CancellationAnalytics'));
 const AdminEarnings = lazy(() => import('./modules/admin/pages/dashboard/AdminEarnings'));
 const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
+const OwnerHome = lazy(() => import('./modules/driver/pages/OwnerHome'));
+const OwnerWallet = lazy(() => import('./modules/driver/pages/OwnerWallet'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
@@ -273,6 +275,7 @@ const AdminWithdrawalRequestOwners = lazy(() => import('./modules/admin/pages/ow
 const AdminWithdrawalRequestOwnerDetail = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwnerDetail'));
 const AdminDeletedOwners = lazy(() => import('./modules/admin/pages/owners/DeletedOwners'));
 const AdminOwnerBookings = lazy(() => import('./modules/admin/pages/owners/OwnerBookings'));
+const AdminOwnerPayoutSettings = lazy(() => import('./modules/admin/pages/owners/OwnerPayoutSettings'));
 
 const AdminGeoFencing = lazy(() => import('./modules/admin/pages/geo/GeoFencing'));
 const AdminHeatMap = lazy(() => import('./modules/admin/pages/geo/HeatMap'));
@@ -1138,15 +1141,16 @@ function TaxiApp() {
                 <Route path="privacy-policy" element={<LegalPage role="driver" />} />
                 <Route path="terms" element={<LegalPage role="driver" />} />
                 <Route path="terms-and-conditions" element={<LegalPage role="driver" />} />
-                <Route path="home" element={<OwnerDashboard />} />
-                <Route path="dashboard" element={<OwnerDashboard />} />
+                <Route path="home" element={<OwnerHome />} />
+                <Route path="dashboard" element={<OwnerHome />} />
+                <Route path="analytics" element={<OwnerDashboard />} />
                 <Route path="bus-service" element={<OwnerBusServicePage />} />
                 <Route path="bus-service/create" element={<OwnerBusServicePage />} />
                 <Route path="bus-service/edit/:id" element={<OwnerBusServicePage />} />
                 <Route path="bus-service/:id" element={<OwnerBusServicePage />} />
                 <Route path="bus-bookings" element={<OwnerBusBookingsPage />} />
                 <Route path="profile" element={<DriverProfile />} />
-                <Route path="wallet" element={<DriverWallet />} />
+                <Route path="wallet" element={<OwnerWallet />} />
                 <Route path="earnings" element={<DriverEarnings />} />
                 <Route path="history" element={<RideRequests />} />
                 <Route path="edit-profile" element={<EditProfile />} />
@@ -1385,6 +1389,7 @@ function TaxiApp() {
                   path="owners/:id/password"
                   element={<AdminOwnerPasswordUpdate />}
                 />
+                <Route path="owners/payout-settings" element={<AdminOwnerPayoutSettings />} />
                 <Route path="owners/:id" element={<AdminOwnerDetails />} />
                 <Route
                   path="owners/wallet/withdrawals"

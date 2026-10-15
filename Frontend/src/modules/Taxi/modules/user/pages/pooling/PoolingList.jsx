@@ -119,10 +119,6 @@ const PoolingList = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between px-3">
                <p className="text-[11px] font-black uppercase tracking-[0.25em] text-slate-400">{routes.length} Available Rides</p>
-               <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest">
-                  <ShieldCheck size={12} />
-                  Verified
-               </div>
             </div>
 
             {routes.map((route, idx) => {
@@ -195,36 +191,28 @@ const PoolingList = () => {
                   {/* Footer Info */}
                   <div className="mt-8 flex items-center justify-between border-t border-slate-50 pt-7">
                     <div className="flex items-center gap-4">
-                      <div className="relative">
-                        <div className="h-10 w-10 overflow-hidden rounded-2xl bg-slate-100 border-2 border-white shadow-sm ring-1 ring-slate-50">
-                          <img src={`https://ui-avatars.com/api/?name=${route.driverName || 'Verified'}&background=4f46e5&color=fff&bold=true&font-size=0.45`} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="absolute -right-1 -bottom-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
-                          <ShieldCheck size={8} className="text-white" />
-                        </div>
+                      <div className="h-10 w-10 overflow-hidden rounded-2xl bg-slate-100 border-2 border-white shadow-sm ring-1 ring-slate-50">
+                        <img src={vehicleImage} alt="" className="h-full w-full object-cover" />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-900">{route.driverName || 'Verified Captain'}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="flex items-center gap-0.5">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={8} className={i < 4 ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200"} />
-                            ))}
-                          </div>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">4.8 • Top Pilot</span>
-                        </div>
+                        <p className="text-sm font-black text-slate-900">{vehicle.name || vehicle.vehicleModel || 'Shared car'}</p>
+                        <p className="mt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {vehicle.vehicleModel ? vehicle.vehicleModel : 'Car pool'}{vehicle.capacity ? ` · ${vehicle.capacity} seats` : ''}
+                        </p>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col items-end">
-                         <div className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest">
-                           <Zap size={10} fill="currentColor" />
-                           Instant
-                         </div>
+                         {route.poolingRules?.allowInstantBooking !== false ? (
+                           <div className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest">
+                             <Zap size={10} fill="currentColor" />
+                             Instant
+                           </div>
+                         ) : null}
                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-2 tracking-tight">
                            <Users size={12} className="text-slate-300" />
-                           {route.maxSeatsPerBooking} seats left
+                           Up to {route.maxSeatsPerBooking} seat{Number(route.maxSeatsPerBooking) === 1 ? '' : 's'} per booking
                          </div>
                       </div>
                       <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-slate-900 text-white shadow-xl shadow-slate-200 group-hover:bg-indigo-600 group-hover:shadow-indigo-100 transition-all">

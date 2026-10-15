@@ -7,6 +7,8 @@
  */
 
 import axios from "axios";
+import { toast } from "sonner";
+import { applyUploadTimeout, describeApiFailure } from "../../shared/friendlyApiError";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -203,8 +205,21 @@ function onRefreshFailed(module) {
   }
 }
 
+// One friendly toast per kind of failure (timeouts, offline, server errors); screens add their own validation toasts.
+const notifyFailure = (err) => {
+  try {
+    const info = describeApiFailure(err);
+    err.friendlyMessage = info.message;
+    if (info.kind === 'timeout' || info.kind === 'offline') err.message = info.message;
+    if (info.notify && !err?.config?.silent && typeof window !== 'undefined') {
+      toast.error(info.message, { id: `api-${info.kind}` });
+    }
+  } catch (_) { }
+};
+
 apiClient.interceptors.request.use(
   (config) => {
+    applyUploadTimeout(config);
     config.contextModule = getModuleFromConfig(config);
 
     // If sending FormData, let the browser set proper multipart boundary.
@@ -235,10 +250,17 @@ apiClient.interceptors.response.use(
 
     if (isNetworkError) {
       err.isOffline = true;
+      notifyFailure(err);
       return Promise.reject(err);
     }
 
-    if (err?.response?.status === 429) {
+    if (!err?.response) {
+      notifyFailure(err);
+      return Promise.reject(err);
+    }
+
+    if (err?.response?.status === 429 || err?.response?.status >= 500) {
+      notifyFailure(err);
       return Promise.reject(err);
     }
     if (err?.response?.status !== 401 || !original || original._retry) {

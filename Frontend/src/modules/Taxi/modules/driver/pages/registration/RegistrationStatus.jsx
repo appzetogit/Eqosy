@@ -183,6 +183,18 @@ const RegistrationStatus = () => {
     };
   }, [location.state, navigate]);
 
+// Lets the captain leave the review screen: clear the saved registration/session and return to the first page.
+  const handleCancelRegistrationStatus = () => {
+    const confirmed = window.confirm(
+      'Leave this screen and go back to the start? Your submitted application stays with our team; you can log in again later to check its status.',
+    );
+    if (!confirmed) return;
+
+    clearInterval(timeoutRef.current);
+    clearDriverAuthState();
+    navigate(`${routePrefix}/login`, { replace: true });
+  };
+
 const getStatusColor = (status) => {
     const s = String(status || '').toLowerCase();
     if (['approved', 'active', 'verified', 'true', '1'].includes(s)) return 'text-emerald-500 bg-emerald-50';
@@ -362,7 +374,8 @@ const getStatusColor = (status) => {
                                 </p>
                             </div>
                         )}
-                        {(doc.status === 'rejected' || doc.status === 'declined') && (
+                        {/* Anything not yet approved stays editable: rejected -> fix, pending/missing -> upload or replace. */}
+                        {!['approved', 'active', 'verified', 'true', '1'].includes(doc.status) && (
                             <button
                                 onClick={() => navigate(`${routePrefix}/documents`, {
                                     state: {
@@ -372,7 +385,10 @@ const getStatusColor = (status) => {
                                 })}
                                 className="w-full h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-slate-900/10"
                             >
-                                Fix Document <ChevronRight size={16} strokeWidth={3} />
+                                {(doc.status === 'rejected' || doc.status === 'declined')
+                                    ? 'Fix Document'
+                                    : doc.previewUrl ? 'Edit Document' : 'Upload Document'}
+                                <ChevronRight size={16} strokeWidth={3} />
                             </button>
                         )}
                     </div>
@@ -401,6 +417,13 @@ const getStatusColor = (status) => {
                 className="w-full h-14 bg-white border border-slate-200 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold active:scale-95 transition-all"
             >
                 Contact Support
+            </button>
+            <button
+                type="button"
+                onClick={handleCancelRegistrationStatus}
+                className="w-full h-12 text-slate-400 rounded-2xl flex items-center justify-center text-[13px] font-black uppercase tracking-widest active:scale-95 transition-all"
+            >
+                Cancel and Go Back to Start
             </button>
         </div>
       </main>

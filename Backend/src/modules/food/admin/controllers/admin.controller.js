@@ -1262,6 +1262,25 @@ export async function approveDeliveryPartner(req, res, next) {
     }
 }
 
+export async function deactivateDeliveryPartner(req, res, next) {
+    try {
+        const partner = await adminService.deactivateDeliveryPartner(req.params.id);
+        if (!partner) {
+            return res.status(404).json({
+                success: false,
+                message: 'Delivery partner not found'
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Delivery partner deactivated successfully',
+            data: partner
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function rejectDeliveryPartner(req, res, next) {
     try {
         const reason = req.body?.reason != null ? String(req.body.reason).trim() : '';

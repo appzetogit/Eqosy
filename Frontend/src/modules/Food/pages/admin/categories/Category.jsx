@@ -281,6 +281,7 @@ export default function Category() {
 
         if (selectedZoneId === "global_zone") {
           if (catZoneIdStr && catZoneIdStr !== "global" && catZoneName !== "global") return false
+          if (category?.restaurantId || category?.restaurant) return false
         } else {
           const targetZoneObj = zones.find((z) => String(z._id || z.id) === selectedZoneId)
           const targetZoneName = (targetZoneObj?.name || targetZoneObj?.zoneName || targetZoneObj?.serviceLocation || "").toLowerCase()

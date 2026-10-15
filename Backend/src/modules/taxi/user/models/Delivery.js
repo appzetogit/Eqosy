@@ -146,6 +146,13 @@ const deliverySchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      payer: {
+        type: String,
+        enum: ['sender', 'receiver'],
+        default: 'sender',
+        lowercase: true,
+        trim: true,
+      },
     },
     acceptedAt: {
       type: Date,

@@ -8,6 +8,7 @@ import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
 import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
+import { getDemoBypass } from '../../admin/services/demoMode.service.js';
 
 
 const normalizeName = (value) =>
@@ -1601,8 +1602,14 @@ export const listApprovedRestaurants = async (query = {}) => {
         }
     }
 
-    const lat = toFiniteNumber(query.lat);
-    const lng = toFiniteNumber(query.lng);
+    let lat = toFiniteNumber(query.lat);
+    let lng = toFiniteNumber(query.lng);
+    // Dev Mode location bypass: measure distances from the demo zone, not the reviewer's real location.
+    const demoBypass = await getDemoBypass();
+    if (demoBypass.enabled) {
+        lat = demoBypass.center.lat;
+        lng = demoBypass.center.lng;
+    }
     // Accept both radiusKm (preferred) and maxDistance (legacy frontend param).
     const radiusKm = toFiniteNumber(query.radiusKm) ?? toFiniteNumber(query.maxDistance);
     const sortBy = parseSortBy(query.sortBy);
@@ -2123,3 +2130,46 @@ export const syncUnassignedRestaurantZones = async () => {
     }
 };
 
+
+/**
+ * Edit an existing restaurant-owned offer. The code may change as long as no other offer uses it.
+ */
+export async function updateRestaurantOffer(restaurantId, offerId, body) {
+    if (!offerId || !mongoose.Types.ObjectId.isValid(String(offerId))) {
+        throw new ValidationError('Invalid offer id');
+    }
+    const doc = await FoodOffer.findOne({
+        _id: new mongoose.Types.ObjectId(offerId),
+        restaurantId: new mongoose.Types.ObjectId(restaurantId),
+        createdByRole: 'RESTAURANT'
+    });
+    if (!doc) {
+        throw new NotFoundError('Offer not found or not owned by you');
+    }
+
+    const formattedCode = String(body.couponCode || '').trim().toUpperCase();
+    if (!formattedCode) {
+        throw new ValidationError('Coupon code is required');
+    }
+    if (formattedCode !== doc.couponCode) {
+        const clash = await FoodOffer.findOne({ couponCode: formattedCode, _id: { $ne: doc._id } }).select('_id').lean();
+        if (clash) {
+            throw new ValidationError('Another coupon with this code already exists. Please choose a different code.');
+        }
+        doc.couponCode = formattedCode;
+    }
+
+    doc.discountType = body.discountType;
+    doc.discountValue = body.discountValue;
+    doc.customerScope = body.customerScope || doc.customerScope || 'all';
+    doc.minOrderValue = body.minOrderValue ?? 0;
+    doc.maxDiscount = body.maxDiscount ?? null;
+    doc.usageLimit = body.usageLimit ?? null;
+    doc.perUserLimit = body.perUserLimit ?? null;
+    doc.startDate = body.startDate;
+    doc.endDate = body.endDate;
+    if (body.isFirstOrderOnly !== undefined) doc.isFirstOrderOnly = body.isFirstOrderOnly;
+
+    await doc.save();
+    return doc.toObject();
+}

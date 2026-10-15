@@ -321,6 +321,18 @@ export const updateOwnerFleetVehicle = (vehicleId, payload) =>
 export const deleteOwnerFleetVehicle = (vehicleId) =>
   api.delete(`/drivers/fleet/vehicles/${vehicleId}`, withDriverAuth());
 
+export const getOwnerFleetWallet = () =>
+  api.get("/drivers/fleet/wallet", withDriverAuth());
+
+export const createOwnerWithdrawal = (payload) =>
+  api.post("/drivers/fleet/wallet/withdrawals", payload, withDriverAuth());
+
+export const createOwnerBusPayout = (payload) =>
+  api.post("/drivers/fleet/wallet/bus-payout", payload, withDriverAuth());
+
+export const markFleetDriverCashReceived = (driverId, payload = {}) =>
+  api.post(`/drivers/fleet/drivers/${driverId}/cash-received`, payload, withDriverAuth());
+
 export const getServiceCenterVehicles = () =>
   api.get("/drivers/service-center/vehicles", withDriverAuth());
 

@@ -37,6 +37,23 @@ const resolveSeatPrice = (bus, seat) => {
     : defaultPrice;
 };
 
+// Plain-language name of a seat so passengers know exactly what they are picking.
+// (The text is translated by the app-wide language switcher.)
+export const describeSeat = (seat = {}) => {
+  const variant = String(seat.variant || 'seat').trim().toLowerCase();
+  const id = String(seat.id || seat.label || '').toUpperCase();
+  if (variant === 'sleeper') {
+    if (/UB$|^U|SU|UPPER/.test(id)) return 'Upper berth';
+    if (/LB$|SL|LOWER/.test(id)) return 'Lower berth';
+    return 'Sleeper berth';
+  }
+  if (variant === 'window') return 'Window seat';
+  if (variant === 'aisle') return 'Aisle seat';
+  return 'Seat';
+};
+
+import BusCancellationPolicy from './BusCancellationPolicy';
+
 const SeatDeck = ({ title, rows, selectedSeatIds, onToggle, bus }) => {
   if (!rows?.length) return null;
 
@@ -92,11 +109,11 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle, bus }) => {
                           : 'border-slate-300 bg-white hover:border-orange-300'
                   }`}
                   style={{
-                    minHeight: isSleeper ? '60px' : '50px',
+                    minHeight: isSleeper ? '68px' : '58px',
                     borderRadius: isSleeper ? '18px' : '12px',
                   }}
                   aria-label={isBooked ? `Seat ${seat.label || seat.id} sold out` : `Seat ${seat.label || seat.id}`}
-                  title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Available: ${seat.label || seat.id} (₹${seatPrice})`}
+                  title={isBooked ? `Sold out: ${describeSeat(seat)} ${seat.label || seat.id}` : `${describeSeat(seat)} ${seat.label || seat.id} (₹${seatPrice})`}
                 >
                   {isSleeper ? (
                     <>
@@ -113,6 +130,9 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle, bus }) => {
                         >
                           {seat.label || seat.id}
                         </span>
+                        <span className={`mt-0.5 text-[7px] font-bold uppercase leading-none tracking-wide ${isSelected ? 'text-white/70' : isBooked ? 'text-slate-400' : 'text-blue-600'}`}>
+                          {describeSeat(seat)}
+                        </span>
                         <span
                           className={`text-[9px] font-bold mt-1 leading-none ${
                             isSelected ? 'text-orange-300' : isBooked ? 'text-slate-400' : 'text-emerald-700'
@@ -125,8 +145,11 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle, bus }) => {
                   ) : (
                     <>
                       <div className={`absolute -top-1 h-2 w-full rounded-t-sm transition-colors ${isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-400' : 'bg-slate-200'}`} />
-                      <span className={`text-[9px] font-black leading-none ${isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-700'}`}>
+                      <span className={`text-[10px] font-black leading-none ${isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-800'}`}>
                         {seat.label || seat.id}
+                      </span>
+                      <span className={`mt-0.5 text-[7px] font-bold uppercase leading-none tracking-wide ${isSelected ? 'text-white/70' : isBooked ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {describeSeat(seat)}
                       </span>
                       <span className={`text-[8px] font-bold mt-0.5 leading-none ${isSelected ? 'text-orange-300' : isBooked ? 'text-slate-400' : 'text-emerald-700'}`}>
                         ₹{seatPrice}
@@ -252,6 +275,7 @@ const BusSeats = () => {
               bus={seatLayout?.bus || bus}
             />
 
+            <BusCancellationPolicy bus={{ ...(bus || {}), ...(seatLayout?.bus || {}), cancellationRules: seatLayout?.bus?.cancellationRules?.length ? seatLayout.bus.cancellationRules : bus?.cancellationRules, cancellationPolicy: seatLayout?.bus?.cancellationPolicy || bus?.cancellationPolicy }} />
             <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
               {seatLegend.map((item) => (
                 <div key={item.key} className="flex items-center gap-2">
@@ -290,7 +314,7 @@ const BusSeats = () => {
                   {selectedSeats.length} Seat{selectedSeats.length > 1 ? 's' : ''} Selected
                 </p>
                 <p className="text-sm font-bold text-slate-900">
-                  {selectedSeats.map((seat) => seat.label || seat.id).join(', ')}
+                  {selectedSeats.map((seat) => `${seat.label || seat.id} (${describeSeat(seat)})`).join(', ')}
                 </p>
               </div>
               <div className="text-right">

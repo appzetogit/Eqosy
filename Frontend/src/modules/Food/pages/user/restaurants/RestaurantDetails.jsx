@@ -109,6 +109,7 @@ function RestaurantDetailsContent() {
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set())
   const [expandedSections, setExpandedSections] = useState(new Set([0])) // Default: Recommended section is expanded
   const [highlightedDishId, setHighlightedDishId] = useState(null)
+  const [menuPhotoViewerIndex, setMenuPhotoViewerIndex] = useState(null)
   const [loadingMenuItems, setLoadingMenuItems] = useState(true)
   const [selectedMenuCategory, setSelectedMenuCategory] = useState("all")
   const dishCardRefs = useRef({})
@@ -2315,6 +2316,76 @@ function RestaurantDetailsContent() {
             </div>
           </div>
         </div>
+
+        {/* Menu photos uploaded by the store */}
+        {(() => {
+          const menuPhotos = (Array.isArray(restaurant?.menuImages) ? restaurant.menuImages : [])
+            .map((img) => (typeof img === "string" ? img : img?.url))
+            .filter(Boolean)
+          if (menuPhotos.length === 0) return null
+          return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-4">
+              <h3 className="text-base font-bold text-gray-900 mb-3">Menu photos</h3>
+              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
+                {menuPhotos.map((url, idx) => (
+                  <button
+                    key={`${url}-${idx}`}
+                    type="button"
+                    onClick={() => setMenuPhotoViewerIndex(idx)}
+                    className="flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 rounded-xl overflow-hidden border border-gray-200 shadow-sm"
+                  >
+                    <img
+                      src={url}
+                      alt={`Menu photo ${idx + 1}`}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== FOOD_IMAGE_FALLBACK) e.currentTarget.src = FOOD_IMAGE_FALLBACK
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+              {menuPhotoViewerIndex !== null && menuPhotos[menuPhotoViewerIndex] && createPortal(
+                <div
+                  className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+                  onClick={() => setMenuPhotoViewerIndex(null)}
+                >
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    className="absolute top-4 right-4 text-white p-2"
+                    onClick={() => setMenuPhotoViewerIndex(null)}
+                  >
+                    <X size={28} />
+                  </button>
+                  <img
+                    src={menuPhotos[menuPhotoViewerIndex]}
+                    alt={`Menu photo ${menuPhotoViewerIndex + 1}`}
+                    className="max-w-full max-h-full object-contain"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  {menuPhotos.length > 1 && (
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-6 text-white text-sm">
+                      <button
+                        type="button"
+                        className="px-4 py-2 bg-white/20 rounded-full"
+                        onClick={(e) => { e.stopPropagation(); setMenuPhotoViewerIndex((menuPhotoViewerIndex - 1 + menuPhotos.length) % menuPhotos.length) }}
+                      >Prev</button>
+                      <span className="py-2">{menuPhotoViewerIndex + 1} / {menuPhotos.length}</span>
+                      <button
+                        type="button"
+                        className="px-4 py-2 bg-white/20 rounded-full"
+                        onClick={(e) => { e.stopPropagation(); setMenuPhotoViewerIndex((menuPhotoViewerIndex + 1) % menuPhotos.length) }}
+                      >Next</button>
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
+            </div>
+          )
+        })()}
 
         {/* Menu Items Section */}
         {restaurant?.menuSections && Array.isArray(restaurant.menuSections) && restaurant.menuSections.length > 0 && (

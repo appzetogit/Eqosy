@@ -31,7 +31,8 @@ export default function LanguageSwitcher() {
     await setLanguage(code)
   }
 
-  const isAdmin = pathname.startsWith('/admin') || pathname.startsWith('/taxi/admin')
+  // The Taxi admin header has its own language button (LanguageButton), so don't float one over it.
+  const isAdmin = pathname.startsWith('/admin')
   const active = LANGUAGES.find((l) => l.code === current) || LANGUAGES[0]
 
   const list = (

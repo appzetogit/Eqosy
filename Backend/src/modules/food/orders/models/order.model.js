@@ -377,6 +377,12 @@ const settingsSchema = new mongoose.Schema(
         dispatchMode: { type: String, enum: ['auto'], default: 'auto' },
         maxDistanceCycle: { type: Number, default: 5 }, // default 5km
         maxDistanceElectricScooter: { type: Number, default: 10 }, // default 10km
+        // Dev Mode (key: 'demo_mode'): lets reviewers/testers see demo data from any location.
+        demoMode: {
+            locationBypass: { type: Boolean, default: false },
+            zoneId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodZone' },
+            groups: { type: mongoose.Schema.Types.Mixed, default: {} }
+        },
         updatedBy: {
             role: { type: String },
             adminId: { type: mongoose.Schema.Types.ObjectId },

@@ -16,6 +16,8 @@ import { TripInstance } from "../../user/models/TripInstance.js";
 import { TripSeatInventory } from "../../user/models/TripSeatInventory.js";
 import { ensureTripInstance, normalizeTravelDateString } from "../../services/tripGeneratorService.js";
 import { Owner } from "../../admin/models/Owner.js";
+import { OwnerWalletTransaction } from "../../admin/models/OwnerWalletTransaction.js";
+import { createBusPayoutRequest, getBusPayoutSummary, resolveOwnerPayout, syncBusBookingOwnerEarning } from "../../services/ownerPayoutService.js";
 import { BusService } from "../../admin/models/BusService.js";
 import { ServiceLocation } from "../../admin/models/ServiceLocation.js";
 import { ServiceStore } from "../../admin/models/ServiceStore.js";
@@ -2643,7 +2645,10 @@ export const getDriverEmergencyContacts = async (req, res) => {
 
 export const getDriverNotifications = async (req, res) => {
   const driverId = req.auth.sub;
-  const driver = await Driver.findById(driverId).lean();
+  const isOwnerRequest = String(req.auth?.role || "").toLowerCase() === "owner";
+  const driver = isOwnerRequest
+    ? await Owner.findById(driverId).select("service_location_id").lean()
+    : await Driver.findById(driverId).lean();
 
   if (!driver) {
     throw new ApiError(404, "Driver not found");
@@ -2688,6 +2693,14 @@ export const getDriverNotifications = async (req, res) => {
 };
 
 export const getDriverScheduledRides = async (req, res) => {
+  // Owners don't take rides themselves, so they have no scheduled rides to show.
+  if (String(req.auth?.role || "").toLowerCase() === "owner") {
+    return res.json({
+      success: true,
+      data: { results: [], paginator: { current_page: 1, per_page: 20, total: 0, last_page: 1 } },
+    });
+  }
+
   const driver = await Driver.findById(req.auth.sub)
     .select("service_location_id vehicleTypeId serviceCategories registerFor onboarding")
     .lean();
@@ -5919,18 +5932,8 @@ export const getOwnerFleetDrivers = async (req, res) => {
     );
   }
 
-  const ownerCity = owner.city || owner.serviceLocation || "";
-  const query = { deletedAt: null };
-
-  if (ownerCity) {
-    query.$or = [
-      { owner_id: owner._id },
-      { city: new RegExp(`^${ownerCity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-      ...(owner.service_location_id ? [{ service_location_id: owner.service_location_id }] : []),
-    ];
-  } else {
-    query.owner_id = owner._id;
-  }
+  // An owner only sees (and manages) their own drivers, never other owners' drivers in the same city.
+  const query = { deletedAt: null, owner_id: owner._id };
 
   const drivers = await Driver.find(query)
     .sort({ createdAt: -1 })
@@ -5979,6 +5982,13 @@ export const createOwnerFleetDriver = async (req, res) => {
 
   if (!/^\d{10}$/.test(phone)) {
     throw new ApiError(400, "A valid 10-digit mobile number is required");
+  }
+
+  const salaryValue = Number(
+    req.body?.salary ?? req.body?.monthly_salary ?? req.body?.monthlySalary ?? 0,
+  );
+  if (!Number.isFinite(salaryValue) || salaryValue < 0) {
+    throw new ApiError(400, "A valid non-negative salary is required");
   }
 
   const existing = await Driver.findOne({ phone }).lean();
@@ -6140,7 +6150,7 @@ export const getOwnerFleetDashboard = async (req, res) => {
                 $sum: {
                   $cond: [
                     { $eq: ["$status", RIDE_STATUS.COMPLETED] },
-                    { $ifNull: ["$driverEarnings", 0] },
+                    { $ifNull: ["$ownerEarnings", 0] },
                     0,
                   ],
                 },
@@ -6206,7 +6216,7 @@ export const getOwnerFleetDashboard = async (req, res) => {
                 $sum: {
                   $cond: [
                     { $eq: ["$status", RIDE_STATUS.COMPLETED] },
-                    { $ifNull: ["$driverEarnings", 0] },
+                    { $ifNull: ["$ownerEarnings", 0] },
                     0,
                   ],
                 },
@@ -6239,7 +6249,7 @@ export const getOwnerFleetDashboard = async (req, res) => {
                 $sum: {
                   $cond: [
                     { $eq: ["$status", RIDE_STATUS.COMPLETED] },
-                    { $ifNull: ["$driverEarnings", 0] },
+                    { $ifNull: ["$ownerEarnings", 0] },
                     0,
                   ],
                 },
@@ -7009,6 +7019,7 @@ export const cancelOwnerBusBookingSeats = async (req, res) => {
     booking.notes = [booking.notes, ownerNote].filter(Boolean).join(" | ");
   }
   await booking.save();
+  await syncBusBookingOwnerEarning(booking._id);
 
   await BusSeatHold.deleteMany({
     bookingId: booking._id,
@@ -7345,5 +7356,245 @@ export const claimDriverIncentiveReward = async (req, res) => {
         periodKey: targetReward.periodKey,
       },
     },
+  });
+};
+
+/* ------------------------- Owner wallet & payouts ------------------------- */
+
+const OWNER_TX_TITLES = {
+  ride_earning: "Ride",
+  bus_earning: "Bus ticket",
+  bus_refund: "Refund",
+  commission: "Commission",
+  withdrawal: "Withdrawal",
+  withdrawal_reversal: "Withdrawal returned",
+  adjustment: "Adjustment",
+};
+
+export const getOwnerFleetWallet = async (req, res) => {
+  const owner = await resolveAuthenticatedOwner(req);
+  if (!owner?._id) {
+    throw new ApiError(403, "Owner wallet is only available for owner accounts");
+  }
+
+  const [freshOwner, transactions, drivers, withdrawals, payout, busPayout] = await Promise.all([
+    Owner.findById(owner._id).select("wallet payout").lean(),
+    OwnerWalletTransaction.find({ ownerId: owner._id }).sort({ createdAt: -1 }).limit(200).lean(),
+    Driver.find({ owner_id: owner._id, deletedAt: null }).select("name phone fleetCashDue salary isOnline").lean(),
+    WithdrawalRequest.find({ owner_id: owner._id }).sort({ createdAt: -1 }).limit(20).lean(),
+    resolveOwnerPayout(owner._id),
+    getBusPayoutSummary(owner._id),
+  ]);
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfDay);
+  startOfWeek.setDate(startOfWeek.getDate() - 6);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const summarize = (from) => {
+    const rows = transactions.filter((t) => new Date(t.createdAt) >= from);
+    const sum = (cats, kind) =>
+      rows.filter((t) => cats.includes(t.category) && (!kind || t.kind === kind)).reduce((s, t) => s + Number(t.amount || 0), 0);
+    const rides = sum(["ride_earning"], "credit");
+    const bus = sum(["bus_earning"], "credit") - sum(["bus_refund"], "debit");
+    const commission = sum(["commission"], "debit");
+    return {
+      rideEarnings: Math.round(rides * 100) / 100,
+      busEarnings: Math.round(bus * 100) / 100,
+      commissionPaid: Math.round(commission * 100) / 100,
+      net: Math.round((rides + bus - commission) * 100) / 100,
+    };
+  };
+
+  res.json({
+    success: true,
+    data: {
+      balance: Math.round(Number(freshOwner?.wallet?.balance || 0) * 100) / 100,
+      payout,
+      busPayout,
+      summary: { today: summarize(startOfDay), week: summarize(startOfWeek), month: summarize(startOfMonth) },
+      cashWithDrivers: Math.round(drivers.reduce((s, d) => s + Number(d.fleetCashDue || 0), 0) * 100) / 100,
+      drivers: drivers.map((d) => ({
+        id: String(d._id),
+        name: d.name || "",
+        phone: d.phone || "",
+        cashDue: Math.round(Number(d.fleetCashDue || 0) * 100) / 100,
+        salary: Number(d.salary || 0),
+        isOnline: Boolean(d.isOnline),
+      })),
+      transactions: transactions.map((t) => ({
+        id: String(t._id),
+        amount: Number(t.amount || 0),
+        kind: t.kind,
+        category: t.category || "adjustment",
+        label: OWNER_TX_TITLES[t.category] || "Adjustment",
+        title: t.title,
+        balance: Number(t.balance || 0),
+        createdAt: t.createdAt,
+      })),
+      withdrawals: withdrawals.map((w) => ({
+        id: String(w._id),
+        amount: Number(w.amount || 0),
+        status: w.status,
+        kind: w.kind || "wallet",
+        paymentMethod: w.payment_method || "",
+        createdAt: w.createdAt,
+      })),
+    },
+  });
+};
+
+export const createOwnerWithdrawalRequest = async (req, res) => {
+  const owner = await resolveAuthenticatedOwner(req);
+  if (!owner?._id) {
+    throw new ApiError(403, "Withdrawals are only available for owner accounts");
+  }
+
+  const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+  const paymentMethod = String(req.body?.payment_method || req.body?.paymentMethod || "upi").trim().toLowerCase();
+  const upiId = String(req.body?.upiId || "").trim();
+  const accountHolderName = String(req.body?.accountHolderName || "").trim();
+  const accountNumber = String(req.body?.accountNumber || "").trim();
+  const ifscCode = String(req.body?.ifscCode || "").trim().toUpperCase();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, "Enter an amount greater than zero");
+  }
+  if (paymentMethod === "upi" && !upiId) {
+    throw new ApiError(400, "UPI ID is required");
+  }
+  if (paymentMethod !== "upi" && (!accountHolderName || !accountNumber || !ifscCode)) {
+    throw new ApiError(400, "Account holder name, account number and IFSC are required");
+  }
+
+  const walletSettings = await getWalletSettings();
+  const minimum = Number(walletSettings.minimum_wallet_amount_for_transfer || 0);
+  if (minimum > 0 && amount < minimum) {
+    throw new ApiError(400, `Minimum withdrawal is ${minimum}`);
+  }
+
+  // Reserve the money atomically so two requests can't spend the same balance.
+  const reserved = await Owner.findOneAndUpdate(
+    { _id: owner._id, "wallet.balance": { $gte: amount } },
+    { $inc: { "wallet.balance": -amount } },
+    { new: true },
+  ).select("wallet");
+  if (!reserved) {
+    throw new ApiError(400, "Withdrawal amount cannot be more than your wallet balance");
+  }
+
+  let request;
+  try {
+    request = await WithdrawalRequest.create({
+      transactionId: `owd_${Date.now().toString(36)}`,
+      owner_id: owner._id,
+      amount,
+      payment_method: paymentMethod,
+      upiId,
+      accountHolderName,
+      accountNumber,
+      ifscCode,
+      status: "pending",
+    });
+
+    await OwnerWalletTransaction.create({
+      ownerId: owner._id,
+      amount,
+      kind: "debit",
+      title: `Withdrawal requested (${paymentMethod.toUpperCase()})`,
+      balance: Math.round(Number(reserved.wallet?.balance || 0) * 100) / 100,
+      category: "withdrawal",
+      metadata: { withdrawalRequestId: String(request._id) },
+    });
+  } catch (error) {
+    // Give the reserved money back if the request could not be recorded.
+    await Owner.updateOne({ _id: owner._id }, { $inc: { "wallet.balance": amount } });
+    if (request?._id) await WithdrawalRequest.deleteOne({ _id: request._id });
+    throw error;
+  }
+
+  try {
+    emitToAdmins("new_registration_alert", {
+      type: "owner_withdrawal",
+      title: "Owner withdrawal request",
+      message: `${owner.company_name || owner.name || "Owner"} requested ${amount}`,
+      requestId: String(request._id),
+    });
+  } catch {
+    /* admin alert is best-effort */
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Withdrawal request sent to admin",
+    data: { requestId: String(request._id), balance: Number(reserved.wallet?.balance || 0) },
+  });
+};
+
+export const createOwnerBusPayoutRequest = async (req, res) => {
+  const owner = await resolveAuthenticatedOwner(req);
+  if (!owner?._id) {
+    throw new ApiError(403, "Bus payouts are only available for owner accounts");
+  }
+  const paymentMethod = String(req.body?.payment_method || req.body?.paymentMethod || "upi").trim().toLowerCase();
+  const details = {
+    payment_method: paymentMethod,
+    upiId: String(req.body?.upiId || "").trim(),
+    accountHolderName: String(req.body?.accountHolderName || "").trim(),
+    accountNumber: String(req.body?.accountNumber || "").trim(),
+    ifscCode: String(req.body?.ifscCode || "").trim().toUpperCase(),
+  };
+  if (paymentMethod === "upi" && !details.upiId) throw new ApiError(400, "UPI ID is required");
+  if (paymentMethod !== "upi" && (!details.accountHolderName || !details.accountNumber || !details.ifscCode)) {
+    throw new ApiError(400, "Account holder name, account number and IFSC are required");
+  }
+
+  const request = await createBusPayoutRequest(owner._id, details);
+  try {
+    emitToAdmins("new_registration_alert", {
+      type: "owner_withdrawal",
+      title: "Bus payout request",
+      message: `${owner.company_name || owner.name || "Owner"} requested bus payout ${request.amount}`,
+      requestId: String(request._id),
+    });
+  } catch {
+    /* admin alert is best-effort */
+  }
+  res.status(201).json({ success: true, message: "Bus payout request sent to admin", data: { requestId: String(request._id), amount: request.amount } });
+};
+
+export const markFleetDriverCashReceived = async (req, res) => {
+  const owner = await resolveAuthenticatedOwner(req);
+  if (!owner?._id) {
+    throw new ApiError(403, "Only owners can settle driver cash");
+  }
+
+  const driverId = String(req.params?.driverId || "").trim();
+  if (!mongoose.isValidObjectId(driverId)) {
+    throw new ApiError(400, "A valid driver id is required");
+  }
+
+  const driver = await Driver.findOne({ _id: driverId, owner_id: owner._id, deletedAt: null }).select("name fleetCashDue");
+  if (!driver) {
+    throw new ApiError(404, "Fleet driver not found");
+  }
+
+  const due = Math.round(Number(driver.fleetCashDue || 0) * 100) / 100;
+  const requested = req.body?.amount === undefined || req.body?.amount === "" ? due : Number(req.body.amount);
+  const amount = Math.round(requested * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, "Enter an amount greater than zero");
+  }
+  if (amount > due) {
+    throw new ApiError(400, `Driver only owes ${due}`);
+  }
+
+  driver.fleetCashDue = Math.round((due - amount) * 100) / 100;
+  await driver.save();
+
+  res.json({
+    success: true,
+    message: `Marked ${amount} received from ${driver.name || "driver"}`,
+    data: { driverId, cashDue: driver.fleetCashDue },
   });
 };

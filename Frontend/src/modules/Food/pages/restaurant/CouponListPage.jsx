@@ -170,7 +170,7 @@ export default function CouponListPage() {
                               data-menu-id={coupon.id}
                             >
                               <button
-                                onClick={(e) => { e.stopPropagation(); toast.info("Edit not implemented yet"); setOpenMenuId(null) }}
+                                onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); navigate(`/food/restaurant/coupon/${coupon.id}/edit`) }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                               >
                                 <Edit className="w-4 h-4" /> Edit

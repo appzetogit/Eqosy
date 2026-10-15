@@ -29,6 +29,35 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/** Cycle and electric scooter riders never get an order whose trip is longer than this (admin can only lower it). */
+export const LIGHT_VEHICLE_MAX_TRIP_KM = 7;
+// Straight-line distance is always shorter than the road; this brings it close to what the customer sees.
+const ROAD_DISTANCE_FACTOR = 1.3;
+
+export const normalizeVehicleKey = (vehicleType) =>
+  String(vehicleType || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+/** Max km one trip may be for this vehicle, or null if the vehicle has no limit. */
+export function getVehicleTripLimitKm(vehicleType, { maxDistanceCycle, maxDistanceElectricScooter } = {}) {
+  const vehicle = normalizeVehicleKey(vehicleType);
+  const pick = (value, fallback) => (Number(value) > 0 ? Number(value) : fallback);
+  if (vehicle === 'cycle' || vehicle === 'bicycle') {
+    return Math.min(pick(maxDistanceCycle, 5), LIGHT_VEHICLE_MAX_TRIP_KM);
+  }
+  if (vehicle.includes('scooter') || vehicle === 'ev' || vehicle.startsWith('electric')) {
+    return Math.min(pick(maxDistanceElectricScooter, LIGHT_VEHICLE_MAX_TRIP_KM), LIGHT_VEHICLE_MAX_TRIP_KM);
+  }
+  return null;
+}
+
+/** True when this vehicle must not receive the order (restaurant -> customer leg + rider -> restaurant leg). */
+export function exceedsVehicleTripLimit(vehicleType, { deliveryKm = 0, pickupKm = 0 } = {}, settings = {}) {
+  const limit = getVehicleTripLimitKm(vehicleType, settings);
+  if (limit === null) return false;
+  const total = (Number(deliveryKm) || 0) * ROAD_DISTANCE_FACTOR + (Number(pickupKm) || 0);
+  return total > limit;
+}
+
 export function generateFourDigitDeliveryOtp() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }

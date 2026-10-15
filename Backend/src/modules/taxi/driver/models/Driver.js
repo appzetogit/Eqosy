@@ -50,6 +50,11 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    // Cash this fleet driver collected from riders that still has to be handed to the owner.
+    fleetCashDue: {
+      type: Number,
+      default: 0,
+    },
     owner_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiOwner',

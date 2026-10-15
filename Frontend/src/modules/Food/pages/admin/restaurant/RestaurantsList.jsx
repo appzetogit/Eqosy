@@ -941,16 +941,9 @@ export default function RestaurantsList() {
         debugLog(`Restaurant ${isBanning ? 'banned' : 'unbanned'} successfully`)
       } catch (apiErr) {
         debugError("API Error:", apiErr)
-        // If API fails, still update locally for better UX
-        setRestaurants(prevRestaurants =>
-          prevRestaurants.map(r =>
-            r.id === restaurant.id || r._id === restaurant._id
-              ? { ...r, isActive: newStatus }
-              : r
-          )
-        )
+        // Don't fake success: the change was not saved, so leave the list as it was.
         setBanConfirmDialog(null)
-        alert(`Restaurant ${isBanning ? 'banned' : 'unbanned'} locally. Please check backend connection.`)
+        alert(apiErr?.response?.data?.message || `Failed to ${action} restaurant. Please try again.`)
       }
 
     } catch (err) {

@@ -109,6 +109,8 @@ const deliveryPartnerSchema = new mongoose.Schema(
         bankName: { type: String },
         upiId: { type: String },
         upiQrCode: { type: String },
+        /** Seeded demo/App Store review data; toggled from Dev Mode. */
+        isDemo: { type: Boolean, default: false, index: true },
         availabilityStatus: {
             type: String,
             enum: ['online', 'offline'],

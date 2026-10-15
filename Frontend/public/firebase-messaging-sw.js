@@ -16,6 +16,15 @@ const getNotificationKey = (payload) =>
     payload?.data?.targetUrl || payload?.data?.link || "",
   ].join("::");
 
+// Only new-order style pushes (data.ring === "true") and chat may make a sound.
+// Status updates (rider arrived, picked up, delivered...) are shown silently.
+function shouldPlaySound(payload = {}) {
+  const data = payload?.data || {};
+  const type = String(data.type || "").toLowerCase();
+  if (type.includes("chat") || data.openChat === "true" || data.conversationId) return true;
+  return String(data.ring) === "true";
+}
+
 async function notifyOpenClients(payload) {
   pushDebugLog(PUSH_DEBUG_PREFIX, "Broadcasting push to open clients", { payload });
   const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -146,9 +155,9 @@ async function loadFirebaseWebConfig() {
         image,
         tag: notificationKey,
         renotify: false,
-        silent: false,
+        silent: !shouldPlaySound(payload),
         requireInteraction: false,
-        vibrate: [200, 100, 200, 100, 300],
+        ...(shouldPlaySound(payload) ? { vibrate: [200, 100, 200, 100, 300] } : {}),
         data: payload?.data || {},
       });
     }
@@ -192,10 +201,10 @@ self.addEventListener("push", (event) => {
           badge: "/eqosy-logo.png",
           image,
           tag: notificationKey || `push_${Date.now()}`,
-          renotify: true,
-          silent: false,
-          requireInteraction: true,
-          vibrate: [200, 100, 200, 100, 300],
+          renotify: shouldPlaySound(payload),
+          silent: !shouldPlaySound(payload),
+          requireInteraction: shouldPlaySound(payload),
+          ...(shouldPlaySound(payload) ? { vibrate: [200, 100, 200, 100, 300] } : {}),
           data: payload?.data || {},
         });
       }

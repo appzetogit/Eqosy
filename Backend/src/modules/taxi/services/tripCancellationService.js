@@ -4,7 +4,7 @@ import { BusSeatHold } from '../user/models/BusSeatHold.js';
 import { BusBooking } from '../user/models/BusBooking.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
 import { ApiError } from '../../../utils/ApiError.js';
-import { resolveConfiguredGatewayCredentials } from '../../../utils/gatewayResolver.js';
+import { resolveConfiguredGatewayCredentials } from './paymentGatewayService.js';
 
 const razorpayRefund = async ({ paymentId, amount, notes, keyId, keySecret }) => {
   const credentials = Buffer.from(`${keyId}:${keySecret}`).toString('base64');

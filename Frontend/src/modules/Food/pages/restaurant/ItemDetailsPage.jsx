@@ -761,10 +761,19 @@ export default function ItemDetailsPage() {
     setVariants((prev) => prev.filter((variant) => variant.localId !== localId))
   }
 
-  const handleDelete = () => {
-    // Delete logic here
-    debugLog("Deleting item:", id)
-    goBack()
+  const handleDelete = async () => {
+    const itemId = String(itemData?.id || id || "")
+    if (!itemId || itemId === "new") return
+    if (!window.confirm("Delete this item? This cannot be undone.")) return
+
+    try {
+      await restaurantAPI.deleteFood(itemId)
+      toast.success("Item deleted")
+      goBack()
+    } catch (error) {
+      debugError("Error deleting item:", error)
+      toast.error(error?.response?.data?.message || "Failed to delete item")
+    }
   }
 
   return (

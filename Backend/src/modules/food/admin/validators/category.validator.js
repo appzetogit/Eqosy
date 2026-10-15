@@ -24,6 +24,7 @@ const upsertSchema = z.object({
     name: z.string().min(1, 'Category name is required').max(200).optional(),
     image: z.string().max(2000).optional(),
     type: z.string().max(100).optional(),
+    section: z.enum(['food', 'grocery']).optional(),
     foodTypeScope: z.enum(['Veg', 'Non-Veg', 'Both']).optional(),
     zoneId: z.string().max(100).optional(),
     status: z.boolean().optional(),

@@ -5789,6 +5789,35 @@ export const listRideRequests = async (query = {}) => {
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
 
+  // Fast path for the notification panel: no search/filters/tab, so let MongoDB do the paging
+  // instead of loading and mapping every ride in memory.
+  const isUnfiltered =
+    tab === 'all' && !search && !query.transportType && !query.status && !query.from && !query.to;
+  if (query.light === '1' && isUnfiltered) {
+    const baseFilter = { serviceType: { $nin: ['parcel', 'intercity'] } };
+    const safePage = Math.max(1, page || 1);
+    const safeLimit = Math.min(100, Math.max(1, limit || 10));
+    const [pageRides, total] = await Promise.all([
+      Ride.find(baseFilter)
+        .sort({ createdAt: -1 })
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit)
+        .populate('userId', 'name phone')
+        .populate('driverId', 'name phone vehicleType vehicleNumber')
+        .lean(),
+      Ride.countDocuments(baseFilter),
+    ]);
+    return {
+      results: pageRides.map(toAdminRideRow),
+      paginator: {
+        current_page: safePage,
+        per_page: safeLimit,
+        total,
+        last_page: Math.max(1, Math.ceil(total / safeLimit)),
+      },
+    };
+  }
+
   const rides = await Ride.find({
     serviceType: { $nin: ['parcel', 'intercity'] },
   })
@@ -5822,7 +5851,27 @@ export const listRideRequests = async (query = {}) => {
     );
   }
 
-  return buildPaginator(rows, page, limit);
+  // Optional filters from the admin Filters panel.
+  const transportFilter = String(query.transportType || '').trim().toLowerCase();
+  if (transportFilter) {
+    rows = rows.filter((row) => String(row.transportType || '').toLowerCase() === transportFilter);
+  }
+  const statusFilter = String(query.status || '').trim().toUpperCase();
+  if (statusFilter) {
+    rows = rows.filter((row) => row.tripStatus === statusFilter);
+  }
+  const fromDate = query.from ? new Date(`${query.from}T00:00:00`) : null;
+  const toDate = query.to ? new Date(`${query.to}T23:59:59.999`) : null;
+  if (fromDate && !Number.isNaN(fromDate.getTime())) {
+    rows = rows.filter((row) => row.date && new Date(row.date) >= fromDate);
+  }
+  if (toDate && !Number.isNaN(toDate.getTime())) {
+    rows = rows.filter((row) => row.date && new Date(row.date) <= toDate);
+  }
+
+  const transportTypes = [...new Set(rides.map(toAdminRideRow).map((row) => row.transportType).filter(Boolean))].sort();
+  const paginated = buildPaginator(rows, page, limit);
+  return { ...paginated, filterOptions: { transportTypes } };
 };
 
 export const listDeliveries = async (query = {}) => {

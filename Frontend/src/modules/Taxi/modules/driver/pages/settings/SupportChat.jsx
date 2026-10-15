@@ -11,8 +11,8 @@ const SupportChat = () => {
   const backState = location.state?.backState;
 
   return (
-    <div className="flex min-h-screen flex-col bg-white font-sans">
-      <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-slate-200 bg-white px-4 py-4 shadow-sm">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-white font-sans">
+      <header className="z-30 flex shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 py-4 shadow-sm">
         <button
           onClick={() => navigate(backPath, backState ? { state: backState } : undefined)}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm"
@@ -28,7 +28,7 @@ const SupportChat = () => {
         title="Driver Support Chat"
         subtitle="Live Messages"
         surface="plain"
-        className="flex-1"
+        className="min-h-0 flex-1"
       />
     </div>
   );

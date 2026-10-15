@@ -25,6 +25,12 @@ const ownerWalletTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // ride_earning | bus_earning | bus_refund | commission | withdrawal | withdrawal_reversal | adjustment
+    category: { type: String, default: 'adjustment', index: true },
+    rideId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiRide', default: null },
+    busBookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiBusBooking', default: null },
+    driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiDriver', default: null },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true },
 );

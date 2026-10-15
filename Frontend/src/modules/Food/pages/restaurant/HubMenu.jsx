@@ -983,9 +983,9 @@ export default function HubMenu() {
     setIsCategoryOptionsOpen(false)
   }
 
-  const handleSaveCategoryName = () => {
+  const handleSaveCategoryName = async () => {
     if (!editCategoryName.trim() || !selectedCategory) return
-    
+
     const newCategoryName = editCategoryName.trim()
     if (newCategoryName === selectedCategory.name) {
       setIsEditCategoryOpen(false)
@@ -993,23 +993,20 @@ export default function HubMenu() {
       return
     }
 
-    // Update all foods in this category
-    const allFoods = getAllFoods()
-    const updatedFoods = allFoods.map(food => {
-      if (food.category === selectedCategory.name) {
-        return { ...food, category: newCategoryName }
-      }
-      return food
-    })
+    // The menu is generated from the server's categories/foods, so the rename must be saved there.
+    // (Previously this only rewrote localStorage, which never reached the server.)
+    if (!/^[a-f\d]{24}$/i.test(String(selectedCategory.id || ''))) {
+      toast.error('This section is not a saved category. Manage it from Menu Categories.')
+      return
+    }
 
-    // Save updated foods
     try {
-      localStorage.setItem('restaurant_foods', JSON.stringify(updatedFoods))
-      window.dispatchEvent(new CustomEvent('foodsChanged'))
-      window.dispatchEvent(new Event('storage'))
+      await restaurantAPI.updateCategory(selectedCategory.id, { name: newCategoryName })
+      toast.success('Category updated')
+      await fetchMenu(false)
     } catch (error) {
       debugError('Error updating category:', error)
-      alert('Error updating category name')
+      toast.error(error?.response?.data?.message || 'Failed to update category name')
       return
     }
 
@@ -2524,7 +2521,7 @@ export default function HubMenu() {
                           type="file"
                           ref={bulkFileInputRef}
                           onChange={onBulkFileChange}
-                          accept=".xlsx, .xls"
+                          accept=".xlsx"
                           className="hidden"
                         />
                         

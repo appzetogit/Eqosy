@@ -26,41 +26,24 @@ export const registerDeliveryPartner = async (payload, files) => {
         await FoodDeliveryPartner.deleteMany({ phone });
     }
 
+    // Upload all document photos at the same time (they used to go one by one, which could exceed the request timeout).
+    const uploadPlan = [
+        ['profilePhoto', 'food/delivery/profile'],
+        ['aadharPhoto', 'food/delivery/aadhar'],
+        ['aadharPhotoBack', 'food/delivery/aadhar'],
+        ['panPhoto', 'food/delivery/pan'],
+        ['panPhotoBack', 'food/delivery/pan'],
+        ['drivingLicensePhoto', 'food/delivery/license'],
+        ['drivingLicensePhotoBack', 'food/delivery/license'],
+        ['bankPassbookPhoto', 'food/delivery/bank'],
+    ].filter(([field]) => files?.[field]?.[0]);
+    const uploaded = await Promise.all(
+        uploadPlan.map(([field, folder]) => uploadImageBuffer(files[field][0].buffer, folder)),
+    );
     const images = {};
-
-    if (files?.profilePhoto?.[0]) {
-        images.profilePhoto = await uploadImageBuffer(files.profilePhoto[0].buffer, 'food/delivery/profile');
-    }
-    if (files?.aadharPhoto?.[0]) {
-        images.aadharPhoto = await uploadImageBuffer(files.aadharPhoto[0].buffer, 'food/delivery/aadhar');
-    }
-    if (files?.aadharPhotoBack?.[0]) {
-        images.aadharPhotoBack = await uploadImageBuffer(files.aadharPhotoBack[0].buffer, 'food/delivery/aadhar');
-    }
-    if (files?.panPhoto?.[0]) {
-        images.panPhoto = await uploadImageBuffer(files.panPhoto[0].buffer, 'food/delivery/pan');
-    }
-    if (files?.panPhotoBack?.[0]) {
-        images.panPhotoBack = await uploadImageBuffer(files.panPhotoBack[0].buffer, 'food/delivery/pan');
-    }
-    if (files?.drivingLicensePhoto?.[0]) {
-        images.drivingLicensePhoto = await uploadImageBuffer(
-            files.drivingLicensePhoto[0].buffer,
-            'food/delivery/license'
-        );
-    }
-    if (files?.drivingLicensePhotoBack?.[0]) {
-        images.drivingLicensePhotoBack = await uploadImageBuffer(
-            files.drivingLicensePhotoBack[0].buffer,
-            'food/delivery/license'
-        );
-    }
-    if (files?.bankPassbookPhoto?.[0]) {
-        images.bankPassbookPhoto = await uploadImageBuffer(
-            files.bankPassbookPhoto[0].buffer,
-            'food/delivery/bank'
-        );
-    }
+    uploadPlan.forEach(([field], index) => {
+        images[field] = uploaded[index];
+    });
 
     const partner = await FoodDeliveryPartner.create({
         name,
@@ -74,7 +57,8 @@ export const registerDeliveryPartner = async (payload, files) => {
         zoneName: zoneName ? String(zoneName).trim() : '',
         vehicleType,
         vehicleName,
-        vehicleNumber,
+        // Blank must be stored as "missing": vehicleNumber is unique+sparse, so "" would collide between riders (e.g. cycle riders).
+        vehicleNumber: vehicleNumber && String(vehicleNumber).trim() ? String(vehicleNumber).trim() : undefined,
         drivingLicenseNumber,
         panNumber,
         aadharNumber,
@@ -154,7 +138,7 @@ export const updateDeliveryPartnerProfile = async (userId, payload, files) => {
     if (state !== undefined) partner.state = state;
     if (vehicleType !== undefined) partner.vehicleType = vehicleType;
     if (vehicleName !== undefined) partner.vehicleName = vehicleName;
-    if (vehicleNumber !== undefined) partner.vehicleNumber = vehicleNumber;
+    if (vehicleNumber !== undefined) partner.vehicleNumber = String(vehicleNumber || "").trim() || undefined;
     if (drivingLicenseNumber !== undefined) partner.drivingLicenseNumber = drivingLicenseNumber;
 
     if (fcmToken) {
@@ -192,7 +176,7 @@ export const updateDeliveryPartnerDetails = async (userId, payload) => {
 
     const vehicle = payload?.vehicle;
     if (vehicle && typeof vehicle === 'object') {
-        if (vehicle.number !== undefined) partner.vehicleNumber = String(vehicle.number || '').trim();
+        if (vehicle.number !== undefined) partner.vehicleNumber = String(vehicle.number || '').trim() || undefined;
         if (vehicle.type !== undefined) partner.vehicleType = String(vehicle.type || '').trim();
         if (vehicle.brand !== undefined) partner.vehicleName = String(vehicle.brand || '').trim();
         if (vehicle.model !== undefined) partner.vehicleName = String(vehicle.model || '').trim();
@@ -682,34 +666,39 @@ const normalizeStatusFilter = (status) => {
     return s;
 };
 
+// Day boundaries are calculated in IST (the operating timezone) so a "day" in the
+// partner's history matches the day shown on their phone regardless of server timezone.
+const IST_OFFSET_MS = 330 * 60 * 1000;
+const istParts = (d) => {
+    const shifted = new Date(new Date(d).getTime() + IST_OFFSET_MS);
+    return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth(), day: shifted.getUTCDate(), dow: shifted.getUTCDay() };
+};
+const istMidnightUtc = (y, m, day) => new Date(Date.UTC(y, m, day) - IST_OFFSET_MS);
+
 const toStartOfDay = (d) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
+    const { y, m, day } = istParts(d);
+    return istMidnightUtc(y, m, day);
 };
 
 const toEndOfDay = (d) => {
-    const x = new Date(d);
-    x.setHours(23, 59, 59, 999);
-    return x;
+    const { y, m, day } = istParts(d);
+    return new Date(istMidnightUtc(y, m, day + 1).getTime() - 1);
 };
 
 const getWeekRange = (anchorDate) => {
-    const d = new Date(anchorDate);
-    const start = toStartOfDay(d);
-    start.setDate(start.getDate() - start.getDay()); // Sunday
-    const end = toEndOfDay(start);
-    end.setDate(start.getDate() + 6);
-    return { start, end };
+    const { y, m, day, dow } = istParts(anchorDate); // week starts Sunday
+    return {
+        start: istMidnightUtc(y, m, day - dow),
+        end: new Date(istMidnightUtc(y, m, day - dow + 7).getTime() - 1),
+    };
 };
 
 const getMonthRange = (anchorDate) => {
-    const d = new Date(anchorDate);
-    const start = new Date(d.getFullYear(), d.getMonth(), 1);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
+    const { y, m } = istParts(anchorDate);
+    return {
+        start: istMidnightUtc(y, m, 1),
+        end: new Date(istMidnightUtc(y, m + 1, 1).getTime() - 1),
+    };
 };
 
 const computeRange = (period, date) => {
@@ -728,7 +717,7 @@ const toTripDto = (order) => {
     const dateForUi = deliveredAt || createdAt || order?.updatedAt || null;
 
     const time = dateForUi
-        ? new Date(dateForUi).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+        ? new Date(dateForUi).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
         : '';
 
     const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
@@ -806,31 +795,37 @@ export const getDeliveryPartnerTripHistory = async (deliveryPartnerId, query = {
     const match = { 'dispatch.deliveryPartnerId': partnerId };
 
     const sf = String(statusFilter || '').toLowerCase();
-    const dateFilterClause = {
+    const inRange = { $gte: start, $lte: end };
+    // A delivered order belongs to the day it was DELIVERED. Using updatedAt/createdAt for it
+    // made an order delivered yesterday reappear on today whenever it was touched again today.
+    const deliveredClause = {
+        orderStatus: { $in: ['delivered', 'completed'] },
         $or: [
-            { 'deliveryState.deliveredAt': { $gte: start, $lte: end } },
-            { deliveredAt: { $gte: start, $lte: end } },
-            { completedAt: { $gte: start, $lte: end } },
-            { updatedAt: { $gte: start, $lte: end } },
-            { createdAt: { $gte: start, $lte: end } }
-        ]
+            { 'deliveryState.deliveredAt': inRange },
+            {
+                'deliveryState.deliveredAt': { $exists: false },
+                $or: [{ deliveredAt: inRange }, { completedAt: inRange }, { updatedAt: inRange }],
+            },
+        ],
+    };
+    const cancelledClause = {
+        orderStatus: { $regex: '^cancelled', $options: 'i' },
+        $or: [{ updatedAt: inRange }, { createdAt: inRange }],
+    };
+    const pendingClause = {
+        orderStatus: { $nin: ['delivered', 'completed'], $not: { $regex: '^cancelled', $options: 'i' } },
+        $or: [{ updatedAt: inRange }, { createdAt: inRange }],
     };
 
     if (sf === 'completed') {
-        match.orderStatus = { $in: ['delivered', 'completed'] };
-        match.$or = dateFilterClause.$or;
+        match.$and = [deliveredClause];
     } else if (sf === 'cancelled') {
-        match.orderStatus = { $regex: '^cancelled', $options: 'i' };
-        match.$or = dateFilterClause.$or;
+        match.$and = [cancelledClause];
     } else if (sf === 'pending') {
-        match.$and = [
-            { orderStatus: { $nin: ['delivered', 'completed'] } },
-            { orderStatus: { $not: { $regex: '^cancelled', $options: 'i' } } },
-            dateFilterClause
-        ];
+        match.$and = [pendingClause];
     } else {
         // ALL TRIPS
-        match.$or = dateFilterClause.$or;
+        match.$or = [deliveredClause, cancelledClause, pendingClause];
     }
 
     const orders = await FoodOrder.find(match)
@@ -862,10 +857,14 @@ export const getDeliveryPocketDetails = async (deliveryPartnerId, query = {}) =>
         orderStatus: 'delivered',
         $or: [
             { 'deliveryState.deliveredAt': { $gte: start, $lte: end } },
-            { deliveredAt: { $gte: start, $lte: end } },
-            { completedAt: { $gte: start, $lte: end } },
-            { updatedAt: { $gte: start, $lte: end } },
-            { createdAt: { $gte: start, $lte: end } }
+            {
+                'deliveryState.deliveredAt': { $exists: false },
+                $or: [
+                    { deliveredAt: { $gte: start, $lte: end } },
+                    { completedAt: { $gte: start, $lte: end } },
+                    { updatedAt: { $gte: start, $lte: end } }
+                ]
+            }
         ]
     })
         .populate({ path: 'restaurantId', select: 'restaurantName' })

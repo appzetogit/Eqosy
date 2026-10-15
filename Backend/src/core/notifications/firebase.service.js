@@ -281,14 +281,15 @@ const buildMessagePayload = (payload = {}, token) => {
         }
     }
 
-    if (Object.keys(data).length > 0) {
-        message.data = data;
-    }
-
     const targetLink = data.link || payload.link || data.targetUrl || data.url;
     const ring = isRingEvent(payload);
     const dataType = String(data.type || payload.type || data.chatType || payload.chatType || '').toLowerCase();
     const isChat = dataType.includes('chat') || data.openChat === 'true' || Boolean(data.conversationId);
+
+    // Tell web/service-worker clients whether this push may make a sound.
+    // Status updates (rider arrived, picked up, delivered...) must stay silent.
+    data.ring = ring ? 'true' : 'false';
+    message.data = data;
 
     message.android = {
         priority: 'high',
@@ -308,7 +309,8 @@ const buildMessagePayload = (payload = {}, token) => {
         notification: {
             title: notification.title,
             body: notification.body,
-            icon: image || payload.icon || '/favicon.ico'
+            icon: image || payload.icon || '/favicon.ico',
+            silent: !(ring || isChat)
         },
         ...(targetLink ? { fcm_options: { link: targetLink } } : {})
     };

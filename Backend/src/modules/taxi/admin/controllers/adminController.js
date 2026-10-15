@@ -3,6 +3,7 @@ import * as adminService from "../services/adminService.js";
 import ExcelJS from 'exceljs';
 import { BusBooking } from '../../user/models/BusBooking.js';
 import { BusService } from '../models/BusService.js';
+import { syncBusBookingOwnerEarning } from '../../services/ownerPayoutService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { Ride } from '../../user/models/Ride.js';
 
@@ -1250,6 +1251,7 @@ export const cancelAdminBusBookingSeats = asyncHandler(async (req, res) => {
     booking.notes = [booking.notes, adminNote].filter(Boolean).join(' | ');
   }
   await booking.save();
+  await syncBusBookingOwnerEarning(booking._id);
 
   await BusSeatHold.deleteMany({
     bookingId: booking._id,

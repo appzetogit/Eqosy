@@ -87,7 +87,7 @@ const ManageDrivers = () => {
     <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
       <header className="flex items-center gap-4 mb-8 text-slate-900 uppercase">
         <button
-          onClick={() => navigate(`${routePrefix}/profile`)}
+          onClick={() => navigate(routePrefix === "/taxi/owner" ? "/taxi/owner/home" : `${routePrefix}/profile`)}
           className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
           <ArrowLeft size={18} />
         </button>

@@ -5,6 +5,12 @@ import gigRoutes from '../modules/food/delivery/routes/gig.routes.js';
 import restaurantRoutes from '../modules/food/restaurant/routes/restaurant.routes.js';
 import landingRoutes from '../modules/food/landing/routes/landing.routes.js';
 import { getPublicDiningCategories, getPublicDiningRestaurants } from '../modules/food/dining/controllers/diningPublic.controller.js';
+import {
+    createDiningBookingController,
+    listMyDiningBookingsController,
+    cancelMyDiningBookingController,
+    reviewMyDiningBookingController,
+} from '../modules/food/dining/controllers/diningBooking.controller.js';
 import uploadRoutes from '../modules/uploads/routes/upload.routes.js';
 import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js';
 import userRoutes from '../modules/food/user/routes/user.routes.js';
@@ -53,6 +59,11 @@ router.use('/v1/food', landingRoutes);
 router.use('/v1/food/search', searchRoutes);
 router.get('/v1/food/dining/categories/public', getPublicDiningCategories);
 router.get('/v1/food/dining/restaurants/public', getPublicDiningRestaurants);
+// Table bookings (customer)
+router.post('/v1/food/dining/bookings', authMiddleware, requireRoles('USER'), createDiningBookingController);
+router.get('/v1/food/dining/bookings', authMiddleware, requireRoles('USER'), listMyDiningBookingsController);
+router.patch('/v1/food/dining/bookings/:id/cancel', authMiddleware, requireRoles('USER'), cancelMyDiningBookingController);
+router.post('/v1/food/dining/bookings/:id/review', authMiddleware, requireRoles('USER'), reviewMyDiningBookingController);
 router.use('/v1/uploads', uploadRoutes);
 
 // Mark business-settings/public as truly public (must be before protected admin block)

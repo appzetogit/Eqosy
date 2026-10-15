@@ -25,6 +25,8 @@ import {
   emitDeliveryDropOtpToUser,
   enqueueOrderEvent,
   generateFourDigitDeliveryOtp,
+  exceedsVehicleTripLimit,
+  haversineKm,
   notifyOwnerSafely,
   notifyOwnersSafely,
   pushStatusHistory,
@@ -233,13 +235,22 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
   return out;
 }
 
+/** Restaurant -> customer straight-line km for an order, 0 when coordinates are missing. */
+function getOrderTripKm(order) {
+  const rest = order?.restaurantId?.location?.coordinates;
+  const cust = order?.deliveryAddress?.location?.coordinates || order?.address?.location?.coordinates;
+  if (!Array.isArray(rest) || !Array.isArray(cust)) return 0;
+  const km = haversineKm(rest[1], rest[0], cust[1], cust[0]);
+  return Number.isFinite(km) ? km : 0;
+}
+
 export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
   const partnerObjId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
   // Fetch the delivery partner's zone info for filtering
   const partner = await FoodDeliveryPartner.findById(partnerObjId)
-    .select('zoneId lastLat lastLng')
+    .select('zoneId lastLat lastLng vehicleType')
     .lean();
 
   const filter = {
@@ -331,6 +342,15 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     }
   }
 
+  // Cycle / electric scooter riders only see trips they are allowed to take (orders already assigned to them stay visible).
+  if (partner?.vehicleType) {
+    const dispatchSettings = await dispatchService.getDispatchSettings();
+    filteredDocs = filteredDocs.filter((doc) => {
+      if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) return true;
+      return !exceedsVehicleTripLimit(partner.vehicleType, { deliveryKm: getOrderTripKm(doc) }, dispatchSettings);
+    });
+  }
+
   const orderIds = filteredDocs.map((d) => d?._id).filter(Boolean);
   const txRows = orderIds.length
     ? await FoodTransaction.find({ orderId: { $in: orderIds } }).lean()
@@ -358,6 +378,20 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   if (!identity) throw new ValidationError('Order id required');
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
+
+  // Cycle / electric scooter riders cannot take long trips, even if the order reached their app some other way.
+  {
+    const [riderForLimit, orderForLimit] = await Promise.all([
+      FoodDeliveryPartner.findById(partnerId).select('vehicleType').lean(),
+      FoodOrder.findOne(identity).select('restaurantId deliveryAddress address').populate('restaurantId', 'location').lean(),
+    ]);
+    if (riderForLimit?.vehicleType && orderForLimit) {
+      const dispatchSettings = await dispatchService.getDispatchSettings();
+      if (exceedsVehicleTripLimit(riderForLimit.vehicleType, { deliveryKm: getOrderTripKm(orderForLimit) }, dispatchSettings)) {
+        throw new ValidationError('This order is too far for your vehicle. Please skip it; a rider with a bike will get it.');
+      }
+    }
+  }
 
   const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
   if (activeZones && activeZones.length > 0) {

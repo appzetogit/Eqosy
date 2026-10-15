@@ -258,7 +258,9 @@ const busBookingSchema = new mongoose.Schema(
       calculatedPlatformEarning: { type: Number, default: 0 },
       operatorEarning: { type: Number, default: 0 },
       refundedAmount: { type: Number, default: 0 },
-      settlementStatus: { type: String, enum: ['pending', 'settled', 'paid'], default: 'pending' },
+      // Amount already credited to the bus owner's wallet for this booking (kept in sync on cancel/refund).
+      ownerCreditedAmount: { type: Number, default: 0 },
+      settlementStatus: { type: String, enum: ['pending', 'requested', 'settled', 'paid'], default: 'pending' },
     },
   },
   { timestamps: true },

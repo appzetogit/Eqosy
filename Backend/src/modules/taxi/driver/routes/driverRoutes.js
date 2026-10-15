@@ -15,6 +15,10 @@ import {
   captureServiceCenterBookingFingerprint,
   createOwnerFleetDriver,
   updateOwnerFleetDriver,
+  getOwnerFleetWallet,
+  createOwnerWithdrawalRequest,
+  createOwnerBusPayoutRequest,
+  markFleetDriverCashReceived,
   updateOwnerFleetVehicle,
   deleteServiceCenterBookingFingerprint,
   deleteCurrentDriverAccount,
@@ -169,12 +173,12 @@ driverRouter.patch(
 );
 driverRouter.get(
   "/notifications",
-  authenticate(["driver"]),
+  authenticate(["driver", "owner"]),
   asyncHandler(getDriverNotifications),
 );
 driverRouter.get(
   "/scheduled-rides",
-  authenticate(["driver"]),
+  authenticate(["driver", "owner"]),
   asyncHandler(getDriverScheduledRides),
 );
 driverRouter.post(
@@ -283,6 +287,26 @@ driverRouter.post(
   "/fleet/bus-bookings/:id/cancel",
   authenticate(["owner"]),
   asyncHandler(cancelOwnerBusBookingSeats),
+);
+driverRouter.get(
+  "/fleet/wallet",
+  authenticate(["owner"]),
+  asyncHandler(getOwnerFleetWallet),
+);
+driverRouter.post(
+  "/fleet/wallet/withdrawals",
+  authenticate(["owner"]),
+  asyncHandler(createOwnerWithdrawalRequest),
+);
+driverRouter.post(
+  "/fleet/wallet/bus-payout",
+  authenticate(["owner"]),
+  asyncHandler(createOwnerBusPayoutRequest),
+);
+driverRouter.post(
+  "/fleet/drivers/:driverId/cash-received",
+  authenticate(["owner"]),
+  asyncHandler(markFleetDriverCashReceived),
 );
 driverRouter.get(
   "/fleet/drivers",

@@ -819,6 +819,7 @@ const ActiveTrip = () => {
     const liveRaw = liveRequest.raw || {};
     const rideId = getJobRideId(liveRequest) || getJobRideId(effectiveState);
     const [resolvedPickupCoords, setResolvedPickupCoords] = useState(null);
+    const [livePayerOverride, setLivePayerOverride] = useState(null);
     const [resolvedDropCoords, setResolvedDropCoords] = useState(null);
     const rawVehicleIcon = String(
         liveRaw.vehicleIconUrl ||
@@ -1327,9 +1328,16 @@ const ActiveTrip = () => {
         socketService.on('rideRequestClosed', handleTripClosed);
         socketService.on('rideCancelled', handleTripClosed);
         socketService.on('ride:status:updated', handleRideStatusUpdated);
+        const handleParcelPayerUpdated = (payload) => {
+            if (String(payload?.rideId || '') === String(currentRideId) && payload?.payer) {
+                setLivePayerOverride({ rideId: String(currentRideId), payer: payload.payer });
+            }
+        };
         socketService.on('ride:state', handleRideState);
+        socketService.on('ride:parcel:payer-updated', handleParcelPayerUpdated);
 
         return () => {
+            socketService.off('ride:parcel:payer-updated', handleParcelPayerUpdated);
             socketService.off('rideRequestClosed', handleTripClosed);
             socketService.off('rideCancelled', handleTripClosed);
             socketService.off('ride:status:updated', handleRideStatusUpdated);
@@ -1661,7 +1669,13 @@ const ActiveTrip = () => {
         explicitDriverEarnings: liveRaw?.driverEarnings ?? effectiveState?.driverEarnings,
     });
     const collectibleFareLabel = formatCurrencyAmount(totalFareAmount);
-    const paymentCollectionLabel = isParcel ? 'receiver' : 'rider';
+    const parcelPayer = String(
+        (livePayerOverride && String(livePayerOverride.rideId) === String(rideId) ? livePayerOverride.payer : '')
+        || liveRaw?.parcel?.payer
+        || effectiveState?.parcel?.payer
+        || 'sender',
+    ).toLowerCase();
+    const paymentCollectionLabel = isParcel ? (parcelPayer === 'receiver' ? 'receiver' : 'sender') : 'rider';
     const routeStrokeColor = '#000000';
     const routeAccentSoft = hexToRgba(routeStrokeColor, 0.08);
     const routeAccentMuted = hexToRgba(routeStrokeColor, 0.18);

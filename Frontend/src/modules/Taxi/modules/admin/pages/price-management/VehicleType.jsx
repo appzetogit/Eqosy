@@ -995,8 +995,12 @@ const VehicleType = ({ mode: propMode }) => {
               value={formData.capacity}
                 onChange={(e) => updateForm('capacity', e.target.value)}
                 className={inputClass}
-              placeholder="12"
+              placeholder="e.g. 4 seats, or 150 (kg) for parcels"
             />
+            <p className="mt-1 text-[11px] font-medium text-gray-500">
+              Passenger vehicles: enter the number of seats (Cab 4, Auto 3, Bike 1). Delivery vehicles: enter the maximum weight in kg.
+              Numbers above 60 are treated as weight, so the rider app will not show them as passenger seats.
+            </p>
           </div>
 
           <div>

@@ -1063,6 +1063,9 @@ const SenderReceiverDetails = () => {
   const [activeMapPicker, setActiveMapPicker] = useState(null);
   const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [parcelPayer, setParcelPayer] = useState(() => (
+    String(parcelState.parcel?.payer || parcelState.payer || 'sender').toLowerCase() === 'receiver' ? 'receiver' : 'sender'
+  ));
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
   const [gpsModalInfo, setGpsModalInfo] = useState(null);
@@ -1843,6 +1846,7 @@ const SenderReceiverDetails = () => {
         receiverName,
         receiverMobile,
         paymentMethod: 'Cash',
+        payer: parcelPayer,
         fare: estimatedFare?.approx ?? estimatedFare?.min ?? null,
         estimatedFare,
         estimatedDistanceKm,
@@ -1862,6 +1866,7 @@ const SenderReceiverDetails = () => {
           senderMobile,
           receiverName,
           receiverMobile,
+          payer: parcelPayer,
         },
         isParcel: true,
         searchNonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -2280,6 +2285,27 @@ const SenderReceiverDetails = () => {
               ) : null}
             </>
           )}
+        </div>
+
+        {/* Who pays for this delivery (can be changed later from the tracking screen) */}
+        <div className="mt-5 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Payment will be paid by</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {[
+              { id: 'sender', label: 'Sender', hint: 'Pay at pickup' },
+              { id: 'receiver', label: 'Receiver', hint: 'Pay at delivery' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setParcelPayer(option.id)}
+                className={`rounded-2xl border px-3 py-3 text-left transition-all ${parcelPayer === option.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-slate-200 bg-slate-50/60'}`}
+              >
+                <span className="block text-sm font-black text-slate-900">{option.label}</span>
+                <span className="block text-[11px] font-semibold text-slate-500">{option.hint}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Prohibited Items & Terms Checkbox on Main Page */}

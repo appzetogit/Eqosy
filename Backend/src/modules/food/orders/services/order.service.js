@@ -31,6 +31,7 @@ import { getFirebaseDB } from '../../../../config/firebase.js';
 import * as foodTransactionService from './foodTransaction.service.js';
 import * as userWalletService from '../../user/services/userWallet.service.js';
 import { calculateOrderPricing, resolveOrderZoneId } from './order-pricing.service.js';
+import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import * as dispatchService from './order-dispatch.service.js';
 import * as deliveryService from './order-delivery.service.js';
 import * as paymentService from './order-payment.service.js';
@@ -99,6 +100,9 @@ export async function createOrder(userId, dto) {
 
     if (!restaurant) throw new ValidationError("Restaurant not found");
 
+    // Dev Mode: keep the saved delivery address consistent with the bypassed pricing location.
+    await applyDemoLocationBypass(dto, restaurant);
+
     try {
       const { FoodRestaurantOutletTimings } = await import('../../restaurant/models/outletTimings.model.js');
       const timingsDoc = await FoodRestaurantOutletTimings.findOne({ restaurantId }).lean();
@@ -155,6 +159,14 @@ export async function createOrder(userId, dto) {
     if (!pricingResult?.pricing) {
       throw new ValidationError("Unable to calculate order pricing from fee settings");
     }
+    // Reject a payment method the admin has switched off (razorpay_qr is the COD-style flow).
+    const allowedMethods = pricingResult.pricing.paymentMethods;
+    const methodKey = paymentMethod === "razorpay_qr" ? "cash" : paymentMethod;
+    if (allowedMethods && allowedMethods[methodKey] === false) {
+      const label = methodKey === "cash" ? "Cash on Delivery" : methodKey === "wallet" ? "Wallet payment" : "Online payment";
+      throw new ValidationError(`${label} is currently unavailable. Please choose another payment method.`);
+    }
+
     const normalizedPricing = {
       subtotal: Number(pricingResult.pricing.subtotal ?? computedSubtotal) || 0,
       tax: Number(pricingResult.pricing.tax ?? 0) || 0,
@@ -1490,6 +1502,21 @@ export async function updateOrderStatusRestaurant(
     }
   } catch (err) {
     logger.warn(`Error in delivery notification logic: ${err?.message || err}`);
+  }
+
+  // Store accepted the order -> automatically offer it to the nearest online delivery partner.
+  // Runs regardless of socket.io; the store no longer needs to press "resend" manually.
+  try {
+    if (['confirmed', 'preparing'].includes(String(orderStatus)) && !['confirmed', 'preparing'].includes(String(from))) {
+      const alreadyAccepted = order.dispatch?.status === 'accepted' && order.dispatch?.deliveryPartnerId;
+      if (!alreadyAccepted) {
+        void tryAutoAssign(order._id, { attempt: 1 }).catch((err) =>
+          logger.warn(`Auto-assign on order accept failed: ${err?.message || err}`),
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn(`Auto-assign trigger on accept failed: ${err?.message || err}`);
   }
 
   enqueueOrderEvent('restaurant_order_status_updated', {

@@ -11,7 +11,7 @@ const HelpSupportOptions = () => {
     <div className="min-h-screen bg-[#f8f9fb] p-6 pt-10 font-sans">
       <header className="mb-8 flex items-center gap-4 text-slate-900">
         <button
-          onClick={() => navigate(`${routePrefix}/profile`)}
+          onClick={() => navigate(routePrefix === "/taxi/owner" ? "/taxi/owner/home" : `${routePrefix}/profile`)}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm"
         >
           <ArrowLeft size={18} />

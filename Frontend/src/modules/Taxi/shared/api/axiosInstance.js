@@ -1,4 +1,6 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import { applyUploadTimeout, describeApiFailure } from '../../../../shared/friendlyApiError';
 import { API_BASE_URL } from './runtimeConfig';
 import { syncAdminSessionBridge } from '../../modules/admin/services/adminSession';
 
@@ -189,6 +191,7 @@ const isAuthTokenFailure = (message = '') => {
 // Request Interceptor: Attach Auth Token automatically
 api.interceptors.request.use(
   (config) => {
+    applyUploadTimeout(config);
     syncAdminSessionBridge();
     const requestPath = String(config.url || '').split('?')[0];
     const existingAuthorization = config.headers?.Authorization || config.headers?.authorization;
@@ -298,10 +301,16 @@ api.interceptors.response.use(
           }));
         }
       }
-      return Promise.reject({ ...error.response.data, status: error.response.status });
+      const info = describeApiFailure(error);
+      if (info.notify && !error.config?.silent) toast.error(info.message, { id: `api-${info.kind}` });
+      const body = error.response.data && typeof error.response.data === 'object' ? error.response.data : {};
+      // Keep the server's own message when it has one; otherwise give a readable one instead of nothing.
+      return Promise.reject({ ...body, message: body.message || info.message, status: error.response.status });
     }
 
-    return Promise.reject({ message: 'Network error or server down.' });
+    const info = describeApiFailure(error);
+    if (!error.config?.silent) toast.error(info.message, { id: `api-${info.kind}` });
+    return Promise.reject({ message: info.message, code: error.code });
   }
 );
 

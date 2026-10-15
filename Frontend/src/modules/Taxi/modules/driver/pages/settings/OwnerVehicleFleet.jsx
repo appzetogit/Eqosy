@@ -876,7 +876,7 @@ const OwnerVehicleFleet = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(`${routePrefix}/profile`)}
+                onClick={() => navigate(routePrefix === "/taxi/owner" ? "/taxi/owner/home" : `${routePrefix}/profile`)}
                 className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-200 flex items-center justify-center hover:shadow-md transition-all flex-shrink-0">
                 <ArrowLeft size={16} className="text-indigo-600" />
               </motion.button>
@@ -906,15 +906,6 @@ const OwnerVehicleFleet = () => {
               Add Fleet
             </motion.button>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={handleAddFleetVehicle}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all sm:hidden"
-          >
-            <Plus size={16} />
-            Add Fleet Vehicle
-          </motion.button>
         </div>
       </div>
 

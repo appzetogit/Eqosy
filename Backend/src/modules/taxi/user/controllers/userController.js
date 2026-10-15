@@ -41,6 +41,7 @@ import { sendPushNotificationToEntities } from '../../services/pushNotificationS
 import { buildRentalTrackingSnapshot, updateUserRentalTracking } from '../../services/rentalTrackingService.js';
 import { listDriverServiceLocations } from '../../driver/services/serviceLocationService.js';
 import { listServiceStores, resolveBusCommissionRule } from '../../admin/services/adminService.js';
+import { syncBusBookingOwnerEarning } from '../../services/ownerPayoutService.js';
 import {
   getUserSubscriptionSummary,
   listCustomerSubscriptionPlans,
@@ -2403,6 +2404,7 @@ export const processBusPaymentConfirmation = async ({ bookingId, paymentId = '',
   if (signature) booking.payment.signature = signature;
   booking.payment.paidAt = now;
   await booking.save();
+  await syncBusBookingOwnerEarning(booking._id);
 
   if (booking.tripId) {
     await TripSeatInventory.updateMany(
@@ -3184,6 +3186,7 @@ export const cancelMyBusBooking = async (req, res) => {
 
   booking.financialSnapshot.refundedAmount = (booking.financialSnapshot?.refundedAmount || 0) + cancellationQuote.refundAmount;
   await booking.save();
+  await syncBusBookingOwnerEarning(booking._id);
 
   if (booking.tripId) {
     await TripSeatInventory.updateMany(

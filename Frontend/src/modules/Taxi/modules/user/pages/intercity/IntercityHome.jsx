@@ -753,25 +753,6 @@ const IntercityHome = () => {
         </div>
       </div>
 
-      {/* Floating Info */}
-      {!searchQuery && (
-        <div className="px-6">
-          <div className="bg-indigo-600 rounded-[32px] p-6 text-white overflow-hidden relative">
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-2">
-                <Star size={16} fill="white" className="text-white" />
-                <span className="text-[11px] font-black uppercase tracking-widest opacity-80">Special Offer</span>
-              </div>
-              <h4 className="text-[22px] font-black leading-tight">First Intercity Trip? Get 20% Off!</h4>
-              <button className="mt-4 px-5 py-2.5 bg-white text-indigo-600 rounded-xl text-[13px] font-black uppercase tracking-wider shadow-lg">
-                View Promo
-              </button>
-            </div>
-            <Sparkles className="absolute top-4 right-4 text-white/20 w-24 h-24 rotate-12" />
-          </div>
-        </div>
-      )}
-
       {/* Bottom Nav Spacer */}
       <div className="h-20" />
 

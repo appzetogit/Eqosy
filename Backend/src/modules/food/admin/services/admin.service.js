@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { invalidateCategoryCache } from '../../restaurant/services/restaurantCategory.service.js';
-import { ValidationError } from '../../../../core/auth/errors.js';
+import { ValidationError, ForbiddenError } from '../../../../core/auth/errors.js';
 import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
@@ -2658,7 +2658,8 @@ export async function updateRestaurantMenuById(id, menu) {
 }
 
 export async function getPendingRestaurants(adminContext = null) {
-    const filter = { status: { $in: ['pending', 'rejected'] } };
+    // Demo (Dev Mode) outlets sit in 'pending' while switched off; they are not real applications.
+    const filter = { status: { $in: ['pending', 'rejected'] }, isDemo: { $ne: true } };
 
     if (adminContext && !isSuperAdminLike(adminContext)) {
         const rawZoneIds = adminContext.food_zone_ids || adminContext.zone_ids || [];
@@ -2678,6 +2679,29 @@ export async function getPendingRestaurants(adminContext = null) {
         sl: i + 1,
         zone: r.zoneId?.zoneName || r.zoneId?.name || null,
     }));
+}
+
+/**
+ * Zone-restricted subadmins may only manage restaurants/stores inside their assigned zones.
+ * Super admins (and callers without an admin context) are unrestricted.
+ */
+export async function assertAdminCanManageRestaurant(restaurantId, adminContext = null) {
+    if (!adminContext || isSuperAdminLike(adminContext)) return;
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(String(restaurantId))) return;
+    const allowed = normalizeObjectIdList(adminContext.food_zone_ids || adminContext.zone_ids || []).map((z) => String(z));
+    const restaurant = await FoodRestaurant.findById(restaurantId).select('zoneId').lean();
+    if (!restaurant) return; // let the handler answer 404
+    if (!restaurant.zoneId || !allowed.includes(String(restaurant.zoneId))) {
+        throw new ForbiddenError('You do not have permission to manage restaurants outside your assigned zones');
+    }
+}
+
+export async function assertAdminCanManageFood(foodId, adminContext = null) {
+    if (!adminContext || isSuperAdminLike(adminContext)) return;
+    if (!foodId || !mongoose.Types.ObjectId.isValid(String(foodId))) return;
+    const food = await FoodItem.findById(foodId).select('restaurantId').lean();
+    if (!food) return;
+    await assertAdminCanManageRestaurant(food.restaurantId, adminContext);
 }
 
 export async function updateRestaurantById(id, body = {}) {
@@ -2729,6 +2753,24 @@ export async function updateRestaurantById(id, body = {}) {
 
     if (body.isRestaurant !== undefined) {
         doc.isRestaurant = parseBooleanLike(body.isRestaurant, 'isRestaurant');
+    }
+
+    // The edit form sends `isActive`; a restaurant is "active" when its status is approved
+    // (same mapping as updateRestaurantStatus). Only flip it when the value actually changes.
+    if (body.isActive !== undefined) {
+        const wantActive = parseBooleanLike(body.isActive, 'isActive');
+        const currentlyActive = doc.status === 'approved';
+        if (wantActive !== currentlyActive) {
+            doc.status = wantActive ? 'approved' : 'rejected';
+            if (wantActive) {
+                doc.approvedAt = new Date();
+                doc.rejectedAt = undefined;
+                doc.rejectionReason = undefined;
+            } else {
+                doc.rejectedAt = new Date();
+                doc.rejectionReason = 'Disabled by admin';
+            }
+        }
     }
 
     if (body.cuisines !== undefined) {
@@ -2949,8 +2991,11 @@ export async function getCategories(query, adminContext = null) {
     if (query.zoneId && String(query.zoneId).trim()) {
         const zid = String(query.zoneId).trim();
         if (zid === 'global') {
+            // Restaurant-owned categories are not global even when they have no zone.
             filter.$and = [...(filter.$and || []), {
                 $or: [{ zoneId: { $exists: false } }, { zoneId: null }]
+            }, {
+                $or: [{ restaurantId: { $exists: false } }, { restaurantId: null }]
             }];
         } else if (mongoose.Types.ObjectId.isValid(zid)) {
             const reqZoneObjectId = new mongoose.Types.ObjectId(zid);
@@ -3191,7 +3236,11 @@ export async function updateCategory(id, body, adminContext = null) {
     if (body.name !== undefined) doc.name = String(body.name || '').trim();
     if (body.image !== undefined) doc.image = String(body.image || '').trim();
     if (body.type !== undefined) doc.type = String(body.type || '').trim();
-    if (body.section !== undefined) doc.section = normalizeCategorySection(body.section, doc.section || 'food');
+    if (body.section !== undefined) {
+        doc.section = normalizeCategorySection(body.section, doc.section || 'food');
+        // Legacy grocery categories were flagged by type; clear it so a move to food sticks.
+        if (doc.section === 'food' && doc.type === 'grocery') doc.type = '';
+    }
     if (body.foodTypeScope !== undefined) doc.foodTypeScope = nextFoodTypeScope;
     if (!doc.restaurantId && doc.createdByRestaurantId) {
         doc.zoneId = undefined;
@@ -3209,7 +3258,10 @@ export async function updateCategory(id, body, adminContext = null) {
     if (!doc.createdByRestaurantId && doc.restaurantId) {
         doc.createdByRestaurantId = doc.restaurantId;
     }
+    const nameChanged = doc.isModified('name');
     await doc.save();
+    // Foods keep a copy of the category name; keep it in sync after a rename.
+    if (nameChanged) await FoodItem.updateMany({ categoryId: doc._id }, { $set: { categoryName: doc.name } });
     await invalidateCategoryCache();
     return doc.toObject();
 }
@@ -3516,6 +3568,8 @@ export async function getFoods(query = {}, adminContext = null) {
         foodType: f.foodType || 'Non-Veg',
         isAvailable: f.isAvailable !== false,
         preparationTime: f.preparationTime || '',
+        // Needed by the edit form; without it saving an edit resets timed items to "all day".
+        availableTime: f.availableTime || { isAllDay: true, startTime: '', endTime: '' },
         approvalStatus: f.approvalStatus || 'approved',
         createdAt: f.createdAt,
         updatedAt: f.updatedAt
@@ -4096,7 +4150,8 @@ export async function expireExpiredOffers() {
 // ----- Delivery join requests -----
 export async function getDeliveryJoinRequests(query) {
     const { status = 'pending', page = 1, limit = 1000, search, zone, vehicleType } = query;
-    const filter = {};
+    // Demo riders (Dev Mode) are not real join requests.
+    const filter = { isDemo: { $ne: true } };
     if (status === 'pending') filter.status = 'pending';
     else if (status === 'denied' || status === 'rejected') filter.status = 'rejected';
     else filter.status = status;
@@ -5146,6 +5201,29 @@ export async function approveDeliveryPartner(id) {
         console.warn('Referral crediting failed (delivery approval):', e?.message || e);
     }
     return partner.toObject();
+}
+
+/**
+ * Deactivate (block) a delivery partner. Profile, wallet and order history are kept; the partner
+ * leaves the approved list, is taken offline and is excluded from dispatch. Re-approving from the
+ * join-request page reactivates the account.
+ */
+export async function deactivateDeliveryPartner(id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const updated = await FoodDeliveryPartner.findByIdAndUpdate(
+        id,
+        {
+            $set: {
+                status: 'rejected',
+                rejectedAt: new Date(),
+                rejectionReason: 'Account deactivated by admin',
+                approvedAt: null,
+                availabilityStatus: 'offline'
+            }
+        },
+        { new: true }
+    ).lean();
+    return updated;
 }
 
 export async function rejectDeliveryPartner(id, reason) {

@@ -1261,8 +1261,14 @@ const RideTracking = () => {
                 path={routePath}
                 options={{
                   strokeColor: '#111827',
-                  strokeOpacity: 0.9,
-                  strokeWeight: 5,
+                  strokeOpacity: 0,
+                  icons: [
+                    {
+                      icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.95, strokeColor: '#111827', strokeWeight: 4, scale: 2 },
+                      offset: '0',
+                      repeat: '14px',
+                    },
+                  ],
                 }}
               />
             )}

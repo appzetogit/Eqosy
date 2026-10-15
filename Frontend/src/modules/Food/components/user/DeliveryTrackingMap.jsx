@@ -224,6 +224,20 @@ function buildRemainingRoutePath(fullPath, riderPosition, endpoint = null) {
   return ensurePathEndsAt(routeOnlyPolyline, endpoint);
 }
 
+/** Dashed route line (dark dashes, Google-Maps style) built from repeating symbols. */
+const dashedLineOptions = (color = '#111827', extra = {}) => ({
+  strokeColor: color,
+  strokeOpacity: 0,
+  icons: [
+    {
+      icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.95, strokeColor: color, strokeWeight: 4, scale: 2 },
+      offset: '0',
+      repeat: '14px',
+    },
+  ],
+  ...extra,
+});
+
 /** Imperatively syncs path on every rider tick — declarative Polyline alone often won't erase behind rider */
 function LiveRoutePolyline({ path, options }) {
   const polylineRef = useRef(null);
@@ -950,12 +964,7 @@ const DeliveryTrackingMap = ({
         {!baselineDirections && restaurantCoords && destinationCoords && (
           <Polyline
             path={[restaurantCoords, destinationCoords]}
-            options={{
-              strokeColor: '#EB590E',
-              strokeOpacity: 0.6,
-              strokeWeight: 5,
-              zIndex: 4
-            }}
+            options={dashedLineOptions('#111827', { zIndex: 4, geodesic: true })}
           />
         )}
 
@@ -963,12 +972,7 @@ const DeliveryTrackingMap = ({
         {baselineDirections?.routes?.[0]?.overview_path && !isDeliveryLeg && (
           <Polyline
             path={baselineDirections.routes[0].overview_path}
-            options={{
-              strokeColor: '#EB590E', 
-              strokeOpacity: isPickupLeg ? 0.45 : 0.85,
-              strokeWeight: isPickupLeg ? 5 : 6,
-              zIndex: 5
-            }}
+            options={dashedLineOptions('#9ca3af', { zIndex: 5 })}
           />
         )}
 
@@ -983,13 +987,7 @@ const DeliveryTrackingMap = ({
         {isPickupLeg && (
           <LiveRoutePolyline
             path={pickupRemainingPath}
-            options={{
-              strokeColor: '#22c55e',
-              strokeWeight: 6,
-              strokeOpacity: 0.9,
-              geodesic: true,
-              zIndex: 10,
-            }}
+            options={dashedLineOptions('#111827', { geodesic: true, zIndex: 10 })}
           />
         )}
 
@@ -1011,13 +1009,7 @@ const DeliveryTrackingMap = ({
         {isDeliveryLeg && (
           <LiveRoutePolyline
             path={deliveryRemainingPath}
-            options={{
-              strokeColor: '#EB590E',
-              strokeWeight: 6,
-              strokeOpacity: 0.9,
-              geodesic: true,
-              zIndex: 10,
-            }}
+            options={dashedLineOptions('#111827', { geodesic: true, zIndex: 10 })}
           />
         )}
 

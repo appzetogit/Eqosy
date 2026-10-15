@@ -97,6 +97,19 @@ const getVehicleIcon = (type = {}) => {
   return '/4_Taxi.png';
 };
 
+// A passenger car/bike/auto never seats more than a few people. Admin-entered capacities outside this range
+// (e.g. 351 for a cab) are typos, so fall back to a sensible number for that vehicle type.
+const MAX_REASONABLE_SEATS = 60;
+const resolveVehicleSeats = (vehicle = {}) => {
+  const entered = Number(vehicle.capacity);
+  if (Number.isFinite(entered) && entered >= 1 && entered <= MAX_REASONABLE_SEATS) return Math.floor(entered);
+  const kind = `${vehicle.iconType || ''} ${vehicle.vehicleName || ''}`.toLowerCase();
+  if (/bike|scooter|moto|cycle/.test(kind)) return 1;
+  if (/auto|rickshaw|toto/.test(kind)) return 3;
+  if (/suv|innova|xl|6/.test(kind)) return 6;
+  return 4;
+};
+
 const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   id: vehicle.id || `${pkg.id}:${vehicle.vehicleTypeId || index}`,
   packageId: pkg.id,
@@ -105,7 +118,7 @@ const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   vehicleTypeId: vehicle.vehicleTypeId || '',
   name: vehicle.vehicleName || 'Vehicle',
   desc: `${pkg.packageTypeName || 'Intercity'} · ${pkg.destination || 'Destination'}`,
-  seats: Number(vehicle.capacity || 4) || 4,
+  seats: resolveVehicleSeats(vehicle),
   icon: getVehicleIcon(vehicle),
   vehicleIconUrl: getVehicleIcon(vehicle),
   iconType: vehicle.iconType || vehicle.vehicleName || 'car',
@@ -166,6 +179,7 @@ const IntercityVehicle = () => {
   const [passengers, setPassengers] = useState(1);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [scheduleError, setScheduleError] = useState('');
+  const [passengerError, setPassengerError] = useState('');
   const travelDateInputRef = useRef(null);
   const scheduledAtInputRef = useRef(null);
   const minTravelDate = useMemo(() => getTodayLocalDate(), []);
@@ -202,8 +216,25 @@ const IntercityVehicle = () => {
 
   useEffect(() => {
     if (!selectedVehicle) return;
-    setPassengers((current) => Math.min(Math.max(current, 1), selectedVehicle.seats));
+    if (passengers > selectedVehicle.seats) {
+      setPassengerError(`${selectedVehicle.name} seats only ${selectedVehicle.seats} passenger${selectedVehicle.seats === 1 ? '' : 's'}. We reduced the count to ${selectedVehicle.seats}. Choose a bigger vehicle for more people.`);
+      setPassengers(selectedVehicle.seats);
+    } else if (passengers < 1) {
+      setPassengers(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVehicle]);
+
+  const changePassengers = (delta) => {
+    const limit = selectedVehicle?.seats || 1;
+    const next = passengers + delta;
+    if (next > limit) {
+      setPassengerError(`This vehicle has only ${limit} seat${limit === 1 ? '' : 's'}. You cannot add more than ${limit} passenger${limit === 1 ? '' : 's'}. Choose a bigger vehicle.`);
+      return;
+    }
+    setPassengerError('');
+    setPassengers(Math.max(1, next));
+  };
 
   useEffect(() => {
     if (travelDate < minTravelDate) {
@@ -256,6 +287,11 @@ const IntercityVehicle = () => {
   };
 
   const handleContinue = () => {
+    if (selectedVehicle && passengers > selectedVehicle.seats) {
+      setPassengerError(`Only ${selectedVehicle.seats} passenger${selectedVehicle.seats === 1 ? '' : 's'} can travel in ${selectedVehicle.name}. Reduce passengers or choose a bigger vehicle.`);
+      return;
+    }
+
     if (!selectedVehicle) return;
 
     if (rideMode === 'schedule') {
@@ -480,7 +516,7 @@ const IntercityVehicle = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setPassengers((current) => Math.max(1, current - 1))}
+                onClick={() => changePassengers(-1)}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700"
               >
                 -
@@ -488,13 +524,16 @@ const IntercityVehicle = () => {
               <span className="w-8 text-center text-base font-semibold text-slate-900">{passengers}</span>
               <button
                 type="button"
-                onClick={() => setPassengers((current) => Math.min(selectedVehicle?.seats || 1, current + 1))}
+                onClick={() => changePassengers(1)}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-700"
               >
                 +
               </button>
             </div>
           </div>
+          {passengerError ? (
+            <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-600" role="alert">{passengerError}</p>
+          ) : null}
         </section>
 
         <section className="space-y-3">
@@ -526,6 +565,9 @@ const IntercityVehicle = () => {
                     setSelectedVehicleId(vehicle.id);
                     if (passengers > vehicle.seats) {
                       setPassengers(vehicle.seats);
+                      setPassengerError(`${vehicle.name} seats only ${vehicle.seats} passenger${vehicle.seats === 1 ? '' : 's'}. We reduced the count to ${vehicle.seats}.`);
+                    } else {
+                      setPassengerError('');
                     }
                   }}
                   className={`w-full rounded-3xl border p-4 text-left transition ${

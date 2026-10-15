@@ -65,6 +65,7 @@ import {
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import quickSpicyLogo from "@food/assets/eqosy-logo.png";
+import LanguageButton from '../../../../../shared/language/LanguageButton';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -994,7 +995,10 @@ const AdminLayout = () => {
               { label: 'Manage Owners', path: '/taxi/admin/owners', permission: 'owners.view' },
               {
                 label: 'Owner Wallet',
-                subItems: [{ label: 'Withdrawal Requests', path: '/taxi/admin/owners/wallet/withdrawals', permission: 'wallet.view' }],
+                subItems: [
+                  { label: 'Payout Settings', path: '/taxi/admin/owners/payout-settings', permission: 'wallet.view' },
+                  { label: 'Withdrawal Requests', path: '/taxi/admin/owners/wallet/withdrawals', permission: 'wallet.view' },
+                ],
               },
               {
                 label: 'Fleet Management',
@@ -1407,6 +1411,7 @@ const AdminLayout = () => {
             limit: NOTIFICATION_PAGE_SIZE,
             tab: 'all',
             search: '',
+            light: true,
           });
 
           if (!isMounted) return;
@@ -1761,6 +1766,7 @@ const AdminLayout = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <LanguageButton />
             {!isSubadmin && (
               <ModeSwitcher mode={mode} setMode={handleModeChange} />
             )}
@@ -1874,7 +1880,7 @@ const AdminLayout = () => {
                   </div>
 
                   <div className="max-h-[420px] overflow-y-auto p-3">
-                    {notificationsLoading ? (
+                    {notificationsLoading && !(notificationTab === 'ride_requests' && rideRequestFeed.results.length > 0) ? (
                       <div className="flex items-center justify-center px-4 py-12 text-sm font-semibold text-slate-500">
                         Loading notifications...
                       </div>
@@ -1891,7 +1897,7 @@ const AdminLayout = () => {
                               key={item.id || item.requestId}
                               type="button"
                               onClick={() => {
-                                navigate('/taxi/admin/trips');
+                                navigate('/taxi/admin/chat');
                                 setIsNotificationsOpen(false);
                               }}
                               className="relative w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 text-left transition-all hover:border-indigo-200 hover:bg-indigo-50/40"

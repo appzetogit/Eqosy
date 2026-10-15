@@ -13,6 +13,8 @@ const foodSchema = new mongoose.Schema(
         restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodRestaurant', required: true, index: true },
         categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodCategory', index: true },
         categoryName: { type: String, trim: true, default: '' },
+        /** Seeded demo/App Store review data; toggled from Dev Mode. */
+        isDemo: { type: Boolean, default: false, index: true },
         name: { type: String, required: true, trim: true, index: true },
         description: { type: String, trim: true, default: '' },
         price: { type: Number, required: true, min: 0 },

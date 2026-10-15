@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search, User, Wallet } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useParams } from 'react-router-dom';
 
 import AdminPageHeader from '../../components/ui/AdminPageHeader';
@@ -9,10 +10,10 @@ import { adminService } from '../../services/adminService';
 
 const statusPillClass = (status) => {
   const normalized = String(status || '').toLowerCase();
-  if (normalized === 'processed' || normalized === 'approved') {
+  if (normalized === 'processed' || normalized === 'approved' || normalized === 'completed') {
     return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   }
-  if (normalized === 'rejected' || normalized === 'failed') {
+  if (normalized === 'rejected' || normalized === 'failed' || normalized === 'cancelled') {
     return 'bg-red-50 text-red-700 border-red-200';
   }
   return 'bg-amber-50 text-amber-700 border-amber-200';
@@ -26,6 +27,28 @@ const WithdrawalRequestOwnerDetail = () => {
   const [owner, setOwner] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [actingId, setActingId] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const handleAction = async (tx, action) => {
+    if (action === 'approve' && !window.confirm(`Mark ${tx.amount} as paid? Send the money to the owner (${tx.payoutTo}) first.`)) return;
+    let reason = '';
+    if (action === 'reject') {
+      reason = window.prompt(tx.kind === 'bus' ? 'Reason for rejecting this bus payout? The owner can request it again.' : 'Reason for rejecting? The amount will be returned to the owner wallet.') ?? null;
+      if (reason === null) return;
+    }
+    setActingId(tx.id);
+    try {
+      if (action === 'approve') await adminService.approveOwnerWithdrawal(tx.id);
+      else await adminService.rejectOwnerWithdrawal(tx.id, reason);
+      toast.success(action === 'approve' ? 'Marked as paid' : tx.kind === 'bus' ? 'Bus payout rejected' : 'Rejected, amount returned to wallet');
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err?.message || 'Action failed');
+    } finally {
+      setActingId('');
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,6 +71,11 @@ const WithdrawalRequestOwnerDetail = () => {
             }),
             amount: `${withdrawal.requested_currency || 'INR'} ${(Math.round((Number(withdrawal.amount || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}`,
             status: withdrawal.status,
+            kind: withdrawal.kind || 'wallet',
+            ongoingAmount: Number(withdrawal.ongoingAmount || 0),
+            payoutTo: withdrawal.payment_method === 'upi'
+              ? `UPI ${withdrawal.upiId || '-'}`
+              : `${withdrawal.accountHolderName || '-'} · A/c ${withdrawal.accountNumber || '-'} · ${withdrawal.ifscCode || '-'}`,
           }));
           setHistory(mapped);
         } else {
@@ -64,7 +92,7 @@ const WithdrawalRequestOwnerDetail = () => {
     };
 
     fetchData();
-  }, [id, itemsPerPage]);
+  }, [id, itemsPerPage, reloadKey]);
 
   const filteredHistory = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -144,7 +172,7 @@ const WithdrawalRequestOwnerDetail = () => {
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <p className="text-xs font-semibold text-gray-500">Processed</p>
                 <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {filteredHistory.filter((item) => String(item.status).toLowerCase() === 'processed').length}
+                  {filteredHistory.filter((item) => ['processed', 'completed'].includes(String(item.status).toLowerCase())).length}
                 </p>
               </div>
             </div>
@@ -177,19 +205,20 @@ const WithdrawalRequestOwnerDetail = () => {
                     <th className="py-3 pr-4 text-xs font-semibold text-gray-500">Date</th>
                     <th className="py-3 pr-4 text-xs font-semibold text-gray-500">Reference</th>
                     <th className="py-3 pr-4 text-xs font-semibold text-gray-500">Amount</th>
+                    <th className="py-3 pr-4 text-xs font-semibold text-gray-500">Pay to</th>
                     <th className="py-3 text-right text-xs font-semibold text-gray-500">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={4} className="py-10 text-center">
+                      <td colSpan={5} className="py-10 text-center">
                         <Loader2 className="mx-auto animate-spin text-indigo-600" size={22} />
                       </td>
                     </tr>
                   ) : filteredHistory.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-14 text-center text-sm text-gray-500">
+                      <td colSpan={5} className="py-14 text-center text-sm text-gray-500">
                         No transactions found.
                       </td>
                     </tr>
@@ -207,7 +236,8 @@ const WithdrawalRequestOwnerDetail = () => {
                             .slice(-8)
                             .toUpperCase()}`}</span>
                         </td>
-                        <td className="py-4 pr-4 text-sm font-medium text-gray-900">{tx.amount}</td>
+                        <td className="py-4 pr-4 text-sm font-medium text-gray-900">{tx.amount}{tx.kind === 'bus' ? <span className="ml-2 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">BUS</span> : null}{tx.ongoingAmount > 0 ? <span className="mt-1 block text-[10px] font-bold text-amber-600">incl. {tx.ongoingAmount} from running trips</span> : null}</td>
+                        <td className="py-4 pr-4 text-xs text-gray-600">{tx.payoutTo}</td>
                         <td className="py-4 text-right">
                           <span
                             className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusPillClass(
@@ -216,6 +246,12 @@ const WithdrawalRequestOwnerDetail = () => {
                           >
                             {tx.status}
                           </span>
+                          {String(tx.status).toLowerCase() === 'pending' ? (
+                            <div className="mt-2 flex justify-end gap-2">
+                              <button type="button" disabled={actingId === tx.id} onClick={() => handleAction(tx, 'reject')} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Reject</button>
+                              <button type="button" disabled={actingId === tx.id} onClick={() => handleAction(tx, 'approve')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Mark paid</button>
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     ))

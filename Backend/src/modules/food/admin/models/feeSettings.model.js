@@ -77,6 +77,18 @@ const feeSettingsSchema = new mongoose.Schema(
         surgeTitle: { type: String, default: 'Surge Charge', trim: true },
         gstRate: { type: Number, min: 0, max: 100 },
         codLimit: { type: Number, min: 0 },
+        // Which payment options customers may use at checkout (all open by default).
+        paymentMethods: {
+            type: new mongoose.Schema(
+                {
+                    cash: { type: Boolean, default: true },
+                    online: { type: Boolean, default: true },
+                    wallet: { type: Boolean, default: true }
+                },
+                { _id: false }
+            ),
+            default: () => ({ cash: true, online: true, wallet: true })
+        },
         isActive: { type: Boolean, default: true, index: true }
     },
     { collection: 'food_fee_settings', timestamps: true }

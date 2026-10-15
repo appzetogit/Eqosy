@@ -11,6 +11,8 @@ import { FoodItem } from '../../admin/models/food.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { haversineKm } from './order.helpers.js';
+import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
+import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
 function extractCoords(addressLike) {
   const coords = addressLike?.location?.coordinates;
   if (!Array.isArray(coords) || coords.length !== 2) return null;
@@ -94,6 +96,9 @@ export async function calculateOrderPricing(userId, dto) {
     .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
+
+  // Dev Mode: move an out-of-zone delivery address next to the restaurant (no-op unless the bypass is on).
+  await applyDemoLocationBypass(dto, restaurant);
 
   try {
     const { FoodRestaurantOutletTimings } = await import('../../restaurant/models/outletTimings.model.js');
@@ -408,6 +413,12 @@ export async function calculateOrderPricing(userId, dto) {
       couponCode: appliedCoupon?.code || codeRaw || null,
       appliedCoupon,
       codLimit: feeSettings?.codLimit ?? null,
+      // Checkout options the admin has left open (online also needs working Razorpay keys).
+      paymentMethods: {
+        cash: feeSettings?.paymentMethods?.cash !== false,
+        razorpay: feeSettings?.paymentMethods?.online !== false && isRazorpayConfigured(),
+        wallet: feeSettings?.paymentMethods?.wallet !== false,
+      },
     },
   };
 }

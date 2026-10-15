@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import BusCancellationPolicy from './BusCancellationPolicy';
 import {
   ArrowLeft,
   Armchair,
@@ -260,12 +261,7 @@ const BusPreview = () => {
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{bus.boardingPolicy}</p>
               </div>
             ) : null}
-            {bus.cancellationPolicy ? (
-              <div className="rounded-[20px] border border-slate-100 bg-slate-50 px-4 py-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Cancellation Policy</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{bus.cancellationPolicy}</p>
-              </div>
-            ) : null}
+            <BusCancellationPolicy bus={bus} />
             {bus.luggagePolicy ? (
               <div className="rounded-[20px] border border-slate-100 bg-slate-50 px-4 py-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Luggage Policy</p>

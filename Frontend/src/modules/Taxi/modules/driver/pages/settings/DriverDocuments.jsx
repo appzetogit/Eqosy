@@ -232,7 +232,7 @@ const DriverDocuments = () => {
   return (
     <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
       <header className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate(`${routePrefix}/profile`)} className="w-9 h-9 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-600 hover:text-slate-900 active:scale-95 transition-all">
+        <button onClick={() => navigate(routePrefix === "/taxi/owner" ? "/taxi/owner/home" : `${routePrefix}/profile`)} className="w-9 h-9 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-600 hover:text-slate-900 active:scale-95 transition-all">
           <ArrowLeft size={18} strokeWidth={2.5} />
         </button>
         <div>

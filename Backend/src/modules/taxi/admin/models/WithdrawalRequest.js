@@ -5,6 +5,10 @@ const withdrawalRequestSchema = new mongoose.Schema({
   driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiDriver' },
   owner_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiOwner' },
   amount: Number,
+  // 'wallet' = normal wallet withdrawal; 'bus' = payout of completed-trip bus earnings (no wallet money involved)
+  kind: { type: String, enum: ['wallet', 'bus'], default: 'wallet' },
+  ongoingAmount: { type: Number, default: 0 },
+  busBookings: [{ _id: false, bookingId: mongoose.Schema.Types.ObjectId, amount: Number }],
   payment_method: String,
   upiQrCode: String,
   upiId: String,

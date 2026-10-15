@@ -171,40 +171,15 @@ export async function listPublicCategories(query = {}) {
 
     const search = typeof query.search === 'string' ? query.search.trim() : '';
     const zoneIdRaw = typeof query.zoneId === 'string' ? query.zoneId.trim() : '';
-    const restaurantFilter = { status: 'approved' };
-    if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
-        restaurantFilter.zoneId = new mongoose.Types.ObjectId(zoneIdRaw);
-    }
     const publicSection = query.isRestaurant === 'false' ? 'grocery' : 'food';
-    restaurantFilter.isRestaurant = publicSection === 'grocery' ? false : { $ne: false };
 
-    const eligibleRestaurantIds = await FoodRestaurant.distinct('_id', restaurantFilter);
-
-    const approvedCategoryIds = eligibleRestaurantIds.length
-        ? await FoodItem.distinct('categoryId', {
-            approvalStatus: 'approved',
-            isActive: { $ne: false },
-            isAvailable: { $ne: false },
-            categoryId: { $ne: null },
-            restaurantId: { $in: eligibleRestaurantIds }
-        })
-        : [];
-
+    // Only global (admin-managed or "made global") categories are public. A category owned by a
+    // single restaurant/store is private to it, even when approved, until an admin makes it global.
     const filter = {
         isActive: true,
         $and: [
             { $or: APPROVED_CATEGORY_FILTER },
-            {
-                $or: [
-                    { restaurantId: null },
-                    { restaurantId: { $exists: false } },
-                    ...(approvedCategoryIds.length ? [{ _id: { $in: approvedCategoryIds } }] : []),
-                    // Approved categories added by grocery stores show up even before the first item is added
-                    ...(publicSection === 'grocery' && eligibleRestaurantIds.length
-                        ? [{ restaurantId: { $in: eligibleRestaurantIds } }]
-                        : [])
-                ]
-            }
+            { $or: GLOBAL_CATEGORY_FILTER }
         ]
     };
 
@@ -323,7 +298,10 @@ export async function updateRestaurantCategory(restaurantId, id, body = {}) {
     doc.approvedAt = undefined;
     doc.rejectedAt = undefined;
 
+    const nameChanged = doc.isModified('name');
     await doc.save();
+    // Foods keep a copy of the category name; keep it in sync after a rename.
+    if (nameChanged) await FoodItem.updateMany({ categoryId: doc._id }, { $set: { categoryName: doc.name } });
     await invalidateCategoryCache();
     return doc.toObject();
 }

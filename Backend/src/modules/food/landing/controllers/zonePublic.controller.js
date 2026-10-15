@@ -1,4 +1,5 @@
 import { FoodZone } from '../../admin/models/zone.model.js';
+import { getDemoBypass } from '../../admin/services/demoMode.service.js';
 
 const toFinite = (v) => {
     const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -29,6 +30,16 @@ export const detectZonePublicController = async (req, res, next) => {
         const lng = toFinite(req.query.lng);
         if (lat === null || lng === null) {
             return res.status(400).json({ success: false, message: 'lat and lng are required' });
+        }
+
+        // Dev Mode location bypass: every location resolves to the demo (Indore) zone.
+        const bypass = await getDemoBypass();
+        if (bypass.enabled && bypass.zone) {
+            return res.status(200).json({
+                success: true,
+                message: 'Zone detected',
+                data: { status: 'IN_SERVICE', zoneId: bypass.zone._id, zone: bypass.zone }
+            });
         }
 
         const zones = await FoodZone.find({ isActive: true }).lean();

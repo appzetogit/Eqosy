@@ -663,6 +663,9 @@ function showForegroundNotification(payload = {}) {
 
   playPushSound(payload);
 
+      // Status updates must not make the OS notification sound.
+      const allowOsSound = isPushRingEvent(payload);
+
       // Force system notification even when the tab is in focus
       const resolveClickTarget = () => {
         const defaultLink = normalizeModuleFromPath() === 'delivery' || payload?.data?.type === 'new_order' || payload?.data?.role === 'delivery' ? '/food/delivery/feed' : '/food/restaurant';
@@ -688,8 +691,9 @@ function showForegroundNotification(payload = {}) {
                   image,
                   tag: notificationKey || undefined,
                   data: payload?.data || {},
-                  requireInteraction: true,
-                  vibrate: [200, 100, 200, 100, 300]
+                  requireInteraction: allowOsSound,
+                  silent: !allowOsSound,
+                  ...(allowOsSound ? { vibrate: [200, 100, 200, 100, 300] } : {}),
                 });
               } else {
                 const notif = new Notification(title, {
@@ -697,7 +701,8 @@ function showForegroundNotification(payload = {}) {
                   icon: "/eqosy-logo.png",
                   image,
                   tag: notificationKey || undefined,
-                  requireInteraction: true
+                  requireInteraction: allowOsSound,
+                  silent: !allowOsSound
                 });
                 notif.onclick = (event) => {
                   event.preventDefault();
@@ -711,7 +716,8 @@ function showForegroundNotification(payload = {}) {
                 icon: "/eqosy-logo.png",
                 image,
                 tag: notificationKey || undefined,
-                requireInteraction: true
+                requireInteraction: allowOsSound,
+                silent: !allowOsSound
               });
               notif.onclick = (event) => {
                 event.preventDefault();
@@ -725,6 +731,7 @@ function showForegroundNotification(payload = {}) {
               icon: "/eqosy-logo.png",
               image,
               tag: notificationKey || undefined,
+              silent: !allowOsSound,
             });
             notif.onclick = (event) => {
               event.preventDefault();

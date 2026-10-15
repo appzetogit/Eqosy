@@ -10,7 +10,11 @@ const addonPayloadSchema = z.object({
 });
 
 const listSchema = z.object({
-    includeDeleted: z.coerce.boolean().optional(),
+    // z.coerce.boolean() turns the string "false" into true, so parse it explicitly.
+    includeDeleted: z.preprocess(
+        (v) => (typeof v === 'string' ? v.trim().toLowerCase() === 'true' : v),
+        z.boolean().optional()
+    ),
     status: z.enum(['pending', 'approved', 'rejected']).optional(),
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),

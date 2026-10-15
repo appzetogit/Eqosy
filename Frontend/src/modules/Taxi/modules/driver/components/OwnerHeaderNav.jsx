@@ -47,7 +47,7 @@ const OwnerHeaderNav = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-blue-900/10 bg-slate-900 text-white shadow-md">
+    <header className="sticky top-0 z-40 hidden w-full md:block border-b border-blue-900/10 bg-slate-900 text-white shadow-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand & Badge */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/taxi/owner/dashboard')}>

@@ -68,21 +68,16 @@ const buildServiceCategoryFilter = (serviceType = 'ride') => {
   }
 
   if (norm === 'parcel' || norm === 'delivery') {
-    const deliveryKeys = [
-      'delivery', 'Delivery', 'DELIVERY',
-      'parcel', 'Parcel', 'PARCEL',
-      'both', 'Both', 'BOTH',
-      'taxi,delivery', 'delivery,taxi',
-      'Taxi,Delivery', 'Delivery,Taxi',
-      'Taxi, Delivery', 'Delivery, Taxi',
-    ];
+    // Case-insensitive, substring-style match so values like "Delivery Partner", "parcel_delivery"
+    // or "Taxi, Delivery" all qualify a captain for parcel requests.
+    const deliveryKeys = [/delivery/i, /parcel/i, /^both$/i];
     return {
       $or: [
         { serviceCategories: { $in: deliveryKeys } },
         { service_categories: { $in: deliveryKeys } },
-        { registerFor: { $in: ['delivery', 'Delivery', 'DELIVERY', 'both', 'Both', 'BOTH'] } },
+        { registerFor: { $in: deliveryKeys } },
         { 'onboarding.activeServices': { $in: deliveryKeys } },
-        { 'onboarding.registerFor': { $in: ['delivery', 'Delivery', 'both', 'Both', 'BOTH'] } },
+        { 'onboarding.registerFor': { $in: deliveryKeys } },
       ],
     };
   }

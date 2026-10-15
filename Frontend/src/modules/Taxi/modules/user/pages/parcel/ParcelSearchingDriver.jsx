@@ -676,6 +676,7 @@ const ParcelSearchingDriver = () => {
           senderMobile: routeState.parcel?.senderMobile || routeState.senderMobile || '',
           receiverName: routeState.parcel?.receiverName || routeState.receiverName || '',
           receiverMobile: routeState.parcel?.receiverMobile || routeState.receiverMobile || '',
+          payer: routeState.parcel?.payer || routeState.payer || 'sender',
           goodsTypeFor: preferredVehicleType || routeState.parcel?.goodsTypeFor || 'both',
           deliveryCategory: routeState.parcel?.deliveryCategory || routeState.deliveryCategory || '',
         };
