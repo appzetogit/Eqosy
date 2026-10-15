@@ -9,6 +9,55 @@ const toNum = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback
 }
 
+const round2 = (n) => Math.round(n * 100) / 100
+
+/**
+ * Mirrors Backend order-pricing.service.js (calculateOrderPricing) so the admin sees
+ * exactly how a customer's delivery fee is derived from the configured slabs.
+ */
+const previewDeliveryFee = (distanceKm, rules) => {
+  const d = toNum(distanceKm, NaN)
+  if (!Number.isFinite(d) || d < 0) return null
+  const active = rules.filter((r) => r.status !== false).sort((a, b) => toNum(a.minDistance) - toNum(b.minDistance))
+  if (!active.length) return { error: "No active slab configured" }
+
+  const maxes = active.map((r) => r.maxDistance).filter((m) => m != null && Number.isFinite(Number(m))).map(Number)
+  if (maxes.length && d > Math.max(...maxes)) {
+    return { error: `Beyond max delivery distance (${Math.max(...maxes)} km) - delivery not available` }
+  }
+
+  const matched =
+    active.find((r) => d >= toNum(r.minDistance) && (r.maxDistance == null || d < toNum(r.maxDistance))) ||
+    [...active].reverse().find((r) => d >= toNum(r.minDistance)) ||
+    active[0]
+
+  const baseSlab = active.find((r) => toNum(r.minDistance) <= 0) || null
+  if (toNum(matched.minDistance) <= 0) {
+    const fee = round2(toNum(matched.basePayout))
+    return {
+      fee,
+      steps: [`${d} km falls in base slab (0 - ${matched.maxDistance == null ? "unlimited" : `${toNum(matched.maxDistance)} km`})`, `Fee = base price Rs.${fee}`],
+    }
+  }
+
+  const baseFlat = baseSlab ? round2(toNum(baseSlab.basePayout)) : 0
+  const baseMax = baseSlab && baseSlab.maxDistance != null ? toNum(baseSlab.maxDistance) : null
+  const perKm = toNum(matched.commissionPerKm)
+  const extraKm = baseMax == null ? d : Math.max(0, d - baseMax)
+  const extra = round2(perKm * extraKm)
+  const fee = round2(baseFlat + extra)
+  return {
+    fee,
+    steps: [
+      `${d} km falls in slab ${toNum(matched.minDistance)} - ${matched.maxDistance == null ? "unlimited" : `${toNum(matched.maxDistance)} km`}`,
+      `Base price (covers first ${baseMax ?? 0} km) = Rs.${baseFlat}`,
+      `Extra distance = ${d} - ${baseMax ?? 0} = ${round2(extraKm)} km`,
+      `Extra charge = ${round2(extraKm)} km x Rs.${perKm}/km = Rs.${extra}`,
+      `Fee = Rs.${baseFlat} + Rs.${extra} = Rs.${fee}`,
+    ],
+  }
+}
+
 export default function FeeSettings() {
   const [feeSettings, setFeeSettings] = useState({
     deliveryFeeComputationMode: "distance_order_value",
@@ -48,6 +97,8 @@ export default function FeeSettings() {
     commissionPerKm: "0",
     adminCommissionPercent: "0",
   })
+
+  const [previewDistance, setPreviewDistance] = useState("0.5")
 
   const [zoneSurges, setZoneSurges] = useState([])
   const [savingZoneId, setSavingZoneId] = useState("")
@@ -520,6 +571,58 @@ export default function FeeSettings() {
                     {savingRule ? "Adding..." : "Add Range"}
                   </Button>
                 </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <h4 className="text-sm font-semibold text-emerald-900 mb-1">Example Calculation (live preview)</h4>
+                <p className="text-xs text-emerald-800 mb-3">
+                  Same logic the customer app uses. Base slab = flat base price. Beyond the base slab = base price + (extra km x per km charge of the matching slab).
+                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <label className="text-sm text-slate-700">Try distance (km):</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={previewDistance}
+                    onChange={(e) => setPreviewDistance(e.target.value)}
+                    className="w-28 px-2 py-1 border border-slate-300 rounded-md text-sm bg-white"
+                  />
+                </div>
+                {(() => {
+                  const result = previewDeliveryFee(previewDistance, sortedDistanceRules)
+                  if (!result) return <p className="text-sm text-slate-500">Enter a valid distance.</p>
+                  if (result.error) return <p className="text-sm text-red-600">{result.error}</p>
+                  return (
+                    <div className="text-sm text-slate-800 space-y-0.5">
+                      {result.steps.map((s) => <div key={s}>{s}</div>)}
+                      <div className="font-semibold text-emerald-700 pt-1">Customer delivery fee: Rs.{result.fee}</div>
+                    </div>
+                  )
+                })()}
+                {sortedDistanceRules.length > 0 && (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="text-xs bg-white border border-emerald-200 rounded">
+                      <thead>
+                        <tr className="bg-emerald-100 text-emerald-900">
+                          <th className="px-3 py-1.5 text-left">Distance</th>
+                          <th className="px-3 py-1.5 text-left">Delivery fee</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[0.5, 1, 2, 3, 5, 8, 10].map((km) => {
+                          const r = previewDeliveryFee(km, sortedDistanceRules)
+                          return (
+                            <tr key={km} className="border-t border-emerald-100">
+                              <td className="px-3 py-1.5">{km} km</td>
+                              <td className="px-3 py-1.5">{r?.error ? <span className="text-red-600">Not available</span> : `Rs.${r?.fee}`}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               <div className="mt-8 border-t border-slate-200 pt-6">

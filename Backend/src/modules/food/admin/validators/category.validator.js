@@ -16,6 +16,8 @@ const listSchema = z.object({
     zoneId: z.string().optional(),
     isApproved: booleanQuerySchema.optional(),
     approvalStatus: z.enum(['pending', 'approved', 'rejected']).optional(),
+    globalOnly: booleanQuerySchema.optional(),
+    sort: z.enum(['name', 'alphabetical']).optional(),
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(1000).optional()
 });

@@ -340,6 +340,8 @@ export default function AddressSelectorPage() {
         address: displayAddress,
         formattedAddress: displayAddress,
         label: suggestion.title,
+        // Searched place is a manual choice: stop the live GPS watch from overwriting it.
+        isManual: true,
       }
 
       await persistActiveLocation(locationData, "current")

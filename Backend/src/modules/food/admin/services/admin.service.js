@@ -2985,6 +2985,14 @@ export async function getCategories(query, adminContext = null) {
         filter.$and = [...(filter.$and || []), categorySectionFilter(query.section)];
     }
 
+    // globalOnly=true => hide restaurant/store-owned categories; only admin/global ones are returned.
+    const globalOnly = query.globalOnly === true || query.globalOnly === 'true' || query.globalOnly === '1';
+    if (globalOnly) {
+        filter.$and = [...(filter.$and || []), {
+            $or: [{ restaurantId: { $exists: false } }, { restaurantId: null }]
+        }];
+    }
+
     // Optional zone filter for admin list.
     // - zoneId=global => only global categories (zoneId missing)
     // - zoneId=<ObjectId> => only categories bound to that zone or restaurants in that zone
@@ -3056,12 +3064,14 @@ export async function getCategories(query, adminContext = null) {
         }
     }
 
+    const alphabetical = query.sort === 'name' || query.sort === 'alphabetical';
+    let categoryQuery = FoodCategory.find(filter);
+    categoryQuery = alphabetical
+        ? categoryQuery.collation({ locale: 'en', strength: 2 }).sort({ name: 1 })
+        : categoryQuery.sort({ sortOrder: 1, createdAt: -1 });
+
     const [list, total] = await Promise.all([
-        FoodCategory.find(filter)
-            .sort({ sortOrder: 1, createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean(),
+        categoryQuery.skip(skip).limit(limit).lean(),
         FoodCategory.countDocuments(filter)
     ]);
 

@@ -385,12 +385,13 @@ export default function FoodsList() {
 
     const loadCategoryOptions = async () => {
       try {
-        const res = await adminAPI.getCategories({ limit: 1000 })
+        const res = await adminAPI.getCategories({ limit: 1000, globalOnly: true, sort: "name" })
         const list = res?.data?.data?.categories || []
         const options = Array.isArray(list)
           ? list
             .map((c) => ({ id: String(c.id || c._id || c.name), name: String(c.name || "").trim(), section: c.section === "grocery" ? "grocery" : "food" }))
             .filter((c) => c.name)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
           : []
         if (!cancelled) setCategoryOptions(options)
       } catch (error) {
