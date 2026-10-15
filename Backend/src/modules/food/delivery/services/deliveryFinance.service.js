@@ -8,6 +8,8 @@ import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransa
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
+import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
+import { assertVerifiedForPayout } from '../../../../core/payments/payoutAccount.service.js';
 
 /**
  * Enhanced wallet fetch for delivery partners.
@@ -170,7 +172,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
  * Submits a new withdrawal request for a delivery partner.
  */
 export const requestDeliveryWithdrawal = async (deliveryPartnerId, payload) => {
-    const { amount, bankDetails, paymentMethod = 'bank_transfer' } = payload;
+    const { amount, paymentMethod = 'bank_transfer' } = payload;
 
     if (!amount || amount < 1) throw new ValidationError('Invalid amount');
 
@@ -185,11 +187,25 @@ export const requestDeliveryWithdrawal = async (deliveryPartnerId, payload) => {
     const partner = await FoodDeliveryPartner.findById(deliveryPartnerId).lean();
     if (!partner) throw new ValidationError('Delivery partner not found');
 
+    // Money only goes to the account that passed the ownership check. A bank override sent in the request is ignored,
+    // otherwise someone could point a payout at an unverified account.
+    if (isRazorpayxConfigured()) {
+        try {
+            assertVerifiedForPayout(partner.payoutVerification, {
+                accountNumber: partner.bankAccountNumber,
+                ifsc: partner.bankIfscCode,
+                upiId: partner.upiId
+            });
+        } catch (err) {
+            throw new ValidationError(err.message);
+        }
+    }
+
     const withdrawal = await FoodDeliveryWithdrawal.create({
         deliveryPartnerId,
         amount,
         paymentMethod,
-        bankDetails: bankDetails || {
+        bankDetails: {
             accountNumber: partner.bankAccountNumber,
             ifscCode: partner.bankIfscCode,
             bankName: partner.bankName,

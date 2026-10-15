@@ -43,6 +43,8 @@ export const ProfileDetailsV2 = () => {
     upiId: "",
     upiQrCode: null
   })
+  // Result of the bank ownership check: { status, registeredName, failureReason }
+  const [bankVerification, setBankVerification] = useState(null)
   const [upiQrFile, setUpiQrFile] = useState(null)
   const [upiQrPreview, setUpiQrPreview] = useState(null)
   const upiQrInputRef = useRef(null)
@@ -109,6 +111,7 @@ export const ProfileDetailsV2 = () => {
             upiId: profileData?.documents?.bankDetails?.upiId || "",
             upiQrCode: profileData?.documents?.bankDetails?.upiQrCode || null
           })
+          setBankVerification(profileData?.payoutVerification || null)
         } else {
           throw new Error("Profile fetch failed")
         }
@@ -380,8 +383,18 @@ export const ProfileDetailsV2 = () => {
         formData.append("upiQrCode", upiQrFile)
       }
 
-      await deliveryAPI.updateBankDetailsMultipart(formData)
-      toast.success("Bank details updated")
+      const saveResponse = await deliveryAPI.updateBankDetailsMultipart(formData)
+      const verification = saveResponse?.data?.data?.verification
+      if (verification) setBankVerification(verification)
+      if (verification?.status === "verified") {
+        toast.success(`Bank account verified${verification.registeredName ? ` (${verification.registeredName})` : ""}`)
+      } else if (verification?.status === "name_mismatch" || verification?.status === "failed") {
+        toast.error(verification.failureReason || "Bank details saved, but verification failed")
+      } else if (verification?.status === "pending") {
+        toast.info("Bank details saved. Verification is in progress")
+      } else {
+        toast.success("Bank details updated")
+      }
       setShowBankDetailsPopup(false)
       setUpiQrFile(null)
       setUpiQrPreview(null)
@@ -596,6 +609,27 @@ export const ProfileDetailsV2 = () => {
                              {bankDetails.accountNumber ? `•••• •••• •••• ${bankDetails.accountNumber.slice(-4)}` : "XXXX XXXX XXXX XXXX"}
                           </p>
                           <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-2">{bankDetails.accountHolderName || "Account Holder"}</p>
+                          {(bankDetails.accountNumber || bankDetails.upiId) && (
+                            <p
+                              className={`text-[10px] font-black uppercase tracking-widest mt-2 ${
+                                bankVerification?.status === "verified"
+                                  ? "text-emerald-400"
+                                  : bankVerification?.status === "pending"
+                                    ? "text-amber-300"
+                                    : "text-red-400"
+                              }`}
+                            >
+                              {bankVerification?.status === "verified"
+                                ? `Verified${bankVerification.registeredName ? ` · ${bankVerification.registeredName}` : ""}`
+                                : bankVerification?.status === "pending"
+                                  ? "Verification in progress"
+                                  : bankVerification?.status === "name_mismatch"
+                                    ? "Name does not match your profile"
+                                    : bankVerification?.status === "failed"
+                                      ? "Verification failed"
+                                      : "Not verified"}
+                            </p>
+                          )}
                        </div>
                        <div className="text-right">
                           <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">IFSC Code</p>

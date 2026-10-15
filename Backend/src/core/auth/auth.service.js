@@ -760,6 +760,12 @@ export const getProfile = async (userId, role) => {
                 }
               : null,
         },
+        payoutVerification: {
+          status: partner.payoutVerification?.status || 'unverified',
+          registeredName: partner.payoutVerification?.registeredName || '',
+          maskedAccount: partner.payoutVerification?.maskedAccount || '',
+          failureReason: partner.payoutVerification?.failureReason || '',
+        },
         location:
           partner.address || partner.city || partner.state
             ? {

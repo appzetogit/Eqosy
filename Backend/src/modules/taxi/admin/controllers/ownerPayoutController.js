@@ -4,6 +4,8 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { Owner } from '../models/Owner.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { OwnerWalletTransaction } from '../models/OwnerWalletTransaction.js';
+import { createTaxiPayout } from '../../services/withdrawalPayout.service.js';
+import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
 import {
   applyOwnerWalletAdjustment,
   finishBusPayoutRequest,
@@ -73,6 +75,25 @@ export const listOwnerWithdrawalsController = asyncHandler(async (req, res) => {
 });
 
 export const approveOwnerWithdrawalController = asyncHandler(async (req, res) => {
+  // Auto payout (RazorpayX): create the payout and leave the request 'pending'; the payout webhook completes it
+  // (and does the paid bookkeeping) once the bank confirms.
+  if (isRazorpayxConfigured()) {
+    const pending = await WithdrawalRequest.findOne({
+      _id: req.params.requestId,
+      owner_id: { $ne: null },
+      status: 'pending',
+    }).lean();
+    if (!pending) throw new ApiError(409, 'Request not found or already processed');
+    const payout = await createTaxiPayout(pending);
+    const started = await WithdrawalRequest.findOneAndUpdate(
+      { _id: pending._id, status: 'pending' },
+      { $set: { payout } },
+      { new: true },
+    ).lean();
+    if (!started) throw new ApiError(409, 'Request was already processed');
+    return ok(res, serializeRequest(started), 'Payout started. It will be marked paid once the bank confirms.');
+  }
+
   const request = await WithdrawalRequest.findOneAndUpdate(
     { _id: req.params.requestId, owner_id: { $ne: null }, status: 'pending' },
     { $set: { status: 'completed' } },
@@ -93,7 +114,13 @@ export const approveOwnerWithdrawalController = asyncHandler(async (req, res) =>
 
 export const rejectOwnerWithdrawalController = asyncHandler(async (req, res) => {
   const request = await WithdrawalRequest.findOneAndUpdate(
-    { _id: req.params.requestId, owner_id: { $ne: null }, status: 'pending' },
+    {
+      _id: req.params.requestId,
+      owner_id: { $ne: null },
+      status: 'pending',
+      // never refund while a RazorpayX payout is in flight or done
+      'payout.status': { $nin: ['queued', 'pending', 'processing', 'processed'] },
+    },
     { $set: { status: 'cancelled' } },
     { new: true },
   ).lean();

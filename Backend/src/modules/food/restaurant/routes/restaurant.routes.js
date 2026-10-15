@@ -35,6 +35,7 @@ import {
 } from '../controllers/supportTicket.controller.js';
 import {
     createWithdrawalRequestController,
+    reverifyRestaurantBankDetailsController,
     listMyWithdrawalsController
 } from '../controllers/withdrawal.controller.js';
 import {
@@ -125,6 +126,7 @@ router.get('/finance', authMiddleware, requireRestaurant, getRestaurantFinanceCo
 router.get('/reviews', authMiddleware, requireRestaurant, getRestaurantReviewsController);
 router.post('/withdraw', authMiddleware, requireRestaurant, createWithdrawalRequestController);
 router.get('/withdrawals', authMiddleware, requireRestaurant, listMyWithdrawalsController);
+router.post('/bank-details/verify', authMiddleware, requireRestaurant, reverifyRestaurantBankDetailsController);
 router.post(
     '/profile/profile-image',
     authMiddleware,

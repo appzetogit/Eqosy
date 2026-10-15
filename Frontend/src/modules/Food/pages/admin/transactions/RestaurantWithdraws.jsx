@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { exportTransactionsToExcel, exportTransactionsToPDF } from "@food/components/admin/transactions/transactionsExportUtils"
 import { adminAPI } from "@food/api"
 import { toast } from "sonner"
+import PayoutStatusNote from "@food/components/admin/PayoutStatusNote"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -467,6 +468,7 @@ export default function RestaurantWithdraws() {
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(withdraw.status)}`}>
                             {withdraw.status}
                           </span>
+                          <PayoutStatusNote verification={withdraw.accountVerification} payout={withdraw.payout} />
                         </td>}
                         {visibleColumns.actions && <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">

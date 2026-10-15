@@ -9,6 +9,35 @@ import { FoodItem } from '../../admin/models/food.model.js';
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
 import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
 import { getDemoBypass } from '../../admin/services/demoMode.service.js';
+import { verifyPayoutAccount } from '../../../../core/payments/payoutAccount.service.js';
+
+/**
+ * Safety check for restaurant bank/UPI details: the bank-registered account-holder name must match one of the
+ * restaurant's identity names (owner / PAN / GST legal / business name). Result is stored on the restaurant.
+ */
+export const verifyRestaurantPayoutAccount = async (restaurantId) => {
+    const r = await FoodRestaurant.findById(restaurantId)
+        .select('ownerName nameOnPan gstLegalName restaurantName ownerPhone ownerEmail accountNumber ifscCode upiId')
+        .lean();
+    if (!r) return null;
+    return verifyPayoutAccount({
+        Model: FoodRestaurant,
+        docId: r._id,
+        ownerType: 'restaurant',
+        identityNames: [r.ownerName, r.nameOnPan, r.gstLegalName, r.restaurantName],
+        phone: r.ownerPhone,
+        email: r.ownerEmail,
+        input: { accountNumber: r.accountNumber, ifsc: r.ifscCode, upiId: r.upiId },
+    });
+};
+
+const summarizePayoutVerification = (v) => ({
+    status: v?.status || 'unverified',
+    registeredName: v?.registeredName || '',
+    maskedAccount: v?.maskedAccount || '',
+    failureReason: v?.failureReason || '',
+    verifiedAt: v?.verifiedAt || null,
+});
 
 
 const normalizeName = (value) =>
@@ -171,6 +200,7 @@ const toRestaurantProfile = (doc) => {
         accountType: doc.accountType || '',
         upiId: doc.upiId || '',
         upiQrImage: doc.upiQrImage ? { url: doc.upiQrImage } : null,
+        payoutVerification: summarizePayoutVerification(doc.payoutVerification),
         pureVegRestaurant: Boolean(doc.pureVegRestaurant),
         profileImage: doc.profileImage ? { url: doc.profileImage } : null,
         menuImages,
@@ -564,6 +594,11 @@ export const registerRestaurant = async (payload, files) => {
             console.error('Failed to notify admins of new restaurant registration:', e);
         }
 
+        // Registration collects bank details too: verify in the background (result is stored on the restaurant).
+        if (accountNumber || ifscCode) {
+            void verifyRestaurantPayoutAccount(restaurant._id);
+        }
+
         return restaurant.toObject();
     } catch (err) {
         // Handle uniqueness conflicts deterministically (race-safe).
@@ -599,6 +634,7 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
                 'accountType',
                 'upiId',
                 'upiQrImage',
+                'payoutVerification',
                 'pureVegRestaurant',
                 'pricingAttributes',
                 'profileImage',
@@ -1250,6 +1286,7 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
                     'accountType',
                     'upiId',
                     'upiQrImage',
+                    'payoutVerification',
                     'estimatedDeliveryTime',
                     'estimatedDeliveryTimeMinutes',
                     'zoneId'
@@ -1261,6 +1298,13 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
             const restaurantNameForNotification =
                 update.restaurantName || currentRestaurant.restaurantName || doc?.restaurantName;
             void notifyAdminsAboutRestaurantProfileReview(restaurantId, restaurantNameForNotification);
+        }
+
+        // New/changed bank or UPI details -> prove the account belongs to this restaurant before it can be paid.
+        if (['accountNumber', 'ifscCode', 'upiId'].some((k) => update[k] !== undefined)) {
+            await verifyRestaurantPayoutAccount(restaurantId);
+            const fresh = await FoodRestaurant.findById(restaurantId).select('payoutVerification').lean();
+            doc.payoutVerification = fresh?.payoutVerification;
         }
 
         return toRestaurantProfile(doc);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PAYOUT_VERIFICATION_FIELDS } from '../../../../core/payments/payoutAccount.service.js';
 
 const normalizeRatingValue = (value) => {
     const numeric = Number(value);
@@ -109,6 +110,8 @@ const deliveryPartnerSchema = new mongoose.Schema(
         bankName: { type: String },
         upiId: { type: String },
         upiQrCode: { type: String },
+        /** Result of the bank/UPI ownership check (penny drop). Payouts are allowed only when status === 'verified'. */
+        payoutVerification: { type: new mongoose.Schema(PAYOUT_VERIFICATION_FIELDS, { _id: false }), default: () => ({}) },
         /** Seeded demo/App Store review data; toggled from Dev Mode. */
         isDemo: { type: Boolean, default: false, index: true },
         availabilityStatus: {

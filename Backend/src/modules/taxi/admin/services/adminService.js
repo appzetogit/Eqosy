@@ -62,6 +62,8 @@ import {
 } from '../../services/dispatchService.js';
 import { buildRentalTrackingSnapshot, listActiveRentalTrackingBookings } from '../../services/rentalTrackingService.js';
 import { sendEmail } from '../../services/mailService.js';
+import { createTaxiPayout } from '../../services/withdrawalPayout.service.js';
+import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
 import { getActivePaymentGateway, normalizePaymentSettingsPayload } from '../../services/paymentGatewayService.js';
 import { signAccessToken } from '../../services/tokenService.js';
 import {
@@ -4458,6 +4460,37 @@ export const getDriverWithdrawalContextByRequestId = async ({ requestId, page = 
 };
 
 export const approveDriverWithdrawalRequest = async (requestId, adminId = null) => {
+  // Auto payout (RazorpayX): create the payout and leave the request 'pending'; the payout webhook completes it.
+  if (isRazorpayxConfigured()) {
+    const pendingRequest = await WithdrawalRequest.findById(requestId).lean();
+    if (!pendingRequest || !pendingRequest.driver_id) {
+      throw new ApiError(404, 'Withdrawal request not found');
+    }
+    if (pendingRequest.status !== 'pending') {
+      throw new ApiError(400, 'Only pending withdrawal requests can be approved');
+    }
+    const payout = await createTaxiPayout(pendingRequest);
+    const started = await WithdrawalRequest.findOneAndUpdate(
+      { _id: requestId, status: 'pending' },
+      { $set: { payout } },
+      { new: true },
+    ).lean();
+    if (!started) throw new ApiError(409, 'Request was already processed');
+    return {
+      request: {
+        _id: started._id,
+        driver_id: started.driver_id,
+        amount: Math.round(Number(started.amount || 0) * 100) / 100,
+        payment_method: started.payment_method || '',
+        status: started.status,
+        payout: started.payout,
+        createdAt: started.createdAt,
+        updatedAt: started.updatedAt,
+      },
+      message: 'Payout started. The request will be marked completed once the bank confirms.',
+    };
+  }
+
   const session = await mongoose.startSession();
 
   try {
@@ -4536,6 +4569,10 @@ export const rejectDriverWithdrawalRequest = async (requestId) => {
 
   if (request.status !== 'pending') {
     throw new ApiError(400, 'Only pending withdrawal requests can be rejected');
+  }
+
+  if (['queued', 'pending', 'processing', 'processed'].includes(request.payout?.status)) {
+    throw new ApiError(409, 'A payout for this request is in progress, so it cannot be rejected now');
   }
 
   request.status = 'cancelled';

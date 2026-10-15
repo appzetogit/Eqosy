@@ -31,6 +31,18 @@ const foodRestaurantWithdrawalSchema = new mongoose.Schema({
         upiQrImage: String,
         upiQrCode: String
     },
+    /** Automatic RazorpayX payout state (set when the admin approves). */
+    payout: {
+        razorpayPayoutId: { type: String, index: true },
+        status: { type: String, enum: ['queued', 'pending', 'processing', 'processed', 'failed', 'reversed', 'cancelled', 'rejected'] },
+        mode: String,
+        utr: String,
+        attempt: Number,
+        verifiedName: String,
+        failureReason: String,
+        initiatedAt: Date,
+        completedAt: Date
+    },
     adminNote: String,
     rejectionReason: String,
     transactionId: String, // Final bank transaction reference from admin

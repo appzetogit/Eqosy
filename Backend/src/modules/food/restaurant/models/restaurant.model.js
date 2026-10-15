@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { PAYOUT_VERIFICATION_FIELDS } from "../../../../core/payments/payoutAccount.service.js";
 
 const normalizeRatingValue = (value) => {
   const numeric = Number(value);
@@ -188,6 +189,11 @@ const restaurantSchema = new mongoose.Schema(
     upiQrImage: {
       type: String,
       trim: true,
+    },
+    /** Result of the bank/UPI ownership check (penny drop). Payouts are allowed only when status === 'verified'. */
+    payoutVerification: {
+      type: new mongoose.Schema(PAYOUT_VERIFICATION_FIELDS, { _id: false }),
+      default: () => ({}),
     },
     menuImages: {
       type: [String],

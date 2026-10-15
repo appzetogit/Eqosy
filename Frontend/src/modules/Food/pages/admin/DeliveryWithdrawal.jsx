@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react"
 import { Search, Wallet, Eye, CheckCircle, XCircle, Loader2, Package, QrCode } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { toast } from "sonner"
+import PayoutStatusNote from "@food/components/admin/PayoutStatusNote"
 import {
   Dialog,
   DialogContent,
@@ -277,6 +278,7 @@ export default function DeliveryWithdrawal() {
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(req.status)}`}>
                             {req.status}
                           </span>
+                          <PayoutStatusNote verification={req.accountVerification} payout={req.payout} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center justify-center gap-2">

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { registerDeliveryPartner, updateDeliveryPartnerProfile, updateDeliveryPartnerBankDetails, listSupportTicketsByPartner, createSupportTicket, getSupportTicketByIdAndPartner, updateDeliveryPartnerDetails, updateDeliveryPartnerProfilePhotoBase64, updateDeliveryAvailability, getDeliveryPartnerWallet, getDeliveryPartnerEarnings, getDeliveryPartnerTripHistory, getDeliveryPocketDetails, getActiveEarningAddonsForPartner, deleteDeliveryPartnerAccount, getDeliveryPartnerReviews } from '../services/delivery.service.js';
+import { reverifyDeliveryPartnerBankDetails, registerDeliveryPartner, updateDeliveryPartnerProfile, updateDeliveryPartnerBankDetails,listSupportTicketsByPartner, createSupportTicket, getSupportTicketByIdAndPartner, updateDeliveryPartnerDetails, updateDeliveryPartnerProfilePhotoBase64, updateDeliveryAvailability, getDeliveryPartnerWallet, getDeliveryPartnerEarnings, getDeliveryPartnerTripHistory, getDeliveryPocketDetails, getActiveEarningAddonsForPartner, deleteDeliveryPartnerAccount, getDeliveryPartnerReviews } from '../services/delivery.service.js';
 import { createDeliveryCashDepositOrder, getDeliveryPartnerWalletEnhanced, requestDeliveryWithdrawal, verifyDeliveryCashDepositPayment } from '../services/deliveryFinance.service.js';
 import { getDeliveryCashLimitSettings, getDeliveryEmergencyHelp } from '../../admin/services/admin.service.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
@@ -62,9 +62,39 @@ export const updateDeliveryPartnerBankDetailsController = async (req, res, next)
                 upiId: partner.upiId,
                 upiQrCode: partner.upiQrCode
             },
-            panNumber: partner.panNumber
+            panNumber: partner.panNumber,
+            verification: {
+                status: partner.payoutVerification?.status || 'unverified',
+                registeredName: partner.payoutVerification?.registeredName || '',
+                maskedAccount: partner.payoutVerification?.maskedAccount || '',
+                failureReason: partner.payoutVerification?.failureReason || ''
+            }
         };
-        return sendResponse(res, 200, 'Bank details updated successfully', data);
+        const vStatus = data.verification.status;
+        const message =
+            vStatus === 'verified' ? 'Bank details saved and verified'
+            : vStatus === 'pending' ? 'Bank details saved. Verification is in progress'
+            : vStatus === 'name_mismatch' ? 'Bank details saved, but the account holder name does not match your registered name'
+            : vStatus === 'failed' ? 'Bank details saved, but verification failed'
+            : 'Bank details updated successfully';
+        return sendResponse(res, 200, message, data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reverifyDeliveryBankDetailsController = async (req, res, next) => {
+    try {
+        const partner = await reverifyDeliveryPartnerBankDetails(req.user?.userId);
+        const v = partner.payoutVerification || {};
+        return sendResponse(res, 200, 'Bank verification updated', {
+            verification: {
+                status: v.status || 'unverified',
+                registeredName: v.registeredName || '',
+                maskedAccount: v.maskedAccount || '',
+                failureReason: v.failureReason || ''
+            }
+        });
     } catch (error) {
         next(error);
     }

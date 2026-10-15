@@ -97,6 +97,13 @@ export const config = {
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET,
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET, // ✅ NEW
 
+    // RazorpayX (payouts + bank account verification). Keys fall back to the Razorpay keys above.
+    razorpayxKeyId: process.env.RAZORPAYX_KEY_ID || process.env.RAZORPAY_KEY_ID,
+    razorpayxKeySecret: process.env.RAZORPAYX_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET,
+    // The RazorpayX current-account number that payouts are debited from.
+    razorpayxAccountNumber: process.env.RAZORPAYX_ACCOUNT_NUMBER,
+    razorpayxWebhookSecret: process.env.RAZORPAYX_WEBHOOK_SECRET,
+
     // Email (SMTP) – for admin forgot password OTP etc.
     emailHost: process.env.EMAIL_HOST,
     emailPort: Number(process.env.EMAIL_PORT) || 587,

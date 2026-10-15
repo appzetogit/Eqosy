@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PAYOUT_VERIFICATION_FIELDS } from '../../../../core/payments/payoutAccount.service.js';
 
 const ownerSchema = new mongoose.Schema(
   {
@@ -157,6 +158,11 @@ const ownerSchema = new mongoose.Schema(
     payout: {
       model: { type: String, enum: ['default', 'salary', 'commission'], default: 'default' },
       ownerSharePercent: { type: Number, min: 0, max: 100, default: null },
+    },
+    /** Result of the bank/UPI ownership check (penny drop). Payouts are allowed only when status === 'verified'. */
+    payoutVerification: {
+      type: new mongoose.Schema(PAYOUT_VERIFICATION_FIELDS, { _id: false }),
+      default: () => ({}),
     },
     area_snapshot: {
       type: mongoose.Schema.Types.Mixed,

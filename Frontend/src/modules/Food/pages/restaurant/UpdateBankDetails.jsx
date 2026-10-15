@@ -26,6 +26,8 @@ export default function UpdateBankDetails() {
   const [saving, setSaving] = useState(false)
   const [uploadingQr, setUploadingQr] = useState(false)
   const [lastUpdated, setLastUpdated] = useState("")
+  // Result of the bank ownership check: { status, registeredName, failureReason }
+  const [verification, setVerification] = useState(null)
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -105,11 +107,15 @@ export default function UpdateBankDetails() {
         upiQrImage,
       })
       setLastUpdated(doc.updatedAt || "")
+      const v = doc.payoutVerification || null
+      setVerification(v)
+      return v
     } catch (error) {
       alert(error?.response?.data?.message || "Failed to load bank details")
     } finally {
       setLoading(false)
     }
+    return null
   }
 
   useEffect(() => {
@@ -162,9 +168,17 @@ export default function UpdateBankDetails() {
     try {
       setSaving(true)
       await restaurantAPI.updateProfile(payload)
-      await loadProfile()
+      const v = await loadProfile()
       setErrors({})
-      alert("Bank details updated successfully")
+      if (v?.status === "verified") {
+        alert(`Bank details saved and verified${v.registeredName ? ` (${v.registeredName})` : ""}`)
+      } else if (v?.status === "name_mismatch" || v?.status === "failed") {
+        alert(`Bank details saved, but ${v.failureReason || "verification failed"}`)
+      } else if (v?.status === "pending") {
+        alert("Bank details saved. Verification is in progress")
+      } else {
+        alert("Bank details updated successfully")
+      }
     } catch (error) {
       alert(error?.response?.data?.message || "Failed to update bank details")
     } finally {
@@ -202,6 +216,28 @@ export default function UpdateBankDetails() {
                 <p className="text-sm text-gray-500 mt-1">Last updated: {formattedUpdatedAt}</p>
               ) : null}
             </div>
+
+            {(form.accountNumber || form.upiId) && (
+              <div
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  verification?.status === "verified"
+                    ? "border-green-200 bg-green-50 text-green-800"
+                    : verification?.status === "pending"
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {verification?.status === "verified"
+                  ? `Verified account${verification.registeredName ? `: ${verification.registeredName}` : ""}`
+                  : verification?.status === "pending"
+                    ? "Verification in progress. Payouts start once the account is verified."
+                    : verification?.status === "name_mismatch"
+                      ? `${verification.failureReason || "Account holder name does not match."} Please use your own account.`
+                      : verification?.status === "failed"
+                        ? verification.failureReason || "Verification failed. Please check the details and save again."
+                        : "Not verified yet. Save your details to verify the account. Withdrawals need a verified account."}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Account holder name</label>

@@ -17,6 +17,7 @@ import { TripSeatInventory } from "../../user/models/TripSeatInventory.js";
 import { ensureTripInstance, normalizeTravelDateString } from "../../services/tripGeneratorService.js";
 import { Owner } from "../../admin/models/Owner.js";
 import { OwnerWalletTransaction } from "../../admin/models/OwnerWalletTransaction.js";
+import { ensureTaxiAccountVerified } from "../../services/withdrawalPayout.service.js";
 import { createBusPayoutRequest, getBusPayoutSummary, resolveOwnerPayout, syncBusBookingOwnerEarning } from "../../services/ownerPayoutService.js";
 import { BusService } from "../../admin/models/BusService.js";
 import { ServiceLocation } from "../../admin/models/ServiceLocation.js";
@@ -4673,6 +4674,17 @@ export const createDriverWithdrawalRequest = async (req, res) => {
 
   const roundedAmount = Math.round(amount * 100) / 100;
 
+  // Safety check before any money is reserved: the saved bank/UPI account must belong to this driver.
+  const savedBank = driver.documents?.bankDetails || {};
+  await ensureTaxiAccountVerified({
+    kind: 'driver',
+    doc: driver,
+    input:
+      paymentMethod === 'upi'
+        ? { upiId: savedBank.upiId || driver.upiId }
+        : { accountNumber: savedBank.accountNumber || driver.accountNumber, ifsc: savedBank.ifscCode || driver.ifscCode },
+  });
+
   const walletResult = await applyDriverWalletAdjustment({
     driverId: req.auth.sub,
     amount: -roundedAmount,
@@ -7473,6 +7485,13 @@ export const createOwnerWithdrawalRequest = async (req, res) => {
     throw new ApiError(400, `Minimum withdrawal is ${minimum}`);
   }
 
+  // Safety check before any money is reserved: the bank/UPI account must belong to this owner.
+  await ensureTaxiAccountVerified({
+    kind: 'owner',
+    doc: owner,
+    input: paymentMethod === "upi" ? { upiId } : { accountNumber, ifsc: ifscCode },
+  });
+
   // Reserve the money atomically so two requests can't spend the same balance.
   const reserved = await Owner.findOneAndUpdate(
     { _id: owner._id, "wallet.balance": { $gte: amount } },
@@ -7548,6 +7567,13 @@ export const createOwnerBusPayoutRequest = async (req, res) => {
   if (paymentMethod !== "upi" && (!details.accountHolderName || !details.accountNumber || !details.ifscCode)) {
     throw new ApiError(400, "Account holder name, account number and IFSC are required");
   }
+
+  // Safety check: the bank/UPI account must belong to this owner before the payout request is created.
+  await ensureTaxiAccountVerified({
+    kind: 'owner',
+    doc: owner,
+    input: paymentMethod === "upi" ? { upiId: details.upiId } : { accountNumber: details.accountNumber, ifsc: details.ifscCode },
+  });
 
   const request = await createBusPayoutRequest(owner._id, details);
   try {

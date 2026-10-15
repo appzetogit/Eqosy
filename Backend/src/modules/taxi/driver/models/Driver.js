@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { VEHICLE_TYPES } from '../../constants/index.js';
+import { PAYOUT_VERIFICATION_FIELDS } from '../../../../core/payments/payoutAccount.service.js';
 
 const geoPointSchema = new mongoose.Schema(
   {
@@ -409,8 +410,13 @@ const driverSchema = new mongoose.Schema(
         default: null,
       },
     },
+    /** Result of the bank/UPI ownership check (penny drop). Payouts are allowed only when status === 'verified'. */
+    payoutVerification: {
+      type: new mongoose.Schema(PAYOUT_VERIFICATION_FIELDS, { _id: false }),
+      default: () => ({}),
+    },
   },
-  { 
+  {
     collection: 'taxidrivers',
     timestamps: true,
   },

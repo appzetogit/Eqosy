@@ -15,7 +15,19 @@ const withdrawalRequestSchema = new mongoose.Schema({
   accountHolderName: String,
   accountNumber: String,
   ifscCode: String,
-  status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' }
+  status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
+  // Automatic RazorpayX payout. While it is in flight the request stays 'pending'; the webhook completes it.
+  payout: {
+    razorpayPayoutId: { type: String, index: true },
+    status: { type: String, enum: ['queued', 'pending', 'processing', 'processed', 'failed', 'reversed', 'cancelled', 'rejected'] },
+    mode: String,
+    utr: String,
+    attempt: Number,
+    verifiedName: String,
+    failureReason: String,
+    initiatedAt: Date,
+    completedAt: Date
+  }
 }, { timestamps: true });
 
 export const WithdrawalRequest = mongoose.models.TaxiWithdrawalRequest || mongoose.model('TaxiWithdrawalRequest', withdrawalRequestSchema);

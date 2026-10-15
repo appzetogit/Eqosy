@@ -8,6 +8,7 @@ import { uploadImageBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
+import { verifyPayoutAccount } from '../../../../core/payments/payoutAccount.service.js';
 
 export const registerDeliveryPartner = async (payload, files) => {
     const {
@@ -256,7 +257,39 @@ export const updateDeliveryPartnerBankDetails = async (userId, payload, files) =
     }
 
     await partner.save();
+
+    // Safety check: prove the account/UPI belongs to this partner (bank-registered name must match their name).
+    if (bankDetails) {
+        await verifyPayoutAccount({
+            Model: FoodDeliveryPartner,
+            docId: partner._id,
+            ownerType: 'delivery',
+            identityNames: [partner.name],
+            phone: partner.phone,
+            input: { accountNumber: partner.bankAccountNumber, ifsc: partner.bankIfscCode, upiId: partner.upiId },
+        });
+        const fresh = await FoodDeliveryPartner.findById(partner._id).lean();
+        if (fresh) return fresh;
+    }
     return partner.toObject();
+};
+
+/** Re-runs the ownership check on the bank/UPI details already saved (e.g. accounts added before verification existed). */
+export const reverifyDeliveryPartnerBankDetails = async (userId) => {
+    const partner = await FoodDeliveryPartner.findById(userId).lean();
+    if (!partner) throw new ValidationError('Delivery partner not found');
+    if (!partner.bankAccountNumber && !partner.upiId) {
+        throw new ValidationError('Please add your bank details first');
+    }
+    await verifyPayoutAccount({
+        Model: FoodDeliveryPartner,
+        docId: partner._id,
+        ownerType: 'delivery',
+        identityNames: [partner.name],
+        phone: partner.phone,
+        input: { accountNumber: partner.bankAccountNumber, ifsc: partner.bankIfscCode, upiId: partner.upiId },
+    });
+    return FoodDeliveryPartner.findById(userId).lean();
 };
 
 function generateTicketId() {

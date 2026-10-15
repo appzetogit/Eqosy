@@ -34,6 +34,7 @@ import { FoodTransaction } from '../../orders/models/foodTransaction.model.js';
 import { FoodRestaurantWithdrawal } from '../../restaurant/models/foodRestaurantWithdrawal.model.js';
 import { FoodDeliveryWithdrawal } from '../../delivery/models/foodDeliveryWithdrawal.model.js';
 import { FoodDeliveryWallet } from '../../delivery/models/deliveryWallet.model.js';
+import { APPROVED_STATUSES, createPayoutForWithdrawal } from './withdrawalPayout.service.js';
 import { FoodDeliveryCashDeposit } from '../../delivery/models/foodDeliveryCashDeposit.model.js';
 import {
     backfillLegacyCategoryWorkflow,
@@ -2848,6 +2849,12 @@ export async function updateRestaurantById(id, body = {}) {
     }
 
     await doc.save();
+
+    // Bank/UPI details entered by an admin must also prove they belong to the restaurant.
+    if (['accountNumber', 'ifscCode', 'upiId'].some((k) => body[k] !== undefined)) {
+        const { verifyRestaurantPayoutAccount } = await import('../../restaurant/services/restaurant.service.js');
+        await verifyRestaurantPayoutAccount(id);
+    }
     return FoodRestaurant.findById(id).select('-__v').populate('zoneId', 'name zoneName serviceLocation isActive').lean();
 }
 
@@ -3919,6 +3926,13 @@ export async function createRestaurantByAdmin(body) {
     }
 
     const restaurant = await FoodRestaurant.create(doc);
+
+    // Bank details entered by an admin must also prove they belong to the restaurant (runs in the background).
+    if (doc.accountNumber || doc.ifscCode) {
+        import('../../restaurant/services/restaurant.service.js')
+            .then(({ verifyRestaurantPayoutAccount }) => verifyRestaurantPayoutAccount(restaurant._id))
+            .catch((err) => logger.warn(`Restaurant bank verification skipped: ${err?.message || err}`));
+    }
 
     try {
         const { invalidateCache } = await import('../../../../middleware/cache.js');
@@ -5411,7 +5425,7 @@ export async function getWithdrawals(query = {}) {
 
     const [withdrawals, total] = await Promise.all([
         FoodRestaurantWithdrawal.find(filter)
-            .populate('restaurantId', 'restaurantName profileImage ownerName phone ownerPhone accountHolderName accountNumber ifscCode accountType upiId upiQrImage')
+            .populate('restaurantId', 'restaurantName profileImage ownerName phone ownerPhone accountHolderName accountNumber ifscCode accountType upiId upiQrImage payoutVerification')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -5425,6 +5439,11 @@ export async function getWithdrawals(query = {}) {
         id: w._id,
         restaurantName: w.restaurantId?.restaurantName || 'N/A',
         restaurantIdString: w.restaurantId ? `REST${w.restaurantId._id.toString().slice(-6).padStart(6, '0')}` : 'N/A',
+        accountVerification: {
+            status: w.restaurantId?.payoutVerification?.status || 'unverified',
+            registeredName: w.restaurantId?.payoutVerification?.registeredName || '',
+            failureReason: w.restaurantId?.payoutVerification?.failureReason || ''
+        },
         restaurantBankDetails: {
             accountHolderName: w.restaurantId?.accountHolderName || '',
             accountNumber: w.restaurantId?.accountNumber || '',
@@ -5451,6 +5470,26 @@ export async function updateWithdrawalStatus(id, { status, adminNote, rejectionR
         processedAt: new Date()
     };
 
+    const existingWithdrawal = await FoodRestaurantWithdrawal.findById(id).lean();
+    if (!existingWithdrawal) throw new ValidationError('Withdrawal request not found');
+
+    const isApproval = ['approved', 'completed', 'settled'].includes(nextStatus);
+    if (isApproval && APPROVED_STATUSES.includes(existingWithdrawal.status)) {
+        // Already approved (payout in progress / done): never pay or settle twice.
+        return FoodRestaurantWithdrawal.findById(id).populate('restaurantId', 'restaurantName').lean();
+    }
+
+    // Auto payout: verified account only. Throws (withdrawal stays pending) if it cannot be paid.
+    let payoutDoc = null;
+    if (isApproval) {
+        payoutDoc = await createPayoutForWithdrawal('restaurant', existingWithdrawal);
+        if (payoutDoc) {
+            update.status = 'approved';
+            update.payout = payoutDoc;
+            update.transactionId = payoutDoc.utr || payoutDoc.razorpayPayoutId;
+        }
+    }
+
     const updated = await FoodRestaurantWithdrawal.findByIdAndUpdate(
         id,
         { $set: update },
@@ -5459,7 +5498,7 @@ export async function updateWithdrawalStatus(id, { status, adminNote, rejectionR
 
     if (!updated) throw new ValidationError('Withdrawal request not found');
 
-    if (['approved', 'completed', 'settled'].includes(nextStatus)) {
+    if (isApproval) {
         try {
             const targetRestaurantId = updated.restaurantId?._id || updated.restaurantId;
             await FoodTransaction.updateMany(
@@ -5477,7 +5516,9 @@ export async function updateWithdrawalStatus(id, { status, adminNote, rejectionR
                 }
             );
 
-            if (targetRestaurantId) {
+            // With auto payout the "credited" message is sent by the payout webhook once the bank confirms.
+            const awaitingPayoutConfirmation = payoutDoc && payoutDoc.status !== 'processed';
+            if (targetRestaurantId && !awaitingPayoutConfirmation) {
                 const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
                 await notifyOwnersSafely(
                     [{ ownerType: 'RESTAURANT', ownerId: targetRestaurantId }],
@@ -5522,7 +5563,7 @@ export async function getDeliveryWithdrawals(query = {}) {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('deliveryPartnerId', 'name phone profilePartnerId upiId upiQrCode')
+            .populate('deliveryPartnerId', 'name phone profilePartnerId upiId upiQrCode payoutVerification')
             .lean(),
         FoodDeliveryWithdrawal.countDocuments(filter)
     ]);
@@ -5533,6 +5574,11 @@ export async function getDeliveryWithdrawals(query = {}) {
         deliveryName: w.deliveryPartnerId?.name || 'N/A',
         deliveryPhone: w.deliveryPartnerId?.phone || 'N/A',
         deliveryIdString: w.deliveryPartnerId?.profilePartnerId || 'N/A',
+        accountVerification: {
+            status: w.deliveryPartnerId?.payoutVerification?.status || 'unverified',
+            registeredName: w.deliveryPartnerId?.payoutVerification?.registeredName || '',
+            failureReason: w.deliveryPartnerId?.payoutVerification?.failureReason || ''
+        },
         status: w.status.charAt(0).toUpperCase() + w.status.slice(1)
     }));
 
@@ -5550,6 +5596,26 @@ export async function updateDeliveryWithdrawalStatus(id, { status, adminNote, re
         processedAt: new Date()
     };
 
+    const existingWithdrawal = await FoodDeliveryWithdrawal.findById(id).lean();
+    if (!existingWithdrawal) throw new ValidationError('Withdrawal request not found');
+
+    const isApproval = APPROVED_STATUSES.includes(String(status).toLowerCase());
+    if (isApproval && APPROVED_STATUSES.includes(existingWithdrawal.status)) {
+        // Already approved (payout in progress / done): never pay or deduct twice.
+        return FoodDeliveryWithdrawal.findById(id).populate('deliveryPartnerId', 'name phone profilePartnerId').lean();
+    }
+
+    // Auto payout: verified account only. Throws (withdrawal stays pending) if it cannot be paid.
+    let payoutDoc = null;
+    if (isApproval) {
+        payoutDoc = await createPayoutForWithdrawal('delivery', existingWithdrawal);
+        if (payoutDoc) {
+            update.status = 'approved';
+            update.payout = payoutDoc;
+            update.transactionId = payoutDoc.utr || payoutDoc.razorpayPayoutId;
+        }
+    }
+
     const updated = await FoodDeliveryWithdrawal.findByIdAndUpdate(
         id,
         { $set: update },
@@ -5559,7 +5625,7 @@ export async function updateDeliveryWithdrawalStatus(id, { status, adminNote, re
     if (!updated) throw new ValidationError('Withdrawal request not found');
 
     // If approved, deduct from wallet balance
-    if (['approved', 'processed', 'completed', 'settled'].includes(String(status).toLowerCase())) {
+    if (isApproval) {
         const amount = Number(updated.amount || 0);
         if (amount > 0) {
             await FoodDeliveryWallet.findOneAndUpdate(
@@ -5575,7 +5641,9 @@ export async function updateDeliveryWithdrawalStatus(id, { status, adminNote, re
 
         try {
             const partnerId = updated.deliveryPartnerId?._id || updated.deliveryPartnerId;
-            if (partnerId) {
+            // With auto payout the "credited" message is sent by the payout webhook once the bank confirms.
+            const awaitingPayoutConfirmation = payoutDoc && payoutDoc.status !== 'processed';
+            if (partnerId && !awaitingPayoutConfirmation) {
                 const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
                 await notifyOwnersSafely(
                     [{ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId }],
