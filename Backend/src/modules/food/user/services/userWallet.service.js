@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodUserWallet } from '../models/userWallet.model.js';
-import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
+import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyCapturedPaymentForReceipt } from '../../orders/helpers/razorpay.helper.js';
 
 const ensureWallet = async (userId) => {
     const id = String(userId || '');
@@ -14,22 +14,43 @@ const ensureWallet = async (userId) => {
     return FoodUserWallet.create({ userId: oid, balance: 0, transactions: [] });
 };
 
+/**
+ * Single atomic wallet movement: balance change + ledger row happen in ONE update, and a debit can never take
+ * the balance below zero. Returns the updated wallet, or null when the guard did not match (e.g. insufficient
+ * balance, or the same payment was already credited).
+ */
+const applyWalletMovement = async (userId, delta, tx, { guard = {}, extraInc = {} } = {}) => {
+    const wallet = await ensureWallet(userId);
+    const now = new Date();
+    const filter = { _id: wallet._id, ...guard };
+    if (delta < 0) filter.balance = { $gte: -delta };
+    return FoodUserWallet.findOneAndUpdate(
+        filter,
+        {
+            $inc: { balance: delta, ...extraInc },
+            $push: { transactions: { $each: [{ ...tx, createdAt: now, updatedAt: now }], $position: 0 } },
+        },
+        { new: true },
+    );
+};
+
 export const creditReferralReward = async (userId, amountInr, metadata = {}) => {
     const amount = Number(amountInr);
     if (!Number.isFinite(amount) || amount <= 0) {
         return { wallet: await getUserWallet(userId) };
     }
-    const wallet = await ensureWallet(userId);
-    wallet.transactions.unshift({
-        type: 'addition',
+    await applyWalletMovement(
+        userId,
         amount,
-        status: 'Completed',
-        description: 'Referral reward',
-        metadata: { source: 'referral_reward', ...(metadata || {}) }
-    });
-    wallet.balance = Number(wallet.balance || 0) + amount;
-    wallet.referralEarnings = Number(wallet.referralEarnings || 0) + amount;
-    await wallet.save();
+        {
+            type: 'addition',
+            amount,
+            status: 'Completed',
+            description: 'Referral reward',
+            metadata: { source: 'referral_reward', ...(metadata || {}) },
+        },
+        { extraInc: { referralEarnings: amount } },
+    );
     return { wallet: await getUserWallet(userId) };
 };
 
@@ -90,12 +111,11 @@ export const verifyWalletTopupPayment = async (userId, payload) => {
     const orderId = String(payload?.razorpayOrderId || '').trim();
     const paymentId = String(payload?.razorpayPaymentId || '').trim();
     const signature = String(payload?.razorpaySignature || '').trim();
-    const amount = Number(payload?.amount);
 
+    // NOTE: any `amount` sent by the client is ignored on purpose; the credited amount is what Razorpay received.
     if (!orderId) throw new ValidationError('razorpayOrderId is required');
     if (!paymentId) throw new ValidationError('razorpayPaymentId is required');
     if (!signature) throw new ValidationError('razorpaySignature is required');
-    if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError('amount is required');
 
     const wallet = await ensureWallet(userId);
     const existing = wallet.transactions.find((t) => String(t.razorpayOrderId || '') === orderId);
@@ -107,25 +127,43 @@ export const verifyWalletTopupPayment = async (userId, payload) => {
         throw new ValidationError('Razorpay payment gateway is not configured');
     }
 
-    const ok = verifyPaymentSignature(orderId, paymentId, signature);
-    if (!ok) {
-        throw new ValidationError('Payment verification failed');
+    // One Razorpay payment can only ever be credited once, across all wallets.
+    if (await FoodUserWallet.exists({ 'transactions.razorpayPaymentId': paymentId })) {
+        throw new ValidationError('This payment has already been used');
     }
 
-    // Store ONLY after payment is verified.
-    wallet.transactions.unshift({
-        type: 'addition',
-        amount,
-        status: 'Completed',
-        description: 'Wallet top-up',
-        metadata: { source: 'wallet_topup', mode: 'razorpay' },
-        razorpayOrderId: orderId,
-        razorpayPaymentId: paymentId,
-        razorpaySignature: signature
-    });
+    let verified;
+    try {
+        verified = await verifyCapturedPaymentForReceipt({
+            orderId,
+            paymentId,
+            signature,
+            receiptPrefix: `wallet_topup_${String(userId).slice(-8)}_`,
+        });
+    } catch (err) {
+        throw new ValidationError(err?.message || 'Payment verification failed');
+    }
 
-    wallet.balance = Number(wallet.balance || 0) + amount;
-    await wallet.save();
+    // Atomic + idempotent: the guard fails if this order was credited by a concurrent request.
+    const credited = await applyWalletMovement(
+        userId,
+        verified.amountInr,
+        {
+            type: 'addition',
+            amount: verified.amountInr,
+            status: 'Completed',
+            description: 'Wallet top-up',
+            metadata: { source: 'wallet_topup', mode: 'razorpay' },
+            razorpayOrderId: verified.orderId,
+            razorpayPaymentId: verified.paymentId,
+            razorpaySignature: signature,
+        },
+        { guard: { transactions: { $not: { $elemMatch: { razorpayOrderId: verified.orderId } } } } },
+    );
+    if (!credited) {
+        // A parallel request already credited this order.
+        return { wallet: await getUserWallet(userId) };
+    }
 
     return { wallet: await getUserWallet(userId) };
 };
@@ -136,21 +174,15 @@ export const deductWalletBalance = async (userId, amountInr, description = 'Orde
         throw new ValidationError('Invalid deduction amount');
     }
 
-    const wallet = await ensureWallet(userId);
-    if (wallet.balance < amount) {
-        throw new ValidationError('Insufficient wallet balance');
-    }
-
-    wallet.transactions.unshift({
+    // Atomic: balance check and deduction are one update, so concurrent orders cannot overspend.
+    const updated = await applyWalletMovement(userId, -amount, {
         type: 'deduction',
         amount,
         status: 'Completed',
         description,
-        metadata: { source: 'order_payment', ...(metadata || {}) }
+        metadata: { source: 'order_payment', ...(metadata || {}) },
     });
-
-    wallet.balance = Number(wallet.balance) - amount;
-    await wallet.save();
+    if (!updated) throw new ValidationError('Insufficient wallet balance');
 
     return { wallet: await getUserWallet(userId) };
 };
@@ -161,17 +193,22 @@ export const refundWalletBalance = async (userId, amountInr, description = 'Orde
         return { wallet: await getUserWallet(userId) };
     }
 
-    const wallet = await ensureWallet(userId);
-    wallet.transactions.unshift({
-        type: 'refund',
+    // Atomic; when an orderId is given the same order can never be refunded to the wallet twice.
+    const orderRef = metadata?.orderId;
+    await applyWalletMovement(
+        userId,
         amount,
-        status: 'Completed',
-        description,
-        metadata: { source: 'order_refund', ...(metadata || {}) }
-    });
-
-    wallet.balance = Number(wallet.balance) + amount;
-    await wallet.save();
+        {
+            type: 'refund',
+            amount,
+            status: 'Completed',
+            description,
+            metadata: { source: 'order_refund', ...(metadata || {}) },
+        },
+        orderRef
+            ? { guard: { transactions: { $not: { $elemMatch: { type: 'refund', 'metadata.orderId': orderRef } } } } }
+            : {},
+    );
 
     return { wallet: await getUserWallet(userId) };
 };

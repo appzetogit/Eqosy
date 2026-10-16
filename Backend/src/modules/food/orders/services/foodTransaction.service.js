@@ -258,12 +258,48 @@ export async function updateTransactionStatus(orderId, kind, details = {}) {
 
     await transaction.save();
 
+    // A refunded order must not keep the restaurant/rider payout that was credited when it was paid.
+    if (details.status === 'refunded') {
+        await reverseOrderPayoutCredits(transaction.orderId);
+    }
+
     // If transaction is captured or completed, credit store and rider wallets atomically
     if (transaction.status === 'captured' || ['cod_marked_paid_on_delivery', 'payment_snapshot_sync', 'captured'].includes(kind)) {
         await creditWalletsForTransaction(transaction);
     }
 
     return transaction;
+}
+
+/**
+ * Takes back the restaurant / rider payout credits of an order that was refunded or cancelled.
+ * Idempotent (one reversal per credit row). If the money was already withdrawn the debit is refused and the
+ * failure is logged for manual follow-up instead of silently driving a wallet negative.
+ */
+export async function reverseOrderPayoutCredits(orderId) {
+    if (!orderId) return;
+    const credits = await Transaction.find({
+        orderId,
+        type: 'credit',
+        category: { $in: ['order_payout', 'delivery_payout'] },
+    }).lean();
+
+    for (const credit of credits) {
+        try {
+            await recordTransaction({
+                entityType: credit.entityType,
+                entityId: String(credit.entityId),
+                type: 'debit',
+                amount: credit.amount,
+                description: `Reversal of payout for refunded order ${orderId}`,
+                category: 'adjustment',
+                orderId: String(orderId),
+                idempotencyKey: `reverse:${credit._id}`,
+            });
+        } catch (err) {
+            logger.error(`[FoodTransaction] Could not reverse payout ${credit._id} for order ${orderId}: ${err?.message || err}`);
+        }
+    }
 }
 
 export async function creditWalletsForTransaction(transaction) {
@@ -328,21 +364,18 @@ export async function creditWalletsForTransaction(transaction) {
     const restId = transaction.restaurantId?._id ? String(transaction.restaurantId._id) : (transaction.restaurantId ? String(transaction.restaurantId) : null);
     if (restaurantShare > 0 && restId && restId !== '[object Object]') {
         try {
-            const existingRestTxn = await Transaction.findOne({
-                orderId: transaction.orderId,
+            // The idempotency key makes the credit exactly-once even under concurrent/replayed calls.
+            const result = await recordTransaction({
                 entityType: 'restaurant',
+                entityId: restId,
+                type: 'credit',
+                amount: restaurantShare,
+                description: `Order payout credit for order ${transaction.orderId}`,
                 category: 'order_payout',
+                orderId: String(transaction.orderId),
+                idempotencyKey: `order_payout:restaurant:${transaction.orderId}`,
             });
-            if (!existingRestTxn) {
-                await recordTransaction({
-                    entityType: 'restaurant',
-                    entityId: restId,
-                    type: 'credit',
-                    amount: restaurantShare,
-                    description: `Order payout credit for order ${transaction.orderId}`,
-                    category: 'order_payout',
-                    orderId: String(transaction.orderId),
-                });
+            if (!result.duplicate) {
                 logger.info(`[FoodTransaction] Credited store wallet ${restId} with ₹${restaurantShare} for order ${transaction.orderId}`);
             }
         } catch (err) {
@@ -352,21 +385,17 @@ export async function creditWalletsForTransaction(transaction) {
 
     if (riderShare > 0 && riderId && riderId !== '[object Object]') {
         try {
-            const existingRiderTxn = await Transaction.findOne({
-                orderId: transaction.orderId,
+            const result = await recordTransaction({
                 entityType: 'deliveryBoy',
+                entityId: riderId,
+                type: 'credit',
+                amount: riderShare,
+                description: `Delivery payout credit for order ${transaction.orderId}`,
                 category: 'delivery_payout',
+                orderId: String(transaction.orderId),
+                idempotencyKey: `order_payout:deliveryBoy:${transaction.orderId}`,
             });
-            if (!existingRiderTxn) {
-                await recordTransaction({
-                    entityType: 'deliveryBoy',
-                    entityId: riderId,
-                    type: 'credit',
-                    amount: riderShare,
-                    description: `Delivery payout credit for order ${transaction.orderId}`,
-                    category: 'delivery_payout',
-                    orderId: String(transaction.orderId),
-                });
+            if (!result.duplicate) {
                 logger.info(`[FoodTransaction] Credited delivery partner wallet ${riderId} with ₹${riderShare} for order ${transaction.orderId}`);
             }
         } catch (err) {

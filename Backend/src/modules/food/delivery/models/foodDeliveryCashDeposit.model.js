@@ -39,5 +39,10 @@ const foodDeliveryCashDepositSchema = new mongoose.Schema({
 });
 
 foodDeliveryCashDepositSchema.index({ createdAt: -1 });
+// A Razorpay payment can fund at most one deposit (partial: cash/manual deposits have no payment id).
+foodDeliveryCashDepositSchema.index(
+    { razorpayPaymentId: 1 },
+    { unique: true, partialFilterExpression: { razorpayPaymentId: { $type: 'string' } } }
+);
 
 export const FoodDeliveryCashDeposit = mongoose.model('FoodDeliveryCashDeposit', foodDeliveryCashDepositSchema);

@@ -80,13 +80,37 @@ export async function recordTransaction(payload) {
         entityType, entityId, type, amount,
         description = '', category = 'other',
         orderId = null, paymentId = null,
-        metadata = undefined, module = 'food'
+        metadata = undefined, module = 'food',
+        idempotencyKey = null
     } = payload;
 
     if (!['credit', 'debit'].includes(type)) throw new Error('type must be credit or debit');
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('amount must be positive');
 
     const { Model, filter } = resolveWallet(entityType, entityId);
+    const entityOid = entityType === 'admin'
+        ? ADMIN_ENTITY_OID
+        : new mongoose.Types.ObjectId(entityId);
+
+    // Same key == same money movement: a retry/replay returns the original row instead of paying twice.
+    if (idempotencyKey) {
+        const prior = await Transaction.findOne({ idempotencyKey }).lean();
+        if (prior) return { transaction: prior, wallet: { balance: prior.balanceAfter }, duplicate: true };
+    }
+
+    // The wallet row must exist before an atomic $inc (upsert is safe under concurrency).
+    await Model.updateOne(filter, { $setOnInsert: { ...filter, balance: 0 } }, { upsert: true });
+
+    const delta = type === 'credit' ? amount : -amount;
+    const inc = { balance: delta };
+    if (type === 'credit') {
+        if (entityType === 'restaurant' || entityType === 'deliveryBoy') inc.totalEarnings = amount;
+        else if (entityType === 'admin') inc.totalRevenue = amount;
+    }
+    // A debit only applies when enough balance is there (admin wallet may go negative).
+    const guard = type === 'debit' && entityType !== 'admin'
+        ? { ...filter, balance: { $gte: amount } }
+        : filter;
 
     let session = null;
     let useTransaction = true;
@@ -103,34 +127,16 @@ export async function recordTransaction(payload) {
 
     try {
         const sessionOption = useTransaction && session ? { session } : {};
-        const createSessionOption = useTransaction && session ? { session } : undefined;
 
-        // 1. Ensure wallet exists
-        let wallet = await Model.findOne(filter, null, sessionOption);
-        if (!wallet) {
-            if (useTransaction && session) {
-                [wallet] = await Model.create([{ ...filter, balance: 0 }], createSessionOption);
-            } else {
-                wallet = await Model.create({ ...filter, balance: 0 });
-            }
+        // 1. One atomic update: no read-modify-write, so concurrent movements can never overwrite each other.
+        const updated = await Model.findOneAndUpdate(guard, { $inc: inc }, { new: true, ...sessionOption });
+        if (!updated) {
+            const current = await Model.findOne(filter, 'balance', sessionOption).lean();
+            throw new Error(`Insufficient balance. Current: ${Number(current?.balance) || 0}, Debit: ${amount}`);
         }
+        const newBalance = Math.round((Number(updated.balance) || 0) * 100) / 100;
 
-        // 2. Compute new balance
-        const currentBalance = Number(wallet.balance) || 0;
-        const newBalance = type === 'credit'
-            ? currentBalance + amount
-            : currentBalance - amount;
-
-        // Debit guard: prevent negative balance (except admin wallet which can go negative)
-        if (type === 'debit' && entityType !== 'admin' && newBalance < 0) {
-            throw new Error(`Insufficient balance. Current: ${currentBalance}, Debit: ${amount}`);
-        }
-
-        // 3. Create transaction row
-        const entityOid = entityType === 'admin'
-            ? ADMIN_ENTITY_OID
-            : new mongoose.Types.ObjectId(entityId);
-
+        // 2. Ledger row in the same transaction. A duplicate idempotency key rolls the wallet change back.
         const txnPayload = {
             paymentId: paymentId ? new mongoose.Types.ObjectId(paymentId) : null,
             orderId: orderId ? new mongoose.Types.ObjectId(orderId) : null,
@@ -144,34 +150,30 @@ export async function recordTransaction(payload) {
             description,
             category,
             module,
-            metadata
+            metadata,
+            ...(idempotencyKey ? { idempotencyKey } : {})
         };
 
-        let txn = null;
-        if (useTransaction && session) {
-            const [createdTxn] = await Transaction.create([txnPayload], createSessionOption);
-            txn = createdTxn;
-        } else {
-            txn = await Transaction.create(txnPayload);
-        }
-
-        // 4. Update wallet balance atomically
-        if (type === 'credit') {
-            if (entityType === 'restaurant' || entityType === 'deliveryBoy') {
-                await Model.updateOne(filter, {
-                    $set: { balance: newBalance },
-                    $inc: { totalEarnings: amount }
-                }, sessionOption);
-            } else if (entityType === 'admin') {
-                await Model.updateOne(filter, {
-                    $set: { balance: newBalance },
-                    $inc: { totalRevenue: amount }
-                }, sessionOption);
+        let txn;
+        try {
+            if (useTransaction && session) {
+                [txn] = await Transaction.create([txnPayload], { session });
             } else {
-                await Model.updateOne(filter, { $set: { balance: newBalance } }, sessionOption);
+                txn = await Transaction.create(txnPayload);
             }
-        } else {
-            await Model.updateOne(filter, { $set: { balance: newBalance } }, sessionOption);
+        } catch (ledgerErr) {
+            if (!useTransaction || !session) {
+                // No DB transaction to roll back: undo the wallet change by hand.
+                await Model.updateOne(filter, { $inc: Object.fromEntries(Object.entries(inc).map(([k, v]) => [k, -v])) });
+            }
+            if (ledgerErr?.code === 11000 && idempotencyKey) {
+                if (useTransaction && session) {
+                    try { await session.abortTransaction(); } catch (e) {}
+                }
+                const prior = await Transaction.findOne({ idempotencyKey }).lean();
+                return { transaction: prior, wallet: { balance: prior?.balanceAfter }, duplicate: true };
+            }
+            throw ledgerErr;
         }
 
         if (useTransaction && session) {

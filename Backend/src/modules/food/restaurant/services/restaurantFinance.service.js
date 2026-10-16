@@ -178,7 +178,14 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         ]
     }).select('pricing orderStatus').lean();
 
-    const ordersPayout = (deliveredOrders || []).reduce((sum, order) => {
+    // Each order is counted exactly once: through its transaction when it has one (that figure already accounts
+    // for restaurant-funded discounts), otherwise from the order itself. Taking max(txPayout, ordersPayout) as
+    // before over-paid whenever the order-based figure was larger.
+    const orderIdsWithTx = new Set(
+        allCompletedTx.map((tx) => String(tx?.orderId?._id || tx?.orderId || '')).filter(Boolean)
+    );
+    const ordersWithoutTxPayout = (deliveredOrders || []).reduce((sum, order) => {
+        if (orderIdsWithTx.has(String(order._id))) return sum;
         const subtotal = Number(order?.pricing?.subtotal) || 0;
         const packagingFee = Number(order?.pricing?.packagingFee) || 0;
         const commission = Number(order?.pricing?.restaurantCommission) || 0;
@@ -186,7 +193,7 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         return sum + share;
     }, 0);
 
-    const globalEstimatedPayout = Math.max(txPayout, ordersPayout);
+    const globalEstimatedPayout = Math.round((txPayout + ordersWithoutTxPayout) * 100) / 100;
 
     // Subtract pending AND approved/completed/processing/settled withdrawals from available balance.
     // Rejected withdrawals are returned to available balance.

@@ -160,3 +160,54 @@ export async function initiateRazorpayRefund(paymentId, amount) {
         };
     }
 }
+
+/**
+ * Fetch a Razorpay order (server-side) so amounts/receipts are read from Razorpay, never from the client.
+ * @param {string} orderId
+ */
+export async function fetchRazorpayOrder(orderId) {
+    const instance = getRazorpayInstance();
+    if (!instance) throw new Error('Razorpay not configured');
+    if (!orderId) throw new Error('orderId is required');
+    return instance.orders.fetch(String(orderId)).catch((error) => {
+        throw new Error(getRazorpayErrorMessage(error));
+    });
+}
+
+/**
+ * Verifies a checkout payment end to end and returns the amount Razorpay actually received.
+ *  1. signature is valid for orderId|paymentId,
+ *  2. the payment belongs to that order and is captured/authorized,
+ *  3. the order was created for this purpose and user (receipt prefix),
+ *  4. payment amount equals the order amount.
+ * The caller must credit the returned `amountInr`, never an amount sent by the client.
+ *
+ * @returns {Promise<{ amountInr: number, paymentId: string, orderId: string }>}
+ */
+export async function verifyCapturedPaymentForReceipt({ orderId, paymentId, signature, receiptPrefix }) {
+    if (!verifyPaymentSignature(orderId, paymentId, signature)) {
+        throw new Error('Payment verification failed');
+    }
+
+    const payment = await fetchRazorpayPayment(paymentId);
+    if (String(payment?.order_id || '') !== String(orderId)) {
+        throw new Error('Payment does not belong to this order');
+    }
+    if (!['captured', 'authorized'].includes(String(payment?.status || '').toLowerCase())) {
+        throw new Error('Payment is not completed');
+    }
+
+    const order = await fetchRazorpayOrder(orderId);
+    if (!receiptPrefix || !String(order?.receipt || '').startsWith(receiptPrefix)) {
+        throw new Error('Payment was not made for this request');
+    }
+    if (Number(order.amount) !== Number(payment.amount)) {
+        throw new Error('Paid amount does not match the order amount');
+    }
+
+    return {
+        amountInr: Math.round(Number(payment.amount)) / 100,
+        paymentId: String(payment.id),
+        orderId: String(order.id),
+    };
+}

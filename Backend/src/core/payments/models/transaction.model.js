@@ -82,6 +82,9 @@ const transactionSchema = new mongoose.Schema(
 
         module: { type: String, default: 'food', trim: true },
 
+        /** Optional unique key: the same key can never create a second ledger row (replay/retry safety). */
+        idempotencyKey: { type: String, default: undefined },
+
         metadata: { type: mongoose.Schema.Types.Mixed, default: undefined }
     },
     { collection: 'transactions', timestamps: true }
@@ -90,5 +93,9 @@ const transactionSchema = new mongoose.Schema(
 transactionSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 transactionSchema.index({ orderId: 1, entityType: 1 });
 transactionSchema.index({ paymentId: 1, type: 1 });
+transactionSchema.index(
+    { idempotencyKey: 1 },
+    { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 export const Transaction = mongoose.model('Transaction', transactionSchema);

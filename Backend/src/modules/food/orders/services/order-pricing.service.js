@@ -91,6 +91,64 @@ async function resolveBaseDistanceSlab() {
   );
 }
 
+/**
+ * Re-prices cart lines from the FoodItem collection.
+ * - the item must exist and belong to this restaurant,
+ * - a variant (if sent) must exist on the item; its price is used, otherwise the item price,
+ * - quantity must be a positive integer.
+ * Client-sent price/variantPrice are overwritten, so the totals can never be tampered with.
+ */
+export async function resolveServerPricedItems(rawItems, restaurantId) {
+  const lines = Array.isArray(rawItems) ? rawItems : [];
+  if (!lines.length) throw new ValidationError('Cart is empty');
+
+  const ids = [...new Set(lines.map((l) => String(l?.itemId || '')))];
+  if (ids.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+    throw new ValidationError('Invalid item in cart');
+  }
+
+  const docs = await FoodItem.find({ _id: { $in: ids } })
+    .select('name price variants restaurantId')
+    .lean();
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+  return lines.map((line) => {
+    const doc = byId.get(String(line.itemId));
+    if (!doc) throw new ValidationError(`"${line?.name || 'An item'}" is no longer available`);
+    if (restaurantId && String(doc.restaurantId) !== String(restaurantId)) {
+      throw new ValidationError(`"${doc.name}" does not belong to this restaurant`);
+    }
+
+    const quantity = Number(line.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      throw new ValidationError(`Invalid quantity for "${doc.name}"`);
+    }
+
+    let unitPrice = Number(doc.price);
+    let variantName = '';
+    const variantId = line.variantId ? String(line.variantId) : '';
+    if (variantId) {
+      const variant = (doc.variants || []).find((v) => String(v._id) === variantId);
+      if (!variant) throw new ValidationError(`Selected option of "${doc.name}" is no longer available`);
+      unitPrice = Number(variant.price);
+      variantName = variant.name || '';
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new ValidationError(`"${doc.name}" has no valid price`);
+    }
+    unitPrice = Math.round(unitPrice * 100) / 100;
+
+    return {
+      ...line,
+      name: doc.name,
+      price: unitPrice,
+      variantPrice: variantId ? unitPrice : line.variantPrice,
+      variantName: variantId ? variantName : line.variantName,
+      quantity,
+    };
+  });
+}
+
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
     .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
@@ -117,11 +175,11 @@ export async function calculateOrderPricing(userId, dto) {
     throw new ValidationError(availability.message || "Restaurant is currently closed and not accepting orders");
   }
 
-  const items = Array.isArray(dto.items) ? dto.items : [];
-  const subtotal = items.reduce(
-    (sum, it) => sum + (Number(it.price) || 0) * (Number(it.quantity) || 1),
-    0,
-  );
+  // Prices always come from the database; whatever price the client sent is ignored.
+  const items = await resolveServerPricedItems(dto.items, dto.restaurantId);
+  const subtotal = Math.round(
+    items.reduce((sum, it) => sum + it.price * it.quantity, 0) * 100,
+  ) / 100;
 
   const feeDoc = await FoodFeeSettings.findOne({ isActive: true })
     .sort({ createdAt: -1 })
@@ -389,6 +447,8 @@ export async function calculateOrderPricing(userId, dto) {
   );
 
   return {
+    // Server-priced cart lines; createOrder stores these instead of the client's items.
+    items,
     pricing: {
       subtotal,
       tax,

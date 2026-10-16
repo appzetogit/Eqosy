@@ -317,7 +317,11 @@ export default function SignupStep2() {
       formData.append("platform", platform);
     }
 
-    const isCompleteProfile = sessionStorage.getItem("deliveryNeedsRegistration") === "true"
+    // No delivery token (Create Account flow, or OTP said needsRegistration) => brand-new partner => register.
+    // completeProfile (PATCH /profile) requires a Bearer token, so only use it when logged in.
+    const hasDeliveryToken = Boolean(localStorage.getItem("delivery_accessToken"))
+    const isCompleteProfile =
+      sessionStorage.getItem("deliveryNeedsRegistration") === "true" || !hasDeliveryToken
 
     setIsSubmitting(true)
 

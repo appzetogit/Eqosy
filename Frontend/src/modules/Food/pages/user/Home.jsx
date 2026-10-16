@@ -1558,12 +1558,14 @@ export default function Home() {
   }, [deliveryAddressMode, defaultSavedAddress?.id, defaultSavedAddress?._id]);
 
   const effectiveLocation = useMemo(() => {
+    // Only use the saved/cached address when the user is actually in "saved" mode.
+    // (Previously the `||` escaped the mode check, so "current" mode still resolved to the saved address.)
     const useSavedAddress =
       deliveryAddressMode === "saved" &&
-      (Number.isFinite(defaultSavedAddressLocation?.latitude) &&
+      ((Number.isFinite(defaultSavedAddressLocation?.latitude) &&
         Number.isFinite(defaultSavedAddressLocation?.longitude)) ||
-      (Number.isFinite(savedLocationCache?.latitude) &&
-        Number.isFinite(savedLocationCache?.longitude));
+        (Number.isFinite(savedLocationCache?.latitude) &&
+          Number.isFinite(savedLocationCache?.longitude)));
 
     if (!useSavedAddress) return location;
     return defaultSavedAddressLocation || savedLocationCache || location;
@@ -1599,6 +1601,45 @@ export default function Home() {
     () => cart.reduce((total, item) => total + (item.quantity || 0), 0),
     [cart],
   );
+
+  // On every app launch, use the device's current GPS location as the delivery location
+  // (zone availability is then checked against it) instead of the previously selected/saved address.
+  // If GPS is unavailable/denied, fall back to the previous behaviour (saved/selected address).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const LAUNCH_KEY = "eqosyLaunchLocationSynced";
+    try {
+      if (window.sessionStorage.getItem(LAUNCH_KEY) === "1") return;
+      window.sessionStorage.setItem(LAUNCH_KEY, "1");
+    } catch {
+      // sessionStorage unavailable — still try once per mount
+    }
+
+    const previousMode = window.localStorage.getItem("deliveryAddressMode") || "saved";
+    const previousLocation = window.localStorage.getItem("userLocation");
+
+    window.localStorage.setItem("deliveryAddressMode", "current");
+    setDeliveryAddressMode("current");
+    window.dispatchEvent(new Event("deliveryAddressModeChanged"));
+
+    (async () => {
+      try {
+        const fresh = await requestLocation();
+        if (!Number.isFinite(Number(fresh?.latitude)) || !Number.isFinite(Number(fresh?.longitude))) {
+          throw new Error("No coordinates from current location");
+        }
+      } catch {
+        // GPS failed or permission denied: restore the previous address selection.
+        if (previousLocation && !window.localStorage.getItem("userLocation")) {
+          window.localStorage.setItem("userLocation", previousLocation);
+        }
+        window.localStorage.setItem("deliveryAddressMode", previousMode);
+        setDeliveryAddressMode(previousMode);
+        window.dispatchEvent(new Event("deliveryAddressModeChanged"));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const readMode = () => {

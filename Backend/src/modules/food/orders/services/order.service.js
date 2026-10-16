@@ -159,6 +159,8 @@ export async function createOrder(userId, dto) {
     if (!pricingResult?.pricing) {
       throw new ValidationError("Unable to calculate order pricing from fee settings");
     }
+    // Store the server-priced lines, never the prices the client sent.
+    dto.items = pricingResult.items;
     // Reject a payment method the admin has switched off (razorpay_qr is the COD-style flow).
     const allowedMethods = pricingResult.pricing.paymentMethods;
     const methodKey = paymentMethod === "razorpay_qr" ? "cash" : paymentMethod;

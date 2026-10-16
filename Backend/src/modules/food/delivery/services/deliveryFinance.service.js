@@ -7,7 +7,7 @@ import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
-import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
+import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyCapturedPaymentForReceipt } from '../../orders/helpers/razorpay.helper.js';
 import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
 import { assertVerifiedForPayout } from '../../../../core/payments/payoutAccount.service.js';
 
@@ -252,12 +252,11 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
     const orderId = String(payload?.razorpayOrderId || '').trim();
     const paymentId = String(payload?.razorpayPaymentId || '').trim();
     const signature = String(payload?.razorpaySignature || '').trim();
-    const amount = Number(payload?.amount);
 
+    // NOTE: any `amount` sent by the client is ignored on purpose; the deposit is what Razorpay actually received.
     if (!orderId) throw new ValidationError('razorpayOrderId is required');
     if (!paymentId) throw new ValidationError('razorpayPaymentId is required');
     if (!signature) throw new ValidationError('razorpaySignature is required');
-    if (!Number.isFinite(amount) || amount < 1) throw new ValidationError('amount is required');
 
     const existing = await FoodDeliveryCashDeposit.findOne({
         deliveryPartnerId,
@@ -271,43 +270,55 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
         return { deposit: existing, wallet: await getDeliveryPartnerWalletEnhanced(deliveryPartnerId) };
     }
 
-    const wallet = await getDeliveryPartnerWalletEnhanced(deliveryPartnerId);
-    if (amount > wallet.cashInHand) {
-        throw new ValidationError('Deposit amount cannot exceed cash in hand');
-    }
-
     if (!isRazorpayConfigured()) {
         throw new ValidationError('Razorpay payment gateway is not configured');
     }
 
-    const isValid = verifyPaymentSignature(orderId, paymentId, signature);
-
-    if (!isValid) {
-        throw new ValidationError('Payment verification failed');
+    let verified;
+    try {
+        verified = await verifyCapturedPaymentForReceipt({
+            orderId,
+            paymentId,
+            signature,
+            receiptPrefix: `cash_deposit_${String(deliveryPartnerId).slice(-8)}_`
+        });
+    } catch (err) {
+        throw new ValidationError(err?.message || 'Payment verification failed');
     }
 
-    const deposit = existing
-        ? await FoodDeliveryCashDeposit.findByIdAndUpdate(
-            existing._id,
-            {
-                $set: {
-                    amount,
-                    paymentMethod: 'razorpay',
-                    status: 'Completed',
-                    razorpayOrderId: orderId,
-                    razorpayPaymentId: paymentId
-                }
-            },
+    const completed = {
+        amount: verified.amountInr,
+        paymentMethod: 'razorpay',
+        status: 'Completed',
+        razorpayOrderId: verified.orderId,
+        razorpayPaymentId: verified.paymentId
+    };
+
+    let deposit;
+    if (existing) {
+        // Complete a pending record exactly once.
+        deposit = await FoodDeliveryCashDeposit.findOneAndUpdate(
+            { _id: existing._id, status: { $ne: 'Completed' } },
+            { $set: completed },
             { new: true }
-        )
-        : await FoodDeliveryCashDeposit.create({
-            deliveryPartnerId,
-            amount,
-            paymentMethod: 'razorpay',
-            status: 'Completed',
-            razorpayOrderId: orderId,
-            razorpayPaymentId: paymentId
-        });
+        );
+        if (!deposit) deposit = await FoodDeliveryCashDeposit.findById(existing._id);
+    } else {
+        // Keyed on the Razorpay payment id (unique index): a retry or a parallel request returns the same record.
+        try {
+            deposit = await FoodDeliveryCashDeposit.findOneAndUpdate(
+                { razorpayPaymentId: verified.paymentId },
+                { $setOnInsert: { deliveryPartnerId, ...completed } },
+                { upsert: true, new: true }
+            );
+        } catch (err) {
+            if (err?.code !== 11000) throw err;
+            deposit = await FoodDeliveryCashDeposit.findOne({ razorpayPaymentId: verified.paymentId });
+        }
+    }
+    if (deposit && String(deposit.deliveryPartnerId) !== String(deliveryPartnerId)) {
+        throw new ValidationError('This payment has already been used');
+    }
 
     return {
         deposit,

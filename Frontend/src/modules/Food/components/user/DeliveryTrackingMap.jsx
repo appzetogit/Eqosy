@@ -238,6 +238,15 @@ const dashedLineOptions = (color = '#111827', extra = {}) => ({
   ...extra,
 });
 
+/** Solid route line — shown once the rider has picked up the order and is heading to the customer. */
+const solidLineOptions = (color = '#111827', extra = {}) => ({
+  strokeColor: color,
+  strokeOpacity: 0.95,
+  strokeWeight: 5,
+  icons: [],
+  ...extra,
+});
+
 /** Imperatively syncs path on every rider tick — declarative Polyline alone often won't erase behind rider */
 function LiveRoutePolyline({ path, options }) {
   const polylineRef = useRef(null);
@@ -1009,7 +1018,7 @@ const DeliveryTrackingMap = ({
         {isDeliveryLeg && (
           <LiveRoutePolyline
             path={deliveryRemainingPath}
-            options={dashedLineOptions('#111827', { geodesic: true, zIndex: 10 })}
+            options={solidLineOptions('#111827', { geodesic: true, zIndex: 10 })}
           />
         )}
 
