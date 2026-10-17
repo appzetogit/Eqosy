@@ -1776,7 +1776,7 @@ export default function OrderTracking({ isSharedView = false }) {
     isFoodOrderCancelledStatus(order?.status)
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] pb-24">
+    <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] pb-4">
       {/* Order Confirmed Modal */}
       <AnimatePresence>
         {showConfirmation && (
@@ -1870,7 +1870,7 @@ export default function OrderTracking({ isSharedView = false }) {
       )}
 
       {/* Scrollable Content */}
-      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 pt-6 pb-28 flex flex-col gap-6">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 pt-6 pb-6 flex flex-col gap-6">
 
         {/* Main Status Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
@@ -1884,10 +1884,24 @@ export default function OrderTracking({ isSharedView = false }) {
                   ? "Delivered!"
                   : (isCancelledOrder && order?.status === 'cancelled_by_restaurant')
                     ? `Cancelled by ${storeWord}`
-                    : isCancelledOrder
+                    : (isCancelledOrder && order?.status === 'cancelled_by_admin')
+                      ? "Cancelled by Admin"
+                      : isCancelledOrder
                       ? "Order Cancelled"
                       : currentStatus.subtitle}
               </h2>
+              {isCancelledOrder && order?.status === 'cancelled_by_admin' && (
+                <div className="mt-2 space-y-1">
+                  {order?.cancellationReason && (
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">Reason: {order.cancellationReason}</p>
+                  )}
+                  {String(order?.payment?.refund?.status || '').toLowerCase() === 'processed' && (
+                    <p className="text-emerald-600 font-semibold text-sm">
+                      Refund of ₹{order.payment.refund.amount} has been initiated to your payment method.
+                    </p>
+                  )}
+                </div>
+              )}
               {isCancelledOrder && order?.status === 'cancelled_by_restaurant' && order?.note && (
                 <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">
                   {order.note}

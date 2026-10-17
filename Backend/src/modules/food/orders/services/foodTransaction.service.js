@@ -305,6 +305,18 @@ export async function reverseOrderPayoutCredits(orderId) {
 export async function creditWalletsForTransaction(transaction) {
     if (!transaction || !transaction.orderId) return;
 
+    // Earnings (restaurant + rider) become real only once the order is completed. Online/wallet orders are
+    // captured at payment time, long before delivery, so crediting then would show earnings for orders that
+    // may still get cancelled or refunded.
+    try {
+        const FoodOrderModel = mongoose.model('FoodOrder');
+        const orderState = await FoodOrderModel.findById(transaction.orderId).select('orderStatus').lean();
+        if (!orderState || orderState.orderStatus !== 'delivered') return;
+    } catch (err) {
+        logger.error(`[FoodTransaction] Could not verify order completion for ${transaction.orderId}: ${err?.message || err}`);
+        return;
+    }
+
     let restaurantShare = Number(transaction.amounts?.restaurantShare) || 0;
     let riderShare = Number(transaction.amounts?.riderShare || transaction.amounts?.riderTotalPayout) || 0;
     let riderId = transaction.deliveryPartnerId?._id ? String(transaction.deliveryPartnerId._id) : (transaction.deliveryPartnerId ? String(transaction.deliveryPartnerId) : null);

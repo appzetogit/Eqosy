@@ -572,13 +572,6 @@ const getOrderItemLabel = (item) => {
   return `${item?.quantity || 1}x ${item?.name || "Item"}${v && String(v).trim() ? ` (${String(v).trim()})` : ""}`;
 };
 
-/** Items of an order that the vendor has not ticked as packed yet. */
-const getUnpackedItems = (order) => {
-  const items = Array.isArray(order?.items) ? order.items : [];
-  const packed = readPackedItems(order?._id || order?.orderId);
-  return items.filter((_, idx) => !packed.includes(idx));
-};
-
 function PackingChecklist({ order }) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const orderKey = order?._id || order?.orderId;
@@ -910,7 +903,7 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
         if (response.data?.success && response.data.data?.orders) {
           // Filter cancelled orders (both restaurant and user cancelled)
           const cancelledOrders = response.data.data.orders.filter(
-            (order) => order.status === "cancelled",
+            (order) => String(order.status || order.orderStatus || "").toLowerCase().startsWith("cancel"),
           );
 
           const transformedOrders = cancelledOrders.map((order) => ({
@@ -927,7 +920,10 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
             }),
             cancelledAt:
               order.cancelledAt || order.updatedAt || order.createdAt,
-            cancelledBy: order.cancelledBy || "unknown",
+            cancelledBy:
+              String(order.status || "").toLowerCase() === "cancelled_by_admin"
+                ? "admin"
+                : String(order.cancelledBy || "unknown").toLowerCase(),
             cancellationReason:
               order.cancellationReason || "No reason provided",
             itemsSummary:
@@ -1020,6 +1016,8 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
             const cancelledByText =
               order.cancelledBy === "user"
                 ? "Cancelled by User"
+                : order.cancelledBy === "admin"
+                  ? "Cancelled by Admin"
                 : order.cancelledBy === "restaurant"
                   ? "Cancelled by Restaurant"
                   : "Cancelled";
@@ -2111,6 +2109,16 @@ export default function OrdersMain() {
 
     // Ensure this order can't re-trigger fallback popup by using a different id key.
     markOrderAsShown(orderToAccept);
+
+    // A popup for an order that already moved past "created/confirmed" (delivered, ready, cancelled...) must not be accepted again.
+    const popupStatus = String(orderToAccept?.status || orderToAccept?.orderStatus || "").toLowerCase();
+    if (popupStatus && !["created", "confirmed", "pending", "placed"].includes(popupStatus)) {
+      setPopupOrder(null);
+      setIsAcceptingOrder(false);
+      setAcceptSwipeProgress(0);
+      requestOrdersRefresh();
+      return;
+    }
 
     // Accept order via API if we have a real order
     if (orderToAccept?.orderMongoId || orderToAccept?.orderId) {
@@ -3428,17 +3436,9 @@ function OrderCard({
         normalizedStatus === "ready" ||
         normalizedStatus === "preparing"),
   );
-  const [missingItems, setMissingItems] = useState(null);
-  const runMarkReady = () => onMarkReady?.({ orderId, mongoId, customerName });
-  // Warn the vendor if some items are not ticked as packed before marking the order ready
+  // Mark ready goes through directly — no "items not packed" confirmation.
   const handleMarkReadyClick = () => {
-    const unpacked = getUnpackedItems(fullOrder);
-    if (unpacked.length > 0) {
-      setMissingItems(unpacked);
-      toast.warning(`${unpacked.length} item${unpacked.length > 1 ? "s" : ""} not packed yet`);
-      return;
-    }
-    runMarkReady();
+    onMarkReady?.({ orderId, mongoId, customerName });
   };
   const statusLabel = String(status || "")
     .replace(/_/g, " ")
@@ -3601,37 +3601,6 @@ function OrderCard({
         </div>
       </div>
 
-      {missingItems && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
-          onClick={(e) => { e.stopPropagation(); setMissingItems(null); }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-bold text-gray-900">Some items are not packed</p>
-            <p className="mt-1 text-xs text-gray-500">Order #{orderId} — these items are not ticked:</p>
-            <ul className="mt-3 space-y-1.5">
-              {missingItems.map((item, idx) => (
-                <li key={idx} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                  {getOrderItemLabel(item)}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setMissingItems(null)}
-                className="flex-1 rounded-xl bg-black py-2.5 text-sm font-medium text-white">
-                Go back &amp; pack
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMissingItems(null); runMarkReady(); }}
-                className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700">
-                Mark ready anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

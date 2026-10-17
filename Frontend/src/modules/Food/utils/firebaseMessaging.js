@@ -354,6 +354,13 @@ export function isPushRingEvent(payload = {}) {
     if (moduleName === 'delivery') {
       return false;
     }
+    // "order_created" is the customer's own confirmation push — never ring a restaurant tab for it.
+    if (moduleName === 'restaurant' && type.includes('order_created')) {
+      return false;
+    }
+    if (isPushForOtherRestaurant(payload)) {
+      return false;
+    }
     return true;
   }
 
@@ -635,9 +642,24 @@ async function registerNativeWebViewFcmToken(moduleName) {
   }
 }
 
+// A restaurant tab must never show/ring pushes addressed to a different restaurant
+// (web FCM tokens are per browser, so several restaurant logins can share one device).
+function isPushForOtherRestaurant(payload = {}) {
+  if (normalizeModuleFromPath() !== "restaurant") return false;
+  const targetId = String(payload?.data?.restaurantId || "").trim();
+  if (!targetId) return false;
+  let currentId = "";
+  try { currentId = String(sessionStorage.getItem("restaurant_current_id") || "").trim(); } catch { /* ignore */ }
+  return Boolean(currentId) && currentId !== targetId;
+}
+
 function showForegroundNotification(payload = {}) {
   if (!isRecord(payload)) {
     pushDebugWarn(PUSH_DEBUG_PREFIX, "Ignoring malformed foreground notification payload", { payload });
+    return;
+  }
+  if (isPushForOtherRestaurant(payload)) {
+    pushDebugLog(PUSH_DEBUG_PREFIX, "Dropped foreground push for another restaurant", { payload });
     return;
   }
   const notificationKey = getNotificationKey(payload);

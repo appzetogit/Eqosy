@@ -968,15 +968,7 @@ const formatAvailabilityLine = (availability) => {
 };
 
 const formatDispatchLabel = (vehicle) => {
-  if (vehicle?.supportsBidding) {
-    return 'Bid or instant booking';
-  }
-
-  const dispatchType = String(vehicle?.dispatchType || '').toLowerCase();
-  if (dispatchType === 'bidding') {
-    return 'Bid booking';
-  }
-
+  // Every vehicle is booked instantly; bidding vehicles just let the rider add to the fare while searching
   return 'Instant booking';
 };
 
@@ -996,8 +988,22 @@ const getAvailabilityBadge = (availability) => {
   return null;
 };
 
+// Service tabs: a rider books from one tab (Cab / Auto / Bike) and sees only that kind of vehicle
+const VEHICLE_CATEGORIES = [
+  { id: 'cab', label: 'Cab' },
+  { id: 'auto', label: 'Auto' },
+  { id: 'bike', label: 'Bike' },
+];
+
+const getVehicleCategoryId = (vehicle) => {
+  const icon = String(vehicle?.iconType || vehicle?.raw?.icon_types || 'car').trim().toLowerCase();
+  if (icon === 'bike') return 'bike';
+  if (icon === 'auto') return 'auto';
+  return 'cab';
+};
+
 const normalizeVehicleType = (type, index) => {
-  const id = String(type?._id || type?.id || type?.name || index);
+  const id =String(type?._id || type?.id || type?.name || index);
   const dispatchType = String(type?.dispatch_type || 'normal').trim().toLowerCase();
 
   return {
@@ -1485,6 +1491,22 @@ const SelectVehicle = () => {
 
   const hasAvailabilityResults = Object.keys(availabilityByVehicleId).length > 0;
 
+  const isParcelBooking =
+    bookingTab === 'parcel' ||
+    routeState.isParcel ||
+    String(routeState.serviceType || '').toLowerCase() === 'parcel' ||
+    location.pathname.includes('/parcel');
+
+  const [vehicleCategory, setVehicleCategory] = useState('');
+  const availableCategories = useMemo(() => {
+    if (isParcelBooking) return [];
+    const present = new Set(pricedVehicles.map(getVehicleCategoryId));
+    return VEHICLE_CATEGORIES.filter((category) => present.has(category.id));
+  }, [pricedVehicles, isParcelBooking]);
+  const activeCategoryId = availableCategories.some((category) => category.id === vehicleCategory)
+    ? vehicleCategory
+    : (availableCategories[0]?.id || '');
+
   const displayedVehicles = useMemo(() => {
     let baseList = [];
     if (!hasAvailabilityResults) {
@@ -1539,14 +1561,17 @@ const SelectVehicle = () => {
       return true;
     });
 
-    if (bookingTab === 'bid') {
-      return filteredBaseList.filter((vehicle) => vehicle.supportsBidding);
-    } else {
-      return filteredBaseList.filter((vehicle) => !vehicle.supportsBidding || vehicle.dispatchType === 'both' || vehicle.dispatchType === 'normal');
+    // One list: there is no separate "bid" list. A vehicle that supports bidding lets the rider raise the fare later on
+    // the searching screen when no driver accepts.
+    if (activeCategoryId) {
+      return filteredBaseList.filter((vehicle) => getVehicleCategoryId(vehicle) === activeCategoryId);
     }
-  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, bookingTab, routeState.isParcel, routeState.serviceType, location.pathname]);
+    return filteredBaseList;
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, activeCategoryId, bookingTab, routeState.isParcel, routeState.serviceType, location.pathname]);
 
-  const effectiveSelectedId = selected || displayedVehicles[0]?.id || '';
+  const effectiveSelectedId = displayedVehicles.some((vehicle) => vehicle.id === selected)
+    ? selected
+    : (displayedVehicles[0]?.id || selected || '');
   const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === effectiveSelectedId) || pricedVehicles[0] || null, [pricedVehicles, effectiveSelectedId]);
   const previewVehicle = useMemo(
     () => pricedVehicles.find((vehicle) => vehicle.id === previewVehicleId) || null,
@@ -1572,7 +1597,8 @@ const SelectVehicle = () => {
     () => displayedVehicles.some((vehicle) => (availabilityByVehicleId[vehicle.id]?.totalDrivers || 0) > 0),
     [availabilityByVehicleId, displayedVehicles],
   );
-  const shouldUseDriverBidding = bookingTab === 'bid' || Boolean(
+  // Drivers sending their own bids is only for outstation (intercity); city rides use "raise the fare" instead
+  const shouldUseDriverBidding = Boolean(
     routeState.intercity ||
     routeState.serviceType === 'intercity' ||
     routeState.transport_type === 'intercity' ||
@@ -1983,8 +2009,8 @@ const SelectVehicle = () => {
         promo_code: appliedPromo?.promo?.code || '',
         promo: appliedPromo?.promo || null,
         promoBreakdown: appliedPromo?.breakdown || null,
-        bookingMode: (bookingTab === 'bid' && selectedVehicle.supportsBidding) ? 'bidding' : 'normal',
-        pricingNegotiationMode: (bookingTab === 'bid' && selectedVehicle.supportsBidding)
+        bookingMode: selectedVehicle.supportsBidding ? 'bidding' : 'normal',
+        pricingNegotiationMode: selectedVehicle.supportsBidding
           ? shouldUseDriverBidding
             ? 'driver_bid'
             : 'user_increment_only'
@@ -1992,8 +2018,8 @@ const SelectVehicle = () => {
         bidStepAmount: selectedBidStepAmount,
         bidFloorFare: selectedBidFloorFare,
         bidCeilingMaxFare: selectedBidCeilingMaxFare,
-        userMaxBidFare: (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidCeiling : finalFare,
-        bidIncrement: (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidIncrement : 0,
+        userMaxBidFare: (selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidCeiling : finalFare,
+        bidIncrement: (selectedVehicle.supportsBidding && shouldUseDriverBidding) ? selectedBidIncrement : 0,
         estimatedDistanceMeters: tripMetrics.distanceMeters,
         estimatedDurationMinutes: tripMetrics.durationMinutes,
         rideMode,
@@ -2042,7 +2068,7 @@ const SelectVehicle = () => {
 
     setScheduleError('');
 
-    if (bookingTab === 'bid' && selectedVehicle.supportsBidding && shouldUseDriverBidding) {
+    if (selectedVehicle.supportsBidding && shouldUseDriverBidding) {
       setShowBidModal(true);
       return;
     }
@@ -2118,45 +2144,27 @@ const SelectVehicle = () => {
           </div>
         </div>
 
-        {/* Instant vs Bid Booking Tabs */}
-        <div className="shrink-0 px-4 pt-3 pb-1 border-b border-slate-100 bg-white">
-          <div className="grid grid-cols-2 rounded-[14px] bg-[#F4F6F8] p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setBookingTab('instant');
-                const instantVehicles = pricedVehicles.filter(v => !v.supportsBidding || v.dispatchType === 'both' || v.dispatchType === 'normal');
-                if (instantVehicles.length > 0 && !instantVehicles.some(v => v.id === selected)) {
-                  setSelected(instantVehicles[0].id);
-                }
-              }}
-              className={`py-2 text-[13px] font-extrabold rounded-[10px] transition-all duration-200 ${
-                bookingTab === 'instant'
-                  ? 'bg-white text-[#1A2B3D] shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Instant Booking
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBookingTab('bid');
-                const bidVehicles = pricedVehicles.filter(v => v.supportsBidding);
-                if (bidVehicles.length > 0 && !bidVehicles.some(v => v.id === selected)) {
-                  setSelected(bidVehicles[0].id);
-                }
-              }}
-              className={`py-2 text-[13px] font-extrabold rounded-[10px] transition-all duration-200 ${
-                bookingTab === 'bid'
-                  ? 'bg-white text-[#1A2B3D] shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Bid Booking
-            </button>
+        {/* Service tabs: Cab / Auto / Bike - each shows only its own vehicles */}
+        {availableCategories.length > 1 && (
+          <div className="shrink-0 flex gap-2 px-4 pt-3 bg-white">
+            {availableCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setVehicleCategory(category.id)}
+                className={`flex-1 rounded-[12px] border py-2 text-[12px] font-extrabold transition-all duration-200 ${
+                  activeCategoryId === category.id
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-600'
+                }`}
+              >
+                {category.label}
+              </button>
+            ))}
           </div>
-        </div>
+        )}
+
+        <div className="shrink-0 h-2 border-b border-slate-100 bg-white" />
 
         <div className="relative flex-1 min-h-0 overflow-hidden">
           <div

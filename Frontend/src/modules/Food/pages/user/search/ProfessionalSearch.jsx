@@ -99,7 +99,9 @@ function useDebounce(value, delay) {
   return debouncedValue
 }
 
-const SEARCH_HISTORY_KEY = "professional_search_history_v1"
+// Food and Grocery keep separate recent searches, so "chicken" / "pasta" from Food never shows up in Grocery.
+const SEARCH_HISTORY_KEY_FOOD = "professional_search_history_v1"
+const SEARCH_HISTORY_KEY_GROCERY = "professional_search_history_grocery_v1"
 
 export default function ProfessionalSearch() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -180,11 +182,17 @@ export default function ProfessionalSearch() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(searchParams.get("cat") || null)
   const [history, setHistory] = useState([])
 
-  // Load search history
+  const SEARCH_HISTORY_KEY = isGrocerySearch ? SEARCH_HISTORY_KEY_GROCERY : SEARCH_HISTORY_KEY_FOOD
+
+  // Load search history for the current vertical
   useEffect(() => {
-    const savedHistory = localStorage.getItem(SEARCH_HISTORY_KEY)
-    if (savedHistory) setHistory(JSON.parse(savedHistory))
-  }, [])
+    try {
+      const savedHistory = localStorage.getItem(SEARCH_HISTORY_KEY)
+      setHistory(savedHistory ? JSON.parse(savedHistory) : [])
+    } catch {
+      setHistory([])
+    }
+  }, [SEARCH_HISTORY_KEY])
 
   useEffect(() => {
     fetchCategories()
@@ -417,7 +425,8 @@ export default function ProfessionalSearch() {
           <div className="mb-8">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-1">Top Categories</h3>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4">
-              {categories.map((cat) => {
+              {/* Grocery shows only categories with a real image (same as the Grocery home row) */}
+              {(isGrocerySearch ? categories.filter((c) => Boolean(getMediaUrl(c.image))) : categories).map((cat) => {
                 const catImgUrl = getMediaUrl(cat.image);
                 return (
                 <button 

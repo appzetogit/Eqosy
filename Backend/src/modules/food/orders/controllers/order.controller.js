@@ -399,6 +399,30 @@ export async function deleteOrderAdminController(req, res, next) {
     }
 }
 
+export async function cancelOrderAdminController(req, res, next) {
+    try {
+        const adminId = req.user?.userId;
+        const result = await orderService.cancelOrderAdmin(req.params.orderId, adminId, req.body || {}, req.adminContext);
+        const refundNote = result.refund?.attempted
+            ? (result.refund.success ? ' Refund processed.' : ` Refund failed: ${result.refund.message}`)
+            : '';
+        return sendResponse(res, 200, `Order cancelled.${refundNote}`, result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function refundOrderAdminController(req, res, next) {
+    try {
+        const adminId = req.user?.userId;
+        const amount = req.body?.refundAmount;
+        const result = await orderService.refundOrderAdmin(req.params.orderId, adminId, amount, req.adminContext);
+        return sendResponse(res, 200, 'Refund processed successfully', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function resendDeliveryNotificationRestaurantController(req, res, next) {
     try {
         const restaurantId = req.user?.userId;

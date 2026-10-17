@@ -183,6 +183,36 @@ export async function listPublicCategories(query = {}) {
         ]
     };
 
+    // Grocery: a store's own categories that hold approved, available items of approved grocery stores are
+    // shown too (same rule the search page uses). Otherwise those sections show in search but not on the
+    // Grocery home row, because they are "private" to the store until an admin makes them global.
+    if (publicSection === 'grocery') {
+        const storeFilter = { status: 'approved', isRestaurant: false };
+        if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
+            storeFilter.zoneId = new mongoose.Types.ObjectId(zoneIdRaw);
+        }
+        const storeIds = await FoodRestaurant.distinct('_id', storeFilter);
+        const storeCategoryIds = storeIds.length
+            ? await FoodItem.distinct('categoryId', {
+                approvalStatus: 'approved',
+                isActive: { $ne: false },
+                isAvailable: { $ne: false },
+                categoryId: { $ne: null },
+                restaurantId: { $in: storeIds }
+            })
+            : [];
+        if (storeCategoryIds.length) {
+            filter.$and = [
+                {
+                    $or: [
+                        { $and: [{ $or: APPROVED_CATEGORY_FILTER }, { $or: GLOBAL_CATEGORY_FILTER }] },
+                        { _id: { $in: storeCategoryIds } }
+                    ]
+                }
+            ];
+        }
+    }
+
     filter.$and.push(categorySectionFilter(publicSection));
     if (search) {
         const term = escapeRegex(search.slice(0, 80));

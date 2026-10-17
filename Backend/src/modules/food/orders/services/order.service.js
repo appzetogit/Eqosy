@@ -1289,6 +1289,12 @@ export async function updateOrderStatusRestaurant(
   if (!order) throw new NotFoundError("Order not found");
   const from = order.orderStatus;
   if (!isStatusAdvance(from, orderStatus)) {
+    // Accepting an order that already moved on (stale popup / double tap) is a harmless no-op, not an error.
+    const isAcceptRequest = ['confirmed', 'preparing'].includes(String(orderStatus));
+    const isCancelledNow = String(from || '').includes('cancel');
+    if (isAcceptRequest && !isCancelledNow) {
+      return normalizeOrderForClient(order);
+    }
     throw new ValidationError(
       `Current order status '${from}' is further ahead than '${orderStatus}'. Order cannot be moved backwards.`
     );
@@ -2524,3 +2530,213 @@ export async function deleteOrderAdmin(orderId, adminId, adminContext = null) {
   };
 }
 
+
+
+// ----- Admin: force cancel + refund -----
+
+/**
+ * Refund an order's online/wallet payment. Idempotent: does nothing if already refunded.
+ * Returns { attempted, success, message } and mutates order.payment (caller saves).
+ */
+async function refundOrderPayment(order, { amount, reason = "" } = {}) {
+  const method = String(order.payment?.method || "").toLowerCase();
+  const status = String(order.payment?.status || "").toLowerCase();
+  const alreadyRefunded =
+    status === "refunded" || String(order.payment?.refund?.status || "").toLowerCase() === "processed";
+  if (alreadyRefunded) return { attempted: false, success: true, message: "Already refunded" };
+  if (status !== "paid" || !["razorpay", "razorpay_qr", "wallet"].includes(method)) {
+    return { attempted: false, success: false, message: "Order has no online/wallet payment to refund" };
+  }
+
+  const total = Number(order.pricing?.total) || 0;
+  const refundAmount = Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : total;
+  if (refundAmount > total) throw new ValidationError(`Refund amount cannot exceed order total (₹${total})`);
+
+  try {
+    if (method === "wallet") {
+      await userWalletService.refundWalletBalance(
+        order.userId,
+        refundAmount,
+        `Refund for order #${order.order_id || order._id}${reason ? ` (${reason})` : ""}`,
+        { orderId: order._id },
+      );
+      order.payment.refund = { status: "processed", amount: refundAmount, processedAt: new Date() };
+    } else {
+      const paymentId = order.payment?.razorpay?.paymentId;
+      if (!paymentId) {
+        order.payment.refund = { status: "failed", amount: refundAmount };
+        return { attempted: true, success: false, message: "Razorpay payment id missing for this order" };
+      }
+      const result = await initiateRazorpayRefund(paymentId, refundAmount);
+      if (!result?.success) {
+        order.payment.refund = { status: "failed", amount: refundAmount };
+        return { attempted: true, success: false, message: result?.message || "Razorpay refund failed" };
+      }
+      order.payment.refund = {
+        status: "processed",
+        amount: refundAmount,
+        refundId: result.refundId,
+        processedAt: new Date(),
+      };
+    }
+    order.payment.status = "refunded";
+    return { attempted: true, success: true, message: `Refund of ₹${refundAmount} processed` };
+  } catch (err) {
+    logger.error(`refundOrderPayment failed for ${order._id}: ${err?.message || err}`);
+    order.payment.refund = { status: "failed", amount: refundAmount };
+    return { attempted: true, success: false, message: err?.message || "Refund failed" };
+  }
+}
+
+/**
+ * Admin force-cancel: works at any stage before delivery (e.g. restaurant never cancels,
+ * or no rider is going to pick the order). Frees the rider, stops all rings and optionally refunds.
+ */
+export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminContext = null) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
+
+  const terminal = ["delivered", "cancelled_by_user", "cancelled_by_restaurant", "cancelled_by_admin"];
+  if (terminal.includes(order.orderStatus)) {
+    throw new ValidationError(`Order is already ${String(order.orderStatus).replace(/_/g, " ")}`);
+  }
+
+  const reason = String(payload.reason || payload.cancellationReason || "").trim() || "Cancelled by admin";
+  const from = order.orderStatus;
+  const assignedRiderId = order.dispatch?.deliveryPartnerId || order.deliveryPartnerId || null;
+
+  order.orderStatus = "cancelled_by_admin";
+  order.cancellationReason = reason;
+  order.cancelledAt = new Date();
+  order.cancelledBy = "ADMIN";
+  if (order.dispatch) {
+    order.dispatch.status = "cancelled";
+    order.dispatch.deliveryPartnerId = null;
+    order.dispatch.dispatchingAt = undefined;
+  }
+  pushStatusHistory(order, { byRole: "ADMIN", byId: adminId, from, to: "cancelled_by_admin", note: reason });
+
+  // Refund only when the customer already paid online / by wallet, and admin asked for it.
+  let refundResult = { attempted: false, success: false, message: "" };
+  if (payload.refund !== false) {
+    refundResult = await refundOrderPayment(order, { amount: payload.refundAmount, reason });
+  }
+
+  await order.save();
+
+  try {
+    const finalStatus = String(order.payment?.status || "").toLowerCase();
+    const paidOnline = ["razorpay", "razorpay_qr", "wallet"].includes(String(order.payment?.method || "").toLowerCase())
+      && ["paid", "refunded"].includes(finalStatus);
+    await foodTransactionService.updateTransactionStatus(order._id, "cancelled_by_admin", {
+      // Paid online but not (yet) refunded: keep the transaction status so admin can still refund it.
+      status: finalStatus === "refunded" ? "refunded" : paidOnline ? undefined : "failed",
+      note: `Order cancelled by admin: ${reason}`,
+      recordedByRole: "ADMIN",
+      recordedById: adminId,
+    });
+  } catch (err) {
+    logger.warn(`cancelOrderAdmin transaction sync failed: ${err?.message || err}`);
+  }
+
+  const displayId = order.order_id || order._id;
+  const refundLine = refundResult.success && refundResult.attempted
+    ? ` Your refund of ₹${order.payment?.refund?.amount} has been initiated.`
+    : "";
+  const targets = [
+    { ownerType: "USER", ownerId: order.userId },
+    { ownerType: "RESTAURANT", ownerId: order.restaurantId },
+  ];
+  if (assignedRiderId) targets.push({ ownerType: "DELIVERY_PARTNER", ownerId: assignedRiderId });
+  await notifyOwnersSafely(targets, {
+    title: "Order Cancelled ❌",
+    body: `Order #${displayId} was cancelled by admin. ${reason}.${refundLine}`,
+    image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
+    data: {
+      type: "order_cancelled",
+      orderId: String(order._id),
+      orderMongoId: String(order._id),
+      restaurantId: String(order.restaurantId?._id || order.restaurantId || ""),
+    },
+  });
+
+  try {
+    const io = getIO();
+    if (io) {
+      const socketPayload = {
+        orderMongoId: order._id.toString(),
+        orderId: order.order_id || order._id.toString(),
+        displayId: order.order_id || order._id.toString(),
+        orderStatus: order.orderStatus,
+        status: order.orderStatus,
+        cancelledBy: "admin",
+        cancellationReason: reason,
+        message: `Order #${displayId} was cancelled by admin.${refundLine}`,
+      };
+      const roomList = [rooms.user(order.userId), rooms.restaurant(order.restaurantId), rooms.tracking(order._id)];
+      if (assignedRiderId) roomList.push(rooms.delivery(assignedRiderId));
+      // Riders who were only offered the order must stop ringing too.
+      for (const offer of order.dispatch?.offeredTo || []) {
+        if (offer?.partnerId) roomList.push(rooms.delivery(offer.partnerId));
+      }
+      for (const room of new Set(roomList)) {
+        io.to(room).emit("order_status_update", socketPayload);
+        io.to(room).emit("order_cancelled", socketPayload);
+      }
+    }
+  } catch (err) {
+    logger.warn(`cancelOrderAdmin socket emit failed: ${err?.message || err}`);
+  }
+
+  return { order: normalizeOrderForClient(order), refund: refundResult };
+}
+
+/** Admin manual refund (for cancelled orders whose automatic refund did not happen / failed). */
+export async function refundOrderAdmin(orderId, adminId, refundAmount = null, adminContext = null) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError("Order not found");
+  await assertSubadminOrderZoneAccess(order, adminContext);
+
+  if (!String(order.orderStatus || "").includes("cancel")) {
+    throw new ValidationError("Only cancelled orders can be refunded. Cancel the order first.");
+  }
+
+  const result = await refundOrderPayment(order, { amount: refundAmount, reason: "admin refund" });
+  if (!result.success) throw new ValidationError(result.message || "Refund failed");
+
+  pushStatusHistory(order, {
+    byRole: "ADMIN",
+    byId: adminId,
+    from: order.orderStatus,
+    to: order.orderStatus,
+    note: `Refund processed: ₹${order.payment?.refund?.amount}`,
+  });
+  await order.save();
+
+  try {
+    await foodTransactionService.updateTransactionStatus(order._id, order.orderStatus, {
+      status: "refunded",
+      note: "Refund processed by admin",
+      recordedByRole: "ADMIN",
+      recordedById: adminId,
+    });
+  } catch (err) {
+    logger.warn(`refundOrderAdmin transaction sync failed: ${err?.message || err}`);
+  }
+
+  await notifyOwnersSafely([{ ownerType: "USER", ownerId: order.userId }], {
+    title: "Refund Processed! 💸",
+    body: `Your refund of ₹${order.payment?.refund?.amount} for Order #${order.order_id || order._id} has been processed.`,
+    image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
+    data: { type: "refund_processed", orderId: String(order._id), orderMongoId: String(order._id) },
+  });
+
+  return normalizeOrderForClient(order);
+}

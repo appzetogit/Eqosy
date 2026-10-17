@@ -291,7 +291,9 @@ const SearchingDriver = () => {
   );
   const activeRideIdRef = useRef('');
   const searchNonce = String(routeState.searchNonce || '');
-  const isDriverBidRide = biddingSummary.pricingNegotiationMode === 'driver_bid' || String(routeState.bookingMode || '').toLowerCase() === 'bidding';
+  // Only the negotiation mode decides: a city ride with bookingMode "bidding" is the "raise the fare" flow, not drivers
+  // sending bids (that list would stay empty because no driver ever bids on it).
+  const isDriverBidRide = biddingSummary.pricingNegotiationMode === 'driver_bid';
   const isUserIncrementRide = biddingSummary.pricingNegotiationMode === 'user_increment_only';
   const isBiddingRide = isDriverBidRide;
   const isScheduledRide = Boolean(routeState.scheduledAt);
@@ -884,7 +886,8 @@ const SearchingDriver = () => {
     }
   };
 
-  const handleIncreaseBid = async () => {
+  const handleIncreaseBid = async (steps = 1) => {
+    const incrementSteps = Math.max(1, Math.round(Number(steps) || 1));
     if (!canIncreaseFare && fareIncreaseCountdownMs > 0) {
       const waitMins = biddingSummary.fareIncreaseWaitMinutes || 2;
       const totalSecs = Math.max(1, Math.ceil(fareIncreaseCountdownMs / 1000));
@@ -904,7 +907,7 @@ const SearchingDriver = () => {
 
     setBidActionLoading(true);
     try {
-      const response = await userAuthService.increaseRideBidCeiling(rideId, 1);
+      const response = await userAuthService.increaseRideBidCeiling(rideId, incrementSteps);
       const payload = unwrap(response);
       setBiddingSummary((current) => ({
         ...current,
@@ -1186,7 +1189,7 @@ const SearchingDriver = () => {
                     <button
                       type="button"
                       disabled={bidActionLoading}
-                      onClick={handleIncreaseBid}
+                      onClick={() => handleIncreaseBid(1)}
                       className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition ${
                         !canIncreaseFare
                           ? 'bg-slate-300 text-slate-600 hover:bg-slate-400'
@@ -1235,7 +1238,7 @@ const SearchingDriver = () => {
                     <button
                       type="button"
                       disabled={bidActionLoading}
-                      onClick={handleIncreaseBid}
+                      onClick={() => handleIncreaseBid(1)}
                       className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition ${
                         !canIncreaseFare
                           ? 'bg-slate-300 text-slate-600 hover:bg-slate-400'

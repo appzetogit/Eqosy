@@ -29,9 +29,18 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 const handleChunkModuleError = (event) => {
   try {
     const lastReload = Number(sessionStorage.getItem('chunk-auto-reload-ts') || 0)
+    const count = Number(sessionStorage.getItem('chunk-auto-reload-count') || 0)
     const now = Date.now()
     if (now - lastReload < 3000) return
+    // At most 2 automatic reloads within a minute. After that stop looping and let the error screen
+    // (with its manual Reload button) show, instead of refreshing the whole app every few seconds.
+    const withinWindow = now - lastReload < 60000
+    if (withinWindow && count >= 2) {
+      console.warn('[chunk-recovery] Auto-reload limit reached; not reloading again.')
+      return
+    }
     sessionStorage.setItem('chunk-auto-reload-ts', String(now))
+    sessionStorage.setItem('chunk-auto-reload-count', String(withinWindow ? count + 1 : 1))
   } catch { /* ignore */ }
   window.location.reload()
 }

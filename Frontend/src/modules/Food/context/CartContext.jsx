@@ -628,6 +628,7 @@ const isItemAvailableNow = (availableTime) => {
         show={showEqosyLoader}
         message={eqosyLoaderOptions.message}
         subMessage={eqosyLoaderOptions.subMessage}
+        vertical={isGroceryActive ? "grocery" : "food"}
       />
     </CartContext.Provider>
   )

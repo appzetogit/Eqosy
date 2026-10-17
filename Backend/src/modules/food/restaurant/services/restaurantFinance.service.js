@@ -90,6 +90,9 @@ function isCompletedTx(tx) {
     const order = (tx.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
     const orderStatus = String(order.orderStatus || order.deliveryState?.currentPhase || order.deliveryState?.status || '').toLowerCase();
     if (['delivered', 'completed'].includes(orderStatus)) return true;
+    // Earnings count only for completed orders. An online-paid (captured) order that is still in progress
+    // or got cancelled must not show up as restaurant earning.
+    if (order.orderStatus) return false;
     const txStatus = String(tx.status || '').toLowerCase();
     const payStatus = String(tx.payment?.status || '').toLowerCase();
     return ['captured', 'authorized', 'settled', 'completed', 'paid'].includes(txStatus) || payStatus === 'paid';

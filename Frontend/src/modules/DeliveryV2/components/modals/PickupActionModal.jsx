@@ -7,6 +7,7 @@ import {
   AlertTriangle, RefreshCw, X, MessageCircle
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
+import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { uploadAPI, deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
 import { openCamera } from "@food/utils/imageUploadUtils";
@@ -386,6 +387,7 @@ export const PickupActionModal = ({
         <div className="p-8 pt-0 pb-12 space-y-6 bg-white border-t border-gray-50">
           {!isAtPickup ? (
             <div className="pt-6 space-y-3">
+              <PaymentBadge order={order} />
               <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-2 transition-colors ${
                 isWithinRange ? 'text-emerald-600' : 'text-orange-500 font-bold'
               }`}>
@@ -423,6 +425,8 @@ export const PickupActionModal = ({
             </div>
           ) : (
             <div className="pt-6 space-y-6">
+              {/* Always visible next to the bill capture: is the order already paid or COD? */}
+              <PaymentBadge order={order} />
               <div className="flex justify-center items-center gap-4 w-full">
                  {!billImageUploaded && !isUploadingBill && (
                    <>

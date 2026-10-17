@@ -20,11 +20,27 @@ import { adminService } from '../../services/adminService';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from "framer-motion";
-import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
 const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
 const selectClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors appearance-none cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M6%209L12%2015L18%209%22%20stroke%3D%22%2364748B%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:18px] bg-[right_12px_center] bg-no-repeat";
+
+// One "Service" per module. transport_type is derived from it, never asked separately.
+const SERVICE_OPTIONS = [
+  { value: 'normal', label: 'Ride', transport: 'taxi' },
+  { value: 'outstation', label: 'Outstation', transport: 'taxi' },
+  { value: 'rental', label: 'Rental', transport: 'taxi' },
+  { value: 'parcel', label: 'Parcel', transport: 'delivery' },
+  { value: 'bus', label: 'Bus', transport: 'taxi' },
+  { value: 'pooling', label: 'Car Pooling', transport: 'pooling' },
+];
+
+const getServiceLabel = (value) =>
+  SERVICE_OPTIONS.find((s) => s.value === String(value || 'normal').toLowerCase())?.label ||
+  String(value || '').replace(/^./, (c) => c.toUpperCase());
+
+const getTransportForService = (value, fallback = 'taxi') =>
+  SERVICE_OPTIONS.find((s) => s.value === String(value || '').toLowerCase())?.transport || fallback;
 
 const StatusToggle = ({ active, onToggle }) => (
   <button
@@ -54,10 +70,8 @@ const AppModules = ({ mode: propMode }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({
     service_type: '',
-    transport_type: '',
     active: '',
   });
-  const { transportTypes } = useTaxiTransportTypes();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -137,7 +151,12 @@ const AppModules = ({ mode: propMode }) => {
     if (!formData.name) return toast.error('Name is required');
     try {
       setSubmitting(true);
-      const payload = { ...formData, order_by: Number(formData.order_by) };
+      if (!formData.service_type) return toast.error('Service is required');
+      const payload = {
+        ...formData,
+        transport_type: getTransportForService(formData.service_type, formData.transport_type || 'taxi'),
+        order_by: Number(formData.order_by),
+      };
 
       if (isEdit) {
         await adminService.updateAppModule(id, payload);
@@ -171,13 +190,10 @@ const AppModules = ({ mode: propMode }) => {
       const matchesService =
         !filters.service_type ||
         String(moduleItem.service_type || '').toLowerCase() === String(filters.service_type).toLowerCase();
-      const matchesTransport =
-        !filters.transport_type ||
-        String(moduleItem.transport_type || '').toLowerCase() === String(filters.transport_type).toLowerCase();
       const matchesStatus =
         filters.active === '' || String(Boolean(moduleItem.active)) === String(filters.active === 'true');
 
-      return matchesSearch && matchesService && matchesTransport && matchesStatus;
+      return matchesSearch && matchesService && matchesStatus;
     });
   }, [filters, modules, searchTerm]);
 
@@ -204,7 +220,6 @@ const AppModules = ({ mode: propMode }) => {
   const clearFilters = () => {
     setFilters({
       service_type: '',
-      transport_type: '',
       active: '',
     });
   };
@@ -289,35 +304,17 @@ const AppModules = ({ mode: propMode }) => {
                         <X size={14} /> Close
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 gap-4 px-8 py-6 md:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 px-8 py-6 md:grid-cols-3">
                       <div>
-                        <label className={labelClass}>Module Service</label>
+                        <label className={labelClass}>Service</label>
                         <select
                           value={filters.service_type}
                           onChange={(e) => updateFilter('service_type', e.target.value)}
                           className={selectClass}
                         >
                           <option value="">All services</option>
-                          <option value="normal">Normal</option>
-                          <option value="outstation">Outstation</option>
-                          <option value="rental">Rental</option>
-                          <option value="bid">Bid</option>
-                          <option value="pooling">Pooling</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Transport Type</label>
-                        <select
-                          value={filters.transport_type}
-                          onChange={(e) => updateFilter('transport_type', e.target.value)}
-                          className={selectClass}
-                        >
-                          <option value="">All transport types</option>
-                          {transportTypes.map((type) => (
-                            <option key={type.value || type.id} value={type.value || type.id}>
-                              {type.label || type.name || type.value}
-                            </option>
+                          {SERVICE_OPTIONS.map((s) => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
                           ))}
                         </select>
                       </div>
@@ -356,8 +353,7 @@ const AppModules = ({ mode: propMode }) => {
                     <thead>
                       <tr className="bg-[#E9E9E9]">
                         <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Name</th>
-                        <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Module Service</th>
-                        <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Transport Type</th>
+                        <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Service</th>
                         <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Thumbnail</th>
                         <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Status</th>
                         <th className="px-6 py-4 text-[13px] font-bold text-slate-700">Action</th>
@@ -366,7 +362,7 @@ const AppModules = ({ mode: propMode }) => {
                     <tbody className="divide-y divide-gray-50">
                       {loading ? (
                         <tr>
-                          <td colSpan="6" className="py-24 text-center">
+                          <td colSpan="5" className="py-24 text-center">
                             <Loader2 className="animate-spin text-indigo-600 mx-auto" size={32} />
                           </td>
                         </tr>
@@ -377,10 +373,7 @@ const AppModules = ({ mode: propMode }) => {
                               <span className="text-[14px] font-bold text-slate-700">{m.name}</span>
                             </td>
                             <td className="px-6 py-5">
-                              <span className="text-[14px] font-medium text-slate-600 capitalize">{m.service_type || 'Normal'}</span>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className="text-[14px] font-medium text-slate-600 capitalize">{m.transport_type || 'Taxi'}</span>
+                              <span className="text-[14px] font-medium text-slate-600">{getServiceLabel(m.service_type)}</span>
                             </td>
                             <td className="px-6 py-5">
                               <div className="w-10 h-10 rounded bg-indigo-50/60 border border-indigo-100 flex items-center justify-center overflow-hidden font-bold text-xs text-indigo-600">
@@ -417,7 +410,7 @@ const AppModules = ({ mode: propMode }) => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="6" className="py-32 text-center text-gray-400 font-medium italic">
+                          <td colSpan="5" className="py-32 text-center text-gray-400 font-medium italic">
                             No records integrated in the system database.
                           </td>
                         </tr>
@@ -485,26 +478,15 @@ const AppModules = ({ mode: propMode }) => {
             </div>
 
             <div className="space-y-1.5 font-sans">
-              <label className={labelClass}>Module Service *</label>
+              <label className={labelClass}>Service *</label>
               <select name="service_type" value={formData.service_type} onChange={handleInputChange} className={selectClass}>
-                <option value="">Choose Module Service</option>
-                <option value="normal">Normal</option>
-                <option value="outstation">Outstation</option>
-                <option value="rental">Rental</option>
-                <option value="bid">Bid</option>
-                <option value="pooling">Pooling</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className={labelClass}>Transport Type *</label>
-              <select name="transport_type" value={formData.transport_type} onChange={handleInputChange} className={selectClass}>
-                <option value="">Choose Transport Type</option>
-                {transportTypes
-                  .filter((t) => String(t?.name || t?.value || t?.id || '').toLowerCase() !== 'pooling')
-                  .map((t) => (
-                    <option key={t.id || t._id} value={t.name}>{t.display_name || t.name}</option>
-                  ))}
+                <option value="">Choose Service</option>
+                {SERVICE_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+                {formData.service_type && !SERVICE_OPTIONS.some((s) => s.value === formData.service_type) ? (
+                  <option value={formData.service_type}>{getServiceLabel(formData.service_type)} (legacy)</option>
+                ) : null}
               </select>
             </div>
 

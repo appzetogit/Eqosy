@@ -224,6 +224,26 @@ function buildRemainingRoutePath(fullPath, riderPosition, endpoint = null) {
   return ensurePathEndsAt(routeOnlyPolyline, endpoint);
 }
 
+/** Gentle curved arc between two points (quadratic bezier) — the dark dashed "as the crow flies" line. */
+function buildCurvedArcPath(from, to, steps = 40, curvature = 0.18) {
+  if (!from || !to) return [];
+  const midLat = (from.lat + to.lat) / 2;
+  const midLng = (from.lng + to.lng) / 2;
+  const dLat = to.lat - from.lat;
+  const dLng = to.lng - from.lng;
+  const ctrl = { lat: midLat + dLng * curvature, lng: midLng - dLat * curvature };
+  const path = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const u = 1 - t;
+    path.push({
+      lat: u * u * from.lat + 2 * u * t * ctrl.lat + t * t * to.lat,
+      lng: u * u * from.lng + 2 * u * t * ctrl.lng + t * t * to.lng,
+    });
+  }
+  return path;
+}
+
 /** Dashed route line (dark dashes, Google-Maps style) built from repeating symbols. */
 const dashedLineOptions = (color = '#111827', extra = {}) => ({
   strokeColor: color,
@@ -969,19 +989,19 @@ const DeliveryTrackingMap = ({
            />
         )}
 
-        {/* Immediate Fallback Polyline if Google Directions isn't ready yet */}
-        {!baselineDirections && restaurantCoords && destinationCoords && (
+        {/* Dark dashed arc: restaurant <-> customer (always visible until rider is on the delivery leg) */}
+        {!isDeliveryLeg && restaurantCoords && destinationCoords && (
           <Polyline
-            path={[restaurantCoords, destinationCoords]}
-            options={dashedLineOptions('#111827', { zIndex: 4, geodesic: true })}
+            path={buildCurvedArcPath(restaurantCoords, destinationCoords)}
+            options={dashedLineOptions('#374151', { zIndex: 6 })}
           />
         )}
 
-        {/* 1. PERSISTENT BASELINE (Full journey: Restaurant -> Customer) */}
+        {/* Light dashed road route under the arc (Google Directions) */}
         {baselineDirections?.routes?.[0]?.overview_path && !isDeliveryLeg && (
           <Polyline
             path={baselineDirections.routes[0].overview_path}
-            options={dashedLineOptions('#9ca3af', { zIndex: 5 })}
+            options={dashedLineOptions('#cbd5e1', { zIndex: 5 })}
           />
         )}
 

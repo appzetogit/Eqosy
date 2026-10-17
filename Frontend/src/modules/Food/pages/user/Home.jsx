@@ -480,7 +480,7 @@ const RecommendedFoodImageStrip = React.memo(
           originalPrice,
           foodType,
         });
-        if (slides.length >= 8) break;
+        if (slides.length >= 50) break;
       }
 
       if (slides.length === 0) {
@@ -627,15 +627,24 @@ const RecommendedFoodImageStrip = React.memo(
               key={item.id || `${item.image}-${index}`}
               className="relative h-full w-full shrink-0 snap-start overflow-hidden bg-white"
             >
-              <OptimizedImage
-                src={item.image}
-                alt={`${restaurant?.name || "Restaurant"} - ${item.name || "Recommended item"}`}
-                className="h-full w-full"
-                objectFit="cover"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                loading={priority && index < 2 ? "eager" : "lazy"}
-                placeholder={priority && index === 0 ? "blur" : "empty"}
-              />
+              {/* Only mount images near the visible slide: restaurants can have many items, and mounting
+                  every slide image for every card made the home page heavy and janky while scrolling. */}
+              {(() => {
+                const total = stripImages.length;
+                const dist = Math.abs(index - activeSlideIndex);
+                const isNearActive = dist <= 1 || dist >= total - 1;
+                return isNearActive ? (
+                  <OptimizedImage
+                    src={item.image}
+                    alt={`${restaurant?.name || "Restaurant"} - ${item.name || "Recommended item"}`}
+                    className="h-full w-full"
+                    objectFit="cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    loading={priority && index < 2 ? "eager" : "lazy"}
+                    placeholder={priority && index === 0 ? "blur" : "empty"}
+                  />
+                ) : null;
+              })()}
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
             </div>
           ))}

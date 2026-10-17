@@ -17,6 +17,7 @@ import { NewOrderModal } from '@/modules/DeliveryV2/components/modals/NewOrderMo
 import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/PickupActionModal';
 import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modals/DeliveryVerificationModal';
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
+import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
 import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
 import FoodOrderChatScreen from '@food/pages/user/orders/FoodOrderChatScreen';
@@ -1884,6 +1885,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                             </div>
                           </div>
 
+                          {/* Payment status: already paid online / collect cash */}
+                          <PaymentBadge order={activeOrder} className="mb-6" />
+
                           {/* Customer Instructions Panel */}
                           {activeOrder?.note && (
                             <div className="w-full bg-linear-to-br from-orange-50/50 to-amber-50/50 border border-orange-100 rounded-[2rem] p-6 mb-8 flex gap-4 items-start relative overflow-hidden group">
@@ -1936,7 +1940,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         </div>
                       </motion.div>
                     ) : (
-                      <div className="w-full bg-white p-8 pb-12 border-t border-gray-100 flex flex-col pointer-events-auto">
+                      <div className="w-full bg-white p-8 pb-12 border-t border-gray-100 flex flex-col gap-4 pointer-events-auto">
+                        <PaymentBadge order={activeOrder} />
                         <button
                           onClick={() => setShowVerification(true)}
                           className="w-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/30 rounded-3xl py-6 font-black text-[13px] tracking-[0.2em] transform transition-all active:scale-95 flex items-center justify-center gap-4"

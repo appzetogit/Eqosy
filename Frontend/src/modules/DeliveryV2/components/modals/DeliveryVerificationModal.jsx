@@ -7,6 +7,7 @@ import {
 import { deliveryAPI, uploadAPI } from '@food/api';
 import { toast } from 'sonner';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
+import { PaymentBadge, getRiderPaymentInfo } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { openCamera, openGallery } from "@food/utils/imageUploadUtils";
 
 const Backdrop = ({ onClose }) => (
@@ -130,6 +131,8 @@ const OtpModal = ({ order, onVerified, onClose }) => {
 
           <DeliveryInstructionsPanel note={order?.note} />
 
+          <PaymentBadge order={order} className="mb-6" />
+
           <div className="flex justify-center gap-4 mb-10">
             {otp.map((digit, i) => (
               <input
@@ -172,7 +175,10 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [collectQrLink, setCollectQrLink] = useState(null);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
-  const isInitialPaid = ['paid', 'captured', 'authorized'].includes(String(order.payment?.status || "").toLowerCase());
+  // Online / wallet orders are already paid: this screen then only confirms "PAID", nothing to collect.
+  const isInitialPaid =
+    getRiderPaymentInfo(order).isPaid ||
+    ['paid', 'captured', 'authorized'].includes(String(order.payment?.status || "").toLowerCase());
   const [paymentStatus, setPaymentStatus] = useState(isInitialPaid ? 'paid' : 'idle');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCashAccepted, setIsCashAccepted] = useState(false);
@@ -180,7 +186,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
   const pollingRef = useRef(null);
 
   const orderId = order.orderId || order._id || 'ORD';
-  const amountToCollect = order.pricing?.total || order.amountToCollect || 0;
+  const amountToCollect = Number(order.pricing?.total || order.total || order.amountToCollect || 0);
 
 
   const checkPaymentSync = useCallback(async () => {
@@ -289,7 +295,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
                   {isCashAccepted ? <CheckCircle2 className="w-8 h-8" /> : <DollarSign className="w-8 h-8" />}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900 tracking-tight">Collect Payment</h2>
+                  <h2 className="text-2xl font-black text-gray-900 tracking-tight">{isPaid ? 'Payment Status' : 'Collect Payment'}</h2>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 2 of 3 • Payment</p>
                 </div>
               </div>
@@ -305,7 +311,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
 
               <div className="relative z-10">
                 <p className="text-amber-700 text-[10px] font-black uppercase tracking-[0.25em] mb-2">
-                  {isPaid ? "Payment Already Settled" : isCashAccepted ? "Collect Cash" : "Amount to Collect"}
+                  {isPaid ? "Bill Total" : isCashAccepted ? "Collect Cash" : "Amount to Collect"}
                 </p>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-2xl font-bold text-amber-950/60">₹</span>
@@ -314,7 +320,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
                 {isPaid ? (
                   <div className="inline-flex items-center gap-2 bg-emerald-500 text-white pl-3 pr-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Payment Received
+                    PAID — Do not collect cash
                   </div>
                 ) : isCashAccepted && (
                   <div className="inline-flex items-center gap-2 bg-blue-500 text-white pl-3 pr-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
@@ -538,6 +544,8 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
 
         <DeliveryInstructionsPanel note={order?.note} />
 
+        <PaymentBadge order={order} className="mb-4" />
+
         {/* Hidden standard file input fallback */}
         <input
           ref={fileInputRef}
@@ -646,12 +654,13 @@ export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
     order?.transaction?.paymentMethod ||
     'cod'
   ).toLowerCase();
-  const isCod = ['cash', 'cod', 'cash_on_delivery', 'razorpay_qr'].includes(paymentMethod);
+  // Every order goes through the payment step: COD shows what to collect, online/wallet shows "PAID".
+  const isCod = true;
 
   // Determine initial step: skip OTP if already verified
   const [step, setStep] = useState(() => {
     if (alreadyVerified) {
-      return isCod ? 'payment' : 'photo';
+      return 'payment';
     }
     return 'otp';
   });

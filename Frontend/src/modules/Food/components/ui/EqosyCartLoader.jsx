@@ -8,7 +8,9 @@ export default function EqosyCartLoader({
   message = "Adding to Cart...",
   subMessage = "Preparing your fresh delicacies with Eqosy",
   fullScreen = true,
+  vertical = "food", // "food" | "grocery" — only changes the badge label
 }) {
+  const badgeLabel = vertical === "grocery" ? "GROCERY" : "FOOD";
   return (
     <AnimatePresence>
       {show && (
@@ -90,7 +92,7 @@ export default function EqosyCartLoader({
                   EQOSY
                 </span>
                 <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-950/60 dark:text-orange-400">
-                  FOOD
+                  {badgeLabel}
                 </span>
               </div>
 

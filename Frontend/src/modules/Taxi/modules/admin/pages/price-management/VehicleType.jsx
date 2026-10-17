@@ -80,6 +80,13 @@ const normalizeIconType = (value = '') => {
 
 const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
 
+const SERVICE_LABELS = {
+  taxi: 'Ride',
+  delivery: 'Parcel',
+  both: 'Ride + Parcel',
+  pooling: 'Car Pooling',
+};
+
 const normalizeTransportType = (value = '') => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'delivery') return 'delivery';
@@ -441,7 +448,7 @@ const VehicleType = ({ mode: propMode }) => {
         map_icon: formData.map_icon || '',
         capacity: Number(formData.capacity || 0),
         size: formData.size,
-        is_taxi: normalizeTaxiMode(formData.is_taxi || formData.transport_type),
+        is_taxi: normalizeTaxiMode(formData.transport_type),
         is_accept_share_ride: Number(formData.is_accept_share_ride || 0),
         delivery_category: showsDeliveryCategorySelector ? formData.delivery_category : '',
         delivery_distance_pricing: showsDeliveryCategorySelector
@@ -700,7 +707,7 @@ const VehicleType = ({ mode: propMode }) => {
       <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <div className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-2 lg:p-8">
           <div>
-            <label className={labelClass}>Transport Type *</label>
+            <label className={labelClass}>Service *</label>
             <select
               value={formData.transport_type}
               onChange={(e) => {
@@ -717,13 +724,13 @@ const VehicleType = ({ mode: propMode }) => {
               }}
               className={inputClass}
             >
-               <option value="">Select Transport Type</option>
+               <option value="">Select Service</option>
                {transportTypeOptions.map((t) => (
-                 <option key={t.id || t._id || t.name} value={t.name}>{t.display_name}</option>
+                 <option key={t.id || t._id || t.name} value={t.name}>{SERVICE_LABELS[t.name] || t.display_name}</option>
                ))}
             </select>
             <p className="mt-2 text-xs text-slate-500">
-              Choose `Both` for vehicle types like bikes that can handle ride and parcel flows.
+              Choose `Ride + Parcel` for vehicle types like bikes that can handle both ride and parcel flows.
             </p>
           </div>
 
@@ -1027,11 +1034,11 @@ const VehicleType = ({ mode: propMode }) => {
           </div>
 
           <div>
-            <label className={labelClass}>Trip Dispatch Type *</label>
+            <label className={labelClass}>Fare Mode *</label>
             <select value={formData.dispatch_type} onChange={(e) => updateForm('dispatch_type', e.target.value)} className={inputClass}>
-              <option value="normal">Normal</option>
+              <option value="normal">Fixed</option>
               <option value="bidding">Bidding</option>
-              <option value="both">Both</option>
+              <option value="both">Fixed + Bidding</option>
             </select>
           </div>
 
@@ -1044,19 +1051,6 @@ const VehicleType = ({ mode: propMode }) => {
               className={inputClass}
               placeholder="2"
             />
-          </div>
-
-          <div>
-            <label className={labelClass}>Operational Scope *</label>
-            <select value={formData.is_taxi || formData.transport_type} onChange={(e) => updateForm('is_taxi', e.target.value)} className={inputClass}>
-              <option value="">Select Scope</option>
-              {transportTypeOptions.map((t) => (
-                <option key={t.id || t._id || t.name} value={t.name}>{t.display_name}</option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-xs text-slate-500">
-              Defines vehicle operational fleet scope (Passenger Ride, Parcel Delivery, or Both). Auto-synced with Transport Type.
-            </p>
           </div>
 
           <div className="lg:col-span-2">

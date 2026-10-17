@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, MapPin, FastForward, Clock, Phone, ChefHat, ChevronDown } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
+import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { getHaversineDistance, calculateETA } from '@/modules/DeliveryV2/utils/geo';
 
@@ -23,7 +24,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
   }, [timeLeft, onReject]);
 
   const { distanceKm, etaMins } = useMemo(() => {
-    if (!order) return { distanceKm: '1.2', etaMins: 15 };
+    if (!order) return { distanceKm: '--', etaMins: 15 };
 
     // 1. Restaurant coordinates
     const rest = order.restaurantLocation || order.restaurantId?.location || {};
@@ -49,9 +50,12 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
       const socketDist = parseFloat(order.pickupDistanceKm || order.distanceKm);
       if (!isNaN(socketDist) && socketDist < 30) {
         pickupKm = socketDist;
-      } else {
-        pickupKm = 1.2; // Realistic local pickup distance fallback
       }
+    }
+
+    // Distance still unknown: show "--" instead of a made-up number.
+    if (pickupKm == null) {
+      return { distanceKm: '--', etaMins: Math.min(60, Math.max(5, Number(order.estimatedTime || order.eta || 15) || 15)) };
     }
 
     // 4. Calculate ETA dynamically
@@ -133,7 +137,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
       const distBreakdown = Number(order.pricing.deliveryFeeBreakdown.distanceKm);
       if (distBreakdown < 50) return distBreakdown.toFixed(1);
     }
-    return '0.8';
+    return '--';
   }, [order, customerLocation]);
 
   const customerName =
@@ -242,6 +246,9 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
                 </div>
               </div>
             </div>
+
+            {/* Payment: already paid online/wallet vs collect cash */}
+            <PaymentBadge order={order} />
 
             {/* Delivery Locations (Tighter Timeline) */}
             <div className="bg-gray-50/50 rounded-3xl p-5 border border-gray-100/50">

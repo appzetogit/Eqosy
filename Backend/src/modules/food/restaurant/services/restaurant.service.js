@@ -236,7 +236,8 @@ const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 const normalizeCuisine = (value) => String(value || '').trim().slice(0, 80);
 
-const MAX_RECOMMENDED_IMAGES_PER_RESTAURANT = 8;
+// Home cards rotate through ALL of a restaurant's items; this is only a safety cap on payload size.
+const MAX_RECOMMENDED_IMAGES_PER_RESTAURANT = 30;
 
 export const attachRecommendedImagesToRestaurants = async (restaurants = []) => {
     if (!Array.isArray(restaurants) || restaurants.length === 0) return [];

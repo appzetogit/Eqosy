@@ -842,6 +842,45 @@ export default function CategoryPage() {
     return matchingDishes
   }
 
+  // Every item of the restaurant (sections + subsections), in menu order.
+  const getAllDishesFromMenu = (menu) => {
+    if (!menu || !Array.isArray(menu.sections)) return []
+    const dishes = []
+    const pushItem = (item, fallbackImage) => {
+      if (!item?.name) return
+      const originalPrice = item.originalPrice || item.price || 0
+      const discountPercent = item.discountPercent || 0
+      const finalPrice = discountPercent > 0
+        ? Math.round(originalPrice * (1 - discountPercent / 100))
+        : originalPrice
+      dishes.push({
+        name: item.name,
+        price: finalPrice,
+        image: normalizeImageUrl(item.image?.url || item.image || fallbackImage),
+        originalPrice,
+        itemId: item._id || item.id || `${item.name}-${finalPrice}`,
+        foodType: item.foodType,
+      })
+    }
+    for (const section of menu.sections) {
+      const sectionImage = section?.image?.url || section?.image
+      for (const item of Array.isArray(section?.items) ? section.items : []) pushItem(item, sectionImage)
+      for (const subsection of Array.isArray(section?.subsections) ? section.subsections : []) {
+        const subImage = subsection?.image?.url || subsection?.image || sectionImage
+        for (const item of Array.isArray(subsection?.items) ? subsection.items : []) pushItem(item, subImage)
+      }
+    }
+    return dishes
+  }
+
+  // Slider shows ALL of the restaurant's items; dishes matching the selected category come first.
+  const getSliderDishesForCategory = (menu, categoryId) => {
+    const matching = getAllCategoryDishesFromMenu(menu, categoryId)
+    const seen = new Set(matching.map((d) => String(d.itemId)))
+    const others = getAllDishesFromMenu(menu).filter((d) => !seen.has(String(d.itemId)))
+    return [...matching, ...others]
+  }
+
   // Helper function to get FIRST featured dish for a category from menu (for backward compatibility)
   const getCategoryDishFromMenu = (menu, categoryId) => {
     const allDishes = getAllCategoryDishesFromMenu(menu, categoryId)
@@ -1249,7 +1288,7 @@ export default function CategoryPage() {
         if (r.menu) {
           const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
           if (hasCategoryItem) {
-            categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
+            categoryDishes = getSliderDishesForCategory(r.menu, selectedCategory)
           }
         }
 
@@ -1314,7 +1353,7 @@ export default function CategoryPage() {
         if (r.menu) {
           const hasCategoryItem = checkCategoryInMenu(r.menu, selectedCategory)
           if (hasCategoryItem) {
-            categoryDishes = getAllCategoryDishesFromMenu(r.menu, selectedCategory)
+            categoryDishes = getSliderDishesForCategory(r.menu, selectedCategory)
           }
         }
 
@@ -1580,7 +1619,7 @@ export default function CategoryPage() {
                       to={`/food/user/restaurants/${restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, '-')}${isGroceryMode ? "?vertical=grocery" : ""}`}
                       onClick={() => {
                         if (triggerEqosyCartLoader) {
-                          triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
+                          triggerEqosyCartLoader(isGroceryMode ? "Loading Store..." : "Loading Restaurant...", isGroceryMode ? "Fetching fresh products & categories..." : "Fetching fresh menu & food categories...", 900);
                         }
                       }}
                       className="block"
@@ -1693,7 +1732,7 @@ export default function CategoryPage() {
                     onFavoriteClick={toggleFavorite}
                     onCardClick={() => {
                       if (triggerEqosyCartLoader) {
-                        triggerEqosyCartLoader("Loading Restaurant...", "Fetching fresh menu & food categories...", 900);
+                        triggerEqosyCartLoader(isGroceryMode ? "Loading Store..." : "Loading Restaurant...", isGroceryMode ? "Fetching fresh products & categories..." : "Fetching fresh menu & food categories...", 900);
                       }
                     }}
                   />

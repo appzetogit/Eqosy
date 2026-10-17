@@ -329,6 +329,8 @@ export const useRestaurantNotifications = () => {
           const restaurant = response.data.data.restaurant;
           const id = restaurant._id?.toString() || restaurant.restaurantId;
           setRestaurantId(id);
+          // Per-tab marker so foreground FCM pushes meant for another restaurant can be dropped.
+          try { sessionStorage.setItem('restaurant_current_id', String(id || '')); } catch { /* ignore */ }
         }
       } catch (error) {
         debugError('Error fetching restaurant:', error);
@@ -813,7 +815,12 @@ export const useRestaurantNotifications = () => {
       setNewOrder(null);
       activeOrderRef.current = null;
       const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
-      toast.error(`User cancelled order #${displayId}`);
+      const cancelledByAdmin = String(data?.cancelledBy || '').toLowerCase() === 'admin';
+      toast.error(
+        cancelledByAdmin
+          ? `Admin cancelled order #${displayId}${data?.cancellationReason ? ` — ${data.cancellationReason}` : ''}`
+          : `User cancelled order #${displayId}`,
+      );
       setLastOrderUpdate(data);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('restaurant_order_updated', { detail: data }));
@@ -851,7 +858,8 @@ export const useRestaurantNotifications = () => {
         activeOrderRef.current = null;
         if (statusStr.includes('cancel')) {
           const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
-          toast.error(`User cancelled order #${displayId}`);
+          const byAdmin = statusStr.includes('admin') || String(data?.cancelledBy || '').toLowerCase() === 'admin';
+          toast.error(byAdmin ? `Admin cancelled order #${displayId}` : `User cancelled order #${displayId}`);
         }
       }
       if (typeof window !== 'undefined') {

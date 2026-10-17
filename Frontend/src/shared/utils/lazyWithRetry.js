@@ -44,8 +44,10 @@ export function lazyWithRetry(componentImport, maxRetries = 3, delayMs = 400) {
               const count = Number(sessionStorage.getItem('chunk-auto-reload-count') || 0)
               const now = Date.now()
 
-              if (now - lastReload >= 5000 || count < 2) {
-                const nextCount = now - lastReload < 15000 ? count + 1 : 1
+              // Allow a reload only if the last one was long ago, or we have not hit the 2-in-a-minute cap.
+              const withinWindow = now - lastReload < 60000
+              if (!withinWindow || count < 2) {
+                const nextCount = withinWindow ? count + 1 : 1
                 sessionStorage.setItem('chunk-auto-reload-ts', String(now))
                 sessionStorage.setItem('chunk-auto-reload-count', String(nextCount))
                 window.location.reload()

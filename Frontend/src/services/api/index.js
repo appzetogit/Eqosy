@@ -618,6 +618,14 @@ export const adminAPI = {
     apiClient.delete(`/food/admin/orders/${String(orderId)}`, {
       contextModule: "admin",
     }),
+  cancelOrder: (orderId, body = {}) =>
+    apiClient.post(`/food/admin/orders/${String(orderId)}/cancel`, body, {
+      contextModule: "admin",
+    }),
+  processRefund: (orderId, body = {}) =>
+    apiClient.post(`/food/admin/orders/${String(orderId)}/refund`, body, {
+      contextModule: "admin",
+    }),
   assignDeliveryPartner: (orderId, deliveryPartnerId) =>
     apiClient.post(
       `/food/admin/orders/${String(orderId)}/assign`,

@@ -87,6 +87,35 @@ export function isPartnerInActiveZoneSync(lat, lng, targetZoneId, activeZones = 
   return activeZones.some(z => isPointInPolygon(Number(lat), Number(lng), z.coordinates || []));
 }
 
+/** Zone a lat/lng falls in (null when outside every active zone). */
+export function resolveZoneIdForPoint(lat, lng, activeZones = []) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+  const hit = (activeZones || []).find((z) => isPointInPolygon(Number(lat), Number(lng), z.coordinates || []));
+  return hit?._id ? String(hit._id) : null;
+}
+
+/** Restaurant's zone: explicit zoneId when it is an active zone, otherwise derived from its location. */
+export function resolveRestaurantZoneId(restaurant, activeZones = []) {
+  const explicit = restaurant?.zoneId || restaurant?.zone;
+  if (explicit && (activeZones || []).some((z) => String(z._id) === String(explicit))) return String(explicit);
+  const coords = restaurant?.location?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2) return resolveZoneIdForPoint(coords[1], coords[0], activeZones);
+  return null;
+}
+
+/**
+ * Strict zone membership: a rider belongs to the zone only if their profile zone matches
+ * or their last GPS fix is inside that zone's polygon. Unknown riders are NOT assumed to be in zone.
+ */
+export function isPartnerInZoneStrict(partner, targetZoneId, activeZones = []) {
+  if (!targetZoneId) return true; // zone could not be determined — nothing to restrict on
+  if (partner?.zoneId && String(partner.zoneId) === String(targetZoneId)) return true;
+  const zone = (activeZones || []).find((z) => String(z._id) === String(targetZoneId));
+  if (!zone) return true;
+  if (partner?.lastLat == null || partner?.lastLng == null) return false;
+  return isPointInPolygon(Number(partner.lastLat), Number(partner.lastLng), zone.coordinates || []);
+}
+
 async function listNearbyOnlineDeliveryPartners(
   restaurantId,
   { maxKm = 15, limit = 25, orderDeliveryDistance = 0 } = {},
@@ -96,9 +125,8 @@ async function listNearbyOnlineDeliveryPartners(
     .select("location zoneId zone")
     .lean();
 
-  const targetZoneId = restaurant?.zoneId || restaurant?.zone;
   const activeZones = await FoodZone.find({ isActive: true }).select("_id coordinates").lean();
-  const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
+  const targetZoneId = resolveRestaurantZoneId(restaurant, activeZones);
 
   const dispatchSettings = await getDispatchSettings();
   // A 0/blank limit would reject every order for that vehicle, so fall back to the defaults.
@@ -178,27 +206,11 @@ async function listNearbyOnlineDeliveryPartners(
     }
   }
 
-  // Helper: check if partner belongs to the restaurant's zone (via matching zoneId, GPS polygon, or fallback)
-  const isPartnerInTargetZone = (p) => {
-    // Match by zoneId field on delivery partner profile
-    if (targetZoneId && p.zoneId) {
-      if (String(p.zoneId) === String(targetZoneId)) return true;
-    }
-    // Match by GPS polygon check if coordinates are present
-    if (hasActiveZones && p.lastLat != null && p.lastLng != null) {
-      return isPartnerInActiveZoneSync(p.lastLat, p.lastLng, targetZoneId, activeZones);
-    }
-    // If no targetZoneId or partner has no specific zone, include partner
-    if (!targetZoneId || !p.zoneId) return true;
-    return false;
-  };
+  // Orders go ONLY to riders of the restaurant's zone (e.g. Indore restaurant -> Indore riders).
+  const isPartnerInTargetZone = (p) => isPartnerInZoneStrict(p, targetZoneId, activeZones);
 
   if (!restaurant?.location?.coordinates?.length) {
-    let partners = allOnline;
-    if (hasActiveZones || targetZoneId) {
-      const inZone = partners.filter((p) => isPartnerInTargetZone(p));
-      if (inZone.length > 0) partners = inZone;
-    }
+    const partners = allOnline.filter((p) => isPartnerInTargetZone(p));
 
     return {
       restaurant: null,
@@ -228,30 +240,19 @@ async function listNearbyOnlineDeliveryPartners(
     scored.push({ partnerId: p._id, distanceKm: Number.isFinite(d) ? d : 999, status: p.status, isInZone: inZone });
   }
 
-  // Zone filtering: pick partners in restaurant's zone first
-  const zonePartners = scored.filter(p => p.isInZone);
-
   let picked;
-  if (zonePartners.length > 0) {
-    // Sort zone partners by distance (closest first, unknown distance 999 last)
+  if (targetZoneId) {
+    // Restaurant zone is known: strictly its zone riders, closest first. No fallback to other zones;
+    // if nobody is available the dispatch retry loop / admin alert handles it.
+    const zonePartners = scored.filter(p => p.isInZone);
     zonePartners.sort((a, b) => a.distanceKm - b.distanceKm);
     picked = zonePartners.slice(0, Math.max(1, limit));
-    logger.info(`[DeliveryDispatch] Found ${zonePartners.length} delivery partner(s) in restaurant zone ${targetZoneId || 'unknown'}.`);
+    logger.info(`[DeliveryDispatch] ${zonePartners.length} delivery partner(s) in restaurant zone ${targetZoneId}.`);
   } else {
-    // FALLBACK: No zone partners found — fall back to distance-based or available search
-    logger.info(`[DeliveryDispatch] No partners in restaurant zone ${targetZoneId || 'unknown'}. Falling back to general online partners.`);
+    // Zone cannot be determined (no zones configured / restaurant outside all zones): distance based.
     const distancePartners = scored.filter(p => p.distanceKm <= maxKm || p.distanceKm === 999);
     distancePartners.sort((a, b) => a.distanceKm - b.distanceKm);
     picked = distancePartners.slice(0, Math.max(1, limit));
-
-    // Last resort: grab any online partner
-    if (picked.length === 0 && allOnline.length > 0) {
-      picked = allOnline.slice(0, limit).map((p) => ({
-        partnerId: p._id,
-        distanceKm: null,
-        status: p.status,
-      }));
-    }
   }
 
   return { partners: picked };

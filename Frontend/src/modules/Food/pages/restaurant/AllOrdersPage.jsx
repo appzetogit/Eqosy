@@ -199,7 +199,8 @@ export default function AllOrdersPage() {
     
     // Determine status (backend: orderStatus)
     let status = (order.orderStatus || order.status || "created").toUpperCase()
-    if (status === 'CANCELLED') status = 'CANCELLED'
+    const isAdminCancelled = status === 'CANCELLED_BY_ADMIN'
+    if (status.startsWith('CANCELLED')) status = 'CANCELLED'
     else if (status === 'REJECTED') status = 'REJECTED'
     else if (status === 'DELIVERED') status = 'DELIVERED'
     else if (status === 'PREPARING') status = 'PREPARING'
@@ -210,8 +211,10 @@ export default function AllOrdersPage() {
     let reason = null
     if (status === 'REJECTED' && order.rejectionReason) {
       reason = `Rejected by Restaurant: ${order.rejectionReason}`
+    } else if (status === 'CANCELLED' && isAdminCancelled) {
+      reason = `Cancelled by Admin${order.cancellationReason ? `: ${order.cancellationReason}` : ''}`
     } else if (status === 'CANCELLED' && order.cancellationReason) {
-      reason = `Cancelled by ${order.cancelledBy === 'customer' ? 'customer' : 'restaurant'}: ${order.cancellationReason}`
+      reason = `Cancelled by ${['customer', 'user'].includes(String(order.cancelledBy || '').toLowerCase()) ? 'customer' : 'restaurant'}: ${order.cancellationReason}`
     } else if (status === 'REJECTED') {
       reason = 'Rejected by Restaurant'
     } else if (status === 'CANCELLED') {

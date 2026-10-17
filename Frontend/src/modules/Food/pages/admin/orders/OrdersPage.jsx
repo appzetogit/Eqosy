@@ -11,6 +11,7 @@ import FilterPanel from "@food/components/admin/orders/FilterPanel"
 import ViewOrderDialog from "@food/components/admin/orders/ViewOrderDialog"
 import SettingsDialog from "@food/components/admin/orders/SettingsDialog"
 import RefundModal from "@food/components/admin/orders/RefundModal"
+import CancelOrderModal from "@food/components/admin/orders/CancelOrderModal"
 import { useOrdersManagement } from "@food/components/admin/orders/useOrdersManagement"
 import { Loader2 } from "lucide-react"
 import { OrdersDashboardSkeleton } from "@food/components/ui/loading-skeletons"
@@ -51,6 +52,9 @@ export default function OrdersPage({ statusKey = "all" }) {
   const [processingRefund, setProcessingRefund] = useState(null)
   const [processingActionOrderId, setProcessingActionOrderId] = useState(null)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [selectedOrderForCancel, setSelectedOrderForCancel] = useState(null)
+  const [cancelingOrderId, setCancelingOrderId] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
   const showLoadingSkeleton = useDelayedLoading(isLoading, { delay: 120, minDuration: 360 })
@@ -825,6 +829,38 @@ export default function OrdersPage({ statusKey = "all" }) {
     }
   }
 
+  // Admin force-cancel (restaurant not cancelling / no rider will pick the order).
+  const handleCancelOrder = (order) => {
+    setSelectedOrderForCancel(order)
+    setCancelModalOpen(true)
+  }
+
+  const handleCancelConfirm = async ({ reason, refund }) => {
+    const order = selectedOrderForCancel
+    const orderIdToUse = order?.id || order?._id || order?.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found. Please refresh the page and try again.")
+      return
+    }
+    try {
+      setCancelingOrderId(orderIdToUse)
+      const response = await adminAPI.cancelOrder(orderIdToUse, { reason, refund })
+      if (response.data?.success) {
+        toast.success(response.data?.message || `Order ${order.orderId} cancelled`)
+        setCancelModalOpen(false)
+        setSelectedOrderForCancel(null)
+        await fetchOrders({ silent: true, withRingCheck: false })
+      } else {
+        toast.error(response.data?.message || "Failed to cancel order")
+      }
+    } catch (error) {
+      debugError("Error cancelling order:", error)
+      toast.error(error.response?.data?.message || "Failed to cancel order")
+    } finally {
+      setCancelingOrderId(null)
+    }
+  }
+
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
   const handleRefund = (order) => {
     const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
@@ -1014,8 +1050,17 @@ export default function OrdersPage({ statusKey = "all" }) {
         onConfirm={handleRefundConfirm}
         isProcessing={processingRefund !== null}
       />
-      <OrdersTable 
-        orders={filteredOrders} 
+      <CancelOrderModal
+        isOpen={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        order={selectedOrderForCancel}
+        onConfirm={handleCancelConfirm}
+        isProcessing={cancelingOrderId !== null}
+      />
+      <OrdersTable
+        orders={filteredOrders}
+        onCancelOrder={canWrite ? handleCancelOrder : undefined}
+        cancelingOrderId={cancelingOrderId}
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}

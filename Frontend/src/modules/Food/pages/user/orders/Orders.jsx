@@ -278,11 +278,13 @@ export default function Orders() {
               backendStatus === 'cancelled_by_admin'
             const cancellationReason = order.cancellationReason || ''
             // Check cancelledBy field first, then fallback to cancellation reason pattern
-            const isRestaurantCancelled = isCancelled && (
-              order.cancelledBy === 'restaurant' ||
+            const isRestaurantCancelled = isCancelled && backendStatus !== 'cancelled_by_admin' && String(order.cancelledBy || '').toLowerCase() !== 'admin' && (
+              String(order.cancelledBy || '').toLowerCase() === 'restaurant' ||
               /rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit|restaurant did not respond/i.test(cancellationReason)
             )
-            const isUserCancelled = isCancelled && order.cancelledBy === 'user'
+            const cancelledByNorm = String(order.cancelledBy || '').toLowerCase()
+            const isAdminCancelled = isCancelled && (cancelledByNorm === 'admin' || backendStatus === 'cancelled_by_admin')
+            const isUserCancelled = isCancelled && !isAdminCancelled && cancelledByNorm === 'user'
 
             // Get original status from backend before transformation
             const originalStatus = backendStatus
@@ -338,6 +340,7 @@ export default function Orders() {
               cancellationReason: cancellationReason,
               isRestaurantCancelled: isRestaurantCancelled,
               isUserCancelled: isUserCancelled,
+              isAdminCancelled: isAdminCancelled,
               cancelledBy: order.cancelledBy,
               eta: order.eta || { min: order.estimatedDeliveryTime || 30, max: order.estimatedDeliveryTime || 30 },
               estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
@@ -755,7 +758,8 @@ Order again from this restaurant in the ${companyName} app.`
 
             const isDelivered = order.status === 'delivered'
             const isRestaurantCancelled = order.isRestaurantCancelled || order.status === 'restaurant_cancelled'
-            const isUserCancelled = order.isUserCancelled || (isCancelled && order.cancelledBy === 'user')
+            const isAdminCancelled = Boolean(order.isAdminCancelled)
+            const isUserCancelled = !isAdminCancelled && (order.isUserCancelled || (isCancelled && String(order.cancelledBy || '').toLowerCase() === 'user'))
             // Prefer food image from first item; fallback to restaurant image, then generic food photo
             const firstItemImage = order.items?.[0]?.image
             const restaurantImage = firstItemImage
@@ -1024,7 +1028,15 @@ Order again from this restaurant in the ${companyName} app.`
                     {isUserCancelled && (
                       <p className="text-xs font-medium text-gray-500 mt-1">Cancelled by you</p>
                     )}
-                    {isCancelled && !isRestaurantCancelled && !isUserCancelled && (
+                    {isAdminCancelled && (
+                      <div className="mt-1">
+                        <p className="text-xs font-medium text-red-500">Cancelled by Admin</p>
+                        {order.cancellationReason && (
+                          <p className="text-[11px] text-gray-500 mt-0.5">{order.cancellationReason}</p>
+                        )}
+                      </div>
+                    )}
+                    {isCancelled && !isRestaurantCancelled && !isUserCancelled && !isAdminCancelled && (
                       <p className="text-xs font-medium text-gray-500 mt-1">Cancelled</p>
                     )}
                   </div>

@@ -244,8 +244,10 @@ export async function calculateOrderPricing(userId, dto) {
     // 2. Maximum Delivery Distance Validation
     const rules = await FoodDeliveryCommissionRule.find({ status: { $ne: false } }).lean();
     if (rules && rules.length > 0) {
+      // An "Unlimited" slab (maxDistance = null) means there is no upper service limit.
+      const hasUnlimitedSlab = rules.some(r => r.maxDistance == null);
       const maxDistances = rules.map(r => r.maxDistance).filter(m => m != null && Number.isFinite(Number(m)));
-      if (maxDistances.length > 0) {
+      if (!hasUnlimitedSlab && maxDistances.length > 0) {
         const maxConfiguredKm = Math.max(...maxDistances.map(Number));
         if (distanceKm > maxConfiguredKm) {
           throw new ValidationError(`Delivery location is outside our maximum service distance (${distanceKm.toFixed(1)} km). Maximum delivery radius is ${maxConfiguredKm} km.`);

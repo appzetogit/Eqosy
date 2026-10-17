@@ -266,13 +266,17 @@ const GroceryCategories = ({ zoneId, zoneChecking }) => {
       </div>
     );
   }
-  if (categories.length === 0) return null;
+  // Like Food: only categories with a real image + name (no placeholder basket icons).
+  const visibleCategories = categories.filter((cat) =>
+    Boolean(normalizeImageUrl(typeof cat.image === 'string' ? cat.image : cat.image?.url || '')),
+  );
+  if (visibleCategories.length === 0) return null;
 
   return (
     <div className="mb-6">
       <h3 className="mb-3 text-base font-extrabold text-gray-900">Shop by category</h3>
       <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        {categories.map((cat) => {
+        {visibleCategories.map((cat) => {
           const slug = cat.slug || String(cat.name || '').toLowerCase().trim().replace(/\s+/g, '-');
           const image = normalizeImageUrl(typeof cat.image === 'string' ? cat.image : cat.image?.url || '');
           return (
@@ -639,7 +643,8 @@ export default function QuickSection({
   const hasStores = useMemo(() => stores.length > 0, [stores.length]);
 
   return (
-    <div className="min-h-screen bg-white px-4 pt-5 pb-28">
+    // Home already reserves space for the bottom nav, so only a small bottom padding here (no forced full-screen height).
+    <div className="bg-white px-4 pt-5 pb-6">
 
       {/* Hero Banner Carousel */}
       <GroceryBannerSlider zoneId={zoneId} />

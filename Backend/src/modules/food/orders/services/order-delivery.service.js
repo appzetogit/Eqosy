@@ -16,12 +16,13 @@ import { fetchPolyline } from '../utils/googleMaps.js';
 
 import * as foodTransactionService from './foodTransaction.service.js';
 import * as dispatchService from './order-dispatch.service.js';
-import { isPartnerInActiveZoneSync } from './order-dispatch.service.js';
+import { isPartnerInActiveZoneSync, isPartnerInZoneStrict, resolveRestaurantZoneId } from './order-dispatch.service.js';
 import * as paymentService from './order-payment.service.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
 
 import {
   buildOrderIdentityFilter,
+  buildRiderPaymentFields,
   emitDeliveryDropOtpToUser,
   enqueueOrderEvent,
   generateFourDigitDeliveryOtp,
@@ -231,7 +232,10 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
     out.pricing = tx.pricing || out.pricing;
     out.amounts = tx.amounts || out.amounts;
     out.transactionStatus = tx.status || out.transactionStatus;
+    if (tx.payment?.status) out.paymentStatus = tx.payment.status;
   }
+  // Recompute after the transaction override so "paid / collect cash" reflects the final payment data.
+  Object.assign(out, buildRiderPaymentFields(out));
   return out;
 }
 
@@ -310,35 +314,17 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   // Zone-based filtering: only show orders from restaurants in the partner's zone
   let filteredDocs = docs || [];
   if (partner) {
-    const partnerZoneId = partner.zoneId ? String(partner.zoneId) : null;
     const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
-    const hasActiveZones = Array.isArray(activeZones) && activeZones.length > 0;
-
-    if (partnerZoneId || (hasActiveZones && partner.lastLat != null && partner.lastLng != null)) {
-      // Determine which zone the partner is in
-      let partnerZoneIdResolved = partnerZoneId;
-      if (!partnerZoneIdResolved && hasActiveZones && partner.lastLat != null && partner.lastLng != null) {
-        // Find the zone the partner is physically inside
-        const matchedZone = activeZones.find(z =>
-          isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, z._id, activeZones)
-        );
-        if (matchedZone) partnerZoneIdResolved = matchedZone._id.toString();
-      }
-
-      if (partnerZoneIdResolved) {
-        const inZone = filteredDocs.filter(doc => {
-          // Orders already assigned to this partner always show
-          if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) {
-            return true;
-          }
-          const restZoneId = doc.restaurantId?.zoneId ? String(doc.restaurantId.zoneId) : null;
-          return restZoneId === partnerZoneIdResolved;
-        });
-        // Only apply zone filter if we have zone-matched orders; fallback to all if none
-        if (inZone.length > 0 || filteredDocs.length === 0) {
-          filteredDocs = inZone;
+    if (activeZones.length > 0) {
+      // Strict: a rider only sees open orders of restaurants in their own zone.
+      filteredDocs = filteredDocs.filter((doc) => {
+        // Orders already assigned to this partner always show
+        if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) {
+          return true;
         }
-      }
+        const restZoneId = resolveRestaurantZoneId(doc.restaurantId, activeZones);
+        return isPartnerInZoneStrict(partner, restZoneId, activeZones);
+      });
     }
   }
 
@@ -359,15 +345,18 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
 
   const enriched = filteredDocs.map((doc) => {
     const tx = txByOrderId.get(String(doc?._id)) || null;
-    if (!tx) return doc;
-    return {
-      ...doc,
-      paymentMethod: tx.payment?.method || tx.paymentMethod || doc.paymentMethod,
-      payment: tx.payment || doc.payment,
-      pricing: tx.pricing || doc.pricing,
-      amounts: tx.amounts || doc.amounts,
-      transactionStatus: tx.status || doc.transactionStatus,
-    };
+    const merged = tx
+      ? {
+          ...doc,
+          paymentMethod: tx.payment?.method || tx.paymentMethod || doc.paymentMethod,
+          payment: tx.payment || doc.payment,
+          pricing: tx.pricing || doc.pricing,
+          amounts: tx.amounts || doc.amounts,
+          transactionStatus: tx.status || doc.transactionStatus,
+        }
+      : doc;
+    // Rider must see "PAID online" vs "COLLECT ₹X" on every card.
+    return { ...merged, ...buildRiderPaymentFields(merged) };
   });
 
   return buildPaginatedResult({ docs: enriched, total: filteredDocs.length, page, limit });
@@ -395,19 +384,16 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
   if (activeZones && activeZones.length > 0) {
-    const partner = await FoodDeliveryPartner.findById(partnerId).select('lastLat lastLng name').lean();
-    if (!partner || partner.lastLat == null || partner.lastLng == null) {
-      logger.warn(`[AcceptOrder] Rider ${partnerId} location unavailable during accept, allowing accept.`);
-    } else {
-      const targetOrder = await FoodOrder.findOne(identity).select('restaurantId').lean();
-      const restaurant = targetOrder?.restaurantId
-        ? await FoodRestaurant.findById(targetOrder.restaurantId).select('zoneId zone').lean()
-        : null;
-      const targetZoneId = restaurant?.zoneId || restaurant?.zone;
-      const isInZone = isPartnerInActiveZoneSync(partner.lastLat, partner.lastLng, targetZoneId, activeZones);
-      if (!isInZone) {
-        logger.warn(`[AcceptOrder] Rider ${partnerId} accepted order while outside zone, allowing accept.`);
-      }
+    const partner = await FoodDeliveryPartner.findById(partnerId).select('lastLat lastLng name zoneId').lean();
+    const targetOrder = await FoodOrder.findOne(identity).select('restaurantId dispatch.deliveryPartnerId').lean();
+    const alreadyMine = targetOrder?.dispatch?.deliveryPartnerId
+      && String(targetOrder.dispatch.deliveryPartnerId) === String(partnerId);
+    const restaurant = targetOrder?.restaurantId
+      ? await FoodRestaurant.findById(targetOrder.restaurantId).select('zoneId zone location').lean()
+      : null;
+    const targetZoneId = resolveRestaurantZoneId(restaurant, activeZones);
+    if (!alreadyMine && !isPartnerInZoneStrict(partner, targetZoneId, activeZones)) {
+      throw new ValidationError('This order is outside your delivery zone.');
     }
   }
   const now = new Date();

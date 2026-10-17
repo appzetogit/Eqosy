@@ -291,6 +291,8 @@ router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orde
 router.post('/orders/:orderId/handover/approve', orderController.approveOrderHandoverAdminController);
 router.post('/orders/:orderId/handover/reject', orderController.rejectOrderHandoverAdminController);
 router.get('/orders/:orderId/available-partners', requireFoodResourceAccess('orders', 'orders'), orderController.listAvailableDeliveryPartnersForOrderController);
+router.post('/orders/:orderId/cancel', requireFoodResourceAccess('orders', 'orders'), orderController.cancelOrderAdminController);
+router.post('/orders/:orderId/refund', requireFoodResourceAccess('orders', 'orders'), orderController.refundOrderAdminController);
 router.delete('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.deleteOrderAdminController);
 
 // ----- CMS Pages (About + legal) -----

@@ -999,7 +999,8 @@ export const createRideRecord = async ({
     : pricingNegotiationMode === 'user_increment_only'
       ? clampBidAmountWithinRange({
         amount: safeFare,
-        minFare: bidRideRange.userBidFloorFare,
+        // The ride starts at the fare the rider was shown; the rider may only raise it later, up to the ceiling.
+        minFare: safeFare,
         maxFare: bidRideRange.userBidCeilingFare,
         baseFare: safeFare,
         bidStepAmount: effectiveBidStepAmount,
@@ -1007,9 +1008,7 @@ export const createRideRecord = async ({
       : safeFare;
   const effectiveBidFloorFare = pricingNegotiationMode === 'driver_bid'
     ? bidRideRange.driverBidFloorFare
-    : pricingNegotiationMode === 'user_increment_only'
-      ? bidRideRange.userBidFloorFare
-      : safeFare;
+    : safeFare;
   const effectiveBidCeilingMaxFare = pricingNegotiationMode === 'driver_bid'
     ? Math.min(bidRideRange.userBidCeilingFare, bidRideRange.driverBidCeilingFare)
     : pricingNegotiationMode === 'user_increment_only'

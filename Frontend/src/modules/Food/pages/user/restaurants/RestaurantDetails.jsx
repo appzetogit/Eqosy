@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component, useMemo, useCallback } from "react"
+import { useState, useEffect, useRef, Component, useMemo, useCallback, startTransition } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
@@ -1969,11 +1969,14 @@ function RestaurantDetailsContent() {
 
   // Show loading state until the current slug fetch fully completes
   if (!isContentReady) {
+    // Grocery stores share this page; the URL's ?vertical=grocery tells us before the store data arrives.
+    const loadingGrocery = searchParams.get("vertical") === "grocery" || restaurant?.isRestaurant === false
     return (
       <EqosyCartLoader
         show={true}
-        message="Loading Restaurant..."
-        subMessage="Fetching fresh menu & food categories..."
+        message={loadingGrocery ? "Loading Store..." : "Loading Restaurant..."}
+        subMessage={loadingGrocery ? "Fetching fresh products & categories..." : "Fetching fresh menu & food categories..."}
+        vertical={loadingGrocery ? "grocery" : "food"}
         fullScreen={true}
       />
     )
@@ -2440,7 +2443,8 @@ function RestaurantDetailsContent() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setExpandedSections(prev => {
+                          // Transition keeps the tap responsive while a big section mounts its items.
+                          startTransition(() => setExpandedSections(prev => {
                             const newSet = new Set(prev)
                             if (newSet.has(originalIndex)) {
                               newSet.delete(originalIndex)
@@ -2448,7 +2452,7 @@ function RestaurantDetailsContent() {
                               newSet.add(originalIndex)
                             }
                             return newSet
-                          })
+                          }))
                         }}
                         className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                       >
@@ -2478,7 +2482,8 @@ function RestaurantDetailsContent() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setExpandedSections(prev => {
+                          // Transition keeps the tap responsive while a big section mounts its items.
+                          startTransition(() => setExpandedSections(prev => {
                             const newSet = new Set(prev)
                             if (newSet.has(originalIndex)) {
                               newSet.delete(originalIndex)
@@ -2486,7 +2491,7 @@ function RestaurantDetailsContent() {
                               newSet.add(originalIndex)
                             }
                             return newSet
-                          })
+                          }))
                         }}
                         className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                       >
@@ -2521,16 +2526,11 @@ function RestaurantDetailsContent() {
                         const isVeg = item.isVeg === true || item.pureVeg === true || typeStr === 'veg' || typeStr === 'pure veg' || (isPureVegRest && typeStr !== 'non-veg' && typeStr !== 'nonveg' && typeStr !== 'egg') || (!['non-veg', 'nonveg', 'egg'].includes(typeStr) && !['chicken', 'mutton', 'fish', 'prawn', 'meat', 'beef', 'pork', 'egg'].some(kw => String(item.name || '').toLowerCase().includes(kw)));
                         const isEgg = typeStr === 'egg' || String(item.name || '').toLowerCase().includes('egg');
 
-                        // Debug: Log preparationTime for troubleshooting
-                        if (item.preparationTime) {
-                          debugLog(`[FRONTEND] Item "${item.name}" preparationTime:`, item.preparationTime, 'Type:', typeof item.preparationTime)
-                        }
-
                         return (
                           <div
                             key={item.id}
                             ref={registerDishCardRef(item, originalIndex, isRecommended)}
-                            className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${getDishHighlightClass(item, isRecommended)}`}
+                            className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 [content-visibility:auto] [contain-intrinsic-size:auto_140px] ${getDishHighlightClass(item, isRecommended)}`}
                             onClick={() => handleItemClick(item)}
                           >
                             {/* Left Side - Details */}
@@ -2748,7 +2748,7 @@ function RestaurantDetailsContent() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setExpandedSections(prev => {
+                                  startTransition(() => setExpandedSections(prev => {
                                     const newSet = new Set(prev)
                                     if (newSet.has(subsectionKey)) {
                                       newSet.delete(subsectionKey)
@@ -2756,7 +2756,7 @@ function RestaurantDetailsContent() {
                                       newSet.add(subsectionKey)
                                     }
                                     return newSet
-                                  })
+                                  }))
                                 }}
                                 className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                               >
@@ -2775,16 +2775,11 @@ function RestaurantDetailsContent() {
                                   // Determine veg/non-veg based on foodType
                                   const isVeg = item.foodType === "Veg"
 
-                                  // Debug: Log preparationTime for troubleshooting
-                                  if (item.preparationTime) {
-                                    debugLog(`[FRONTEND] Subsection item "${item.name}" preparationTime:`, item.preparationTime)
-                                  }
-
                                   return (
                                     <div
                                       key={item.id}
                                       ref={registerDishCardRef(item, originalIndex, false)}
-                                      className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 ${getDishHighlightClass(item, false)}`}
+                                      className={`flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer transition-all duration-300 [content-visibility:auto] [contain-intrinsic-size:auto_140px] ${getDishHighlightClass(item, false)}`}
                                       onClick={() => handleItemClick(item)}
                                     >
                                       {/* Left Side - Details */}

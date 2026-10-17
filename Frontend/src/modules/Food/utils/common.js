@@ -88,7 +88,7 @@ export const calculateDistance = (lat1, lng1, lat2, lng2) => {
  * Formats distance for display
  */
 export const formatDistance = (distanceInKm) => {
-  if (distanceInKm === null || distanceInKm === undefined) return "1.2 km";
+  if (distanceInKm === null || distanceInKm === undefined) return "-- km";
   if (distanceInKm >= 1) {
     return `${distanceInKm.toFixed(1)} km`;
   } else {
@@ -109,7 +109,7 @@ export const slugify = (value) =>
  * Resolves accurate order distance in km for display across all order screens
  */
 export const getOrderDisplayDistance = (orderLike) => {
-  if (!orderLike) return "1.2";
+  if (!orderLike) return "--";
   const pricing = orderLike?.pricing || orderLike?.rawOrderData?.pricing || {};
   const breakdownDistance = parseFloat(pricing?.deliveryFeeBreakdown?.distanceKm);
   const pricingDistance = parseFloat(pricing?.distanceKm);
@@ -157,6 +157,7 @@ export const getOrderDisplayDistance = (orderLike) => {
     return rawDist % 1 === 0 ? rawDist.toFixed(0) : rawDist.toFixed(1);
   }
 
-  return "1.2";
+  // Unknown distance: never invent one (a made-up "1.2 km" next to a real fee looks like a billing bug).
+  return "--";
 };
 
