@@ -71,6 +71,10 @@ const transactionSchema = new mongoose.Schema(
                 'wallet_debit',
                 'commission',
                 'delivery_earning',
+                // Wallet credits created when a food order is completed (see foodTransaction.service.js).
+                // Without these the credit failed validation and restaurant / rider wallets never got paid.
+                'order_payout',
+                'delivery_payout',
                 'platform_fee',
                 'settlement_payout',
                 'referral_reward',
