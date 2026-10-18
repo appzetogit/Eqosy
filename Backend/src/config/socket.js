@@ -552,10 +552,28 @@ export const initSocket = async (server) => {
  * @returns {Server | null}
  */
 export const getIO = () => {
+    if (!io && socketEmitter) {
+        return socketEmitter;
+    }
     if (!io) {
         logger.warn('Socket.IO not initialized');
     }
     return io;
+};
+
+let socketEmitter = null;
+
+/**
+ * API-process side of the standalone socket setup (SOCKET_STANDALONE=true).
+ * Returns an emitter exposing io.to(room).emit(...) that publishes through Redis
+ * to the Socket.IO server running in Backend/socket.js. Requires a connected Redis client.
+ * @param {import('redis').RedisClientType} redisClient
+ */
+export const initSocketEmitter = async (redisClient) => {
+    const { Emitter } = await import('@socket.io/redis-emitter');
+    socketEmitter = new Emitter(redisClient);
+    logger.info('Socket.IO Redis emitter initialized (standalone socket mode)');
+    return socketEmitter;
 };
 
 export const rooms = roomNames;

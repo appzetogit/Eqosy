@@ -19,6 +19,9 @@ export const config = {
     // Basic server config
     port: process.env.PORT || 5000,
     host: process.env.HOST || '0.0.0.0',
+    // Standalone Socket.IO server (Backend/socket.js). When true, the API process only emits via Redis.
+    socketStandalone: process.env.SOCKET_STANDALONE === 'true',
+    socketPort: process.env.SOCKET_PORT || 5001,
     nodeEnv: process.env.NODE_ENV || 'development',
 
     // Database
