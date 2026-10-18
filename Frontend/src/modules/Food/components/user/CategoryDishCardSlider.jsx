@@ -15,27 +15,50 @@ export default function CategoryDishCardSlider({
   backendOrigin = "",
   className = ""
 }) {
-  // Construct slide items from category dishes or fallback to restaurant image
+  // Slides: matched dishes first, then the restaurant's uploaded menu card photos, then cover/profile image.
   const slides = useMemo(() => {
-    if (Array.isArray(dishes) && dishes.length > 0) {
-      return dishes.map((dish, idx) => ({
-        id: dish.itemId || dish._id || dish.id || `dish-${idx}`,
-        name: dish.name || dish.categoryDishName || "Special Dish",
-        price: dish.price ?? dish.categoryDishPrice ?? dish.originalPrice ?? 149,
-        image: dish.image || dish.categoryDishImage || restaurant.categoryDishImage || restaurant.image || DEFAULT_DISH_IMAGE,
-        foodType: dish.foodType || dish.categoryDishFoodType || (restaurant.pureVegRestaurant ? 'Veg' : 'Non-Veg'),
-        dishObj: dish
+    const toUrl = (img) => (typeof img === 'string' ? img : img?.url) || '';
+    const foodType = restaurant.pureVegRestaurant ? 'Veg' : 'Non-Veg';
+
+    const dishSlides = Array.isArray(dishes)
+      ? dishes.map((dish, idx) => ({
+          id: dish.itemId || dish._id || dish.id || `dish-${idx}`,
+          name: dish.name || dish.categoryDishName || 'Special Dish',
+          price: dish.price ?? dish.categoryDishPrice ?? dish.originalPrice ?? 149,
+          image: dish.image || dish.categoryDishImage || restaurant.categoryDishImage || restaurant.image || DEFAULT_DISH_IMAGE,
+          foodType: dish.foodType || dish.categoryDishFoodType || foodType,
+          dishObj: dish,
+        }))
+      : [];
+
+    const menuCardSlides = (Array.isArray(restaurant.menuImages) ? restaurant.menuImages : [])
+      .map(toUrl)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((url, idx) => ({
+        id: `menu-card-${restaurant._id || restaurant.id || 'r'}-${idx}`,
+        name: 'Menu card',
+        price: null,
+        image: url,
+        foodType,
+        dishObj: null,
       }));
+
+    if (dishSlides.length > 0 || menuCardSlides.length > 0) {
+      return [...dishSlides, ...menuCardSlides];
     }
+
+    const coverUrl = (Array.isArray(restaurant.coverImages) ? restaurant.coverImages : []).map(toUrl).find(Boolean);
+    const profileUrl = toUrl(restaurant.profileImage);
 
     // Fallback single slide
     return [{
       id: `rest-${restaurant._id || restaurant.id || 'single'}`,
-      name: restaurant.categoryDishName || restaurant.featuredDish || restaurant.name || "Featured Item",
-      price: restaurant.categoryDishPrice || restaurant.featuredPrice || 149,
-      image: restaurant.categoryDishImage || restaurant.image || DEFAULT_RESTAURANT_IMAGE,
-      foodType: restaurant.categoryDishFoodType || (restaurant.pureVegRestaurant ? 'Veg' : 'Non-Veg'),
-      dishObj: null
+      name: restaurant.categoryDishName || restaurant.featuredDish || restaurant.name || 'Featured Item',
+      price: restaurant.categoryDishPrice || restaurant.featuredPrice || null,
+      image: restaurant.categoryDishImage || restaurant.image || coverUrl || profileUrl || DEFAULT_RESTAURANT_IMAGE,
+      foodType: restaurant.categoryDishFoodType || foodType,
+      dishObj: null,
     }];
   }, [dishes, restaurant]);
 
@@ -161,12 +184,16 @@ export default function CategoryDishCardSlider({
                 {currentSlide.name}
               </span>
 
-              <span className="text-white/40">·</span>
+              {currentSlide.price != null && (
+                <>
+                  <span className="text-white/40">·</span>
 
-              {/* Dish Price */}
-              <span className="font-black text-amber-400 text-xs sm:text-sm">
-                ₹{Math.round(currentSlide.price)}
-              </span>
+                  {/* Dish Price */}
+                  <span className="font-black text-amber-400 text-xs sm:text-sm">
+                    ₹{Math.round(currentSlide.price)}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
