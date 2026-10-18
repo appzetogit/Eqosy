@@ -612,15 +612,19 @@ export const logout = async (refreshToken, fcmToken, platform) => {
     
     // We try to remove the token from all 4 possible models regardless of the user ID, 
     // ensuring no stale connections are left across any role or app the user was logged into.
-    const field = platform === "mobile" ? "fcmTokenMobile" : "fcmTokens";
+    // Pull from both token lists: the client may report the wrong platform, and a stale token left
+    // behind keeps delivering pushes to a logged-out device.
+    const fields = ["fcmTokens", "fcmTokenMobile"];
     const models = [FoodUser, FoodRestaurant, FoodDeliveryPartner, FoodAdmin];
     
     try {
       await Promise.all(
-        models.map((model) =>
-          model.updateMany(
-            { [field]: fcmToken },
-            { $pull: { [field]: fcmToken } },
+        models.flatMap((model) =>
+          fields.map((field) =>
+            model.updateMany(
+              { [field]: fcmToken },
+              { $pull: { [field]: fcmToken } },
+            ),
           ),
         ),
       );

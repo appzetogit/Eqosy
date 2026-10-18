@@ -218,6 +218,39 @@ export function logout(refreshToken, fcmToken = null, platform = "web") {
 }
 
 /**
+ * Finds this device's push token so logout can unregister it. Without this the server keeps sending
+ * "new order" pushes to a device that is already logged out (tapping one then opens the login page).
+ * Flutter app -> asks the native side (platform "mobile"); browser -> token cached at registration.
+ * @param {"user"|"admin"|"restaurant"|"delivery"} module
+ * @returns {Promise<{ fcmToken: string|null, platform: "web"|"mobile" }>}
+ */
+export async function resolveLogoutFcmToken(module) {
+  let fcmToken = null;
+  let platform = "web";
+  try {
+    if (typeof window !== "undefined" && window.flutter_inappwebview) {
+      platform = "mobile";
+      for (const handlerName of ["getFcmToken", "getFCMToken", "getPushToken", "getFirebaseToken"]) {
+        try {
+          const t = await window.flutter_inappwebview.callHandler(handlerName, { module });
+          if (t && typeof t === "string" && t.length > 20) {
+            fcmToken = t.trim();
+            break;
+          }
+        } catch {
+          /* try next handler */
+        }
+      }
+    } else if (typeof localStorage !== "undefined") {
+      fcmToken = localStorage.getItem(`fcm_web_registered_token_${module}`) || null;
+    }
+  } catch {
+    /* logout must never fail because of the push token */
+  }
+  return { fcmToken, platform };
+}
+
+/**
  * Get current profile (requires Bearer).
  * @param {string} [module] - "user" | "admin" | "restaurant" | "delivery" (which token to send; default "user")
  */
