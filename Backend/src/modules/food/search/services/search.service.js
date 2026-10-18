@@ -179,11 +179,25 @@ export const searchUnified = async (query = {}, options = {}) => {
             );
         }
         if (categoryObj) {
-            const catNameRx = new RegExp(categoryObj.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            const escapeForRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const catNameRx = new RegExp(escapeForRegex(categoryObj.name), 'i');
             foodOrConditions.push(
                 { categoryId: categoryObj._id },
                 { categoryName: catNameRx }
             );
+            // Restaurants file items under their own categories ("Cold Drinks"), so also match the
+            // meaningful words of the global category ("Soda & Drinks" -> soda, drink) in the item's
+            // category name or item name.
+            const stopWords = new Set(['and', 'the', 'item', 'items', 'special', 'combo', 'combos']);
+            const words = String(categoryObj.name || '')
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((w) => w.length >= 3 && !stopWords.has(w))
+                .map((w) => w.replace(/s$/, ''));
+            if (words.length > 0) {
+                const wordRx = new RegExp('\\b(' + words.map(escapeForRegex).join('|') + ')', 'i');
+                foodOrConditions.push({ categoryName: wordRx }, { name: wordRx });
+            }
         }
 
         if (foodOrConditions.length > 0) {

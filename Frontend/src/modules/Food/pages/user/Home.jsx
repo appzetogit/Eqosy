@@ -1038,8 +1038,11 @@ export default function Home() {
 
   const displayCategories = useMemo(() => {
     // Only global (admin-managed) categories: never the private categories of single restaurants.
-    if (realCategories.length > 0) return realCategories;
-    return normalizedLandingCategories;
+    const base = realCategories.length > 0 ? realCategories : normalizedLandingCategories;
+    // Alphabetical (A-Z), ignoring case.
+    return [...base].sort((a, b) =>
+      String(a?.name || "").localeCompare(String(b?.name || ""), undefined, { sensitivity: "base" })
+    );
   }, [realCategories, normalizedLandingCategories]);
 
   // Swipe functionality for hero banner carousel

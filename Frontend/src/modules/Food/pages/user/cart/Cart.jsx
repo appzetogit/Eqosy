@@ -846,6 +846,13 @@ function CartInner() {
     }
   }, [showPlacingOrder, showOrderSuccess])
 
+  // Safety net: if the restaurant request hangs or fails, show the cart anyway instead of an endless skeleton/blank page.
+  useEffect(() => {
+    if (restaurantFetchComplete || cart.length === 0) return undefined
+    const timer = setTimeout(() => setRestaurantFetchComplete(true), 6000)
+    return () => clearTimeout(timer)
+  }, [restaurantFetchComplete, cart.length])
+
   // Fetch restaurant data when cart has items
   useEffect(() => {
     const fetchRestaurantData = async () => {

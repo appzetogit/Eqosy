@@ -176,9 +176,10 @@ export default function Categories() {
     fetchCategories();
   }, [resolvedZoneId, zoneStatus, zoneLoading, hasEffectiveCoordinates, BACKEND_ORIGIN, isGrocery]);
 
-  const filteredCategories = categories.filter((cat) =>
-    (cat.name || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Alphabetical (A-Z), ignoring case.
+  const filteredCategories = categories
+    .filter((cat) => (cat.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" }));
 
   // ─── GROCERY MODE UI ───────────────────────────────────────────────────────
   if (isGrocery) {

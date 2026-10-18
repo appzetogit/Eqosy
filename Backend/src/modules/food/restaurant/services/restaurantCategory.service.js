@@ -179,7 +179,9 @@ export async function listPublicCategories(query = {}) {
         isActive: true,
         $and: [
             { $or: APPROVED_CATEGORY_FILTER },
-            { $or: GLOBAL_CATEGORY_FILTER }
+            { $or: GLOBAL_CATEGORY_FILTER },
+            // A category a restaurant created is not public unless an admin globalized it.
+            { $or: [{ createdByRestaurantId: { $exists: false } }, { createdByRestaurantId: null }, { globalizedAt: { $ne: null } }] }
         ]
     };
 

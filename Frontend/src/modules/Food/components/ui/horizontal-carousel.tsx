@@ -58,31 +58,12 @@ export function HorizontalCarousel({
       }
     }
 
-    const onTouchMove = (e: TouchEvent) => {
-      const touchCurrentX = e.touches[0].clientX
-      const touchCurrentY = e.touches[0].clientY
-      const diffX = Math.abs(touchCurrentX - touchStartX.current)
-      const diffY = Math.abs(touchCurrentY - touchStartY.current)
-
-      if (diffX > diffY && diffX > 10) {
-        const { scrollLeft, scrollWidth, clientWidth } = el
-        const canScrollLeft = scrollLeft > 0
-        const canScrollRight = scrollLeft < scrollWidth - clientWidth - 1
-
-        if (canScrollLeft || canScrollRight) {
-          if (e.cancelable) {
-            e.preventDefault()
-          }
-        }
-      }
-    }
-
     el.addEventListener("wheel", onWheel, { passive: false })
-    el.addEventListener("touchmove", onTouchMove, { passive: false })
+    // Touch swiping is left to the browser (touch-action: pan-x pan-y). Calling preventDefault on
+    // touchmove here used to cancel the native horizontal scroll, so the cards would not move.
 
     return () => {
       el.removeEventListener("wheel", onWheel)
-      el.removeEventListener("touchmove", onTouchMove)
     }
   }, [])
 
