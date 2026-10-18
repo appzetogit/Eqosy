@@ -615,7 +615,7 @@ const RecommendedFoodImageStrip = React.memo(
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex h-full overflow-x-auto overscroll-x-contain snap-x snap-mandatory [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
+          className="flex h-full overflow-x-auto overscroll-x-contain snap-x snap-mandatory [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
