@@ -1594,6 +1594,36 @@ export default function Home() {
   useEffect(() => {
     if (zoneId) prefetchGrocery(zoneId);
   }, [zoneId]);
+
+  // "What's on your mind today?": global categories, zone-wise. Categories bound to the user's zone are
+  // included together with the all-zone (global) ones; re-fetched once the zone is known.
+  useEffect(() => {
+    if (zoneLoading || !zoneId) return undefined;
+    let cancelled = false;
+    adminAPI
+      .getPublicCategories({ zoneId })
+      .then((res) => {
+        if (cancelled) return;
+        const list = res?.data?.data?.categories || res?.data?.categories || [];
+        if (!Array.isArray(list)) return;
+        const categories = list.map((cat, idx) => ({
+          id: String(cat?.id || cat?._id || cat?.slug || idx),
+          name: cat?.name || "",
+          slug: cat?.slug || String(cat?.name || "").toLowerCase().replace(/\s+/g, "-"),
+          image:
+            normalizeImageUrl(cat?.image || cat?.imageUrl) ||
+            foodImages[idx % foodImages.length] ||
+            foodImages[0],
+          type: cat?.type || "",
+        }));
+        setRealCategories(categories);
+        try { localStorage.setItem("home_cached_public_categories", JSON.stringify(categories)); } catch (_) {}
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [zoneId, zoneLoading, normalizeImageUrl]);
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
