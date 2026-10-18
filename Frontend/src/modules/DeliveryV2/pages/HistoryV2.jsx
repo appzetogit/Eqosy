@@ -177,7 +177,7 @@ export const HistoryV2 = () => {
     return `${qty}x ${name}${items.length > 1 ? ` +${items.length - 1} more` : ''}`;
   };
 
-  const formatCurrency = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
+  const formatCurrency = (amount) => `₹${Math.round(Number(amount || 0))}`;
 
   const getEarningBreakdown = (trip) => {
     const basePay = Number(trip.riderBasePay || trip.pricing?.deliveryFeeBreakdown?.basePayout || 0);
@@ -306,11 +306,11 @@ export const HistoryV2 = () => {
           <div className="bg-[#E9F9F4] rounded-2xl p-6 border border-[#D1F2E8] flex justify-between items-center">
              <div>
                 <p className="text-[11px] font-bold text-[#10B981] mb-1">COD Collected</p>
-                <h3 className="text-xl font-bold text-gray-950">₹{metrics.cod.toFixed(2)}</h3>
+                <h3 className="text-xl font-bold text-gray-950">₹{Math.round(metrics.cod)}</h3>
              </div>
              <div className="text-right">
                 <p className="text-[11px] font-bold text-[#10B981] mb-1">Earnings</p>
-                <h3 className="text-xl font-bold text-gray-950">₹{metrics.earnings.toFixed(2)}</h3>
+                <h3 className="text-xl font-bold text-gray-950">₹{Math.round(metrics.earnings)}</h3>
              </div>
           </div>
 
@@ -448,7 +448,7 @@ export const HistoryV2 = () => {
                       ) : bonusTransactions.length > 0 ? bonusTransactions.map((tx, i) => (
                          <div key={i} className="bg-gray-50 rounded-2xl p-5 border border-gray-100 flex justify-between items-center">
                             <div>
-                               <p className="text-lg font-bold text-gray-950 mb-0.5">₹{Number(tx.amount || 0).toFixed(2)}</p>
+                               <p className="text-lg font-bold text-gray-950 mb-0.5">₹{Math.round(Number(tx.amount || 0))}</p>
                                <p className="text-sm font-medium text-gray-600 line-clamp-1">{tx.description || 'Bonus Payout'}</p>
                                <p className="text-[10px] text-gray-400 font-medium mt-1">{new Date(tx.createdAt || tx.date).toLocaleDateString()}</p>
                             </div>

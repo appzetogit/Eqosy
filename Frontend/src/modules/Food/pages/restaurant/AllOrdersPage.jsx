@@ -20,7 +20,7 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
-const formatMoney = (value) => `₹${Number(value || 0).toFixed(2)}`
+const formatMoney = (value) => `₹${Math.round(Number(value || 0))}`
 
 // Initialize with current week if needed
 const getCurrentWeek = () => {

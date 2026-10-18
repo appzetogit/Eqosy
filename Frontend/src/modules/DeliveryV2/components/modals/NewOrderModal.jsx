@@ -215,7 +215,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
               </div>
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-bold opacity-80">₹</span>
-                <h2 className="text-4xl font-black tracking-tighter">{Number(earnings || 0).toFixed(2)}</h2>
+                <h2 className="text-4xl font-black tracking-tighter">{Math.round(Number(earnings || 0))}</h2>
               </div>
             </div>
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 text-white flex flex-col items-center min-w-[80px]">

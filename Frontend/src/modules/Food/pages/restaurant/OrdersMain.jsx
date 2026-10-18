@@ -871,7 +871,7 @@ function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
                           Amount
                         </span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          ₹{Math.round(Number(order.amount) || 0)}
                         </span>
                       </div>
                     </div>
@@ -1110,7 +1110,7 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
                           Amount
                         </span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          ₹{Math.round(Number(order.amount) || 0)}
                         </span>
                       </div>
                     </div>

@@ -220,21 +220,21 @@ export const PocketStatementV2 = () => {
                                <div className="mb-2">
                                   <p className="text-[10px] text-gray-400 font-bold uppercase">Earning</p>
                                   <p className="text-sm font-bold text-black">
-                                     ₹{(Math.round((Number(amounts.earning || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
+                                     ₹{Math.round(Number(amounts.earning || 0))}
                                   </p>
                                </div>
                                {amounts.bonus > 0 && (
                                   <div className="mb-2">
                                      <p className="text-[10px] text-emerald-500 font-bold uppercase">Bonus</p>
                                      <p className="text-sm font-bold text-emerald-600">
-                                        + ₹{(Math.round((Number(amounts.bonus || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
+                                        + ₹{Math.round(Number(amounts.bonus || 0))}
                                      </p>
                                   </div>
                                )}
                                <div className="pt-2 border-t border-gray-50">
                                   <p className="text-[10px] text-gray-800 font-bold uppercase">Total</p>
                                   <p className="text-base font-bold text-[#ff8100]">
-                                     ₹{(Math.round((Number(amounts.total || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
+                                     ₹{Math.round(Number(amounts.total || 0))}
                                   </p>
                                </div>
                             </div>

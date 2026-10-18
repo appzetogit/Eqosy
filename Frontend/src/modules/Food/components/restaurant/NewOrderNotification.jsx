@@ -59,7 +59,7 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                   <span className="text-gray-600 font-medium">Total Amount</span>
                 </div>
                 <span className="text-2xl font-bold text-green-600">
-                  ₹{order.total?.toFixed(2) || '0.00'}
+                  ₹{Math.round(Number(order.total) || 0)}
                 </span>
               </div>
 
@@ -73,7 +73,7 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                         {item.name} × {item.quantity}
                       </span>
                       <span className="text-gray-800 font-medium">
-                        ₹{(item.price * item.quantity).toFixed(2)}
+                        ₹{Math.round(item.price * item.quantity)}
                       </span>
                     </div>
                   ))}

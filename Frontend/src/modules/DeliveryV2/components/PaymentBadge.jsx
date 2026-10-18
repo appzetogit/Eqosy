@@ -44,7 +44,7 @@ export const PaymentBadge = ({ order, className = '' }) => {
             Paid {method ? `via ${methodLabel(method)}` : 'online'}
           </span>
           <span className="text-sm font-black text-emerald-900 leading-tight">
-            {billTotal > 0 ? `Bill ₹${billTotal.toFixed(2)} already paid — collect ₹0` : 'Already paid — do not collect cash'}
+            {billTotal > 0 ? `Bill ₹${Math.round(billTotal)} already paid — collect ₹0` : 'Already paid — do not collect cash'}
           </span>
         </div>
       </div>
@@ -58,7 +58,7 @@ export const PaymentBadge = ({ order, className = '' }) => {
       </div>
       <div className="flex flex-col">
         <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">Cash on delivery</span>
-        <span className="text-sm font-black text-amber-900 leading-tight">Collect ₹{amount.toFixed(2)} from customer</span>
+        <span className="text-sm font-black text-amber-900 leading-tight">Collect ₹{Math.round(amount)} from customer</span>
       </div>
     </div>
   );

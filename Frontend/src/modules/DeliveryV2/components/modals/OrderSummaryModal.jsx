@@ -51,7 +51,7 @@ export const OrderSummaryModal = ({ order, onDone }) => {
               <Star className="w-4 h-4 text-orange-400 fill-orange-400" />
             </div>
             
-            <p className="text-gray-950 text-6xl font-bold mb-6 tracking-tighter">₹{Number(earnings).toFixed(2)}</p>
+            <p className="text-gray-950 text-6xl font-bold mb-6 tracking-tighter">₹{Math.round(Number(earnings) || 0)}</p>
             
             <div className="flex items-center justify-center gap-3 py-3 bg-green-50 rounded-2xl text-green-700 text-sm font-bold border border-green-100">
               <Wallet className="w-5 h-5" />
