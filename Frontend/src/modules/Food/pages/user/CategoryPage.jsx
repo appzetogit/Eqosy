@@ -16,7 +16,7 @@ import {
 // Import shared food images - prevents duplication
 import { foodImages } from "@food/constants/images"
 import api from "@food/api"
-import { restaurantAPI, adminAPI } from "@food/api"
+import { restaurantAPI, adminAPI, searchAPI } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { useProfile } from "@food/context/ProfileContext"
 import { useCart } from "@food/context/CartContext"
@@ -128,6 +128,10 @@ export default function CategoryPage() {
   const [isEnrichingMenus, setIsEnrichingMenus] = useState(false)
   const [approvedFoodsData, setApprovedFoodsData] = useState([])
   const [categoryKeywords, setCategoryKeywords] = useState({})
+  // Restaurants + dishes of the selected category, matched by category id on the server
+  // (null = not loaded / 'All'; then the older name-matching fallback below is used).
+  const [categoryResults, setCategoryResults] = useState(null)
+  const [loadingCategoryResults, setLoadingCategoryResults] = useState(false)
   const showCategorySkeleton = useDelayedLoading(loadingCategories)
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const BACKEND_ORIGIN = useMemo(() => API_BASE_URL.replace(/\/api\/?$/, ""), [])
@@ -629,6 +633,7 @@ export default function CategoryPage() {
             { id: 'all', name: "All", image: null, slug: 'all' },
             ...categoriesArray.map((cat) => ({
               id: cat.slug || cat.id,
+              rawId: cat.id || cat._id || '',
               name: cat.name,
               image: cat.image || (isGroceryMode ? null : foodImages[0]),
               slug: cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'),
@@ -1280,7 +1285,21 @@ export default function CategoryPage() {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    if (selectedCategory && selectedCategory !== 'all') {
+    if (selectedCategory && selectedCategory !== 'all' && categoryResults) {
+      filtered = categoryResults
+        .map((r) => {
+          const dishes = vegMode ? r.categoryDishes.filter((d) => d.foodType === 'Veg') : r.categoryDishes
+          return {
+            ...r,
+            categoryDishes: dishes,
+            categoryDishName: dishes[0]?.name,
+            categoryDishPrice: dishes[0]?.price,
+            categoryDishImage: dishes[0]?.image,
+            categoryDishFoodType: dishes[0]?.foodType,
+          }
+        })
+        .filter((r) => r.categoryDishes.length > 0)
+    } else if (selectedCategory && selectedCategory !== 'all') {
       const restaurantList = []
 
       filtered.forEach(r => {
@@ -1339,13 +1358,27 @@ export default function CategoryPage() {
     }
 
     return applyFiltersAndSorting(filtered)
-  }, [selectedCategory, activeFilters, deferredSearchQuery, restaurantsData, categoryKeywords, vegMode, approvedFoodsData, sortBy])
+  }, [selectedCategory, activeFilters, deferredSearchQuery, restaurantsData, categoryKeywords, vegMode, approvedFoodsData, sortBy, categoryResults])
 
   const filteredAllRestaurants = useMemo(() => {
     const sourceData = restaurantsData.length > 0 ? restaurantsData : []
     let filtered = [...sourceData]
 
-    if (selectedCategory && selectedCategory !== 'all') {
+    if (selectedCategory && selectedCategory !== 'all' && categoryResults) {
+      filtered = categoryResults
+        .map((r) => {
+          const dishes = vegMode ? r.categoryDishes.filter((d) => d.foodType === 'Veg') : r.categoryDishes
+          return {
+            ...r,
+            categoryDishes: dishes,
+            categoryDishName: dishes[0]?.name,
+            categoryDishPrice: dishes[0]?.price,
+            categoryDishImage: dishes[0]?.image,
+            categoryDishFoodType: dishes[0]?.foodType,
+          }
+        })
+        .filter((r) => r.categoryDishes.length > 0)
+    } else if (selectedCategory && selectedCategory !== 'all') {
       const restaurantList = []
 
       filtered.forEach(r => {
@@ -1404,7 +1437,51 @@ export default function CategoryPage() {
     }
 
     return applyFiltersAndSorting(filtered)
-  }, [selectedCategory, activeFilters, deferredSearchQuery, restaurantsData, categoryKeywords, vegMode, approvedFoodsData, sortBy])
+  }, [selectedCategory, activeFilters, deferredSearchQuery, restaurantsData, categoryKeywords, vegMode, approvedFoodsData, sortBy, categoryResults])
+
+  useEffect(() => {
+    if (!selectedCategory || selectedCategory === 'all') {
+      setCategoryResults(null)
+      setLoadingCategoryResults(false)
+      return undefined
+    }
+    const categoryObj = categories.find((c) => c.slug === selectedCategory || c.id === selectedCategory)
+    if (!categoryObj?.rawId) return undefined
+
+    let cancelled = false
+    setLoadingCategoryResults(true)
+    searchAPI
+      .unifiedSearch({
+        categoryId: categoryObj.rawId,
+        ...(effectiveLocation?.latitude ? { lat: effectiveLocation.latitude } : {}),
+        ...(effectiveLocation?.longitude ? { lng: effectiveLocation.longitude } : {}),
+        ...(zoneId ? { zoneId } : {}),
+        isRestaurant: isGroceryMode ? 'false' : 'true',
+        limit: 60,
+      })
+      .then((res) => {
+        if (cancelled) return
+        const rows = res?.data?.data?.restaurants || res?.data?.restaurants || []
+        const mapped = rows
+          .filter((r) => (r.matchType === 'restaurant' || !r.matchType) && Array.isArray(r.matchedDishes) && r.matchedDishes.length > 0)
+          .map((r) => ({
+            ...r,
+            id: r.restaurantId || r._id,
+            name: r.restaurantName || r.name,
+            categoryDishes: r.matchedDishes,
+          }))
+        setCategoryResults(mapped)
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryResults(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCategoryResults(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCategory, categories, zoneId, effectiveLocation?.latitude, effectiveLocation?.longitude, isGroceryMode])
 
   // Menu enrichment can take a long time (one request per restaurant). Don't keep the full-page loading
   // overlay (which blocks taps) up for more than a few seconds while it finishes in the background.
@@ -1419,7 +1496,7 @@ export default function CategoryPage() {
   }, [isEnrichingMenus])
 
   const showRestaurantSkeleton = useDelayedLoading(
-    isLoadingFilterResults || loadingRestaurants || (isEnrichingMenus && !enrichGraceOver && selectedCategory !== 'all' && filteredRecommended.length === 0),
+    isLoadingFilterResults || loadingRestaurants || loadingCategoryResults || (isEnrichingMenus && !enrichGraceOver && selectedCategory !== 'all' && filteredRecommended.length === 0),
     { delay: 140, minDuration: 360 }
   )
 

@@ -1037,10 +1037,10 @@ export default function Home() {
   }, [landingCategories, normalizeImageUrl, slugifyCategory]);
 
   const displayCategories = useMemo(() => {
+    // Only global (admin-managed) categories: never the private categories of single restaurants.
     if (realCategories.length > 0) return realCategories;
-    if (menuCategories.length > 0) return menuCategories;
     return normalizedLandingCategories;
-  }, [menuCategories, realCategories, normalizedLandingCategories]);
+  }, [realCategories, normalizedLandingCategories]);
 
   // Swipe functionality for hero banner carousel
   const touchStartX = useRef(0);

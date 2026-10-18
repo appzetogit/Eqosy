@@ -162,7 +162,8 @@ export const searchUnified = async (query = {}, options = {}) => {
 
         // B. Search Food Items by text query and/or category
         const foodFilters = {
-            approvalStatus: { $ne: 'rejected' },
+            // Same rule as the public menu: approved items only (legacy items without the field count as approved).
+            approvalStatus: { $in: ['approved', null] },
             isActive: { $ne: false },
             isAvailable: { $ne: false },
             restaurantId: { $in: eligibleRestIds }
