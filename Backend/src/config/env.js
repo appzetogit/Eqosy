@@ -78,6 +78,9 @@ export const config = {
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
 
+    // Google Maps (server-side Directions/polyline)
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY,
+
     // Firebase / FCM
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
     firebaseDatabaseUrl: process.env.VITE_FIREBASE_DATABASE_URL,
