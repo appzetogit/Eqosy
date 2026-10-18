@@ -420,8 +420,30 @@ export default function ProfessionalSearch() {
         <OutOfServiceView />
       ) : (
         <div className="max-w-3xl mx-auto p-4">
+        {/* Once a category is picked, a compact one-line chip row replaces the big grid so the results stay at the top. */}
+        {!query && selectedCategoryId && (
+          <div className="mb-4 -mx-4 px-4 flex gap-2 overflow-x-auto scrollbar-hide">
+            {[...categories]
+              .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }))
+              .map((cat) => (
+                <button
+                  key={cat._id}
+                  type="button"
+                  onClick={() => handleCategoryClick(cat._id)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+                    selectedCategoryId === cat._id
+                      ? 'bg-rose-500 border-rose-500 text-white'
+                      : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-300'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+          </div>
+        )}
+
         {/* Categories (Admin only) */}
-        {!query && !loading && (
+        {!query && !selectedCategoryId && !loading && (
           <div className="mb-8">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-1">Top Categories</h3>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4">
@@ -480,7 +502,7 @@ export default function ProfessionalSearch() {
         </AnimatePresence>
 
         {/* Recent History */}
-        {!query && !loading && history.length > 0 && (
+        {!query && !selectedCategoryId && !loading && history.length > 0 && (
           <div className="mb-8">
              <div className="flex items-center justify-between mb-2 px-1">
                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Recently Searched</h3>
