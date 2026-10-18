@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
-import { restaurantAPI } from "@food/api"
+import { restaurantAPI, diningAPI } from "@food/api"
 import { useProfile } from "@food/context/ProfileContext"
 import { getMenuFromResponse } from "@food/utils/menuItems"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
@@ -103,6 +103,22 @@ export default function DiningRestaurantDetails() {
   const [selectedGuests, setSelectedGuests] = useState(2)
   const [isBookingSheetOpen, setIsBookingSheetOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("prebook")
+  // Real dining rating + reviews: only guests with a completed table booking can rate.
+  const [diningReviews, setDiningReviews] = useState(null)
+  const diningRestaurantId = restaurant?._id || restaurant?.id || ""
+  useEffect(() => {
+    if (!diningRestaurantId) return undefined
+    let cancelled = false
+    diningAPI
+      .getRestaurantReviews(diningRestaurantId)
+      .then((res) => {
+        if (!cancelled) setDiningReviews(res?.data?.data || null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [diningRestaurantId])
 
   useEffect(() => {
     const fetchRestaurantData = async () => {
@@ -183,8 +199,9 @@ export default function DiningRestaurantDetails() {
       : "Asian, Italian, Continental, Chinese, North Indian, Desserts, Beverages, Coffee"
   const costForTwo = restaurant?.costForTwo ? `${"\u20B9"}${restaurant.costForTwo} for two` : `${"\u20B9"}1900 for two`
   const facilities = buildFacilities(restaurant)
-  const rating = Number(restaurant?.rating || restaurant?.avgRating || 0).toFixed(1)
-  const reviewCount = restaurant?.totalRatings || restaurant?.reviewCount || restaurant?.reviewsCount || 0
+  const hasDiningRating = Number(diningReviews?.rating || 0) > 0
+  const rating = hasDiningRating ? Number(diningReviews.rating).toFixed(1) : "New"
+  const reviewCount = diningReviews?.reviewCount || 0
   const openingTime = formatTimeLabel(restaurant?.openingTime || restaurant?.diningSettings?.openingTime || "12:00")
   const closingTime = formatTimeLabel(restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:59")
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
@@ -309,7 +326,7 @@ export default function DiningRestaurantDetails() {
               <div className="mb-1 shrink-0 rounded-[18px] bg-white px-3 py-2 text-center text-[#1f2328] shadow-xl">
                 <div className="flex items-center justify-center gap-1 text-[31px] font-black leading-none">
                   <span>{rating}</span>
-                  <span className="text-[18px] text-[#18b54f]">★</span>
+                  {hasDiningRating && <span className="text-[18px] text-[#18b54f]">★</span>}
                 </div>
                 <p className="mt-1 text-[13px] leading-4 text-[#6e7481]">{reviewCount} Reviews</p>
               </div>
@@ -468,6 +485,28 @@ export default function DiningRestaurantDetails() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section id="restaurant-reviews" className="px-3 pb-28 pt-5">
+          <h3 className="text-[20px] font-semibold text-[#23180f]">Guest reviews</h3>
+          {Array.isArray(diningReviews?.reviews) && diningReviews.reviews.length > 0 ? (
+            <div className="mt-3 space-y-3">
+              {diningReviews.reviews.map((review, index) => (
+                <div key={`${review.createdAt || index}-${index}`} className="rounded-[18px] border border-[#ececf4] bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[15px] font-semibold text-[#23180f]">{review.name}</p>
+                    <span className="rounded-lg bg-[#18b54f] px-2 py-0.5 text-[13px] font-bold text-white">{review.rating} ★</span>
+                  </div>
+                  {review.comment ? <p className="mt-2 text-[14px] leading-5 text-[#5f6474]">{review.comment}</p> : null}
+                  {review.createdAt ? (
+                    <p className="mt-2 text-[12px] text-[#9096a5]">{new Date(review.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-[14px] text-[#6e7481]">No reviews yet. Guests can rate after their table booking is completed.</p>
+          )}
         </section>
       </div>
 

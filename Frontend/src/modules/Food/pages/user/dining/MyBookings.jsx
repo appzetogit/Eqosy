@@ -14,11 +14,16 @@ const debugError = (...args) => {}
 
 
 function ReviewModal({ booking, onClose, onSubmit }) {
-    const [rating, setRating] = useState(5)
+    // Starts empty: the guest must pick the stars themselves so ratings stay genuine.
+    const [rating, setRating] = useState(0)
     const [comment, setComment] = useState("")
     const [submitting, setSubmitting] = useState(false)
 
     const handleSubmit = async () => {
+        if (rating < 1) {
+            toast.error("Please select a star rating")
+            return
+        }
         if (!comment.trim()) {
             toast.error("Please add a comment")
             return
@@ -69,7 +74,7 @@ function ReviewModal({ booking, onClose, onSubmit }) {
 
                     <Button
                         onClick={handleSubmit}
-                        disabled={submitting}
+                        disabled={submitting || rating < 1}
                         className="w-full bg-red-500 hover:bg-red-600 text-white font-bold h-12 rounded-2xl shadow-lg shadow-red-200"
                     >
                         {submitting ? "Submitting..." : "Submit Review"}
@@ -127,8 +132,12 @@ export default function MyBookings() {
             const response = await diningAPI.createReview(reviewData)
             if (response.data.success) {
                 toast.success("Review submitted! Thank you for your feedback.")
-                // Update booking list to mark it as reviewed if we had a reviewed flag
-                // For now just close the modal
+                const savedReview = response.data.data?.review || { rating: reviewData.rating, comment: reviewData.comment }
+                setBookings((prev) =>
+                    prev.map((b) =>
+                        (b._id === reviewData.bookingId || b.id === reviewData.bookingId) ? { ...b, review: savedReview } : b
+                    )
+                )
                 setSelectedBooking(null)
             }
         } catch (error) {
@@ -218,7 +227,14 @@ export default function MyBookings() {
                                     </p>
                                 )}
 
-                                {booking.status === 'completed' && (
+                                {booking.status === 'completed' && booking.review?.rating > 0 && (
+                                    <p className="mt-3 flex items-center gap-1 text-[12px] font-bold text-amber-600">
+                                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                                        You rated {booking.review.rating} / 5
+                                    </p>
+                                )}
+
+                                {booking.status === 'completed' && !(booking.review?.rating > 0) && (
                                     <button
                                         onClick={() => setSelectedBooking(booking)}
                                         className="mt-3 w-full py-2 bg-red-50 text-red-600 text-[11px] font-bold rounded-lg border border-red-100 hover:bg-red-100 transition-colors"

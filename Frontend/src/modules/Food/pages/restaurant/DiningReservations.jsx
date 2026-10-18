@@ -88,6 +88,9 @@ export default function DiningReservations() {
     const [uploadError, setUploadError] = useState("")
     const [activeSection, setActiveSection] = useState("reservations")
     const [activeView, setActiveView] = useState("priority")
+    // Day-wise view: "" = all days, otherwise YYYY-MM-DD (local/IST day of the booking).
+    const [selectedDate, setSelectedDate] = useState("")
+    const [statusFilter, setStatusFilter] = useState("all")
     const [showMediaPanel, setShowMediaPanel] = useState(false)
     const [diningEnabled, setDiningEnabled] = useState(false)
     const [maxGuestsLimit, setMaxGuestsLimit] = useState(6)
@@ -507,9 +510,49 @@ export default function DiningReservations() {
         })
     }, [bookings])
 
+    const toDayKey = (value) => {
+        const date = new Date(value)
+        if (Number.isNaN(date.getTime())) return ""
+        const pad = (n) => String(n).padStart(2, "0")
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    }
+
+    const STATUS_FILTERS = [
+        { id: "all", label: "All", statuses: null },
+        { id: "pending", label: "Pending", statuses: ["confirmed", "pending"] },
+        { id: "accepted", label: "Accepted", statuses: ["accepted"] },
+        { id: "checked-in", label: "Checked-in", statuses: ["checked-in"] },
+        { id: "completed", label: "Completed", statuses: ["completed"] },
+        { id: "cancelled", label: "Cancelled", statuses: ["cancelled", "rejected", "no_show"] },
+    ]
+
+    const shiftSelectedDate = (days) => {
+        const base = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date()
+        base.setDate(base.getDate() + days)
+        setSelectedDate(toDayKey(base))
+    }
+
+    // Bookings of the chosen day (or all days), before the status filter, so the chips can show counts.
+    const dayBookings = useMemo(
+        () => (selectedDate ? sortedBookings.filter((booking) => toDayKey(booking?.date) === selectedDate) : sortedBookings),
+        [sortedBookings, selectedDate]
+    )
+
+    const statusCounts = useMemo(() => {
+        const counts = {}
+        STATUS_FILTERS.forEach((filter) => {
+            counts[filter.id] = filter.statuses
+                ? dayBookings.filter((booking) => filter.statuses.includes(String(booking?.status || "").toLowerCase())).length
+                : dayBookings.length
+        })
+        return counts
+    }, [dayBookings])
+
     const filteredBookings = useMemo(() => {
         const term = searchTerm.trim().toLowerCase()
-        return sortedBookings
+        const activeStatuses = STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.statuses || null
+        return dayBookings
+            .filter((booking) => !activeStatuses || activeStatuses.includes(String(booking?.status || "").toLowerCase()))
             .filter((booking) => {
                 if (!term) return true
                 return (
@@ -523,7 +566,7 @@ export default function DiningReservations() {
                 if (activeView === "new") return isNewRequest(booking)
                 return true
             })
-    }, [sortedBookings, searchTerm, activeView])
+    }, [dayBookings, searchTerm, activeView, statusFilter])
 
     const newRequestsCount = useMemo(
         () => bookings.filter((booking) => isNewRequest(booking)).length,
@@ -906,6 +949,63 @@ export default function DiningReservations() {
                                 >
                                     Today
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Day-wise table booking status */}
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => shiftSelectedDate(-1)}
+                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                                >
+                                    Prev day
+                                </button>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-800"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => shiftSelectedDate(1)}
+                                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                                >
+                                    Next day
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedDate(toDayKey(new Date()))}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${selectedDate === toDayKey(new Date()) ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-600"}`}
+                                >
+                                    Today
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedDate("")}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${selectedDate === "" ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-600"}`}
+                                >
+                                    All days
+                                </button>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-500">
+                                {selectedDate
+                                    ? `${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}:${statusCounts.all} booking${statusCounts.all === 1 ? "" : "s"}`
+                                    : `All days: ${statusCounts.all} bookings`}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {STATUS_FILTERS.map((filter) => (
+                                    <button
+                                        key={filter.id}
+                                        type="button"
+                                        onClick={() => setStatusFilter(filter.id)}
+                                        className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${statusFilter === filter.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
+                                    >
+                                        {filter.label} ({statusCounts[filter.id] ?? 0})
+                                    </button>
+                                ))}
                             </div>
                         </div>
 

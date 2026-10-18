@@ -4,7 +4,7 @@ import deliveryRoutes from '../modules/food/delivery/routes/delivery.routes.js';
 import gigRoutes from '../modules/food/delivery/routes/gig.routes.js';
 import restaurantRoutes from '../modules/food/restaurant/routes/restaurant.routes.js';
 import landingRoutes from '../modules/food/landing/routes/landing.routes.js';
-import { getPublicDiningCategories, getPublicDiningRestaurants } from '../modules/food/dining/controllers/diningPublic.controller.js';
+import { getPublicDiningCategories, getPublicDiningRestaurants, getPublicDiningRestaurantReviews } from '../modules/food/dining/controllers/diningPublic.controller.js';
 import {
     createDiningBookingController,
     listMyDiningBookingsController,
@@ -59,6 +59,7 @@ router.use('/v1/food', landingRoutes);
 router.use('/v1/food/search', searchRoutes);
 router.get('/v1/food/dining/categories/public', getPublicDiningCategories);
 router.get('/v1/food/dining/restaurants/public', getPublicDiningRestaurants);
+router.get('/v1/food/dining/restaurants/:id/reviews', getPublicDiningRestaurantReviews);
 // Table bookings (customer)
 router.post('/v1/food/dining/bookings', authMiddleware, requireRoles('USER'), createDiningBookingController);
 router.get('/v1/food/dining/bookings', authMiddleware, requireRoles('USER'), listMyDiningBookingsController);

@@ -2559,6 +2559,8 @@ export const diningAPI = {
     ),
   cancelBooking: (bookingId) =>
     apiClient.patch(`/food/dining/bookings/${String(bookingId)}/cancel`, {}, { contextModule: "user" }),
+  getRestaurantReviews: (restaurantId) =>
+    apiClient.get(`/food/dining/restaurants/${String(restaurantId)}/reviews`),
   createReview: (payload = {}) =>
     apiClient.post(
       `/food/dining/bookings/${String(payload?.bookingId || "")}/review`,

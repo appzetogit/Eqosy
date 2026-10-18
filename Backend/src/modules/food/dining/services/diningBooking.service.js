@@ -179,13 +179,56 @@ export async function reviewUserDiningBooking(userId, bookingId, body = {}) {
     if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
         throw new ValidationError('Rating must be between 1 and 5');
     }
+    const existing = await FoodDiningBooking.findOne({
+        _id: toObjectId(bookingId, 'booking id'),
+        userId: toObjectId(userId, 'user')
+    }).select('status review');
+    if (!existing) throw new NotFoundError('Booking not found');
+    // Only a guest who actually dined (booking checked out/completed) can rate, and only once,
+    // so the restaurant's dining rating is made of real visits.
+    if (existing.status !== 'completed') {
+        throw new ValidationError('You can rate this restaurant after your booking is completed');
+    }
+    if (existing.review?.rating) {
+        throw new ValidationError('You have already rated this booking');
+    }
     const booking = await FoodDiningBooking.findOneAndUpdate(
-        { _id: toObjectId(bookingId, 'booking id'), userId: toObjectId(userId, 'user') },
-        { $set: { review: { rating, comment: String(body.comment || '').trim(), createdAt: new Date() } } },
+        { _id: existing._id, 'review.rating': { $exists: false } },
+        { $set: { review: { rating: Math.round(rating), comment: String(body.comment || '').trim(), createdAt: new Date() } } },
         { new: true }
     );
-    if (!booking) throw new NotFoundError('Booking not found');
+    if (!booking) throw new ValidationError('You have already rated this booking');
     return serialize(booking);
+}
+
+/** Real dining rating of one restaurant: average of guest reviews + the latest written reviews. */
+export async function getDiningRestaurantReviews(restaurantId, { limit = 20 } = {}) {
+    const rid = toObjectId(restaurantId, 'restaurant');
+    const [stats] = await FoodDiningBooking.aggregate([
+        { $match: { restaurantId: rid, 'review.rating': { $gte: 1 } } },
+        { $group: { _id: '$restaurantId', avg: { $avg: '$review.rating' }, count: { $sum: 1 } } }
+    ]);
+    const docs = await FoodDiningBooking.find({ restaurantId: rid, 'review.rating': { $gte: 1 } })
+        .sort({ 'review.createdAt': -1 })
+        .limit(Math.min(Math.max(Number(limit) || 20, 1), 50))
+        .select('user.name review')
+        .lean();
+
+    const maskName = (name) => {
+        const first = String(name || '').trim().split(/\s+/)[0];
+        return first ? `${first.slice(0, 1).toUpperCase()}${first.slice(1)}` : 'Guest';
+    };
+
+    return {
+        rating: stats ? Math.round(stats.avg * 10) / 10 : 0,
+        reviewCount: stats?.count || 0,
+        reviews: docs.map((d) => ({
+            name: maskName(d.user?.name),
+            rating: d.review.rating,
+            comment: d.review.comment || '',
+            createdAt: d.review.createdAt
+        }))
+    };
 }
 
 export async function listRestaurantDiningBookings(restaurantId) {

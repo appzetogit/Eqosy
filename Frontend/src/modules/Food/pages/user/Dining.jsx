@@ -1017,7 +1017,7 @@ export default function Dining() {
                                 }}
                                 transition={{ duration: 0.3, type: "spring", stiffness: 400 }}
                               >
-                                <span className="text-sm font-bold">{restaurant.rating}</span>
+                                <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}</span>
                                 <Star className="h-3 w-3 fill-white text-white" />
                               </motion.div>
                             </div>
@@ -1209,7 +1209,7 @@ export default function Dining() {
                               </h3>
                             </div>
                             <div className="flex-shrink-0 bg-green-600 text-white px-2 py-1 rounded-lg flex items-center gap-1">
-                              <span className="text-sm font-bold">{restaurant.rating}</span>
+                              <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}</span>
                               <Star className="h-3 w-3 fill-white text-white" />
                             </div>
                           </div>

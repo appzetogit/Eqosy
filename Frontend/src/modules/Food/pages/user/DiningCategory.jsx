@@ -89,7 +89,7 @@ export default function DiningCategory() {
                   ? restaurant.cuisines.join(" • ")
                   : "Multi-cuisine",
               price: restaurant.costForTwo ? `Rs ${restaurant.costForTwo} for two` : "Price on request",
-              rating: Number(restaurant.rating || restaurant.avgRating || 0).toFixed(1),
+              rating: Number(restaurant.rating || 0) > 0 ? Number(restaurant.rating).toFixed(1) : "New",
               offer: restaurant.offer || "Pre-book tables and dining offers",
               featuredDish: restaurant.featuredDish || "Chef's special",
               featuredPrice: restaurant.featuredPrice || null,
@@ -243,7 +243,7 @@ export default function DiningCategory() {
                         </div>
                         <div className="inline-flex items-center gap-1 rounded-2xl bg-emerald-600 px-2.5 py-1.5 text-sm font-bold text-white">
                           <span>{restaurant.rating}</span>
-                          <Star className="h-3.5 w-3.5 fill-current" />
+                          {restaurant.rating !== "New" && <Star className="h-3.5 w-3.5 fill-current" />}
                         </div>
                       </div>
 

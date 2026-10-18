@@ -3,6 +3,7 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDiningCategory } from '../models/diningCategory.model.js';
 import { FoodDiningRestaurant } from '../models/diningRestaurant.model.js';
+import { FoodDiningBooking } from '../models/diningBooking.model.js';
 
 const slugify = (value) =>
     String(value || '')
@@ -370,10 +371,29 @@ export async function listDiningRestaurantsPublic(query = {}) {
         .populate('categoryIds', 'name slug imageUrl')
         .lean();
 
-    return diningDocs
-        .filter((doc) => doc.restaurantId)
-        .map((doc) => ({
+    const visibleDocs = diningDocs.filter((doc) => doc.restaurantId);
+
+    // Dining rating is the real average of guest reviews left after completed table bookings
+    // (not the food-delivery rating, and no made-up default when nobody has rated yet).
+    const ratingRows = visibleDocs.length > 0
+        ? await FoodDiningBooking.aggregate([
+            { $match: { restaurantId: { $in: visibleDocs.map((doc) => doc.restaurantId._id) }, 'review.rating': { $gte: 1 } } },
+            { $group: { _id: '$restaurantId', avg: { $avg: '$review.rating' }, count: { $sum: 1 } } }
+        ])
+        : [];
+    const ratingByRestaurant = new Map(ratingRows.map((row) => [String(row._id), row]));
+
+    return visibleDocs
+        .map((doc) => {
+            const stats = ratingByRestaurant.get(String(doc.restaurantId._id));
+            const diningRating = stats ? Math.round(stats.avg * 10) / 10 : 0;
+            return { doc, diningRating, diningReviewCount: stats?.count || 0 };
+        })
+        .map(({ doc, diningRating, diningReviewCount }) => ({
             ...doc.restaurantId,
+            rating: diningRating,
+            diningRating,
+            diningReviewCount,
             restaurant: doc.restaurantId,
             categories: doc.categoryIds || [],
             diningSettings: {
