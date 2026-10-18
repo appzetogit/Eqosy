@@ -315,7 +315,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
                 </p>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-2xl font-bold text-amber-950/60">₹</span>
-                  <p className="text-amber-950 text-5xl font-black tracking-tighter leading-none">{amountToCollect.toFixed(2)}</p>
+                  <p className="text-amber-950 text-5xl font-black tracking-tighter leading-none">{Number.isInteger(amountToCollect) ? amountToCollect : amountToCollect.toFixed(2)}</p>
                 </div>
                 {isPaid ? (
                   <div className="inline-flex items-center gap-2 bg-emerald-500 text-white pl-3 pr-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">
@@ -392,7 +392,7 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-gray-950 font-bold text-xl mb-2">Scan to Pay</h3>
-              <p className="text-gray-500 text-sm mb-8 font-medium">Order Total: ₹{amountToCollect.toFixed(2)}</p>
+              <p className="text-gray-500 text-sm mb-8 font-medium">Order Total: ₹{Number.isInteger(amountToCollect) ? amountToCollect : amountToCollect.toFixed(2)}</p>
 
               <div className="relative p-6 bg-gray-50 rounded-3xl border-2 border-gray-100 mb-8">
                 <img

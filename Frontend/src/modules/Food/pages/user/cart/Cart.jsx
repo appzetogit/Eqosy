@@ -3197,6 +3197,14 @@ function CartInner() {
                       </button>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{isPricingAvailable ? `${RUPEE_SYMBOL}${gstCharges.toFixed(2)}` : "-"}</span>
                     </div>
+                    {isPricingAvailable && Number(pricing?.roundOff || 0) !== 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Round off</span>
+                        <span className="text-gray-800 dark:text-gray-200 font-medium">
+                          {Number(pricing.roundOff) > 0 ? "+" : "-"}{RUPEE_SYMBOL}{Math.abs(Number(pricing.roundOff)).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     {discount > 0 && (
                       <div className="flex justify-between text-sm text-[color:var(--app-primary,#EB590E)] font-medium">
                         <span>Coupon Discount</span>

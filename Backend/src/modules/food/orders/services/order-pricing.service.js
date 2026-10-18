@@ -453,10 +453,13 @@ export async function calculateOrderPricing(userId, dto) {
     }
   }
 
-  const total = Math.max(
+  const rawTotal = Math.max(
     0,
     subtotal + packagingFee + deliveryFee + platformFee + tax + surgeAmount - discount,
   );
+  // Bill is rounded to a whole rupee so cash collection and online payment are exact amounts.
+  const total = Math.round(rawTotal);
+  const roundOff = Math.round((total - rawTotal) * 100) / 100;
 
   return {
     // Server-priced cart lines; createOrder stores these instead of the client's items.
@@ -480,6 +483,7 @@ export async function calculateOrderPricing(userId, dto) {
       surgeAmount,
       surgeTitle,
       discount,
+      roundOff,
       total,
       currency: "INR",
       couponCode: appliedCoupon?.code || codeRaw || null,

@@ -743,6 +743,11 @@ export default function OrderTracking({ isSharedView = false }) {
   // 0 = not rated yet; the user must pick the stars themselves before submitting.
   const [restaurantRating, setRestaurantRating] = useState(0)
   const [deliveryRating, setDeliveryRating] = useState(0)
+  // Rating is asked one step at a time: delivery partner first, then the restaurant.
+  const [ratingStep, setRatingStep] = useState("delivery")
+  useEffect(() => {
+    if (isRatingModalOpen) setRatingStep("delivery")
+  }, [isRatingModalOpen])
   const [restaurantComment, setRestaurantComment] = useState("")
   const [deliveryComment, setDeliveryComment] = useState("")
   const [submittingRating, setSubmittingRating] = useState(false)
@@ -2430,7 +2435,7 @@ export default function OrderTracking({ isSharedView = false }) {
 
           <div className="space-y-6 py-2">
             {/* 1. Rate Delivery Partner */}
-            {(order?.deliveryPartnerId || order?.deliveryPartner) && (
+            {(order?.deliveryPartnerId || order?.deliveryPartner) && ratingStep === "delivery" && (
               <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-[color:var(--app-primary,#EB590E)] flex items-center justify-center font-bold">
@@ -2494,6 +2499,7 @@ export default function OrderTracking({ isSharedView = false }) {
             )}
 
             {/* 2. Rate Restaurant Food */}
+            {(ratingStep === "restaurant" || !(order?.deliveryPartnerId || order?.deliveryPartner)) && (
             <div className="bg-gray-50 dark:bg-zinc-800/60 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold">
@@ -2554,17 +2560,35 @@ export default function OrderTracking({ isSharedView = false }) {
                 className="min-h-[60px] text-xs resize-none rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
               />
             </div>
+            )}
 
             {/* Submit Button */}
+            {ratingStep === "restaurant" && Boolean(order?.deliveryPartnerId || order?.deliveryPartner) && (
+              <button
+                type="button"
+                onClick={() => setRatingStep("delivery")}
+                className="w-full text-xs font-semibold text-gray-500 underline"
+              >
+                Back to delivery partner rating
+              </button>
+            )}
+
             <Button
-              onClick={handleRatingSubmit}
-              disabled={submittingRating || restaurantRating < 1 || (Boolean(order?.deliveryPartnerId || order?.deliveryPartner) && deliveryRating < 1)}
+              onClick={ratingStep === "delivery" && Boolean(order?.deliveryPartnerId || order?.deliveryPartner) ? () => setRatingStep("restaurant") : handleRatingSubmit}
+              disabled={
+                submittingRating ||
+                (ratingStep === "delivery" && Boolean(order?.deliveryPartnerId || order?.deliveryPartner)
+                  ? deliveryRating < 1
+                  : restaurantRating < 1)
+              }
               className="w-full h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-base rounded-2xl shadow-lg border-none active:scale-98 transition-all"
             >
               {submittingRating ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto" /> Submitting Ratings...
                 </div>
+              ) : ratingStep === "delivery" && Boolean(order?.deliveryPartnerId || order?.deliveryPartner) ? (
+                "Next: Rate Restaurant"
               ) : (
                 "Submit Ratings & Feedback"
               )}
