@@ -385,7 +385,9 @@ export const getAdminCategories = async (query = {}) => {
             $or: [
                 { restaurantId: null },
                 { restaurantId: { $exists: false } },
-                ...(eligibleCategoryIds.length ? [{ _id: { $in: eligibleCategoryIds } }] : [])
+                // Grocery also lists a store's own categories; Food shows global categories only
+                // (a restaurant's own categories belong inside that restaurant's menu).
+                ...(query.isRestaurant === 'false' && eligibleCategoryIds.length ? [{ _id: { $in: eligibleCategoryIds } }] : [])
             ]
         };
 
@@ -407,12 +409,23 @@ export const getAdminCategories = async (query = {}) => {
         if (sectionClause.length) {
             filter.$and = [...(filter.$and || []), ...sectionClause];
         }
+        if (query.isRestaurant !== 'false') {
+            // A category a restaurant created is not global unless an admin globalized it.
+            filter.$and = [
+                ...(filter.$and || []),
+                { $or: [{ createdByRestaurantId: { $exists: false } }, { createdByRestaurantId: null }, { globalizedAt: { $ne: null } }] }
+            ];
+        }
 
         let categories = await FoodCategory.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
 
         if (!categories || categories.length === 0) {
             // Last-resort fallback must still respect the section.
-            categories = await FoodCategory.find({ isActive: { $ne: false }, ...(sectionClause[0] || {}) }).sort({ sortOrder: 1, name: 1 }).lean();
+            categories = await FoodCategory.find({
+                isActive: { $ne: false },
+                ...(query.isRestaurant !== 'false' ? { $or: [{ restaurantId: null }, { restaurantId: { $exists: false } }] } : {}),
+                ...(sectionClause[0] || {})
+            }).sort({ sortOrder: 1, name: 1 }).lean();
         }
         return categories;
     } catch (err) {

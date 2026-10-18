@@ -631,7 +631,9 @@ export default function CategoryPage() {
           // Transform API categories to match expected format
           const transformedCategories = [
             { id: 'all', name: "All", image: null, slug: 'all' },
-            ...categoriesArray.map((cat) => ({
+            ...[...categoriesArray]
+              .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }))
+              .map((cat) => ({
               id: cat.slug || cat.id,
               rawId: cat.id || cat._id || '',
               name: cat.name,

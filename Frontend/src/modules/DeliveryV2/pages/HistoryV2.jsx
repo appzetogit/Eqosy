@@ -333,8 +333,9 @@ export const HistoryV2 = () => {
                       trip.earningAmount ||
                       0
                    );
-                   const collection = Number(trip.codCollectedAmount || trip.orderTotal || 0);
                    const isCOD = (trip.paymentMethod || '').toLowerCase() === 'cash' || (trip.paymentMethod || '').toLowerCase() === 'cod';
+                   // Cash is collected only on COD orders. Online-paid orders: nothing to collect, so no COD amount.
+                   const collection = isCOD ? Number(trip.codCollectedAmount || trip.orderTotal || 0) : 0;
                    const breakdown = getEarningBreakdown(trip);
                    const tripKey = trip.orderId || trip._id || idx;
                    const isBreakdownOpen = expandedTripId === tripKey;
@@ -364,8 +365,8 @@ export const HistoryV2 = () => {
                                 <p className="text-sm font-bold text-gray-950">{trip.time || '--:--'}</p>
                              </div>
                              <div className="text-center">
-                                <p className="text-[11px] font-medium text-gray-400 mb-1">COD</p>
-                                <p className="text-sm font-bold text-gray-950">{formatCurrency(collection)}</p>
+                                <p className="text-[11px] font-medium text-gray-400 mb-1">{isCOD ? 'COD' : 'Paid online'}</p>
+                                <p className="text-sm font-bold text-gray-950">{isCOD ? formatCurrency(collection) : 'No cash'}</p>
                              </div>
                              <div className="text-right">
                                 <p className="text-[11px] font-medium text-gray-400 mb-1">Earning</p>

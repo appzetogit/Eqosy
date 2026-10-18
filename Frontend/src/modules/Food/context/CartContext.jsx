@@ -148,11 +148,28 @@ export function CartProvider({ children }) {
   // Food and grocery keep separate carts; the context exposes the one for the current vertical.
   const { search, pathname } = useLocation()
   // Sticky: sub-pages like cart / checkout / address selection don't always carry the flag, so they keep the last vertical.
-  const lastVerticalRef = useRef(false)
+  // The vertical is also kept in sessionStorage, so a page refresh on a sub-page that has no ?vertical flag
+  // (grocery store / cart pages) still shows the grocery cart instead of the (empty) food cart.
+  const lastVerticalRef = useRef(null)
+  if (lastVerticalRef.current === null) {
+    try {
+      lastVerticalRef.current = sessionStorage.getItem("cart_vertical") === "grocery"
+    } catch {
+      lastVerticalRef.current = false
+    }
+  }
+  const previousVertical = lastVerticalRef.current
   if (new URLSearchParams(search).get("vertical") === "grocery") {
     lastVerticalRef.current = true
   } else if (/^(\/food)?\/user\/?(dining.*|under-250|restaurants.*|orders\/?|profile\/?|categories\/?|category\/.*)?$/.test(pathname)) {
     lastVerticalRef.current = false
+  }
+  if (lastVerticalRef.current !== previousVertical) {
+    try {
+      sessionStorage.setItem("cart_vertical", lastVerticalRef.current ? "grocery" : "food")
+    } catch {
+      // ignore storage errors
+    }
   }
   const isGroceryActive = lastVerticalRef.current
   const [allCart, setAllCart] = useState(() => {

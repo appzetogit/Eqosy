@@ -426,7 +426,9 @@ export default function ProfessionalSearch() {
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 px-1">Top Categories</h3>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-4">
               {/* Grocery shows only categories with a real image (same as the Grocery home row) */}
-              {(isGrocerySearch ? categories.filter((c) => Boolean(getMediaUrl(c.image))) : categories).map((cat) => {
+              {[...(isGrocerySearch ? categories.filter((c) => Boolean(getMediaUrl(c.image))) : categories)]
+                .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }))
+                .map((cat) => {
                 const catImgUrl = getMediaUrl(cat.image);
                 return (
                 <button 
@@ -508,7 +510,15 @@ export default function ProfessionalSearch() {
         {/* Search Results */}
         {!loading && (query || selectedCategoryId) && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            
+            {/* Availability summary: tells right away whether the searched item / category is available */}
+            <p className={`text-sm font-semibold ${results.dishes.length > 0 ? "text-emerald-600" : "text-slate-500"}`}>
+              {results.dishes.length > 0
+                ? `${results.dishes.length} ${results.dishes.length === 1 ? "item" : "items"} available${results.restaurants.length > 0 ? ` from ${results.restaurants.length} ${results.restaurants.length === 1 ? "restaurant" : "restaurants"}` : ""}`
+                : results.restaurants.length > 0
+                  ? `${results.restaurants.length} ${results.restaurants.length === 1 ? "restaurant" : "restaurants"} found`
+                  : `No items available for "${(categories.find((c) => c._id === selectedCategoryId)?.name) || query}" right now`}
+            </p>
+
             {/* Dish Results Section */}
             {results.dishes.length > 0 && (
               <section>
@@ -565,6 +575,7 @@ export default function ProfessionalSearch() {
                              <span className="text-sm font-extrabold text-[color:var(--app-primary,#EB590E)]">
                                ₹{Math.round(dishPrice)}
                              </span>
+                             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Available</span>
                            </div>
                            <h3 className="font-bold text-slate-900 dark:text-white text-base line-clamp-1">
                              {r.matchedDish || r.restaurantName}
