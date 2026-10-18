@@ -1406,8 +1406,20 @@ export default function CategoryPage() {
     return applyFiltersAndSorting(filtered)
   }, [selectedCategory, activeFilters, deferredSearchQuery, restaurantsData, categoryKeywords, vegMode, approvedFoodsData, sortBy])
 
+  // Menu enrichment can take a long time (one request per restaurant). Don't keep the full-page loading
+  // overlay (which blocks taps) up for more than a few seconds while it finishes in the background.
+  const [enrichGraceOver, setEnrichGraceOver] = useState(false)
+  useEffect(() => {
+    if (!isEnrichingMenus) {
+      setEnrichGraceOver(false)
+      return undefined
+    }
+    const timer = setTimeout(() => setEnrichGraceOver(true), 3000)
+    return () => clearTimeout(timer)
+  }, [isEnrichingMenus])
+
   const showRestaurantSkeleton = useDelayedLoading(
-    isLoadingFilterResults || loadingRestaurants || (isEnrichingMenus && selectedCategory !== 'all' && filteredRecommended.length === 0),
+    isLoadingFilterResults || loadingRestaurants || (isEnrichingMenus && !enrichGraceOver && selectedCategory !== 'all' && filteredRecommended.length === 0),
     { delay: 140, minDuration: 360 }
   )
 

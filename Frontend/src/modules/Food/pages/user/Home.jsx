@@ -1607,8 +1607,14 @@ export default function Home() {
   const showCategorySkeleton = isLoggedInUser && (loadingRealCategories || loadingMenuCategories);
   const showExploreSkeleton = isLoggedInUser && loadingLandingConfig;
   const showRestaurantSkeleton = isLoadingFilterResults || (isLoggedInUser && (loadingRestaurants || Boolean(zoneLoading)));
+  // Safety: never keep the full-screen loader (it blocks every tap) up for more than 8 seconds.
+  const [guestLoaderExpired, setGuestLoaderExpired] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setGuestLoaderExpired(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
   const showGuestLoader =
-    !isLoggedInUser && (loadingBanners || loadingRealCategories || loadingMenuCategories || loadingLandingConfig || loadingRestaurants || Boolean(zoneLoading));
+    !guestLoaderExpired && !isLoggedInUser && (loadingBanners || loadingRealCategories || loadingMenuCategories || loadingLandingConfig || loadingRestaurants || Boolean(zoneLoading));
 
 
 
