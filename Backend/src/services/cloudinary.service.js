@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { config } from '../config/env.js';
+import { isLocalStorageEnabled, saveBufferLocally } from './localStorage.service.js';
 
 cloudinary.config({
     cloud_name: config.cloudinaryCloudName,
@@ -10,6 +11,10 @@ cloudinary.config({
 export const uploadImageBuffer = async (buffer, folder = 'uploads') => {
     if (!buffer) {
         throw new Error('File buffer is required');
+    }
+
+    if (isLocalStorageEnabled()) {
+        return (await saveBufferLocally(buffer, folder)).secure_url;
     }
 
     if (!config.cloudinaryCloudName || !config.cloudinaryApiKey || !config.cloudinaryApiSecret) {
@@ -36,6 +41,10 @@ export const uploadImageBuffer = async (buffer, folder = 'uploads') => {
 export const uploadImageBufferDetailed = async (buffer, folder = 'uploads') => {
     if (!buffer) {
         throw new Error('File buffer is required');
+    }
+
+    if (isLocalStorageEnabled()) {
+        return saveBufferLocally(buffer, folder);
     }
 
     return new Promise((resolve, reject) => {

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Blob } from 'node:buffer';
 import { env } from '../config/env.js';
 import { ApiError } from './ApiError.js';
+import { isLocalStorageEnabled, saveBufferLocally } from '../services/localStorage.service.js';
 
 const DATA_URL_PATTERN = /^data:([^;]+);base64,(.+)$/;
 
@@ -58,12 +59,24 @@ export const uploadBufferToCloudinary = async ({
   publicIdSuffix = '',
   format = 'webp',
 }) => {
-  if (!env.cloudinary.cloudName || !env.cloudinary.apiKey || !env.cloudinary.apiSecret) {
-    throw new ApiError(500, 'Cloudinary credentials are not configured');
-  }
-
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new ApiError(400, 'Image buffer is required');
+  }
+
+  if (isLocalStorageEnabled()) {
+    const saved = await saveBufferLocally(buffer, folder);
+    return {
+      secureUrl: saved.secure_url,
+      publicId: saved.public_id,
+      resourceType: saved.resource_type,
+      format: saved.format,
+      bytes: saved.bytes,
+      raw: saved,
+    };
+  }
+
+  if (!env.cloudinary.cloudName || !env.cloudinary.apiKey || !env.cloudinary.apiSecret) {
+    throw new ApiError(500, 'Cloudinary credentials are not configured');
   }
 
   const extension = extensionFromMimeType(mimeType);
