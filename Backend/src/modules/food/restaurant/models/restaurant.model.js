@@ -265,6 +265,8 @@ const restaurantSchema = new mongoose.Schema(
       isEnabled: { type: Boolean, default: false },
       maxGuests: { type: Number, default: 6 },
       diningType: { type: String, default: "family-dining" },
+      // Offer the restaurant gives on table bookings (shown to guests); empty = no offer.
+      offer: { type: String, default: "", trim: true, maxlength: 80 },
     },
     menu: {
       sections: { type: Array, default: [] },

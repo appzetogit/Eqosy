@@ -94,6 +94,7 @@ export default function DiningReservations() {
     const [showMediaPanel, setShowMediaPanel] = useState(false)
     const [diningEnabled, setDiningEnabled] = useState(false)
     const [maxGuestsLimit, setMaxGuestsLimit] = useState(6)
+    const [diningOffer, setDiningOffer] = useState("")
     const [savingDiningSettings, setSavingDiningSettings] = useState(false)
     const [diningSettingsMessage, setDiningSettingsMessage] = useState("")
     const [diningSettingsError, setDiningSettingsError] = useState("")
@@ -203,6 +204,7 @@ export default function DiningReservations() {
         setMenuPhotos(getMenuImages(restaurantData))
         setDiningEnabled(Boolean(restaurantData?.diningSettings?.isEnabled))
         setMaxGuestsLimit(Math.max(1, parseInt(restaurantData?.diningSettings?.maxGuests, 10) || 6))
+        setDiningOffer(String(restaurantData?.diningSettings?.offer || ""))
     }
 
     useEffect(() => {
@@ -424,6 +426,7 @@ export default function DiningReservations() {
             isEnabled: Boolean(diningEnabled),
             maxGuests: nextMaxGuests,
             diningType: restaurant?.diningSettings?.diningType || "family-dining",
+            offer: diningOffer.trim().slice(0, 80),
         }
 
         setDiningSettingsError("")
@@ -892,6 +895,22 @@ export default function DiningReservations() {
                                         onChange={(e) => setMaxGuestsLimit(e.target.value)}
                                         className="w-20 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-center text-sm font-semibold text-slate-900 outline-none focus:border-blue-500"
                                     />
+                                </div>
+
+                                <div className="flex w-full flex-col gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:w-auto sm:min-w-[320px]">
+                                    <label className="text-sm font-medium text-slate-700" htmlFor="dining-offer-input">
+                                        Dining offer <span className="font-normal text-slate-400">(shown to guests, optional)</span>
+                                    </label>
+                                    <input
+                                        id="dining-offer-input"
+                                        type="text"
+                                        maxLength={80}
+                                        value={diningOffer}
+                                        onChange={(e) => setDiningOffer(e.target.value)}
+                                        placeholder="e.g. 10% off on table booking"
+                                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-blue-500"
+                                    />
+                                    <p className="text-xs text-slate-400">Leave empty if you do not give any offer. {diningOffer.length}/80</p>
                                 </div>
 
                                 <button

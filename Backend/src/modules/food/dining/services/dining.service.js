@@ -29,12 +29,11 @@ async function syncRestaurantDiningSettings(restaurantId, diningDoc) {
     await FoodRestaurant.findByIdAndUpdate(
         restaurantId,
         {
+            // Dotted keys: keep the restaurant's own `offer` instead of replacing the whole object.
             $set: {
-                diningSettings: {
-                    isEnabled: Boolean(diningDoc?.isEnabled),
-                    maxGuests: Math.max(1, Number(diningDoc?.maxGuests) || 6),
-                    diningType: primaryCategory?.slug || 'family-dining'
-                }
+                'diningSettings.isEnabled': Boolean(diningDoc?.isEnabled),
+                'diningSettings.maxGuests': Math.max(1, Number(diningDoc?.maxGuests) || 6),
+                'diningSettings.diningType': primaryCategory?.slug || 'family-dining'
             }
         },
         { new: false }
@@ -396,11 +395,14 @@ export async function listDiningRestaurantsPublic(query = {}) {
             diningReviewCount,
             restaurant: doc.restaurantId,
             categories: doc.categoryIds || [],
+            // The dining card shows the restaurant's dining offer only (not its food-delivery offer).
+            offer: String(doc.restaurantId?.diningSettings?.offer || '').trim(),
             diningSettings: {
                 isEnabled: true,
                 maxGuests: Math.max(1, Number(doc.maxGuests) || 6),
                 pureVegRestaurant: doc.pureVegRestaurant === true || doc.restaurantId?.pureVegRestaurant === true,
-                diningType: doc.categoryIds?.[0]?.slug || doc.restaurantId?.diningSettings?.diningType || ''
+                diningType: doc.categoryIds?.[0]?.slug || doc.restaurantId?.diningSettings?.diningType || '',
+                offer: String(doc.restaurantId?.diningSettings?.offer || '').trim()
             }
         }));
 }

@@ -53,9 +53,11 @@ export default function TableBookingConfirmation() {
         toast.success("Guest details updated!")
     }
 
+    // Only the restaurant's own dining offer (never a placeholder).
     const activeOfferText =
-        restaurant?.offer ||
         restaurant?.diningSettings?.offer ||
+        restaurant?.diningOffer ||
+        (restaurant?.diningSettings ? "" : restaurant?.offer) ||
         (restaurant?.diningSettings?.discountPercentage
             ? `${restaurant.diningSettings.discountPercentage}% OFF`
             : typeof discount === "string" && discount.includes("%")

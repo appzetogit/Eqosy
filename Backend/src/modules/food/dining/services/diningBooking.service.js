@@ -49,7 +49,8 @@ const serialize = (doc) => {
             slug: b.restaurantId.slug || '',
             profileImage: b.restaurantId.profileImage || null,
             coverImages: b.restaurantId.coverImages || [],
-            location: b.restaurantId.location || null
+            location: b.restaurantId.location || null,
+            offer: String(b.restaurantId.diningSettings?.offer || '').trim()
         }
         : null;
     return {
@@ -106,7 +107,7 @@ export async function createDiningBooking(userId, body = {}) {
         }
     }
 
-    const restaurant = await FoodRestaurant.findById(restaurantId).select('restaurantName').lean();
+    const restaurant = await FoodRestaurant.findById(restaurantId).select('restaurantName diningSettings').lean();
     if (!restaurant) throw new NotFoundError('Restaurant not found');
 
     const user = await FoodUser.findById(uid).select('name phone email').lean();
@@ -139,14 +140,15 @@ export async function createDiningBooking(userId, body = {}) {
             id: restaurantId,
             restaurantId,
             name: restaurant.restaurantName,
-            restaurantName: restaurant.restaurantName
+            restaurantName: restaurant.restaurantName,
+            offer: String(restaurant.diningSettings?.offer || '').trim()
         }
     };
 }
 
 export async function listUserDiningBookings(userId) {
     const docs = await FoodDiningBooking.find({ userId: toObjectId(userId, 'user') })
-        .populate({ path: 'restaurantId', select: 'restaurantName slug profileImage coverImages location' })
+        .populate({ path: 'restaurantId', select: 'restaurantName slug profileImage coverImages location diningSettings' })
         .sort({ createdAt: -1 })
         .limit(200)
         .lean();

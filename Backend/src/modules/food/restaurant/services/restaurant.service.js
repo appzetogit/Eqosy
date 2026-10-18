@@ -770,6 +770,11 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
         String(body.diningType ?? currentDiningSettings.diningType ?? 'family-dining').trim() ||
         'family-dining';
 
+    const offer = String(body.offer !== undefined ? body.offer : (currentDiningSettings.offer || ''))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+
     const doc = await FoodRestaurant.findByIdAndUpdate(
         restaurantId,
         {
@@ -777,7 +782,8 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
                 diningSettings: {
                     isEnabled: parseBoolean(body.isEnabled, currentDiningSettings.isEnabled),
                     maxGuests,
-                    diningType
+                    diningType,
+                    offer
                 }
             }
         },
