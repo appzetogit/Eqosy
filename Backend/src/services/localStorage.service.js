@@ -45,7 +45,21 @@ export const saveBufferLocally = async (buffer, folder = 'uploads') => {
         throw new Error('File buffer is required');
     }
     const safeFolder = sanitizeFolder(folder);
-    const ext = detectExtension(buffer);
+    let ext = detectExtension(buffer);
+    if (['jpg', 'png', 'webp'].includes(ext)) {
+        // Downscale + WebP: phone photos are several MB, which makes pages slow to load.
+        try {
+            const { default: sharp } = await import('sharp');
+            buffer = await sharp(buffer)
+                .rotate()
+                .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+                .webp({ quality: 80 })
+                .toBuffer();
+            ext = 'webp';
+        } catch {
+            // sharp unavailable or unreadable image: store the original bytes
+        }
+    }
     const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const publicId = `${safeFolder}/${fileName}`;
     const target = resolveInsideRoot(publicId);

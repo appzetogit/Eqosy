@@ -73,6 +73,38 @@ const FOOD_IMAGE_FALLBACK = "https://picsum.photos/seed/food-fallback/800/600"
 const RUPEE_SYMBOL = "\u20B9"
 const RESTAURANT_DETAILS_FILTERS_STORAGE_KEY = "food-restaurant-details-filters"
 
+// Rotating offer text. Owns its own timer so each tick re-renders only this small
+// component instead of the whole (very large) restaurant menu page.
+function OfferTicker({ offers }) {
+  const [index, setIndex] = useState(0)
+  const count = offers.length
+
+  useEffect(() => {
+    if (count <= 1) return undefined
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % count)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [count])
+
+  const safeIndex = count > 0 ? index % count : 0
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={safeIndex}
+        initial={{ y: 16, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -16, opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="text-[color:var(--app-primary,#EB590E)] font-medium inline-block"
+      >
+        {offers[safeIndex]}
+      </motion.span>
+    </AnimatePresence>
+  )
+}
+
 function RestaurantDetailsContent() {
   const { slug } = useParams()
   const navigate = useNavigate()
@@ -84,8 +116,6 @@ function RestaurantDetailsContent() {
   const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
   const { zoneId, isOutOfService } = useZone(userLocation) // Get user's zone for zone-based filtering
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [highlightIndex, setHighlightIndex] = useState(0)
   const [quantities, setQuantities] = useState({})
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [showItemDetail, setShowItemDetail] = useState(false)
@@ -1937,28 +1967,6 @@ function RestaurantDetailsContent() {
     ...(Array.isArray(restaurant?.offers) ? restaurant.offers.map((offer) => offer?.title || "") : []),
   ]
 
-  // Auto-rotate images every 3 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => {
-        const offersLength = Array.isArray(restaurant?.offers) && restaurant.offers.length > 0
-          ? restaurant.offers.length
-          : 1
-        return (prev + 1) % offersLength
-      })
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [restaurant?.offers?.length || 0])
-
-  // Auto-rotate highlight offer text every 2 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHighlightIndex((prev) => (prev + 1) % highlightOffers.length)
-    }, 2000)
-
-    return () => clearInterval(interval)
-  }, [highlightOffers.length])
-
   const handleBack = useCallback(() => {
     if (restaurant?.isRestaurant === false) {
       navigate("/food/user?vertical=grocery")
@@ -2200,18 +2208,7 @@ function RestaurantDetailsContent() {
                 <div className="flex items-center gap-2 text-sm overflow-hidden">
                   <Tag className="h-4 w-4 text-[color:var(--app-primary,#EB590E)]" />
                   <div className="relative h-5 overflow-hidden">
-                    <AnimatePresence mode="wait">
-                      <motion.span
-                        key={highlightIndex}
-                        initial={{ y: 16, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -16, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="text-[color:var(--app-primary,#EB590E)] font-medium inline-block"
-                      >
-                        {highlightOffers[highlightIndex]}
-                      </motion.span>
-                    </AnimatePresence>
+                    <OfferTicker offers={highlightOffers} />
                   </div>
                 </div>
               </div>
@@ -2642,6 +2639,8 @@ function RestaurantDetailsContent() {
                               {item.image ? (
                                 <img
                                   src={item.image}
+                                  loading="lazy"
+                                  decoding="async"
                                   alt={item.name}
                                   className="w-full h-full object-cover rounded-2xl shadow-sm"
                                   onError={(e) => {
@@ -2864,6 +2863,8 @@ function RestaurantDetailsContent() {
                                         {item.image ? (
                                           <img
                                             src={item.image}
+                                            loading="lazy"
+                                            decoding="async"
                                             alt={item.name}
                                             className="w-full h-full object-cover rounded-2xl shadow-sm"
                                             onError={(e) => {
