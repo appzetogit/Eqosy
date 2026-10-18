@@ -740,8 +740,9 @@ export default function OrderTracking({ isSharedView = false }) {
 
   // Post-Delivery Rating State
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false)
-  const [restaurantRating, setRestaurantRating] = useState(5)
-  const [deliveryRating, setDeliveryRating] = useState(5)
+  // 0 = not rated yet; the user must pick the stars themselves before submitting.
+  const [restaurantRating, setRestaurantRating] = useState(0)
+  const [deliveryRating, setDeliveryRating] = useState(0)
   const [restaurantComment, setRestaurantComment] = useState("")
   const [deliveryComment, setDeliveryComment] = useState("")
   const [submittingRating, setSubmittingRating] = useState(false)
@@ -774,9 +775,13 @@ export default function OrderTracking({ isSharedView = false }) {
 
   const handleRatingSubmit = async () => {
     if (!order) return
+    const hasDeliveryPartner = Boolean(order?.deliveryPartnerId || order?.deliveryPartner)
+    if (restaurantRating < 1 || (hasDeliveryPartner && deliveryRating < 1)) {
+      toast.error("Please select a star rating before submitting")
+      return
+    }
     try {
       setSubmittingRating(true)
-      const hasDeliveryPartner = Boolean(order?.deliveryPartnerId || order?.deliveryPartner)
       const payload = {
         restaurantRating,
         restaurantComment: restaurantComment.trim() || undefined,
@@ -2553,7 +2558,7 @@ export default function OrderTracking({ isSharedView = false }) {
             {/* Submit Button */}
             <Button
               onClick={handleRatingSubmit}
-              disabled={submittingRating}
+              disabled={submittingRating || restaurantRating < 1 || (Boolean(order?.deliveryPartnerId || order?.deliveryPartner) && deliveryRating < 1)}
               className="w-full h-12 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-base rounded-2xl shadow-lg border-none active:scale-98 transition-all"
             >
               {submittingRating ? (

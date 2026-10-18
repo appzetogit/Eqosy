@@ -55,6 +55,7 @@ import {
   LoadingSkeletonRegion,
   RestaurantGridSkeleton,
 } from "@food/components/ui/loading-skeletons";
+import EqosyCartLoader from "@food/components/ui/EqosyCartLoader";
 import { useProfile } from "@food/context/ProfileContext";
 import { useCart } from "@food/context/CartContext";
 import { HorizontalCarousel } from "@food/components/ui/horizontal-carousel";
@@ -1598,10 +1599,16 @@ export default function Home() {
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
 
   // Show skeletons immediately while loading — delayed toggles caused visible layout swap (CLS).
-  const showBannerSkeleton = loadingBanners;
-  const showCategorySkeleton = loadingRealCategories || loadingMenuCategories;
-  const showExploreSkeleton = loadingLandingConfig;
-  const showRestaurantSkeleton = isLoadingFilterResults || loadingRestaurants || Boolean(zoneLoading);
+  // Visitors who have not logged in / signed up yet get the normal branded loader instead of skeletons.
+  const isLoggedInUser =
+    localStorage.getItem("user_authenticated") === "true" ||
+    !!localStorage.getItem("user_accessToken");
+  const showBannerSkeleton = isLoggedInUser && loadingBanners;
+  const showCategorySkeleton = isLoggedInUser && (loadingRealCategories || loadingMenuCategories);
+  const showExploreSkeleton = isLoggedInUser && loadingLandingConfig;
+  const showRestaurantSkeleton = isLoadingFilterResults || (isLoggedInUser && (loadingRestaurants || Boolean(zoneLoading)));
+  const showGuestLoader =
+    !isLoggedInUser && (loadingBanners || loadingRealCategories || loadingMenuCategories || loadingLandingConfig || loadingRestaurants || Boolean(zoneLoading));
 
 
 
@@ -3320,6 +3327,7 @@ export default function Home() {
   return (
 
     <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
+      <EqosyCartLoader show={showGuestLoader} message="Loading..." subMessage="Getting things ready for you" />
       <HomeHeader
         activeVertical={superAppVertical}
         onVerticalChange={handleVerticalChange}
