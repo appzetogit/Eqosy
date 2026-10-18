@@ -1502,14 +1502,24 @@ export default function CategoryPage() {
     { delay: 140, minDuration: 360 }
   )
 
+  // One step back (the page the user came from); only fall back to home when there is no history.
+  const handleBackClick = () => {
+    const historyIndex = typeof window !== 'undefined' ? window.history.state?.idx : 0
+    if (typeof historyIndex === 'number' && historyIndex > 0) {
+      navigate(-1)
+      return
+    }
+    navigate(isGroceryMode ? '/food/user?vertical=grocery' : '/food/user')
+  }
+
   const handleCategorySelect = (category) => {
     const categorySlug = category.slug || category.id
     setSelectedCategory(categorySlug)
     // Update URL to reflect category change
     if (categorySlug === 'all') {
-      navigate(isGroceryMode ? '/food/user/category/all?vertical=grocery' : '/user/category/all')
+      navigate(isGroceryMode ? '/food/user/category/all?vertical=grocery' : '/user/category/all', { replace: true })
     } else {
-      navigate(`/user/category/${categorySlug}${isGroceryMode ? "?vertical=grocery" : ""}`)
+      navigate(`/user/category/${categorySlug}${isGroceryMode ? "?vertical=grocery" : ""}`, { replace: true })
     }
   }
 
@@ -1525,7 +1535,7 @@ export default function CategoryPage() {
           {/* Search Bar with Back Button */}
           <div className="flex items-center gap-2 px-3 md:px-6 py-3 border-b border-gray-100 dark:border-gray-800">
             <button
-              onClick={() => navigate(isGroceryMode ? '/food/user?vertical=grocery' : '/user')}
+              onClick={handleBackClick}
               className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />

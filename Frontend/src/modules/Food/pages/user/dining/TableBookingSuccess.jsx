@@ -168,10 +168,14 @@ export default function TableBookingSuccess() {
 
                     <div className="flex items-center justify-between text-[color:var(--app-primary,#EB590E)]">
                         <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[color:var(--app-primary,#EB590E)] animate-pulse"></div>
-                            <span className="font-bold text-sm">
-                                {booking.restaurant?.offer || "10% Cashback"} with Eqosy Pay
-                            </span>
+                            {booking.restaurant?.offer ? (
+                              <>
+                                <div className="w-2 h-2 rounded-full bg-[color:var(--app-primary,#EB590E)] animate-pulse"></div>
+                                <span className="font-bold text-sm">
+                                    {booking.restaurant.offer}
+                                </span>
+                              </>
+                            ) : null}
                         </div>
                         <button
                             onClick={handleShare}

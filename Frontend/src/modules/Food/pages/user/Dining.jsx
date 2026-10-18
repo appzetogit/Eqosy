@@ -265,10 +265,13 @@ export default function Dining() {
             restaurant?.profileImage ||
             ""
           ).trim(),
-          offer: String(restaurant?.offer || "Pre-book table").trim(),
+          // Only a real offer set by the restaurant; no placeholder text.
+          offer: String(restaurant?.offer || "").trim(),
           featuredDish: String(restaurant?.featuredDish || "Chef's special").trim(),
           featuredPrice: Number(restaurant?.featuredPrice || 0),
-          rating: Number(restaurant?.rating || restaurant?.avgRating || 0),
+          // Real dining rating (average of guest reviews after completed bookings) and how many reviews back it.
+          rating: Number(restaurant?.diningRating ?? restaurant?.rating ?? 0),
+          reviewCount: Number(restaurant?.diningReviewCount || 0),
           deliveryTime: String(
             restaurant?.estimatedDeliveryTime ||
             restaurant?.deliveryTime ||
@@ -978,9 +981,11 @@ export default function Dining() {
                                   PRE-BOOK TABLE
                                 </p>
                                 <div className="h-px bg-white/30 mb-2 w-24"></div>
-                                <p className="text-white text-base sm:text-lg font-bold">
-                                  {restaurant.offer}
-                                </p>
+                                {restaurant.offer ? (
+                                  <p className="text-white text-base sm:text-lg font-bold">
+                                    {restaurant.offer}
+                                  </p>
+                                ) : null}
                               </div>
                             </div>
                           </div>
@@ -1017,7 +1022,7 @@ export default function Dining() {
                                 }}
                                 transition={{ duration: 0.3, type: "spring", stiffness: 400 }}
                               >
-                                <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}</span>
+                                <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}{Number(restaurant.reviewCount) > 0 ? ` (${restaurant.reviewCount})` : ""}</span>
                                 <Star className="h-3 w-3 fill-white text-white" />
                               </motion.div>
                             </div>
@@ -1191,9 +1196,11 @@ export default function Dining() {
                                   PRE-BOOK TABLE
                                 </p>
                                 <div className="h-px bg-white/30 mb-2 w-24"></div>
-                                <p className="text-white text-base sm:text-lg font-bold">
-                                  {restaurant.offer}
-                                </p>
+                                {restaurant.offer ? (
+                                  <p className="text-white text-base sm:text-lg font-bold">
+                                    {restaurant.offer}
+                                  </p>
+                                ) : null}
                               </div>
                             </div>
                           </div>
@@ -1209,7 +1216,7 @@ export default function Dining() {
                               </h3>
                             </div>
                             <div className="flex-shrink-0 bg-green-600 text-white px-2 py-1 rounded-lg flex items-center gap-1">
-                              <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}</span>
+                              <span className="text-sm font-bold">{Number(restaurant.rating) > 0 ? Number(restaurant.rating).toFixed(1) : "New"}{Number(restaurant.reviewCount) > 0 ? ` (${restaurant.reviewCount})` : ""}</span>
                               <Star className="h-3 w-3 fill-white text-white" />
                             </div>
                           </div>

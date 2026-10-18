@@ -90,7 +90,7 @@ export default function DiningCategory() {
                   : "Multi-cuisine",
               price: restaurant.costForTwo ? `Rs ${restaurant.costForTwo} for two` : "Price on request",
               rating: Number(restaurant.rating || 0) > 0 ? Number(restaurant.rating).toFixed(1) : "New",
-              offer: restaurant.offer || "Pre-book tables and dining offers",
+              offer: restaurant.offer || "",
               featuredDish: restaurant.featuredDish || "Chef's special",
               featuredPrice: restaurant.featuredPrice || null,
               availability,
@@ -231,7 +231,9 @@ export default function DiningCategory() {
 
                       <div className="absolute bottom-4 left-4 right-4">
                         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-white/80">Reserve Your Table</p>
-                        <p className="max-w-[85%] text-2xl font-black leading-tight text-white">{restaurant.offer}</p>
+                        {restaurant.offer ? (
+                          <p className="max-w-[85%] text-2xl font-black leading-tight text-white">{restaurant.offer}</p>
+                        ) : null}
                       </div>
                     </div>
 

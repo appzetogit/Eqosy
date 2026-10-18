@@ -60,7 +60,7 @@ export default function TableBookingConfirmation() {
             ? `${restaurant.diningSettings.discountPercentage}% OFF`
             : typeof discount === "string" && discount.includes("%")
             ? discount
-            : "10% cashback")
+            : "")
 
     const quickPills = [
         "🎂 Birthday decoration",
@@ -243,6 +243,7 @@ export default function TableBookingConfirmation() {
                             </div>
                         </div>
 
+                        {activeOfferText ? (
                         <div
                             onClick={() => {
                                 toast.success(`🎉 ${activeOfferText} Applied!`, {
@@ -260,6 +261,7 @@ export default function TableBookingConfirmation() {
                                 Applied ✓
                             </span>
                         </div>
+                        ) : null}
                     </div>
                 </div>
 
