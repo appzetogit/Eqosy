@@ -55,6 +55,10 @@ const iconMap = {
   suv: SuvIcon,
 };
 
+// Two-wheelers can only be a Ride or a Parcel vehicle (no pooling / outstation / combined service).
+const TWO_WHEELER_ICONS = ['bike', 'cycle', 'electric_scooty', 'scooter'];
+const TWO_WHEELER_SERVICES = ['taxi', 'ride', 'delivery', 'parcel'];
+
 const ICON_TYPE_ALIASES = {
   motor_bike: 'bike',
   motorbike: 'bike',
@@ -387,6 +391,8 @@ const VehicleType = ({ mode: propMode }) => {
     () => vehicles.filter((item) => String(item.id) !== String(id)),
     [id, vehicles],
   );
+
+  const isTwoWheelerIcon = TWO_WHEELER_ICONS.includes(normalizeIconType(formData.icon_types));
 
   const showsDeliveryCategorySelector = useMemo(
     () => ['delivery', 'both'].includes(normalizeTransportType(formData.transport_type)),
@@ -725,12 +731,16 @@ const VehicleType = ({ mode: propMode }) => {
               className={inputClass}
             >
                <option value="">Select Service</option>
-               {transportTypeOptions.map((t) => (
+               {transportTypeOptions
+                 .filter((t) => !isTwoWheelerIcon || TWO_WHEELER_SERVICES.includes(t.name) || t.name === formData.transport_type)
+                 .map((t) => (
                  <option key={t.id || t._id || t.name} value={t.name}>{SERVICE_LABELS[t.name] || t.display_name}</option>
                ))}
             </select>
             <p className="mt-2 text-xs text-slate-500">
-              Choose `Ride + Parcel` for vehicle types like bikes that can handle both ride and parcel flows.
+              {isTwoWheelerIcon
+                ? 'Two-wheelers (bike, scooter, cycle) can be a Ride or a Parcel vehicle.'
+                : 'Choose `Ride + Parcel` for vehicle types that can handle both ride and parcel flows.'}
             </p>
           </div>
 
