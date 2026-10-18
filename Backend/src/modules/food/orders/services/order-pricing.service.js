@@ -127,9 +127,18 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
     let unitPrice = Number(doc.price);
     let variantName = '';
     const variantId = line.variantId ? String(line.variantId) : '';
+    let resolvedVariantId = variantId;
     if (variantId) {
-      const variant = (doc.variants || []).find((v) => String(v._id) === variantId);
+      // Variant ids change when the restaurant re-saves an item; fall back to the variant name so
+      // carts created before the edit keep working.
+      const lineVariantName = String(line.variantName || line.variant?.name || '').trim().toLowerCase();
+      const variant =
+        (doc.variants || []).find((v) => String(v._id) === variantId) ||
+        (lineVariantName
+          ? (doc.variants || []).find((v) => String(v.name || '').trim().toLowerCase() === lineVariantName)
+          : null);
       if (!variant) throw new ValidationError(`Selected option of "${doc.name}" is no longer available`);
+      resolvedVariantId = String(variant._id);
       unitPrice = Number(variant.price);
       variantName = variant.name || '';
     }
@@ -141,6 +150,7 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
     return {
       ...line,
       name: doc.name,
+      variantId: resolvedVariantId || line.variantId,
       price: unitPrice,
       variantPrice: variantId ? unitPrice : line.variantPrice,
       variantName: variantId ? variantName : line.variantName,

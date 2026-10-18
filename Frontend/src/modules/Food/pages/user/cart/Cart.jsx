@@ -3416,7 +3416,7 @@ function CartInner() {
                   : isRestaurantOffline
                   ? "Restaurant Closed"
                   : pricingError
-                  ? "Location Outside Delivery Zone"
+                  ? (/outside|service zone/i.test(String(pricingError)) ? "Location Outside Delivery Zone" : "Cart needs an update")
                   : isPlacingOrder
                   ? "Processing..."
                   : loadingPricing
