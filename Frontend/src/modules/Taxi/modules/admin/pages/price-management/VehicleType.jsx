@@ -57,7 +57,8 @@ const iconMap = {
 
 // Two-wheelers can only be a Ride or a Parcel vehicle (no pooling / outstation / combined service).
 const TWO_WHEELER_ICONS = ['bike', 'cycle', 'electric_scooty', 'scooter'];
-const TWO_WHEELER_SERVICES = ['taxi', 'ride', 'delivery', 'parcel'];
+const TWO_WHEELER_NAME_PATTERN = /\b(bike|bikes|scooter|scooty|moped|cycle|2[\s-]?wheel(er)?s?|two[\s-]?wheel(er)?s?)\b/i;
+const TWO_WHEELER_SERVICES =['taxi', 'ride', 'delivery', 'parcel'];
 
 const ICON_TYPE_ALIASES = {
   motor_bike: 'bike',
@@ -392,7 +393,11 @@ const VehicleType = ({ mode: propMode }) => {
     [id, vehicles],
   );
 
-  const isTwoWheelerIcon = TWO_WHEELER_ICONS.includes(normalizeIconType(formData.icon_types));
+  // A two-wheeler is recognised by its icon type, its delivery category, or its name (e.g. "Bike", "2 Wheeler").
+  const isTwoWheelerIcon =
+    TWO_WHEELER_ICONS.includes(normalizeIconType(formData.icon_types)) ||
+    formData.delivery_category === '2wheeler' ||
+    TWO_WHEELER_NAME_PATTERN.test(String(formData.name || ''));
 
   const showsDeliveryCategorySelector = useMemo(
     () => ['delivery', 'both'].includes(normalizeTransportType(formData.transport_type)),
