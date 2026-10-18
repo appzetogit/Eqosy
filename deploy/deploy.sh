@@ -29,7 +29,7 @@ sudo chmod -R 775 "$UPLOADS_DIR"
 
 # Processes: api, socket and the BullMQ workers
 cd "$APP_DIR"
-if pm2 describe appzeto-api > /dev/null 2>&1; then
+if pm2 describe eqosy-api > /dev/null 2>&1; then
   pm2 reload ecosystem.config.cjs --update-env
 else
   pm2 start ecosystem.config.cjs
