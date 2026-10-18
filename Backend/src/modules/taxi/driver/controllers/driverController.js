@@ -2507,6 +2507,31 @@ export const goOnline = async (req, res) => {
   });
 };
 
+// What a captain may pick, from the admin's vehicle type settings (Service + dispatch type).
+const resolveDriverPreferenceOptions = async (driver) => {
+  const vehicle = driver?.vehicleTypeId
+    ? await Vehicle.findById(driver.vehicleTypeId).select('transport_type dispatch_type').lean()
+    : null;
+  const transport = String(vehicle?.transport_type || '').toLowerCase();
+  const dispatch = String(vehicle?.dispatch_type || '').toLowerCase();
+  const allowedServicePreferences =
+    transport === 'taxi' || transport === 'pooling' ? ['ride'] : transport === 'delivery' ? ['parcel'] : ['ride', 'parcel', 'both'];
+  const allowedRideModes =
+    dispatch === 'normal' ? ['normal'] : dispatch === 'bidding' ? ['bidding'] : ['normal', 'bidding', 'both'];
+  const pick = (stored, allowed) => {
+    if (allowed.includes(stored)) return stored;
+    return allowed.length === 1 ? allowed[0] : 'both';
+  };
+  return {
+    vehicleTransportType: transport,
+    vehicleDispatchType: dispatch,
+    allowedServicePreferences,
+    allowedRideModes,
+    servicePreference: pick(driver?.servicePreference, allowedServicePreferences),
+    rideModePreference: pick(driver?.rideModePreference, allowedRideModes),
+  };
+};
+
 export const getCurrentDriver = async (req, res) => {
   if (String(req.auth?.role || "").toLowerCase() === "service_center_staff") {
     const access = await resolveAuthenticatedServiceCenterAccess(req);
@@ -2616,6 +2641,7 @@ export const getCurrentDriver = async (req, res) => {
       location: driver.location,
       zoneId: driver.zoneId,
       routeBooking: serializeDriverRouteBooking(driver.routeBooking),
+      ...(await resolveDriverPreferenceOptions(driver)),
       documents: driver.documents || {},
       emergencyContacts: Array.isArray(driver.emergencyContacts)
         ? driver.emergencyContacts.map(serializeEmergencyContact)
@@ -2994,6 +3020,27 @@ export const updateCurrentDriver = async (req, res) => {
     }
   }
 
+  if (
+    Object.prototype.hasOwnProperty.call(req.body || {}, "servicePreference") ||
+    Object.prototype.hasOwnProperty.call(req.body || {}, "rideModePreference")
+  ) {
+    const options = await resolveDriverPreferenceOptions(driver);
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "servicePreference")) {
+      const value = String(req.body.servicePreference || "").trim().toLowerCase();
+      if (!options.allowedServicePreferences.includes(value)) {
+        throw new ApiError(400, "This service is not available for your vehicle type");
+      }
+      driver.servicePreference = value;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "rideModePreference")) {
+      const value = String(req.body.rideModePreference || "").trim().toLowerCase();
+      if (!options.allowedRideModes.includes(value)) {
+        throw new ApiError(400, "This ride type is not available for your vehicle type");
+      }
+      driver.rideModePreference = value;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "routeBooking")) {
     const routeBookingPayload = req.body?.routeBooking || {};
     const enabled = Boolean(routeBookingPayload?.enabled);
@@ -3031,6 +3078,7 @@ export const updateCurrentDriver = async (req, res) => {
       email: driver.email,
       profileImage: driver.profileImage || "",
       routeBooking: serializeDriverRouteBooking(driver.routeBooking),
+      ...(await resolveDriverPreferenceOptions(driver)),
     },
   });
 };

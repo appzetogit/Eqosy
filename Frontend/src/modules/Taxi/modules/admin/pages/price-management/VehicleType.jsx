@@ -58,7 +58,7 @@ const iconMap = {
 // Two-wheelers can only be a Ride or a Parcel vehicle (no pooling / outstation / combined service).
 const TWO_WHEELER_ICONS = ['bike', 'cycle', 'electric_scooty', 'scooter'];
 const TWO_WHEELER_NAME_PATTERN = /\b(bike|bikes|scooter|scooty|moped|cycle|2[\s-]?wheel(er)?s?|two[\s-]?wheel(er)?s?)\b/i;
-const TWO_WHEELER_SERVICES =['taxi', 'ride', 'delivery', 'parcel'];
+const TWO_WHEELER_SERVICES = ['taxi', 'ride', 'delivery', 'parcel', 'both', 'all'];
 
 const ICON_TYPE_ALIASES = {
   motor_bike: 'bike',
@@ -89,6 +89,7 @@ const SERVICE_LABELS = {
   taxi: 'Ride',
   delivery: 'Parcel',
   both: 'Ride + Parcel',
+  all: 'Ride + Parcel',
   pooling: 'Car Pooling',
 };
 
@@ -744,7 +745,7 @@ const VehicleType = ({ mode: propMode }) => {
             </select>
             <p className="mt-2 text-xs text-slate-500">
               {isTwoWheelerIcon
-                ? 'Two-wheelers (bike, scooter, cycle) can be a Ride or a Parcel vehicle.'
+                ? 'Two-wheelers (bike, scooter, cycle) can be Ride, Parcel, or Ride + Parcel. Requests reach drivers of this vehicle according to this.'
                 : 'Choose `Ride + Parcel` for vehicle types that can handle both ride and parcel flows.'}
             </p>
           </div>

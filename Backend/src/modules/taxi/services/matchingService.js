@@ -120,7 +120,36 @@ const buildServiceCategoryFilter = (serviceType = 'ride') => {
   };
 };
 
-const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys, allowedVehicles = [], serviceType = 'ride' }) => {
+const buildPreferenceFilters = ({ serviceType = 'ride', bookingMode = 'normal' }) => {
+  const filters = [];
+  const service = String(serviceType || '').toLowerCase().trim();
+  if (service === 'parcel' || service === 'delivery') {
+    filters.push({ servicePreference: { $ne: 'ride' } });
+  } else if (service === 'ride' || service === 'taxi' || service === '') {
+    filters.push({ servicePreference: { $ne: 'parcel' } });
+  }
+  const mode = String(bookingMode || '').toLowerCase().trim();
+  if (mode === 'bidding') {
+    filters.push({ rideModePreference: { $ne: 'normal' } });
+  } else if (mode === 'normal') {
+    filters.push({ rideModePreference: { $ne: 'bidding' } });
+  }
+  return filters;
+};
+
+// Vehicle types whose admin-set Service (transport type) can not serve this request:
+// ride requests never go to Parcel-only vehicles, parcel requests never go to Ride-only vehicles.
+const getIncompatibleVehicleTypeIds = async (serviceType = 'ride') => {
+  const service = String(serviceType || '').toLowerCase().trim();
+  let blockedTransportTypes = [];
+  if (service === 'parcel' || service === 'delivery') blockedTransportTypes = ['taxi', 'pooling'];
+  else if (service === 'ride' || service === 'taxi' || service === '') blockedTransportTypes = ['delivery'];
+  if (blockedTransportTypes.length === 0) return [];
+  const rows = await Vehicle.find({ transport_type: { $in: blockedTransportTypes } }).select('_id').lean();
+  return rows.map((row) => row._id);
+};
+
+const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicleTypeKeys, allowedVehicles = [], serviceType = 'ride', bookingMode = 'normal', incompatibleVehicleTypeIds = [] }) => {
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const normalizedVehicleTypeKeys = Array.isArray(vehicleTypeKeys)
     ? [...new Set(vehicleTypeKeys.map(normalizeVehicleKey).filter(Boolean))]
@@ -178,6 +207,12 @@ const buildDriverMatchFilters = ({ zoneId, vehicleTypeId, vehicleTypeIds, vehicl
   if (serviceCategoryFilter && Object.keys(serviceCategoryFilter).length > 0) {
     conditions.push(serviceCategoryFilter);
   }
+
+  if (incompatibleVehicleTypeIds.length > 0) {
+    conditions.push({ vehicleTypeId: { $nin: incompatibleVehicleTypeIds } });
+  }
+
+  conditions.push(...buildPreferenceFilters({ serviceType, bookingMode }));
 
   return { $and: conditions };
 };
@@ -318,6 +353,8 @@ const findDriversForZone = async ({
   vehicleTypeKeys,
   allowedVehicles = [],
   serviceType = 'ride',
+  bookingMode = 'normal',
+  incompatibleVehicleTypeIds = [],
 }) => {
   const commonFilters = buildDriverMatchFilters({
     zoneId,
@@ -325,6 +362,8 @@ const findDriversForZone = async ({
     vehicleTypeKeys,
     allowedVehicles,
     serviceType,
+    bookingMode,
+    incompatibleVehicleTypeIds,
   });
   const selectedFields =
     'name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating ratingCount location zoneId isOnline isOnRide routeBooking serviceCategories registerFor';
@@ -364,6 +403,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     vehicleTypeId,
     vehicleTypeIds,
     serviceType = 'ride',
+    bookingMode = 'normal',
   } = options;
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const allowedVehicles = normalizedVehicleTypeIds.length
@@ -373,6 +413,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
 
   const zone = await findZoneByPickup(coordinates);
   const effectiveMaxDistance = Math.max(1, Math.round(maxDistance));
+  const incompatibleVehicleTypeIds = await getIncompatibleVehicleTypeIds(serviceType);
 
   let drivers = await findDriversForZone({
     zoneId: zone?._id || undefined,
@@ -383,6 +424,8 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     vehicleTypeKeys,
     allowedVehicles,
     serviceType,
+    bookingMode,
+    incompatibleVehicleTypeIds,
   });
 
   const blockedDriverIds = await getDriverIdsBlockedByUpcomingScheduledRides(
@@ -400,6 +443,8 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
       vehicleTypeKeys,
       allowedVehicles,
       serviceType,
+      bookingMode,
+      incompatibleVehicleTypeIds,
     });
 
     const fallbackBlockedDriverIds = await getDriverIdsBlockedByUpcomingScheduledRides(

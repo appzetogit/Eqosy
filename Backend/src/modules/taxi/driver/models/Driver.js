@@ -159,6 +159,17 @@ const driverSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // What the captain chooses to accept, within what the vehicle type allows.
+    servicePreference: {
+      type: String,
+      enum: ['ride', 'parcel', 'both'],
+      default: 'both',
+    },
+    rideModePreference: {
+      type: String,
+      enum: ['normal', 'bidding', 'both'],
+      default: 'both',
+    },
     vehicleNumber: {
       type: String,
       default: '',

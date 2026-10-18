@@ -80,6 +80,7 @@ const DriverProfile = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [routeBookingBusy, setRouteBookingBusy] = useState(false);
+    const [preferenceBusy, setPreferenceBusy] = useState(false);
     const role = localStorage.getItem('role') || 'driver';
     const isOwner = role === 'owner';
     const routePrefix = isOwner ? '/taxi/owner' : '/taxi/driver';
@@ -146,6 +147,33 @@ const DriverProfile = () => {
     }, [routeBookingPreferences.coordinates, routeBookingPreferences.enabled, routeBookingPreferences.label]);
 
     const hasProfileImage = Boolean(driver?.profileImage);
+
+    const servicePreferenceOptions = useMemo(() => {
+        const labels = { ride: 'Ride', parcel: 'Parcel', both: 'Ride + Parcel' };
+        return (Array.isArray(driver?.allowedServicePreferences) ? driver.allowedServicePreferences : []).map((value) => ({ value, label: labels[value] || value }));
+    }, [driver?.allowedServicePreferences]);
+
+    const rideModeOptions = useMemo(() => {
+        const labels = { normal: 'Normal', bidding: 'Bidding', both: 'Normal + Bidding' };
+        return (Array.isArray(driver?.allowedRideModes) ? driver.allowedRideModes : []).map((value) => ({ value, label: labels[value] || value }));
+    }, [driver?.allowedRideModes]);
+
+    const handlePreferenceChange = async (field, value) => {
+        if (preferenceBusy || !value || driver?.[field] === value) {
+            return;
+        }
+        setPreferenceBusy(true);
+        setError('');
+        try {
+            const response = await updateDriverProfile({ [field]: value });
+            const updated = unwrapDriver(response);
+            setDriver((prev) => ({ ...(prev || {}), ...(updated || {}), [field]: updated?.[field] || value }));
+        } catch (err) {
+            setError(err?.response?.data?.message || err?.message || 'Could not update your preference.');
+        } finally {
+            setPreferenceBusy(false);
+        }
+    };
 
     const handleRouteBookingToggle = async () => {
         if (routeBookingBusy) {
@@ -344,6 +372,50 @@ const DriverProfile = () => {
                     )}
                 </div>
             </header>
+
+            {/* Which requests this captain accepts (limited by what the admin allows for the vehicle type) */}
+            {!isOwner && (servicePreferenceOptions.length > 0 || rideModeOptions.length > 0) && (
+                <div className="mx-5 mt-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Requests you accept</h3>
+                    {servicePreferenceOptions.length > 0 && (
+                        <div className="mt-3">
+                            <p className="mb-2 text-[12px] font-semibold text-slate-600">Service type</p>
+                            <div className="flex flex-wrap gap-2">
+                                {servicePreferenceOptions.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        disabled={preferenceBusy || servicePreferenceOptions.length === 1}
+                                        onClick={() => handlePreferenceChange('servicePreference', option.value)}
+                                        className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${driver?.servicePreference === option.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'} disabled:opacity-70`}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {rideModeOptions.length > 0 && (
+                        <div className="mt-4">
+                            <p className="mb-2 text-[12px] font-semibold text-slate-600">Ride type</p>
+                            <div className="flex flex-wrap gap-2">
+                                {rideModeOptions.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        disabled={preferenceBusy || rideModeOptions.length === 1}
+                                        onClick={() => handlePreferenceChange('rideModePreference', option.value)}
+                                        className={`rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${driver?.rideModePreference === option.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'} disabled:opacity-70`}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-[11px] text-slate-400">Bidding rides let you quote your own fare; normal rides use the fixed fare.</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* List Menu */}
             <main className="space-y-1">
