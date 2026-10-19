@@ -738,6 +738,8 @@ const VehicleType = ({ mode: propMode }) => {
             >
                <option value="">Select Service</option>
                {transportTypeOptions
+                 // Outstation is a driver-chosen service, not a vehicle transport type (the API would save it as "taxi").
+                 .filter((t) => t.name !== 'outstation')
                  .filter((t) => !isTwoWheelerIcon || TWO_WHEELER_SERVICES.includes(t.name) || t.name === formData.transport_type)
                  .map((t) => (
                  <option key={t.id || t._id || t.name} value={t.name}>{SERVICE_LABELS[t.name] || t.display_name}</option>

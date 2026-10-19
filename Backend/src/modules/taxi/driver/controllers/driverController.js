@@ -3013,10 +3013,27 @@ export const updateCurrentDriver = async (req, res) => {
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "serviceCategories") || Object.prototype.hasOwnProperty.call(req.body || {}, "service_categories")) {
     const categories = req.body.serviceCategories || req.body.service_categories;
+    let nextCategories = null;
     if (Array.isArray(categories)) {
-      driver.serviceCategories = categories;
+      nextCategories = categories;
     } else if (typeof categories === 'string') {
-      driver.serviceCategories = categories.split(',').map((s) => s.trim()).filter(Boolean);
+      nextCategories = categories.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
+    if (nextCategories) {
+      // Outstation / Pooling are 4-wheeler services. Two-wheelers can't newly add them
+      // (anything they already had is left untouched).
+      const vehicleHint = `${driver.vehicleIconType || ''} ${driver.vehicleType || ''}`.toLowerCase();
+      const isTwoWheeler = /\b(bike|motorbike|motor_bike|scooter|scooty|electric_scooty|cycle|moped)\b/.test(vehicleHint);
+      if (isTwoWheeler) {
+        const existing = new Set((Array.isArray(driver.serviceCategories) ? driver.serviceCategories : []).map((c) => String(c).toLowerCase()));
+        nextCategories = nextCategories.filter((c) => {
+          const value = String(c).toLowerCase();
+          return !['outstation', 'pooling'].includes(value) || existing.has(value);
+        });
+        if (nextCategories.length === 0) nextCategories = ['taxi'];
+      }
+      driver.serviceCategories = nextCategories;
     }
   }
 

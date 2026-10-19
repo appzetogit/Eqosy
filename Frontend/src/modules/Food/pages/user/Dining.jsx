@@ -1037,11 +1037,11 @@ export default function Dining() {
 
                             {/* Offer Badge */}
                             {restaurant.offer && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFF1E8] px-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--app-primary,#EB590E)]">
-                                  Off
+                              <div className="flex items-center gap-2 rounded-lg border border-dashed border-green-300 bg-gradient-to-r from-green-50 via-emerald-50 to-white px-2.5 py-1.5 text-sm dark:border-green-700 dark:from-green-950/40 dark:via-emerald-950/30 dark:to-transparent">
+                                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-gradient-to-r from-green-600 to-emerald-500 px-1.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-sm">
+                                  % Off
                                 </span>
-                                <span className="text-gray-700 dark:text-gray-300 font-medium">{restaurant.offer}</span>
+                                <span className="font-semibold text-green-800 dark:text-green-300">{restaurant.offer}</span>
                               </div>
                             )}
                           </CardContent>
@@ -1231,11 +1231,11 @@ export default function Dining() {
 
                           {/* Offer Badge */}
                           {restaurant.offer && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FFF1E8] px-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--app-primary,#EB590E)]">
-                                Off
+                            <div className="flex items-center gap-2 rounded-lg border border-dashed border-green-300 bg-gradient-to-r from-green-50 via-emerald-50 to-white px-2.5 py-1.5 text-sm dark:border-green-700 dark:from-green-950/40 dark:via-emerald-950/30 dark:to-transparent">
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-gradient-to-r from-green-600 to-emerald-500 px-1.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-sm">
+                                % Off
                               </span>
-                              <span className="text-gray-700 dark:text-gray-300 font-medium">{restaurant.offer}</span>
+                              <span className="font-semibold text-green-800 dark:text-green-300">{restaurant.offer}</span>
                             </div>
                           )}
                         </CardContent>

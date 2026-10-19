@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import { getCurrentDriver, updateDriverProfile } from '../../services/registrationService';
 import toast from 'react-hot-toast';
+import { FOUR_WHEELER_ONLY_CATEGORIES, isTwoWheelerVehicle } from '../../utils/vehicleServices';
 
 const Motion = motion;
 const NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
@@ -252,7 +253,11 @@ const EditProfile = () => {
                             onChange={(e) => setFormData(prev => ({ ...prev, transportType: e.target.value }))}
                             className="w-full text-[15px] font-semibold text-slate-900 bg-transparent border-none p-0 focus:ring-0 tracking-tight cursor-pointer"
                         >
-                            {transportTypeOptions.map((opt) => (
+                            {transportTypeOptions
+                                .filter((opt) => !isTwoWheelerVehicle(driver || {})
+                                    || !FOUR_WHEELER_ONLY_CATEGORIES.includes(opt.value)
+                                    || opt.value === formData.transportType)
+                                .map((opt) => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                         </select>
@@ -265,7 +270,11 @@ const EditProfile = () => {
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Service Categories</span>
                         </div>
                         <div className="flex flex-wrap gap-2 pt-1">
-                            {serviceCategoryOptions.map((opt) => {
+                            {serviceCategoryOptions
+                                .filter((opt) => !isTwoWheelerVehicle(driver || {})
+                                    || !FOUR_WHEELER_ONLY_CATEGORIES.includes(opt.value)
+                                    || formData.serviceCategories.includes(opt.value))
+                                .map((opt) => {
                                 const isSelected = formData.serviceCategories.includes(opt.value);
                                 return (
                                     <button
@@ -283,7 +292,11 @@ const EditProfile = () => {
                                 );
                             })}
                         </div>
-                        <p className="text-[10px] text-slate-400 font-medium pt-1">Tap categories to enable/disable future service requests</p>
+                        <p className="text-[10px] text-slate-400 font-medium pt-1">
+                            {isTwoWheelerVehicle(driver || {})
+                                ? 'Outstation and Pooling are available for 4-wheelers only.'
+                                : 'Tap categories to enable/disable future service requests'}
+                        </p>
                     </div>
                 </div>
 

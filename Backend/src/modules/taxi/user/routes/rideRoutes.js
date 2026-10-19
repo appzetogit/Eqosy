@@ -18,6 +18,7 @@ import {
   payRideCompletionWithWallet,
   submitRideReview,
   updateParcelPayerController,
+  updateParcelProofController,
   updateRideBidCeiling,
   updateRideStatus,
   verifyRazorpayRideCompletion,
@@ -36,7 +37,8 @@ rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelR
 rideRouter.post('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));
 rideRouter.get('/:rideId/cancellation-bill', authenticateOrResolveUser(['user', 'driver', 'admin']), asyncHandler(getCancellationBillReceipt));
 rideRouter.patch('/:rideId/parcel-payer', authenticate(['user']), asyncHandler(updateParcelPayerController));
-rideRouter.get('/:rideId/bids', authenticate(['user']), asyncHandler(getRideBids));
+rideRouter.patch('/:rideId/parcel-proof', authenticate(['driver']), asyncHandler(updateParcelProofController));
+rideRouter.get('/:rideId/bids',authenticate(['user']), asyncHandler(getRideBids));
 rideRouter.patch('/:rideId/bids/ceiling', authenticate(['user']), asyncHandler(updateRideBidCeiling));
 rideRouter.post('/:rideId/bids/:bidId/accept', authenticate(['user']), asyncHandler(acceptRideBid));
 rideRouter.get('/:rideId', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getRideById));

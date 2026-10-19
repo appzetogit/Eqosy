@@ -18,6 +18,7 @@ import {
   getRideRoom,
   increaseRideBidCeiling,
   updateParcelPayer,
+  updateParcelProof,
   listRideBidsForUser,
   listRideHistoryForIdentity,
   serializeRideRealtime,
@@ -1210,6 +1211,18 @@ export const acceptRideBid = async (req, res) => {
       acceptedAt: ride.acceptedAt,
     },
   });
+};
+
+export const updateParcelProofController = async (req, res) => {
+  const data = await updateParcelProof({
+    rideId: req.params.rideId,
+    driverId: req.auth.sub,
+    pickupPhotoUrl: req.body?.pickupPhotoUrl,
+    deliveryPhotoUrl: req.body?.deliveryPhotoUrl,
+    cashCollected: req.body?.cashCollected === true,
+  });
+
+  res.json({ success: true, data });
 };
 
 export const updateParcelPayerController = async (req, res) => {

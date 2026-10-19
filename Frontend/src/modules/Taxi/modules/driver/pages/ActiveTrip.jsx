@@ -31,6 +31,7 @@ import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
 import carIcon from '../../../assets/icons/car.png';
 import { getLocalDriverToken } from '../services/registrationService';
 import CancellationReceiptModal from '../../shared/components/CancellationReceiptModal';
+import ParcelProofPanel from '../components/ParcelProofPanel';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 
 const resolveAssetUrl = (value = '') => {
@@ -820,6 +821,10 @@ const ActiveTrip = () => {
     const rideId = getJobRideId(liveRequest) || getJobRideId(effectiveState);
     const [resolvedPickupCoords, setResolvedPickupCoords] = useState(null);
     const [livePayerOverride, setLivePayerOverride] = useState(null);
+    const [parcelProofLocal, setParcelProofLocal] = useState({});
+    useEffect(() => {
+        setParcelProofLocal({});
+    }, [rideId]);
     const [resolvedDropCoords, setResolvedDropCoords] = useState(null);
     const rawVehicleIcon = String(
         liveRaw.vehicleIconUrl ||
@@ -1676,6 +1681,23 @@ const ActiveTrip = () => {
         || 'sender',
     ).toLowerCase();
     const paymentCollectionLabel = isParcel ? (parcelPayer === 'receiver' ? 'receiver' : 'sender') : 'rider';
+    const parcelProof = { ...(liveRaw?.parcelProof || {}), ...parcelProofLocal };
+    const parcelPaymentIsCash = String(selectedPaymentMode || effectiveState?.paymentMethod || liveRequest?.payment || 'cash').toLowerCase().includes('cash');
+    // Receiver pays: cash is taken before the trip starts. Sender pays in cash: taken before final delivery.
+    const needsCashBeforeStart = isParcel && parcelPayer === 'receiver';
+    const needsCashBeforeDelivery = isParcel && parcelPayer === 'sender' && parcelPaymentIsCash;
+    const parcelItemName = liveRaw?.parcel?.description || effectiveState?.parcel?.description || '';
+
+    const saveParcelProof = async (payload) => {
+        const driverToken = getLocalDriverToken();
+        await api.patch(`/rides/${rideId}/parcel-proof`, payload, withDriverAuthorization(driverToken));
+        setParcelProofLocal((current) => ({
+            ...current,
+            ...(payload.pickupPhotoUrl ? { pickupPhotoUrl: payload.pickupPhotoUrl } : {}),
+            ...(payload.deliveryPhotoUrl ? { deliveryPhotoUrl: payload.deliveryPhotoUrl } : {}),
+            ...(payload.cashCollected ? { cashCollectedAt: new Date().toISOString() } : {}),
+        }));
+    };
     const routeStrokeColor = '#000000';
     const routeAccentSoft = hexToRgba(routeStrokeColor, 0.08);
     const routeAccentMuted = hexToRgba(routeStrokeColor, 0.18);
@@ -2064,6 +2086,16 @@ const ActiveTrip = () => {
 
         if (String(enteredOtp) !== expectedOtp) {
             setOtpError('Wrong PIN. Ask the passenger again.');
+            return;
+        }
+
+        if (isParcel && !parcelProof.pickupPhotoUrl) {
+            setOtpError('Upload the parcel pickup photo first.');
+            return;
+        }
+
+        if (needsCashBeforeStart && !parcelProof.cashCollectedAt) {
+            setOtpError('Collect the cash from the receiver before starting.');
             return;
         }
 
@@ -2709,6 +2741,25 @@ const ActiveTrip = () => {
                                     </div>
                                 </div>
                             )}
+                            {isParcel && (
+                                <>
+                                    {parcelItemName ? (
+                                        <p className="mb-2 text-center text-[11px] font-black uppercase tracking-wider text-slate-600">
+                                            Item: <span className="text-slate-900">{parcelItemName}</span>
+                                        </p>
+                                    ) : null}
+                                    <ParcelProofPanel
+                                        title="Before you start"
+                                        photoLabel="Parcel pickup photo"
+                                        photoUrl={parcelProof.pickupPhotoUrl}
+                                        onPhotoUploaded={(url) => saveParcelProof({ pickupPhotoUrl: url })}
+                                        cashAmountLabel={needsCashBeforeStart ? collectibleFareLabel : ''}
+                                        cashFrom="receiver"
+                                        cashCollected={Boolean(parcelProof.cashCollectedAt)}
+                                        onCashCollected={() => saveParcelProof({ cashCollected: true })}
+                                    />
+                                </>
+                            )}
                             <div className="flex justify-center gap-3 mb-8">
                                 {otp.map((digit, index) => (
                                     <input
@@ -2806,11 +2857,33 @@ const ActiveTrip = () => {
                                     {arrivalGuardError}
                                 </p>
                             )}
+                            {isParcel && (
+                                <ParcelProofPanel
+                                    title="Before final delivery"
+                                    photoLabel="Final delivery photo"
+                                    photoUrl={parcelProof.deliveryPhotoUrl}
+                                    onPhotoUploaded={(url) => saveParcelProof({ deliveryPhotoUrl: url })}
+                                    cashAmountLabel={needsCashBeforeDelivery ? collectibleFareLabel : ''}
+                                    cashFrom="sender"
+                                    cashCollected={Boolean(parcelProof.cashCollectedAt)}
+                                    onCashCollected={() => saveParcelProof({ cashCollected: true })}
+                                />
+                            )}
                             <motion.button
                                 whileTap={{ scale: 0.96 }}
                                 onClick={() => {
                                     if (isParcel && !canDeliverParcel) {
                                         setArrivalGuardError('Reach within 100 meters of receiver before delivering parcel.');
+                                        return;
+                                    }
+
+                                    if (isParcel && !parcelProof.deliveryPhotoUrl) {
+                                        setArrivalGuardError('Upload the final delivery photo first.');
+                                        return;
+                                    }
+
+                                    if (needsCashBeforeDelivery && !parcelProof.cashCollectedAt) {
+                                        setArrivalGuardError('Collect the cash from the sender before final delivery.');
                                         return;
                                     }
 

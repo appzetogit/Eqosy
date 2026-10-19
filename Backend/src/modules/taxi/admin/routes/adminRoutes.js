@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/authMiddleware.js';
+import { assignOutstationRide, getOutstationRideDrivers, getOutstationRides } from '../controllers/outstationAssignController.js';
 import {
   approveOwner,
   approveOwnerSignupFromDriver,
@@ -43,6 +44,7 @@ import {
   deleteRentalPackageType,
   deleteLanguage,
   deleteOngoingRide,
+  getRideTracking,
   deleteOwner,
   deleteOwnerBooking,
   deleteOwnerNeededDocument,
@@ -427,8 +429,12 @@ adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/cancellation-analytics', getTaxiCancellationAnalytics);
 adminRouter.get('/admin/safety/alerts', authenticate(['admin']), listSafetyAlerts);
 adminRouter.patch('/admin/safety/alerts/:id/resolve', authenticate(['admin']), resolveSafetyAlert);
+adminRouter.get('/admin/outstation-rides', getOutstationRides);
+adminRouter.get('/admin/outstation-rides/:rideId/drivers', getOutstationRideDrivers);
+adminRouter.post('/admin/outstation-rides/:rideId/assign', assignOutstationRide);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
 adminRouter.get('/admin/ride-requests', getRideRequests);
+adminRouter.get('/admin/ongoing-rides/:id/tracking', getRideTracking);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 adminRouter.get('/admin/deliveries', getDeliveries);
 adminRouter.get('/admin/trips', getIntercityTrips);

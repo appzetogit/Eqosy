@@ -510,8 +510,10 @@ const RideTracking = () => {
           toast.success("Your ride has been cancelled successfully.");
         }
       }
-    } catch (_error) {
-      toast.success("Your ride has been cancelled successfully.");
+    } catch (error) {
+      // Do not claim success: the ride is still active on the server if the request failed.
+      toast.error(error?.response?.data?.message || error?.message || 'Could not cancel the ride. Please try again.');
+      return;
     }
     clearCurrentRide();
     navigate('/taxi/user');

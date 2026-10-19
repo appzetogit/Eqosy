@@ -138,7 +138,7 @@ const IncomingRideRequest = ({
       ? (isParcel ? 'Scheduled delivery request' : isIntercity ? 'Scheduled intercity request' : 'Scheduled ride request')
       : (isParcel ? 'New delivery request' : isIntercity ? 'New intercity request' : 'New ride request'));
   const intercityRoute = [data.raw?.intercity?.fromCity, data.raw?.intercity?.toCity].filter(Boolean).join(' to ');
-  const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
+  const category = data.raw?.parcel?.description || data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
   const payment = normalizePayment(data.payment);
   const timerProgress = Math.max(0, Math.min(100, (timer / requestDurationSeconds) * 100));
   const accentClass = isParcel ? 'bg-orange-500' : isIntercity ? 'bg-yellow-400' : 'bg-blue-600';

@@ -5,6 +5,7 @@ import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
 import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 import { SetPrice } from '../admin/models/SetPrice.js';
 import { Vehicle } from '../admin/models/Vehicle.js';
+import { ServiceLocation } from '../admin/models/ServiceLocation.js';
 import { Driver } from '../driver/models/Driver.js';
 import { Zone } from '../driver/models/Zone.js';
 import { WalletTransaction } from '../driver/models/WalletTransaction.js';
@@ -760,6 +761,53 @@ export const resolveSetPriceForRide = async ({ serviceLocationId = null, transpo
   return null;
 };
 
+/**
+ * Package (intercity / outstation) pricing lives on a SetPrice document with pricing_scope "package";
+ * commission, tax and fees sit on that vehicle's row inside package_vehicle_prices.
+ * Returns a rule shaped like a normal Set Price so the ride snapshot and commission logic can reuse it.
+ */
+const resolveIntercityPackageRule = async ({ vehicleTypeId, packageId = '', destination = '', serviceLocationId = null }) => {
+  if (!vehicleTypeId) {
+    return null;
+  }
+
+  const baseFilter = { pricing_scope: 'package', active: 1, status: 'active' };
+  let packageDoc = null;
+
+  if (packageId && mongoose.Types.ObjectId.isValid(String(packageId))) {
+    packageDoc = await SetPrice.findOne({ ...baseFilter, _id: packageId }).lean();
+  }
+
+  if (!packageDoc && String(destination || '').trim()) {
+    const escaped = String(destination).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    packageDoc = await SetPrice.findOne({
+      ...baseFilter,
+      package_destination: { $regex: `^${escaped}$`, $options: 'i' },
+      'package_vehicle_prices.vehicle_type': vehicleTypeId,
+      ...(serviceLocationId ? { service_location_id: serviceLocationId } : {}),
+    }).sort({ updatedAt: -1 }).lean();
+  }
+
+  if (!packageDoc) {
+    return null;
+  }
+
+  const row = (Array.isArray(packageDoc.package_vehicle_prices) ? packageDoc.package_vehicle_prices : [])
+    .find((item) => String(item?.vehicle_type || '') === String(vehicleTypeId));
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...packageDoc,
+    admin_commission_type_from_driver: row.admin_commission_type_from_driver ?? packageDoc.admin_commission_type_from_driver ?? 1,
+    admin_commission_from_driver: row.admin_commission_from_driver ?? packageDoc.admin_commission_from_driver ?? 0,
+    service_tax: row.service_tax ?? packageDoc.service_tax ?? 0,
+    cancellation_fee: row.cancellation_fee ?? packageDoc.cancellation_fee ?? 0,
+  };
+};
+
 export const getAllowedRidePaymentMethodsForPricing = async ({ serviceLocationId = null, transportType = 'taxi', vehicleTypeId = null }) => {
   const pricingRule = await resolveSetPriceForRide({ serviceLocationId, transportType, vehicleTypeId });
 
@@ -949,11 +997,25 @@ export const createRideRecord = async ({
     service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
       ? new mongoose.Types.ObjectId(service_location_id)
       : null;
-  const { pricingRule, allowedPaymentMethods } = await getAllowedRidePaymentMethodsForPricing({
-    serviceLocationId: resolvedServiceLocationId,
-    transportType: normalizedTransportType,
-    vehicleTypeId: primaryVehicleTypeId,
-  });
+  // Intercity (outstation) rides are priced from the admin's package pricing, not the city Set Price.
+  const intercityPackageRule = normalizeServiceType(serviceType) === 'intercity'
+    ? await resolveIntercityPackageRule({
+      vehicleTypeId: primaryVehicleTypeId,
+      packageId: intercity?.packageId,
+      destination: intercity?.toCity,
+      serviceLocationId: resolvedServiceLocationId,
+    })
+    : null;
+  const { pricingRule, allowedPaymentMethods } = intercityPackageRule
+    ? {
+      pricingRule: intercityPackageRule,
+      allowedPaymentMethods: normalizeAllowedRidePaymentMethods(intercityPackageRule.payment_type),
+    }
+    : await getAllowedRidePaymentMethodsForPricing({
+      serviceLocationId: resolvedServiceLocationId,
+      transportType: normalizedTransportType,
+      vehicleTypeId: primaryVehicleTypeId,
+    });
   const normalizedPaymentMethod = normalizeRidePaymentMethod(paymentMethod);
   const resolvedRequestedPaymentMethod = allowedPaymentMethods.includes(normalizedPaymentMethod)
     ? normalizedPaymentMethod
@@ -1366,6 +1428,14 @@ export const serializeRideRealtime = (ride) => ({
     : null,
   otp: ride.otp || '',
   parcel: ride.deliveryId?.parcel || ride.parcel || null,
+  parcelProof: ride.serviceType === 'parcel'
+    ? {
+      pickupPhotoUrl: ride.parcelProof?.pickupPhotoUrl || '',
+      deliveryPhotoUrl: ride.parcelProof?.deliveryPhotoUrl || '',
+      cashCollectedAt: ride.parcelProof?.cashCollectedAt || null,
+      cashCollectedFrom: ride.parcelProof?.cashCollectedFrom || '',
+    }
+    : null,
   intercity: ride.intercity || null,
   commissionAmount: ride.commissionAmount,
   driverEarnings: ride.driverEarnings,
@@ -1705,6 +1775,200 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
   throw lastError || new ApiError(500, 'Failed to accept ride');
 };
 
+/**
+ * Manual assignment of outstation (intercity) rides by admin: open requests, the drivers who
+ * opted in to Outstation, and the assignment itself.
+ */
+const OUTSTATION_CATEGORY_KEYS = [
+  'outstation', 'Outstation', 'OUTSTATION',
+  'taxi,outstation', 'outstation,taxi', 'Taxi,Outstation', 'Outstation,Taxi',
+  'both', 'Both', 'BOTH',
+];
+
+const outstationDriverQuery = () => ({
+  approve: { $ne: false },
+  'wallet.isBlocked': { $ne: true },
+  $or: [
+    { serviceCategories: { $in: OUTSTATION_CATEGORY_KEYS } },
+    { service_categories: { $in: OUTSTATION_CATEGORY_KEYS } },
+    { registerFor: { $in: ['outstation', 'Outstation', 'OUTSTATION', 'both', 'Both', 'BOTH'] } },
+    { 'onboarding.activeServices': { $in: OUTSTATION_CATEGORY_KEYS } },
+  ],
+});
+
+export const listOutstationRidesForAssignment = async () => {
+  const rides = await Ride.find({
+    serviceType: 'intercity',
+    status: RIDE_STATUS.SEARCHING,
+    driverId: null,
+  })
+    .sort({ scheduledAt: 1, createdAt: -1 })
+    .limit(100)
+    .populate('userId', 'name phone')
+    .lean();
+
+  return rides.map((ride) => ({
+    id: String(ride._id),
+    createdAt: ride.createdAt,
+    scheduledAt: ride.scheduledAt || null,
+    user: { name: ride.userId?.name || '', phone: ride.userId?.phone || '' },
+    pickupAddress: ride.pickupAddress || '',
+    dropAddress: ride.dropAddress || '',
+    fare: ride.fare || 0,
+    paymentMethod: ride.paymentMethod || '',
+    bookingMode: ride.bookingMode || 'normal',
+    intercity: ride.intercity || null,
+  }));
+};
+
+/**
+ * Zone / service location of a ride. Intercity rides are often saved without a service location,
+ * so fall back to the zone polygon that contains the pickup point.
+ */
+export const resolveRideServiceArea = async (ride) => {
+  let serviceLocationId = ride?.service_location_id || null;
+  let zone = null;
+
+  const pickup = Array.isArray(ride?.pickupLocation?.coordinates) ? ride.pickupLocation.coordinates : null;
+  if (pickup && pickup.length === 2) {
+    zone = await Zone.findOne({
+      active: true,
+      geometry: { $geoIntersects: { $geometry: { type: 'Point', coordinates: pickup } } },
+    }).select('name service_location_id').lean();
+  }
+
+  if (!serviceLocationId && zone?.service_location_id) {
+    serviceLocationId = zone.service_location_id;
+  }
+
+  const serviceLocation = serviceLocationId
+    ? await ServiceLocation.findById(serviceLocationId).select('name service_location_name').lean()
+    : null;
+
+  return {
+    zoneId: zone?._id ? String(zone._id) : '',
+    zoneName: zone?.name || '',
+    serviceLocationId: serviceLocationId ? String(serviceLocationId) : '',
+    serviceLocationName: serviceLocation?.name || serviceLocation?.service_location_name || '',
+  };
+};
+
+export const listOutstationDriversForRide = async ({ rideId, serviceLocationId }) => {
+  const ride = await Ride.findOne({ _id: rideId, serviceType: 'intercity' }).lean();
+  if (!ride) {
+    throw new ApiError(404, 'Outstation ride not found');
+  }
+
+  const area = await resolveRideServiceArea(ride);
+  // "all" shows every outstation driver; otherwise default to the ride's own zone.
+  const requested = String(serviceLocationId || '').trim();
+  const effectiveLocationId = requested === 'all' ? '' : (requested || area.serviceLocationId);
+
+  const wantedVehicleIds = new Set(
+    [ride.vehicleTypeId, ...(Array.isArray(ride.dispatchVehicleTypeIds) ? ride.dispatchVehicleTypeIds : [])]
+      .filter(Boolean)
+      .map((id) => String(id)),
+  );
+
+  const query = outstationDriverQuery();
+  if (effectiveLocationId && mongoose.Types.ObjectId.isValid(effectiveLocationId)) {
+    query.service_location_id = new mongoose.Types.ObjectId(effectiveLocationId);
+  }
+
+  const [drivers, serviceLocations] = await Promise.all([
+    Driver.find(query)
+      .select('name phone vehicleType vehicleNumber vehicleTypeId isOnline isOnRide owner_id rating service_location_id')
+      .sort({ isOnline: -1, name: 1 })
+      .limit(300)
+      .lean(),
+    ServiceLocation.find({ status: 'active' }).select('name service_location_name').sort({ name: 1 }).lean(),
+  ]);
+
+  return {
+    area,
+    selectedServiceLocationId: effectiveLocationId,
+    currentDriverId: ride.driverId ? String(ride.driverId) : '',
+    serviceLocations: serviceLocations.map((item) => ({
+      id: String(item._id),
+      name: item.name || item.service_location_name || '',
+    })),
+    drivers: drivers.map((driver) => ({
+      id: String(driver._id),
+      name: driver.name || '',
+      phone: driver.phone || '',
+      vehicleType: driver.vehicleType || '',
+      vehicleNumber: driver.vehicleNumber || '',
+      isOnline: Boolean(driver.isOnline),
+      isOnRide: Boolean(driver.isOnRide),
+      isFleetDriver: Boolean(driver.owner_id),
+      rating: driver.rating || 0,
+      vehicleMatch: wantedVehicleIds.size === 0 || wantedVehicleIds.has(String(driver.vehicleTypeId || '')),
+    })),
+  };
+};
+
+export const assignOutstationRideToDriver = async ({ rideId, driverId }) => {
+  const existing = await Ride.findOne({ _id: rideId, serviceType: 'intercity' }).select('status liveStatus driverId').lean();
+  if (!existing) {
+    throw new ApiError(404, 'Outstation ride not found');
+  }
+
+  const isOpen = existing.status === RIDE_STATUS.SEARCHING && !existing.driverId;
+  const isReassignable =
+    existing.status === RIDE_STATUS.ACCEPTED &&
+    [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING].includes(existing.liveStatus);
+
+  if (!isOpen && !isReassignable) {
+    throw new ApiError(409, 'This ride can no longer be assigned (it has already started or finished)');
+  }
+
+  if (existing.driverId && String(existing.driverId) === String(driverId)) {
+    throw new ApiError(409, 'This driver is already assigned to the ride');
+  }
+
+  const driver = await Driver.findOne({ _id: driverId, ...outstationDriverQuery() });
+  if (!driver) {
+    throw new ApiError(404, 'This driver has not opted in to Outstation rides');
+  }
+
+  if (driver.isOnRide) {
+    throw new ApiError(409, 'Driver is already on another ride');
+  }
+
+  await ensureDriverWalletCanAcceptRide(driver);
+
+  const ride = await Ride.findOneAndUpdate(
+    isOpen
+      ? { _id: rideId, status: RIDE_STATUS.SEARCHING, driverId: null }
+      : { _id: rideId, status: RIDE_STATUS.ACCEPTED, driverId: existing.driverId, liveStatus: { $in: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING] } },
+    {
+      $set: {
+        driverId: driver._id,
+        status: RIDE_STATUS.ACCEPTED,
+        liveStatus: RIDE_LIVE_STATUS.ACCEPTED,
+        acceptedAt: new Date(),
+        ...(await Ride.exists({ _id: rideId, bookingMode: 'bidding' }) ? { biddingStatus: 'accepted' } : {}),
+      },
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!ride) {
+    throw new ApiError(409, 'Ride changed while assigning. Please refresh and try again');
+  }
+
+  driver.isOnRide = !isRideScheduledForFuture(ride);
+  await driver.save();
+
+  if (existing.driverId) {
+    await Driver.updateOne({ _id: existing.driverId }, { $set: { isOnRide: false } });
+  }
+
+  await syncDeliveryWithRide(ride);
+
+  return { ride, previousDriverId: existing.driverId ? String(existing.driverId) : '' };
+};
+
 const rideStatusConfig = {
   [RIDE_LIVE_STATUS.ACCEPTED]: {
     persistedStatus: RIDE_STATUS.ACCEPTED,
@@ -1728,6 +1992,77 @@ const rideStatusConfig = {
   },
 };
 
+/**
+ * Parcel safety rules for the captain:
+ * - before the trip starts: pickup photo, and the cash if the receiver pays
+ * - before the final delivery: delivery photo, and the cash if the sender pays in cash
+ */
+const assertParcelProofForTransition = (ride, nextStatus, paymentMethod) => {
+  const proof = ride.parcelProof || {};
+  const payer = normalizeParcelPayer(ride.parcel?.payer);
+  const effectiveMethod = normalizeRidePaymentMethod(paymentMethod || ride.paymentMethod);
+
+  if (nextStatus === RIDE_LIVE_STATUS.STARTED && ride.liveStatus !== RIDE_LIVE_STATUS.STARTED) {
+    if (!proof.pickupPhotoUrl) {
+      throw new ApiError(409, 'Upload the parcel pickup photo before starting the trip');
+    }
+    if (payer === 'receiver' && !proof.cashCollectedAt) {
+      throw new ApiError(409, 'Collect the cash from the receiver before starting the trip');
+    }
+  }
+
+  if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
+    if (!proof.deliveryPhotoUrl) {
+      throw new ApiError(409, 'Upload the final delivery photo before completing the delivery');
+    }
+    if (payer === 'sender' && effectiveMethod === 'cash' && !proof.cashCollectedAt) {
+      throw new ApiError(409, 'Collect the cash from the sender before the final delivery');
+    }
+  }
+};
+
+export const updateParcelProof = async ({ rideId, driverId, pickupPhotoUrl, deliveryPhotoUrl, cashCollected }) => {
+  const ride = await Ride.findOne({
+    _id: rideId,
+    driverId,
+    serviceType: 'parcel',
+    status: { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+  });
+
+  if (!ride) {
+    throw new ApiError(404, 'Active parcel delivery not found');
+  }
+
+  const isHttpUrl = (value) => /^https?:\/\//i.test(String(value || '').trim());
+  const now = new Date();
+  ride.parcelProof = ride.parcelProof || {};
+
+  if (pickupPhotoUrl !== undefined) {
+    if (!isHttpUrl(pickupPhotoUrl)) throw new ApiError(400, 'A valid pickup photo is required');
+    ride.parcelProof.pickupPhotoUrl = String(pickupPhotoUrl).trim();
+    ride.parcelProof.pickupPhotoAt = now;
+  }
+
+  if (deliveryPhotoUrl !== undefined) {
+    if (!isHttpUrl(deliveryPhotoUrl)) throw new ApiError(400, 'A valid delivery photo is required');
+    ride.parcelProof.deliveryPhotoUrl = String(deliveryPhotoUrl).trim();
+    ride.parcelProof.deliveryPhotoAt = now;
+  }
+
+  if (cashCollected === true) {
+    ride.parcelProof.cashCollectedAt = now;
+    ride.parcelProof.cashCollectedFrom = normalizeParcelPayer(ride.parcel?.payer);
+  }
+
+  await ride.save();
+
+  const payload = serializeRideRealtime(await populateRideRealtime(ride._id));
+  emitToRoom(getRideRoom(ride._id), 'ride:state', payload);
+  if (ride.userId) emitToRoom(getUserRoom(ride.userId), 'ride:state', payload);
+
+  return payload;
+};
+
 export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymentMethod }) => {
   const config = rideStatusConfig[nextStatus];
 
@@ -1743,6 +2078,10 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (!config.allowedCurrent.includes(ride.liveStatus)) {
     throw new ApiError(409, `Ride cannot move from ${ride.liveStatus} to ${nextStatus}`);
+  }
+
+  if (ride.serviceType === 'parcel') {
+    assertParcelProofForTransition(ride, nextStatus, paymentMethod);
   }
 
   ride.liveStatus = nextStatus;
