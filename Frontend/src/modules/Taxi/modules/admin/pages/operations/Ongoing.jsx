@@ -1,7 +1,10 @@
 import React from 'react';
-import { Filter, MoreVertical, Search, Loader2, ChevronRight, Menu, Trash2 } from 'lucide-react';
+import { Filter, Search, Loader2, ChevronRight, Menu, XCircle, UserCheck, CalendarClock, Navigation } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/adminService';
+import RideTrackingModal from './RideTrackingModal';
+import AssignDriverModal from './AssignDriverModal';
 
 const STATUS_STYLES = {
   ACCEPTED: 'bg-[#10B981] text-white', // Emerald/Green from image
@@ -16,6 +19,31 @@ const PAYMENT_STYLES = {
 };
 
 const TAB_SET = ['All', 'Accepted', 'Upcoming', 'Ongoing'];
+
+const TYPE_FILTERS = [
+  { id: 'all', label: 'All types' },
+  { id: 'taxi', label: 'Taxi' },
+  { id: 'parcel', label: 'Parcel' },
+  { id: 'outstation', label: 'Outstation' },
+  { id: 'pooling', label: 'Pooling' },
+  { id: 'scheduled', label: 'Scheduled' },
+];
+
+const TYPE_BADGES = {
+  taxi: { label: 'Taxi', className: 'bg-blue-100 text-blue-700' },
+  parcel: { label: 'Parcel', className: 'bg-orange-100 text-orange-700' },
+  parcel_outstation: { label: 'Parcel • Outstation', className: 'bg-orange-100 text-orange-700' },
+  outstation: { label: 'Outstation', className: 'bg-yellow-100 text-yellow-800' },
+  pooling: { label: 'Pooling', className: 'bg-violet-100 text-violet-700' },
+};
+
+const matchesTypeFilter = (row, filter) => {
+  if (filter === 'all') return true;
+  if (filter === 'scheduled') return Boolean(row.isScheduled);
+  if (filter === 'parcel') return row.rideType === 'parcel' || row.rideType === 'parcel_outstation';
+  if (filter === 'outstation') return row.rideType === 'outstation' || row.rideType === 'parcel_outstation';
+  return row.rideType === filter;
+};
 
 const formatDate = (value) => {
   const date = value ? new Date(value) : null;
@@ -32,6 +60,9 @@ const Ongoing = () => {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [typeFilter, setTypeFilter] = React.useState('all');
+  const [trackingRow, setTrackingRow] = React.useState(null);
+  const [assignRow, setAssignRow] = React.useState(null);
 
   const loadRows = React.useCallback(async () => {
     setLoading(true);
@@ -55,16 +86,34 @@ const Ongoing = () => {
     loadRows();
   }, [loadRows]);
 
-  const handleDelete = async (ride) => {
-    const confirmed = window.confirm(`Delete ride ${ride.requestId}? This will remove it for both rider and driver.`);
+  // Keep the list fresh so rides the rider cancels (or that finish) drop off by themselves.
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        adminService
+          .getOngoingRides({ limit, tab: activeTab.toLowerCase(), search })
+          .then((response) => {
+            const data = response?.data?.data || response?.data || response;
+            setRows(data?.results || []);
+          })
+          .catch(() => {});
+      }
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [activeTab, limit, search]);
+
+  const handleCancel = async (ride) => {
+    const confirmed = window.confirm(`Cancel ride ${ride.requestId}? The rider and the driver will both be told it was cancelled.`);
     if (!confirmed) return;
     try {
       await adminService.deleteOngoingRide(ride.id);
       setRows((prev) => prev.filter((row) => row.id !== ride.id));
     } catch (err) {
-      window.alert(err?.message || 'Failed to delete ride');
+      window.alert(err?.message || 'Failed to cancel ride');
     }
   };
+
+  const visibleRows = rows.filter((row) => matchesTypeFilter(row, typeFilter));
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
@@ -123,11 +172,25 @@ const Ongoing = () => {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-6 py-3">
+            {TYPE_FILTERS.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTypeFilter(item.id)}
+                className={`rounded-full px-4 py-1.5 text-[12px] font-bold transition-all ${
+                  typeFilter === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr className="bg-slate-50">
-                  {['Request Id', 'Date', 'User Name', 'Driver Name', 'Transport Type', 'Trip Status', 'Payment Option', 'Action'].map((h) => (
+                  {['Request Id', 'Date', 'Type', 'Zone', 'User Name', 'Driver Name', 'Vehicle', 'Trip Status', 'Payment Option', 'Action'].map((h) => (
                     <th key={h} className="px-6 py-4 text-[13px] font-bold text-slate-900 border-b border-slate-100">
                       {h}
                     </th>
@@ -137,15 +200,29 @@ const Ongoing = () => {
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-20 text-center">
+                    <td colSpan={10} className="py-20 text-center">
                       <Loader2 className="animate-spin text-slate-300 mx-auto" size={32} />
                     </td>
                   </tr>
-                ) : rows.length > 0 ? (
-                  rows.map((row) => (
+                ) : visibleRows.length > 0 ? (
+                  visibleRows.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/30">
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.requestId}</td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{formatDate(row.date)}</td>
+                      <td className="px-6 py-5">
+                        <span className={`inline-block whitespace-nowrap px-3 py-1 text-[10px] font-bold rounded uppercase ${(TYPE_BADGES[row.rideType] || TYPE_BADGES.taxi).className}`}>
+                          {(TYPE_BADGES[row.rideType] || TYPE_BADGES.taxi).label}
+                        </span>
+                        {row.isScheduled ? (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] font-bold text-amber-600">
+                            <CalendarClock size={12} /> {formatDate(row.scheduledAt)}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-6 py-5 text-[13px] text-slate-600 font-medium">
+                        {row.serviceLocationName || row.zoneName || '--'}
+                        {row.serviceLocationName && row.zoneName ? <div className="text-[11px] text-slate-400">{row.zoneName}</div> : null}
+                      </td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.userName}</td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.driverName || '----'}</td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.transportType}</td>
@@ -160,20 +237,33 @@ const Ongoing = () => {
                         </span>
                       </td>
                       <td className="px-6 py-5">
-                         <div className="flex items-center gap-3">
-                           <button onClick={() => handleDelete(row)} className="text-rose-400 hover:text-rose-600">
-                             <Trash2 size={16} />
+                         <div className="flex flex-col items-start gap-2">
+                           {row.canAssignDriver ? (
+                             <button onClick={() => setAssignRow(row)} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white">
+                               <UserCheck size={13} /> {row.driver ? 'Reassign driver' : 'Assign driver'}
+                             </button>
+                           ) : null}
+                           {row.rideType !== 'pooling' && row.driver && ['ACCEPTED', 'ONGOING'].includes(row.tripStatus) ? (
+                             <button onClick={() => setTrackingRow(row)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700">
+                               <Navigation size={13} /> Track live
+                             </button>
+                           ) : null}
+                           {row.rideType === 'pooling' ? (
+                             <Link to="/taxi/admin/pooling/bookings" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50">
+                               Manage booking
+                             </Link>
+                           ) : (
+                           <button onClick={() => handleCancel(row)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50">
+                             <XCircle size={13} /> Cancel ride
                            </button>
-                           <button className="text-slate-400 hover:text-slate-800">
-                             <MoreVertical size={18} />
-                           </button>
+                           )}
                          </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-20 text-center text-[14px] font-medium text-slate-400">
+                    <td colSpan={10} className="py-20 text-center text-[14px] font-medium text-slate-400">
                       No Ongoing Requests Found.
                     </td>
                   </tr>
@@ -181,6 +271,18 @@ const Ongoing = () => {
               </tbody>
             </table>
           </div>
+
+          {assignRow ? (
+            <AssignDriverModal
+              ride={{ id: assignRow.id, title: `${assignRow.requestId} • ${assignRow.pickupLabel || ''} to ${assignRow.dropLabel || ''}` }}
+              onClose={() => setAssignRow(null)}
+              onAssigned={() => {
+                setAssignRow(null);
+                loadRows();
+              }}
+            />
+          ) : null}
+          {trackingRow ? <RideTrackingModal ride={trackingRow} onClose={() => setTrackingRow(null)} /> : null}
 
           {/* Floating Action Button from image */}
           <button className="fixed bottom-10 right-10 w-14 h-14 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform z-50">

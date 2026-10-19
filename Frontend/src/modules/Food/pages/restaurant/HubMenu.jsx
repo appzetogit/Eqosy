@@ -98,6 +98,7 @@ export default function HubMenu() {
   const [addonName, setAddonName] = useState("")
   const [addonDescription, setAddonDescription] = useState("")
   const [addonPrice, setAddonPrice] = useState("")
+  const [addonFoodType, setAddonFoodType] = useState("Veg")
   const [addonImages, setAddonImages] = useState([])
   const [addonImageFiles, setAddonImageFiles] = useState(new Map())
   const [uploadingAddonImages, setUploadingAddonImages] = useState(false)
@@ -591,6 +592,7 @@ export default function HubMenu() {
         name: addonName.trim(),
         description: addonDescription.trim(),
         price: parseFloat(addonPrice) || 0,
+        foodType: addonFoodType,
         image: allImageUrls.length > 0 ? allImageUrls[0] : '',
         images: allImageUrls
       }
@@ -608,7 +610,7 @@ export default function HubMenu() {
       // Reset form
       setAddonName("")
       setAddonDescription("")
-      setAddonPrice("")
+      setAddonPrice(""); setAddonFoodType("Veg")
       setAddonImages([])
       setAddonImageFiles(new Map())
       setEditingAddon(null)
@@ -631,6 +633,7 @@ export default function HubMenu() {
     setAddonName(addon.name || "")
     setAddonDescription(addon.description || "")
     setAddonPrice(addon.price?.toString() || "")
+    setAddonFoodType(addon.foodType === "Non-Veg" ? "Non-Veg" : "Veg")
     setAddonImages(addon.images && addon.images.length > 0 ? addon.images : (addon.image ? [addon.image] : []))
     setAddonImageFiles(new Map())
     setIsAddAddonModalOpen(true)
@@ -713,7 +716,7 @@ export default function HubMenu() {
     if (!isAddAddonModalOpen) {
       setAddonName("")
       setAddonDescription("")
-      setAddonPrice("")
+      setAddonPrice(""); setAddonFoodType("Veg")
       setAddonImages([])
       setAddonImageFiles(new Map())
       setEditingAddon(null)
@@ -2362,6 +2365,30 @@ export default function HubMenu() {
                     step="0.01"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   />
+                </div>
+
+                {/* Food Type Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Food Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    {["Veg", "Non-Veg"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setAddonFoodType(type)}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
+                          addonFoodType === type
+                            ? (type === "Veg" ? "border-green-600 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-600")
+                            : "border-gray-300 text-gray-600"
+                        }`}
+                      >
+                        <span className={`h-3 w-3 rounded-full ${type === "Veg" ? "bg-green-600" : "bg-red-500"}`} />
+                        {type}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Images Section */}

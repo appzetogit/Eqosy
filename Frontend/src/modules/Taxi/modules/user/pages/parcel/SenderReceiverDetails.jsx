@@ -1066,6 +1066,10 @@ const SenderReceiverDetails = () => {
   const [parcelPayer, setParcelPayer] = useState(() => (
     String(parcelState.parcel?.payer || parcelState.payer || 'sender').toLowerCase() === 'receiver' ? 'receiver' : 'sender'
   ));
+  const [itemName, setItemName] = useState(() => String(parcelState.parcel?.description || parcelState.description || '').trim());
+  const [parcelPaymentMethod, setParcelPaymentMethod] = useState(() => (
+    String(parcelState.paymentMethod || 'Cash').toLowerCase() === 'online' ? 'Online' : 'Cash'
+  ));
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
   const [gpsModalInfo, setGpsModalInfo] = useState(null);
@@ -1078,6 +1082,7 @@ const SenderReceiverDetails = () => {
   const livePickupHydratedRef = useRef(false);
   const dropInputRef = useRef(null);
   const termsRef = useRef(null);
+  const itemRef = useRef(null);
   const dropGeocodeTimerRef = useRef(null);
   const dropSuggestionTimerRef = useRef(null);
   const autocompleteServiceRef = useRef(null);
@@ -1349,6 +1354,7 @@ const SenderReceiverDetails = () => {
     if (!PHONE_REGEX.test(senderMobile)) nextErrors.senderMobile = 'Enter a valid 10-digit number';
     if (!receiverName.trim()) nextErrors.receiverName = 'Receiver name is required';
     if (!PHONE_REGEX.test(receiverMobile)) nextErrors.receiverMobile = 'Enter a valid 10-digit number';
+    if (!itemName.trim()) nextErrors.itemName = 'Tell the captain what you are sending';
     if (!pickup.trim()) nextErrors.pickup = 'Pickup location is required';
     if (!drop.trim()) nextErrors.drop = 'Drop location is required';
     if (!acceptedTerms) nextErrors.acceptedTerms = 'Please check the box to confirm no prohibited items & accept policy';
@@ -1795,6 +1801,16 @@ const SenderReceiverDetails = () => {
         return;
       }
 
+      if (nextErrors.itemName) {
+        if (fromContactSheet) {
+          setIsContactSheetOpen(false);
+        }
+        setTimeout(() => {
+          itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        return;
+      }
+
       if (nextErrors.acceptedTerms) {
         if (fromContactSheet) {
           setIsContactSheetOpen(false);
@@ -1845,7 +1861,7 @@ const SenderReceiverDetails = () => {
         senderMobile,
         receiverName,
         receiverMobile,
-        paymentMethod: 'Cash',
+        paymentMethod: parcelPayer === 'sender' ? parcelPaymentMethod : 'Cash',
         payer: parcelPayer,
         fare: estimatedFare?.approx ?? estimatedFare?.min ?? null,
         estimatedFare,
@@ -1857,7 +1873,7 @@ const SenderReceiverDetails = () => {
         parcel: {
           category: parcelState.parcelType || parcelState.category || 'Parcel',
           weight: parcelState.weight || 'Under 5kg',
-          description: parcelState.description || '',
+          description: itemName.trim(),
           deliveryCategory: parcelState.deliveryCategory || parcelState.category || categoryId || '',
           goodsTypeFor: resolvedGoodsTypeFor,
           deliveryScope: parcelState.deliveryScope || 'city',
@@ -2287,6 +2303,30 @@ const SenderReceiverDetails = () => {
           )}
         </div>
 
+        {/* Item details: shown to the captain before they accept the request */}
+        <div ref={itemRef} className={`mt-5 rounded-[24px] border bg-white p-4 shadow-sm ${errors.itemName ? 'border-red-300' : 'border-slate-200'}`}>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">What are you sending?</p>
+          <input
+            type="text"
+            value={itemName}
+            maxLength={80}
+            onChange={(e) => {
+              setItemName(e.target.value);
+              if (e.target.value.trim()) clearError('itemName');
+            }}
+            placeholder="e.g. Documents, Mobile phone, Clothes"
+            className="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-3 text-sm font-black text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400 focus:border-blue-500"
+          />
+          {errors.itemName ? (
+            <p className="mt-2 flex items-center gap-1 text-[11px] font-black text-red-500">
+              <AlertCircle size={11} strokeWidth={3} />
+              {errors.itemName}
+            </p>
+          ) : (
+            <p className="mt-2 text-[11px] font-semibold text-slate-500">The captain sees this before accepting your request.</p>
+          )}
+        </div>
+
         {/* Who pays for this delivery (can be changed later from the tracking screen) */}
         <div className="mt-5 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Payment will be paid by</p>
@@ -2306,6 +2346,53 @@ const SenderReceiverDetails = () => {
               </button>
             ))}
           </div>
+
+          {parcelPayer === 'sender' ? (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Payment method</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  { id: 'Cash', label: 'Cash', hint: 'Pay captain at pickup' },
+                  { id: 'Online', label: 'Online', hint: 'Pay now before pickup' },
+                ].map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => setParcelPaymentMethod(method.id)}
+                    className={`rounded-2xl border px-3 py-3 text-left transition-all ${parcelPaymentMethod === method.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-slate-200 bg-slate-50/60'}`}
+                  >
+                    <span className="block text-sm font-black text-slate-900">{method.label}</span>
+                    <span className="block text-[11px] font-semibold text-slate-500">{method.hint}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] font-semibold text-slate-500">
+                Sender pays first. The captain collects the amount before the final delivery.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Receiver details</p>
+              <button
+                type="button"
+                onClick={() => setIsContactSheetOpen(true)}
+                className={`mt-3 flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-all ${errors.receiverName || errors.receiverMobile ? 'border-red-300 bg-red-50/60' : 'border-slate-200 bg-slate-50/60'}`}
+              >
+                <span>
+                  <span className="block text-sm font-black text-slate-900">
+                    {receiverName.trim() || 'Add receiver name & mobile'}
+                  </span>
+                  <span className="block text-[11px] font-semibold text-slate-500">
+                    {receiverMobile ? `+91 ${receiverMobile}` : 'Required so the captain can reach the receiver'}
+                  </span>
+                </span>
+                <ChevronRight size={18} className="text-slate-400" />
+              </button>
+              <p className="mt-2 text-[11px] font-semibold text-slate-500">
+                Receiver pays cash to the captain before the trip starts.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Prohibited Items & Terms Checkbox on Main Page */}

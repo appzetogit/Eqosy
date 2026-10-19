@@ -708,7 +708,18 @@ export const saveDriverVehicle = async ({
 
   const selectedServiceLocation = serviceLocation || (locationId ? await ServiceLocation.findById(locationId).lean() : null);
   const selectedLocation = getServiceLocationName(selectedServiceLocation) || String(locationName || city || '').trim();
-  const normalizedServiceCategories = normalizeServiceCategories(serviceCategories, registerFor || session.role || 'taxi');
+  let normalizedServiceCategories = normalizeServiceCategories(serviceCategories, registerFor || session.role || 'taxi');
+
+  // Outstation / Pooling are 4-wheeler services; drop them when the chosen vehicle is a two-wheeler.
+  if (/^[a-f\d]{24}$/i.test(String(vehicleTypeId || ''))) {
+    const chosenVehicle = await Vehicle.findById(vehicleTypeId).select('icon_types name').lean();
+    const hint = `${chosenVehicle?.icon_types || ''} ${chosenVehicle?.name || ''}`.toLowerCase();
+    if (/\b(bike|bikes|motorbike|motor_bike|scooter|scooty|electric_scooty|cycle|moped|2[\s-]?wheel(er)?s?|two[\s-]?wheel(er)?s?)\b/.test(hint)) {
+      const filtered = normalizedServiceCategories.filter((c) => !['outstation', 'pooling'].includes(c));
+      normalizedServiceCategories = filtered.length > 0 ? filtered : ['taxi'];
+    }
+  }
+
   const normalizedRegisterFor = getPrimaryRegisterFor(normalizedServiceCategories, registerFor || session.role || 'taxi');
 
   if (!selectedLocation) {

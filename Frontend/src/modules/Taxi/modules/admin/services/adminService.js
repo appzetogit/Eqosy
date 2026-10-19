@@ -204,6 +204,10 @@ export const adminService = {
   getSafetyAlerts: ({ page = 1, limit = 25, status = 'active' } = {}) =>
     api.get(`/admin/safety/alerts?page=${page}&limit=${limit}&status=${encodeURIComponent(status)}`),
   resolveSafetyAlert: (id, note = '') => api.patch(`/admin/safety/alerts/${id}/resolve`, { note }),
+  getOutstationRides: () => api.get('/admin/outstation-rides'),
+  getOutstationRideDrivers: (rideId, serviceLocationId = '') =>
+    api.get(`/admin/outstation-rides/${rideId}/drivers${serviceLocationId ? `?serviceLocationId=${encodeURIComponent(serviceLocationId)}` : ''}`),
+  assignOutstationRide: (rideId, driverId) => api.post(`/admin/outstation-rides/${rideId}/assign`, { driverId }),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '', transportType = '', status = '', from = '', to = '', light = false } = {}) =>
@@ -219,6 +223,7 @@ export const adminService = {
     api.get(`/admin/deliveries?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getTrips: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/trips?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getRideTracking: (id) => api.get(`/admin/ongoing-rides/${id}/tracking`),
   deleteOngoingRide: (id) => api.delete(`/admin/ongoing-rides/${id}`),
 
   /**

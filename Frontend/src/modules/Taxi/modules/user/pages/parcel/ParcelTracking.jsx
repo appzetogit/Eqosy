@@ -612,12 +612,31 @@ const ParcelTracking = () => {
     }
 
     if (COMPLETED_TRACKING_STATUSES.has(tripStatus)) {
+      // Sender pays on delivery: open the standard ride payment screen (cash / online / wallet,
+      // shows "paid" once settled) instead of the plain delivered summary.
+      if (parcelPayer === 'sender' && rideId && !hasCompletedRedirectRef.current) {
+        hasCompletedRedirectRef.current = true;
+        const snapshot = {
+          ...latestStateRef.current,
+          rideId,
+          serviceType: 'parcel',
+          driver,
+          fare,
+          paymentMethod: rideRealtime?.paymentMethod || latestStateRef.current.paymentMethod || 'Cash',
+          status: tripStatus,
+          liveStatus: tripStatus,
+          completedAt: rideRealtime?.completedAt || latestStateRef.current.completedAt || Date.now(),
+          feedback: rideRealtime?.feedback || latestStateRef.current.feedback || null,
+        };
+        saveCurrentRide(snapshot);
+        navigate(`${routePrefix || '/taxi/user'}/ride/complete`, { replace: true, state: snapshot });
+      }
       return;
     }
 
     clearCurrentRide();
     navigate(userHomeRoute, { replace: true });
-  }, [navigate, tripStatus, userHomeRoute]);
+  }, [driver, fare, navigate, parcelPayer, rideId, rideRealtime, routePrefix, tripStatus, userHomeRoute]);
 
   // Route Path Update
   useEffect(() => {

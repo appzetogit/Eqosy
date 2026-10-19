@@ -874,6 +874,7 @@ export default function Inventory() {
   const [addonName, setAddonName] = useState("")
   const [addonDescription, setAddonDescription] = useState("")
   const [addonPrice, setAddonPrice] = useState("")
+  const [addonFoodType, setAddonFoodType] = useState("Veg")
   const [addonImageFile, setAddonImageFile] = useState(null)
   const [addonImagePreview, setAddonImagePreview] = useState("")
   const [savingAddon, setSavingAddon] = useState(false)
@@ -1090,6 +1091,7 @@ export default function Inventory() {
     setAddonName("")
     setAddonDescription("")
     setAddonPrice("")
+    setAddonFoodType("Veg")
     setAddonImageFile(null)
     setAddonImagePreview("")
     if (addonImageInputRef.current) {
@@ -1143,6 +1145,7 @@ export default function Inventory() {
         name: addonName.trim(),
         description: addonDescription.trim(),
         price: parsedPrice,
+        foodType: addonFoodType,
         image: imageUrl,
         images: imageUrl ? [imageUrl] : [],
       }
@@ -1150,7 +1153,7 @@ export default function Inventory() {
       toast.success("Add-on submitted to admin for approval")
       resetAddonForm()
       setIsAddAddonOpen(false)
-      fetchAddons(true)
+      fetchMenuAndAddons()
     } catch (error) {
       debugError("Error saving add-on:", error)
       toast.error(error?.response?.data?.message || "Failed to save add-on")
@@ -2078,6 +2081,26 @@ export default function Inventory() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Food Type *</label>
+                      <div className="flex gap-2">
+                        {["Veg", "Non-Veg"].map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setAddonFoodType(type)}
+                            className={`flex-1 flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
+                              addonFoodType === type
+                                ? (type === "Veg" ? "border-green-600 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-600")
+                                : "border-gray-300 text-gray-600"
+                            }`}
+                          >
+                            <span className={`h-3 w-3 rounded-full ${type === "Veg" ? "bg-green-600" : "bg-red-500"}`} />
+                            {type}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Image (1 only)</label>
                       {addonImagePreview && (
                         <div className="mb-2">
@@ -2160,6 +2183,9 @@ export default function Inventory() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="mb-2 flex items-center gap-2 flex-wrap">
+                            <span className={`h-3.5 w-3.5 rounded-sm border-2 flex items-center justify-center ${addon.foodType === 'Non-Veg' ? 'border-red-500' : 'border-green-600'}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${addon.foodType === 'Non-Veg' ? 'bg-red-500' : 'bg-green-600'}`} />
+                            </span>
                             <h3 className="text-base font-semibold text-slate-950">{addon.name}</h3>
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                               addon.isAvailable !== false

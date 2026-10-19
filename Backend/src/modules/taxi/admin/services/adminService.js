@@ -49,6 +49,8 @@ import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { SupportTicket } from '../../support/models/SupportTicket.js';
 import TaxiTransportType from '../models/TaxiTransportType.js';
+import { resolveRideServiceArea } from '../../services/rideService.js';
+import { PoolingBooking } from '../models/PoolingBooking.js';
 import { comparePassword, hashPassword } from '../../driver/services/authService.js';
 import {
   applyDriverWalletAdjustment,
@@ -5666,10 +5668,22 @@ const toAdminRideRow = (ride) => {
     userName: ride.userId?.name || 'Unknown User',
     driverName: ride.driverId?.name || 'Unassigned',
     transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi',
+    rideType: ride.serviceType === 'intercity'
+      ? 'outstation'
+      : ride.serviceType === 'parcel'
+        ? (ride.parcel?.isOutstation || ride.parcel?.deliveryScope === 'outstation' ? 'parcel_outstation' : 'parcel')
+        : 'taxi',
+    scheduledAt: ride.scheduledAt || null,
+    isScheduled: Boolean(ride.scheduledAt) && new Date(ride.scheduledAt).getTime() > Date.now(),
+    // Outstation rides can be (re)assigned until the trip starts.
+    canAssignDriver: ride.serviceType === 'intercity' && (
+      (status === RIDE_STATUS.SEARCHING && !ride.driverId) ||
+      (status === RIDE_STATUS.ACCEPTED && [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING].includes(liveStatus))
+    ),
     tripStatus,
     rideStatus: ride.status,
     liveStatus: ride.liveStatus,
-    paymentOption: 'CASH',
+    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
     fare: Number(ride.fare || 0),
     pickupLabel: formatRidePointLabel(ride.pickupLocation, 'Pickup'),
     dropLabel: formatRidePointLabel(ride.dropLocation, 'Drop'),
@@ -5788,13 +5802,59 @@ export const listOngoingRides = async (query = {}) => {
 
   const rides = await Ride.find({
     status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+    // A cancelled ride must never linger here, even if only one of the two status fields was updated.
+    liveStatus: { $nin: [RIDE_LIVE_STATUS.CANCELLED, RIDE_LIVE_STATUS.COMPLETED] },
   })
     .sort({ createdAt: -1 })
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
 
-  let rows = rides.map(toAdminRideRow);
+  const areas = await Promise.all(rides.map((ride) => resolveRideServiceArea(ride).catch(() => ({}))));
+  let rows = rides.map((ride, index) => ({
+    ...toAdminRideRow(ride),
+    zoneName: areas[index]?.zoneName || '',
+    serviceLocationName: areas[index]?.serviceLocationName || '',
+  }));
+
+  // Car pooling has no live ride record: seat bookings for today and later are shown as upcoming
+  // pooling trips (view only, no tracking or driver).
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const poolingBookings = await PoolingBooking.find({
+    bookingStatus: 'confirmed',
+    travelDate: { $gte: startOfToday },
+  })
+    .sort({ travelDate: 1 })
+    .populate('user', 'name phone')
+    .populate('route', 'routeName')
+    .limit(200)
+    .lean();
+
+  rows = [
+    ...rows,
+    ...poolingBookings.map((booking) => ({
+      id: String(booking._id),
+      requestId: booking.bookingId || `POOL_${String(booking._id).slice(-8).toUpperCase()}`,
+      date: booking.travelDate,
+      userName: booking.user?.name || 'Unknown User',
+      driverName: 'Unassigned',
+      transportType: booking.route?.routeName || 'Pooling',
+      rideType: 'pooling',
+      scheduledAt: booking.travelDate,
+      isScheduled: false,
+      tripStatus: 'UPCOMING',
+      rideStatus: booking.bookingStatus,
+      liveStatus: booking.bookingStatus,
+      paymentOption: booking.paymentStatus === 'paid' ? 'ONLINE' : 'PENDING',
+      fare: Number(booking.fare || 0),
+      pickupLabel: booking.pickupLabel || '',
+      dropLabel: booking.dropLabel || '',
+      seatsBooked: booking.seatsBooked || 1,
+      user: booking.user ? { id: String(booking.user._id), name: booking.user.name || '', phone: booking.user.phone || '' } : null,
+      driver: null,
+    })),
+  ];
 
   if (tab === 'accepted') {
     rows = rows.filter((row) => row.tripStatus === 'ACCEPTED');
@@ -6005,6 +6065,52 @@ export const listIntercityTrips = async (query = {}) => {
   }
 
   return buildPaginator(rows, page, limit);
+};
+
+export const getAdminRideTracking = async (rideId) => {
+  if (!mongoose.Types.ObjectId.isValid(String(rideId))) {
+    throw new ApiError(400, 'Invalid ride id');
+  }
+
+  const ride = await Ride.findById(rideId)
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  if (!ride) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  const toLatLng = (point) => {
+    const [lng, lat] = Array.isArray(point?.coordinates) ? point.coordinates : [];
+    return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) ? { lat: Number(lat), lng: Number(lng) } : null;
+  };
+
+  return {
+    id: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+    serviceType: ride.serviceType || 'ride',
+    pickup: { label: ride.pickupAddress || '', ...(toLatLng(ride.pickupLocation) || {}) },
+    drop: { label: ride.dropAddress || '', ...(toLatLng(ride.dropLocation) || {}) },
+    driverLocation: ride.lastDriverLocation
+      ? {
+        ...(toLatLng(ride.lastDriverLocation) || {}),
+        heading: ride.lastDriverLocation.heading ?? null,
+        speed: ride.lastDriverLocation.speed ?? null,
+        updatedAt: ride.lastDriverLocation.updatedAt || null,
+      }
+      : null,
+    user: ride.userId ? { name: ride.userId.name || '', phone: ride.userId.phone || '' } : null,
+    driver: ride.driverId
+      ? {
+        name: ride.driverId.name || '',
+        phone: ride.driverId.phone || '',
+        vehicleType: ride.driverId.vehicleType || '',
+        vehicleNumber: ride.driverId.vehicleNumber || '',
+      }
+      : null,
+  };
 };
 
 export const deleteOngoingRide = async (rideId) => {

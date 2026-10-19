@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import FarePreview from './FarePreview';
 import { 
   Plus, 
   Search, 
@@ -724,6 +725,8 @@ const SetPrices = ({ mode }) => {
                            <input type="number" required className={inputClass} placeholder="Free Waiting Time In Minutes After Start A Ride" value={formData.free_waiting_after} onChange={e => setFormData(p=>({...p, free_waiting_after: e.target.value}))} />
                         </div>
                      </div>
+
+                     <FarePreview formData={formData} />
 
                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12 pt-4">
                         <div className="flex items-center gap-2 pt-2 ml-1">

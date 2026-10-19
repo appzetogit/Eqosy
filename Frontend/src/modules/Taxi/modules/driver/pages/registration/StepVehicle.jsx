@@ -19,6 +19,7 @@ import {
     normalizeDriverPortalRole,
 } from '../../services/registrationService';
 import { POOLING_ENABLED } from '../../../../shared/featureFlags';
+import { filterServiceCategoriesForVehicle, isTwoWheelerVehicle } from '../../utils/vehicleServices';
 
 const VEHICLE_NUMBER_REGEX = /^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{4}$/;
 const getAllowedServiceCategories = () => (
@@ -379,6 +380,9 @@ const StepVehicle = () => {
     };
 
     const locationField = getFieldConfig('locationId', { name: 'Operating City' });
+    const selectedVehicleType = vehicleTypes.find((type) => String(type._id || type.id) === String(formData.vehicleTypeId)) || null;
+    const selectedIsTwoWheeler = selectedVehicleType ? isTwoWheelerVehicle(selectedVehicleType) : false;
+    const selectableServiceCategories = filterServiceCategoriesForVehicle(getAllowedServiceCategories(), selectedVehicleType);
     const vehicleTypeField = getFieldConfig('vehicleTypeId', { name: 'Vehicle Type', help_text: 'Select the type of vehicle you drive.' });
     const companyNameField = getFieldConfig('companyName', { name: 'Company Name', placeholder: 'Legal Company Name' });
     const companyAddressField = getFieldConfig('companyAddress', { name: 'Company Address', placeholder: 'Business Address' });
@@ -590,7 +594,14 @@ const StepVehicle = () => {
                                                      <button
                                                          key={type._id || type.id}
                                                          type="button"
-                                                         onClick={() => setFormData(p => ({ ...p, vehicleTypeId: type._id || type.id }))}
+                                                         onClick={() => setFormData(p => {
+                                                             const nextCategories = filterServiceCategoriesForVehicle(p.serviceCategories, type);
+                                                             return {
+                                                                 ...p,
+                                                                 vehicleTypeId: type._id || type.id,
+                                                                 serviceCategories: nextCategories.length > 0 ? nextCategories : ['taxi'],
+                                                             };
+                                                         })}
                                                          className={`relative h-32 rounded-3xl border transition-all flex flex-col group overflow-hidden cursor-pointer touch-manipulation text-left ${
                                                              formData.vehicleTypeId === (type._id || type.id)
                                                              ? 'border-slate-900 bg-slate-900/[0.02] ring-1 ring-slate-900/5' 
@@ -619,6 +630,48 @@ const StepVehicle = () => {
                                                  ))
                                              )}
                                          </div>
+                                    </div>
+                                )}
+
+                                {selectedVehicleType && (
+                                    <div className="space-y-3 pt-1">
+                                        <div className="space-y-1 px-1">
+                                            <h2 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Services you want</h2>
+                                            <p className="text-sm text-slate-500">
+                                                {selectedIsTwoWheeler
+                                                    ? 'Choose Taxi, Delivery or both. Outstation and Pooling are for 4-wheelers.'
+                                                    : 'Pick every service you want to take requests for.'}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 px-1">
+                                            {selectableServiceCategories.map((category) => {
+                                                const isSelected = formData.serviceCategories.includes(category);
+                                                return (
+                                                    <button
+                                                        key={category}
+                                                        type="button"
+                                                        onClick={() => setFormData((p) => {
+                                                            const next = p.serviceCategories.includes(category)
+                                                                ? p.serviceCategories.filter((item) => item !== category)
+                                                                : [...p.serviceCategories, category];
+                                                            const safe = next.length > 0 ? next : [category];
+                                                            return {
+                                                                ...p,
+                                                                serviceCategories: safe,
+                                                                registerFor: getPrimaryRegisterFor(safe, p.registerFor),
+                                                            };
+                                                        })}
+                                                        className={`rounded-full px-4 py-2 text-xs font-bold capitalize transition-all ${
+                                                            isSelected
+                                                                ? 'bg-slate-900 text-white shadow-sm'
+                                                                : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                                        }`}
+                                                    >
+                                                        {category === 'taxi' ? 'Taxi' : category}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
 

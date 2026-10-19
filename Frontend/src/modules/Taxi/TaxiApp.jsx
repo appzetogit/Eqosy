@@ -179,6 +179,7 @@ const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const OwnerHome = lazy(() => import('./modules/driver/pages/OwnerHome'));
 const OwnerWallet = lazy(() => import('./modules/driver/pages/OwnerWallet'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
+const AdminOutstationRides = lazy(() => import('./modules/admin/pages/operations/OutstationRides'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
 const AdminWalletPayment = lazy(() => import('./modules/admin/pages/wallet/WalletPayment'));
@@ -1194,6 +1195,7 @@ function TaxiApp() {
                 <Route path="earnings" element={<AdminEarnings />} />
                 <Route path="chat" element={<AdminChat />} />
                 <Route path="trips" element={<AdminTrips />} />
+                <Route path="outstation-rides" element={<AdminOutstationRides />} />
                 <Route path="deliveries" element={<AdminDeliveries />} />
                 <Route path="ongoing" element={<AdminOngoing />} />
                 <Route path="bus-service" element={<AdminBusServiceManager basePath="/taxi/admin/bus-service" />} />

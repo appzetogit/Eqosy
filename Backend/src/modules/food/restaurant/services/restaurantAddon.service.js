@@ -22,6 +22,7 @@ const normalizeAddonDoc = (doc) => {
         name: draft.name || '',
         description: draft.description || '',
         price: Number(draft.price) || 0,
+        foodType: draft.foodType === 'Non-Veg' ? 'Non-Veg' : 'Veg',
         image: draft.image || '',
         images: Array.isArray(draft.images) ? draft.images : [],
         // Published snapshot (what user app sees)
@@ -30,6 +31,7 @@ const normalizeAddonDoc = (doc) => {
                 name: published.name || '',
                 description: published.description || '',
                 price: Number(published.price) || 0,
+                foodType: published.foodType === 'Non-Veg' ? 'Non-Veg' : 'Veg',
                 image: published.image || '',
                 images: Array.isArray(published.images) ? published.images : []
             }
@@ -106,6 +108,7 @@ export async function createRestaurantAddon(restaurantId, body) {
             name,
             description: String(body.description || '').trim(),
             price: Number(body.price) || 0,
+            foodType: body.foodType === 'Non-Veg' ? 'Non-Veg' : 'Veg',
             image: String(body.image || '').trim(),
             images: Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 10) : []
         },
@@ -181,6 +184,7 @@ export async function updateRestaurantAddon(restaurantId, addonId, updateDto) {
             if (!Number.isFinite(price) || price < 0) throw new ValidationError('Price must be >= 0');
             set['draft.price'] = price;
         }
+        if (d.foodType !== undefined) set['draft.foodType'] = d.foodType === 'Non-Veg' ? 'Non-Veg' : 'Veg';
         if (d.image !== undefined) set['draft.image'] = String(d.image || '').trim();
         if (d.images !== undefined) {
             const imgs = Array.isArray(d.images) ? d.images.filter(Boolean).slice(0, 10) : [];

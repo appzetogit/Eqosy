@@ -876,6 +876,7 @@ const AdminLayout = () => {
             ],
           },
           { icon: Car, label: 'Trip Requests', path: '/taxi/admin/trips', permission: 'trips.view' },
+          { icon: Car, label: 'Outstation Rides', path: '/taxi/admin/outstation-rides', permission: 'trips.view' },
           { icon: Ban, label: 'Cancellation Analytics', path: '/taxi/admin/cancellation-analytics', permission: 'cancellation_analytics.view' },
           { icon: Package, label: 'Delivery Requests', path: '/taxi/admin/deliveries', permission: 'deliveries.view' },
           { icon: Clock, label: 'Ongoing Requests', path: '/taxi/admin/ongoing', permission: 'ongoing.view' },

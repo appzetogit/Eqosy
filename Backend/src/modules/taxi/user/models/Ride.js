@@ -181,6 +181,15 @@ const rideSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    // Captain-side proof for parcel deliveries (photos + cash hand-over confirmation).
+    parcelProof: {
+      pickupPhotoUrl: { type: String, default: '', trim: true },
+      pickupPhotoAt: { type: Date, default: null },
+      deliveryPhotoUrl: { type: String, default: '', trim: true },
+      deliveryPhotoAt: { type: Date, default: null },
+      cashCollectedAt: { type: Date, default: null },
+      cashCollectedFrom: { type: String, enum: ['', 'sender', 'receiver'], default: '' },
+    },
     scheduledAt: {
       type: Date,
       default: null,
