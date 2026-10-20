@@ -453,9 +453,47 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     drivers = drivers.filter((driver) => !fallbackBlockedDriverIds.has(String(driver?._id || '')));
   }
 
+  if (drivers.length === 0) {
+    logMatchFunnel({
+      zoneId: zone?._id || undefined,
+      coordinates,
+      effectiveMaxDistance,
+      normalizedVehicleTypeIds,
+      vehicleTypeKeys,
+      allowedVehicles,
+      serviceType,
+      bookingMode,
+      incompatibleVehicleTypeIds,
+    }).catch(() => {});
+  }
+
   return {
     zone,
     drivers,
     searchRadiusMeters: effectiveMaxDistance,
   };
+};
+
+// When nobody matches, count drivers surviving each filter in order so server logs show
+// exactly which condition (online, zone, vehicle type, service, preference, distance) drops them.
+const logMatchFunnel = async ({ coordinates, effectiveMaxDistance, ...rest }) => {
+  const { $and: conditions } = buildDriverMatchFilters({
+    vehicleTypeIds: rest.normalizedVehicleTypeIds,
+    ...rest,
+  });
+  const describe = (condition) => {
+    const key = Object.keys(condition)[0];
+    return key === '$or' ? `$or(${Object.keys(condition.$or[0] || {})[0]}...)` : key;
+  };
+  const steps = {};
+  steps.allDrivers = await Driver.countDocuments({});
+  for (let i = 0; i < conditions.length; i += 1) {
+    steps[`+${describe(conditions[i])}`] = await Driver.countDocuments({ $and: conditions.slice(0, i + 1) });
+  }
+  // $near is not allowed in countDocuments, so use the equivalent $geoWithin circle.
+  steps[`+within ${effectiveMaxDistance}m of pickup`] = await Driver.countDocuments({
+    $and: conditions,
+    location: { $geoWithin: { $centerSphere: [coordinates, effectiveMaxDistance / EARTH_RADIUS_METERS] } },
+  }).catch((error) => `error: ${error.message}`);
+  console.warn(`[MATCH_FUNNEL] no drivers for serviceType=${rest.serviceType} bookingMode=${rest.bookingMode}`, JSON.stringify(steps));
 };

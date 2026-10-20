@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
@@ -21,6 +22,9 @@ import { POOLING_ENABLED, RENTAL_ENABLED } from './shared/featureFlags';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import { TaxiAppSkeleton } from '@/shared/components/skeletons/ModuleSkeletons';
 import './App.css';
+
+// Phones: skip transform loops and heavy blur layers (see .taxi-low-power in App.css).
+const LOW_POWER_UI = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(max-width: 1023px)').matches);
 
 
 // Lazy loading pages for performance
@@ -712,6 +716,11 @@ function TaxiApp() {
   const { pathname: taxiPathname } = useLocation();
   const isTaxiAdminPath = taxiPathname.startsWith('/taxi/admin');
   useEffect(() => {
+    if (!LOW_POWER_UI || isTaxiAdminPath) return undefined;
+    document.documentElement.classList.add('taxi-low-power');
+    return () => document.documentElement.classList.remove('taxi-low-power');
+  }, [isTaxiAdminPath]);
+  useEffect(() => {
     installNativeFcmBridge();
     installBrowserFcmRegistration();
   }, []);
@@ -745,6 +754,7 @@ function TaxiApp() {
         <ScrollToTop />
         <UserAccountInvalidationListener />
         <UserUpcomingRideReminderBootstrap />
+        <MotionConfig reducedMotion={LOW_POWER_UI ? "always" : "user"}>
         <MainLayout>
           <Suspense fallback={isTaxiAdminPath ? <div className="min-h-screen bg-neutral-100" /> : <TaxiAppSkeleton />}>
             <Toaster position="top-right" closeButton />
@@ -1764,6 +1774,7 @@ function TaxiApp() {
             </Routes>
           </Suspense>
         </MainLayout>
+        </MotionConfig>
       </SettingsProvider>
     </>
   );
