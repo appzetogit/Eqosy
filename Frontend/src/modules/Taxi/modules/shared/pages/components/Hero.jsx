@@ -472,6 +472,7 @@ export default function Hero() {
                 ref={videoRef}
                 src={heroVideoSrc || heroPromoVideo}
                 autoPlay
+                preload="metadata"
                 muted
                 loop
                 playsInline

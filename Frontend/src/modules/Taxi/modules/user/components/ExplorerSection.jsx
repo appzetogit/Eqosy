@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import indiaGateImg from '@/assets/india_gate_real.png';
+import indiaGateImg from '@/assets/india_gate_real.webp';
 import jaipurImg from '@/assets/jaipur.avif';
 import tajMahalImg from '@/assets/taj mahal.jpeg';
 

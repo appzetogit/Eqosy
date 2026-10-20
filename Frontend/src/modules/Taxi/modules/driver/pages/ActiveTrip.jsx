@@ -55,6 +55,8 @@ const MIN_ROUTE_POLYLINE_METERS = 1;
 const ROUTE_DEVIATION_METERS = 100;
 const ROUTE_REFRESH_INTERVAL_MS = 30000;
 const ROUTE_WATCH_INTERVAL_MS = 5000;
+const LOCATION_EMIT_MIN_MS = 2000;
+const LOCATION_PATCH_MIN_MS = 10000;
 
 const mapStyles = [
     { elementType: 'geometry', stylers: [{ color: '#f8fafc' }] },
@@ -2156,6 +2158,8 @@ const ActiveTrip = () => {
     useEffect(() => {
         let watchId = null;
         let cancelled = false;
+        let lastLocationEmitAt = 0;
+        let lastLocationPatchAt = 0;
         const socket = socketService.connect({ role: 'driver' });
 
         if (socket && rideId) {
@@ -2195,42 +2199,49 @@ const ActiveTrip = () => {
                     lng: pos.coords.longitude,
                 };
 
-                setDriverPosition((previousPosition) => {
-                    hasResolvedLivePositionRef.current = true;
-                    const nextHeading = normalizeHeading(
-                        pos.coords.heading,
-                        calculateBearing(previousPosition, nextPosition, displayDriverHeadingRef.current),
-                    );
-                    setDriverHeading(nextHeading);
-                    if (rideId) {
-                        socketService.emit('ride:driver-location:update', {
-                            rideId,
-                            coordinates: [nextPosition.lng, nextPosition.lat],
-                            heading: nextHeading,
-                            speed: pos.coords.speed,
-                        });
-                        socketService.emit('locationUpdate', {
-                            coordinates: [nextPosition.lng, nextPosition.lat],
-                            lat: nextPosition.lat,
-                            lng: nextPosition.lng,
-                            heading: nextHeading,
-                        });
-                        socketService.emit('driver_location_update', {
-                            coordinates: [nextPosition.lng, nextPosition.lat],
-                            latitude: nextPosition.lat,
-                            longitude: nextPosition.lng,
-                            heading: nextHeading,
-                        });
-                        api.patch('/drivers/location', {
-                            coordinates: [nextPosition.lng, nextPosition.lat],
-                            lat: nextPosition.lat,
-                            lng: nextPosition.lng,
-                        }).catch(() => {});
-                    }
-                    driverPositionRef.current = nextPosition;
-                    evaluateRouteRefresh();
-                    return nextPosition;
-                });
+                const previousPosition = driverPositionRef.current;
+                hasResolvedLivePositionRef.current = true;
+                const nextHeading = normalizeHeading(
+                    pos.coords.heading,
+                    calculateBearing(previousPosition, nextPosition, displayDriverHeadingRef.current),
+                );
+                setDriverHeading(nextHeading);
+                setDriverPosition(nextPosition);
+                driverPositionRef.current = nextPosition;
+                evaluateRouteRefresh();
+
+                // Network side effects run outside the state updater and are throttled:
+                // GPS can fire every second, which flooded sockets and the REST endpoint.
+                const now = Date.now();
+                if (rideId && now - lastLocationEmitAt >= LOCATION_EMIT_MIN_MS) {
+                    lastLocationEmitAt = now;
+                    socketService.emit('ride:driver-location:update', {
+                        rideId,
+                        coordinates: [nextPosition.lng, nextPosition.lat],
+                        heading: nextHeading,
+                        speed: pos.coords.speed,
+                    });
+                    socketService.emit('locationUpdate', {
+                        coordinates: [nextPosition.lng, nextPosition.lat],
+                        lat: nextPosition.lat,
+                        lng: nextPosition.lng,
+                        heading: nextHeading,
+                    });
+                    socketService.emit('driver_location_update', {
+                        coordinates: [nextPosition.lng, nextPosition.lat],
+                        latitude: nextPosition.lat,
+                        longitude: nextPosition.lng,
+                        heading: nextHeading,
+                    });
+                }
+                if (rideId && now - lastLocationPatchAt >= LOCATION_PATCH_MIN_MS) {
+                    lastLocationPatchAt = now;
+                    api.patch('/drivers/location', {
+                        coordinates: [nextPosition.lng, nextPosition.lat],
+                        lat: nextPosition.lat,
+                        lng: nextPosition.lng,
+                    }).catch(() => {});
+                }
             },
             () => {},
             {

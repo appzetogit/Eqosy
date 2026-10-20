@@ -30,7 +30,7 @@ import McvIcon from '../../../../assets/icons/mcv.png';
 import LuxuryIcon from '../../../../assets/icons/Luxury.png';
 import PremiumIcon from '../../../../assets/icons/Premium.png';
 import SuvIcon from '../../../../assets/icons/SUV.png';
-import MapBackground from '../../../../assets/map_image.png';
+import MapBackground from '../../../../assets/map_image.webp';
 import trucksImg from '@/assets/images/delivery/trucks.png';
 import bikeImg from '@/assets/images/delivery/bike.png';
 import moversImg from '@/assets/images/delivery/movers.png';

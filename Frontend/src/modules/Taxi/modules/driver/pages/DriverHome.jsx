@@ -28,7 +28,7 @@ import toast from 'react-hot-toast';
 import LowBalanceModal from './LowBalanceModal';
 
 
-import MapGrid from '@/assets/premium_grid_map.png';
+import MapGrid from '@/assets/premium_grid_map.webp';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
 import IncomingRideRequest from './IncomingRideRequest';
 import api from '../../../shared/api/axiosInstance';

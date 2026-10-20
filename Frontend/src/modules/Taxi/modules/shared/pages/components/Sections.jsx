@@ -662,6 +662,7 @@ export function CityScene() {
               <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-[#0F172A] shadow-md">
                 <video
                   src={groceryFoodVideo}
+                  preload="metadata"
                   autoPlay
                   muted
                   loop

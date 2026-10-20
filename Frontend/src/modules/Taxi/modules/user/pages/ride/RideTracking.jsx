@@ -22,6 +22,7 @@ const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
 const ACTIVE_RIDE_VALIDATE_MS = 15000;
+const ROUTE_REFETCH_MIN_MS = 20000;
 const COMPLETED_TRACKING_STATUSES = new Set(['completed', 'delivered']);
 const POST_RIDE_REDIRECT_STATUSES = new Set(['arrived', 'completed', 'delivered']);
 
@@ -480,6 +481,7 @@ const RideTracking = () => {
   const hasCompletedRedirectRef = useRef(false);
   const hasAutoFramedMapRef = useRef(false);
   const lastMapPanPositionRef = useRef(null);
+  const lastRouteFetchRef = useRef({ at: 0, key: '' });
 
   useEffect(() => {
     latestStateRef.current = state;
@@ -958,38 +960,58 @@ const RideTracking = () => {
     }
 
     let active = true;
-    const directionsService = new window.google.maps.DirectionsService();
+    let timerId = null;
+    const destinationKey = `${activeDestination.lat},${activeDestination.lng}`;
 
-    directionsService.route(
-      {
-        origin: driverPosition,
-        destination: activeDestination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-        provideRouteAlternatives: false,
-      },
-      (result, status) => {
-        if (!active) {
-          return;
-        }
+    const fetchRoute = () => {
+      lastRouteFetchRef.current = { at: Date.now(), key: destinationKey };
+      const directionsService = new window.google.maps.DirectionsService();
 
-        if (status === 'OK' && result?.routes?.[0]?.overview_path?.length) {
-          setRoutePath(
-            result.routes[0].overview_path.map((point) => ({
-              lat: point.lat(),
-              lng: point.lng(),
-            })),
-          );
-          setRouteError('');
-          return;
-        }
+      directionsService.route(
+        {
+          origin: driverPosition,
+          destination: activeDestination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          provideRouteAlternatives: false,
+        },
+        (result, status) => {
+          if (!active) {
+            return;
+          }
 
-        setRoutePath([driverPosition, activeDestination]);
-        setRouteError(status || 'Directions unavailable');
-      },
-    );
+          if (status === 'OK' && result?.routes?.[0]?.overview_path?.length) {
+            setRoutePath(
+              result.routes[0].overview_path.map((point) => ({
+                lat: point.lat(),
+                lng: point.lng(),
+              })),
+            );
+            setRouteError('');
+            return;
+          }
+
+          setRoutePath([driverPosition, activeDestination]);
+          setRouteError(status || 'Directions unavailable');
+        },
+      );
+    };
+
+    // Driver location arrives every few seconds; calling Directions on each tick
+    // floods the API and re-renders the map. Throttle per destination.
+    const { at, key } = lastRouteFetchRef.current;
+    const wait = key === destinationKey ? Math.max(0, ROUTE_REFETCH_MIN_MS - (Date.now() - at)) : 0;
+
+    if (wait === 0) {
+      fetchRoute();
+    } else {
+      timerId = window.setTimeout(fetchRoute, wait);
+    }
 
     return () => {
       active = false;
+      if (timerId) {
+        window.clearTimeout(timerId);
+      }
     };
   }, [activeDestination, driverPosition, hasLiveDriverLocation, isLoaded, isScheduledUpcoming]);
 
