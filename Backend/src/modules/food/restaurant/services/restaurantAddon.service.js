@@ -141,6 +141,15 @@ export async function createRestaurantAddon(restaurantId, body) {
     return normalizeAddonDoc(doc.toObject());
 }
 
+const invalidateAddonsCache = async () => {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_addons:*');
+    } catch (cacheErr) {
+        console.error('Failed to invalidate addons cache:', cacheErr);
+    }
+};
+
 export async function updateRestaurantAddon(restaurantId, addonId, updateDto) {
     if (!restaurantId || !mongoose.Types.ObjectId.isValid(String(restaurantId))) {
         throw new ValidationError('Invalid restaurant id');
@@ -209,6 +218,7 @@ export async function updateRestaurantAddon(restaurantId, addonId, updateDto) {
         { $set: set },
         { new: true }
     ).lean();
+    await invalidateAddonsCache();
     return updated ? normalizeAddonDoc(updated) : null;
 }
 
@@ -226,6 +236,7 @@ export async function deleteRestaurantAddon(restaurantId, addonId) {
         { $set: { isDeleted: true } },
         { new: true }
     ).lean();
+    await invalidateAddonsCache();
     return updated ? { id: updated._id } : null;
 }
 

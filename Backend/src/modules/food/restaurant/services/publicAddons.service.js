@@ -26,7 +26,6 @@ export async function getPublicApprovedRestaurantAddons(restaurantIdOrSlug) {
     const addons = await FoodAddon.find({
         restaurantId: new mongoose.Types.ObjectId(String(restaurant._id)),
         isDeleted: { $ne: true },
-        approvalStatus: 'approved',
         isAvailable: true,
         published: { $ne: null }
     })

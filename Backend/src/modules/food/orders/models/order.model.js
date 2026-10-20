@@ -11,7 +11,9 @@ const orderItemSchema = new mongoose.Schema(
         quantity: { type: Number, required: true, min: 1 },
         isVeg: { type: Boolean, default: true },
         image: { type: String, default: '' },
-        notes: { type: String, default: '' }
+        notes: { type: String, default: '' },
+        isAddon: { type: Boolean, default: false },
+        addons: { type: [mongoose.Schema.Types.Mixed], default: [] }
     },
     { _id: false }
 );

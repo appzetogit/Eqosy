@@ -8,6 +8,7 @@ import { FoodDeliverySurgeZone } from '../../admin/models/deliverySurgeZone.mode
 import { FoodDeliveryCommissionRule } from '../../admin/models/deliveryCommissionRule.model.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
+import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { haversineKm } from './order.helpers.js';
@@ -107,16 +108,40 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
     throw new ValidationError('Invalid item in cart');
   }
 
-  const docs = await FoodItem.find({ _id: { $in: ids } })
-    .select('name price variants restaurantId')
-    .lean();
-  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  const [docs, addonDocs] = await Promise.all([
+    FoodItem.find({ _id: { $in: ids } })
+      .select('name price variants restaurantId isAvailable isActive')
+      .lean(),
+    FoodAddon.find({ _id: { $in: ids }, isDeleted: { $ne: true } })
+      .select('restaurantId draft published approvalStatus isAvailable')
+      .lean(),
+  ]);
+
+  const byId = new Map(docs.map((d) => [String(d._id), { ...d, isAddon: false }]));
+  for (const a of (addonDocs || [])) {
+    const payload = a.published || (a.approvalStatus === 'approved' ? a.draft : null);
+    if (payload) {
+      byId.set(String(a._id), {
+        _id: a._id,
+        name: payload.name || a.draft?.name || 'Addon',
+        price: Number(payload.price ?? a.draft?.price ?? 0),
+        restaurantId: a.restaurantId,
+        isAvailable: a.isAvailable !== false,
+        isActive: true,
+        variants: [],
+        isAddon: true,
+      });
+    }
+  }
 
   return lines.map((line) => {
     const doc = byId.get(String(line.itemId));
     if (!doc) throw new ValidationError(`"${line?.name || 'An item'}" is no longer available`);
     if (restaurantId && String(doc.restaurantId) !== String(restaurantId)) {
       throw new ValidationError(`"${doc.name}" does not belong to this restaurant`);
+    }
+    if (doc.isAvailable === false || doc.isActive === false) {
+      throw new ValidationError(`"${doc.name}" is currently unavailable`);
     }
 
     const quantity = Number(line.quantity);
@@ -128,7 +153,7 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
     let variantName = '';
     const variantId = line.variantId ? String(line.variantId) : '';
     let resolvedVariantId = variantId;
-    if (variantId) {
+    if (variantId && !doc.isAddon) {
       // Variant ids change when the restaurant re-saves an item; fall back to the variant name so
       // carts created before the edit keep working.
       const lineVariantName = String(line.variantName || line.variant?.name || '').trim().toLowerCase();
@@ -150,11 +175,12 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
     return {
       ...line,
       name: doc.name,
-      variantId: resolvedVariantId || line.variantId,
+      variantId: doc.isAddon ? '' : (resolvedVariantId || line.variantId),
       price: unitPrice,
-      variantPrice: variantId ? unitPrice : line.variantPrice,
-      variantName: variantId ? variantName : line.variantName,
+      variantPrice: (!doc.isAddon && variantId) ? unitPrice : (line.variantPrice || 0),
+      variantName: (!doc.isAddon && variantId) ? variantName : (line.variantName || ''),
       quantity,
+      isAddon: Boolean(doc.isAddon),
     };
   });
 }

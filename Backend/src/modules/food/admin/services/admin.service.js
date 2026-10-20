@@ -3454,6 +3454,13 @@ export async function approveRestaurantAddon(addonId) {
         { new: true }
     ).lean();
 
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_addons:*');
+    } catch (cacheErr) {
+        console.error('Failed to invalidate addons cache after approval:', cacheErr);
+    }
+
     if (updated?.restaurantId) {
         try {
             const { notifyOwnersSafely } = await import('../../../../core/notifications/firebase.service.js');
@@ -6000,6 +6007,13 @@ export async function bulkApproveFoodItems(restaurantId) {
             }
         ]
     );
+
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache('restaurant_addons:*');
+    } catch (cacheErr) {
+        console.error('Failed to invalidate addons cache after bulk approval:', cacheErr);
+    }
 
     // 3. Invalidate Cache if restaurantId is provided
     if (restaurantId && mongoose.Types.ObjectId.isValid(restaurantId)) {

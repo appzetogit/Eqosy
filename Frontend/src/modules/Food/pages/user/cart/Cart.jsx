@@ -1205,7 +1205,8 @@ function CartInner() {
           quantity: item.quantity || 1,
           image: item.image,
           description: item.description,
-          isVeg: item.isVeg !== false
+          isVeg: item.isVeg !== false,
+          isAddon: Boolean(item.isAddon)
         }))
 
         const resolvedRestaurantId = restaurantData?._id || restaurantData?.restaurantId || restaurantId || undefined
@@ -1864,7 +1865,8 @@ function CartInner() {
         image: item.image || "",
         description: item.description || "",
         isVeg: item.isVeg !== false,
-        preparationTime: item.preparationTime
+        preparationTime: item.preparationTime,
+        isAddon: Boolean(item.isAddon)
       }))
 
       debugLog("?? Order items to send:", orderItems)
@@ -2618,7 +2620,8 @@ function CartInner() {
                                   isVeg: addon.foodType !== 'Non-Veg',
                                   foodType: addon.foodType === 'Non-Veg' ? 'Non-Veg' : 'Veg',
                                   restaurant: cartRestaurantName,
-                                  restaurantId: cartRestaurantId
+                                  restaurantId: cartRestaurantId,
+                                  isAddon: true
                                 });
                               }}
                               className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-[color:var(--app-primary,#EB590E)] rounded flex items-center justify-center shadow-sm hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"

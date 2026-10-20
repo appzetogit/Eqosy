@@ -14,6 +14,7 @@ import { sendPushNotificationToEntities } from './pushNotificationService.js';
 import { processRideCancellation } from './cancellationService.js';
 import { Notification } from '../admin/promotions/models/Notification.js';
 import { RideBid } from '../user/models/RideBid.js';
+import { getIO } from '../../../config/socket.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;
@@ -67,15 +68,21 @@ const getDispatchVehicleTypeIds = (ride) => {
   return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
 };
 
+// ioInstance is only set in the process that hosts Socket.IO. In standalone socket mode
+// the API process has no server, so fall back to the Redis emitter from getIO().
+const resolveIo = () => ioInstance || getIO();
+
 const emitToSocket = (socketId, event, payload) => {
-  if (ioInstance && socketId) {
-    ioInstance.to(socketId).emit(event, payload);
+  const io = resolveIo();
+  if (io && socketId) {
+    io.to(socketId).emit(event, payload);
   }
 };
 
 export const emitToRoom = (room, event, payload) => {
-  if (ioInstance) {
-    ioInstance.to(room).emit(event, payload);
+  const io = resolveIo();
+  if (io) {
+    io.to(room).emit(event, payload);
   }
 };
 
