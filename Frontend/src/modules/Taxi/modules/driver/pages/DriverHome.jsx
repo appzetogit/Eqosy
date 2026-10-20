@@ -400,6 +400,42 @@ const createScheduledRidePreview = (ride) => ({
     },
 });
 
+// A background or covered tab cannot paint the request card, so surface the request as an OS notification.
+const requestSystemNotificationPermission = () => {
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'default') {
+        return;
+    }
+
+    Notification.requestPermission().catch(() => {});
+};
+
+const showRideRequestSystemNotification = (request) => {
+    if (
+        typeof document === 'undefined' ||
+        document.visibilityState === 'visible' ||
+        !('Notification' in window) ||
+        Notification.permission !== 'granted'
+    ) {
+        return;
+    }
+
+    try {
+        const notification = new Notification(request.title || 'New ride request', {
+            body: `${request.pickup}\n${request.fare} - ${request.payment}`,
+            icon: '/eqosy-logo.png',
+            tag: `ride-request-${request.rideId}`,
+            requireInteraction: true,
+        });
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+        };
+        window.setTimeout(() => notification.close(), (Number(request.acceptRejectDurationSeconds) || 15) * 1000);
+    } catch {
+        // Some browsers only allow notifications through a service worker; the FCM push covers those.
+    }
+};
+
 const normalizeJobType = (job = {}) => {
     const value = String(job.type || job.serviceType || 'ride').toLowerCase();
     if (value === 'parcel') return 'parcel';
@@ -724,7 +760,10 @@ const DriverHome = () => {
 
 
     useEffect(() => {
-        const unlock = () => unlockRideRequestAlertSound();
+        const unlock = () => {
+            unlockRideRequestAlertSound();
+            requestSystemNotificationPermission();
+        };
 
         window.addEventListener('pointerdown', unlock, { passive: true });
         window.addEventListener('keydown', unlock);
@@ -1729,6 +1768,7 @@ const DriverHome = () => {
                 setCurrentRequest(request);
                 setShowRequest(true);
                 playRideRequestAlertSound();
+                showRideRequestSystemNotification(request);
                 setStatusMessage('New booking received.');
             };
 
@@ -2045,9 +2085,13 @@ const DriverHome = () => {
         socketService.emit('acceptRide', { rideId: currentRequest.rideId });
     };
 
-    const handleDecline = () => {
+    // `reason: 'timeout'` means the accept timer ran out (ignored); anything else is a real reject.
+    const handleDecline = (declineInfo) => {
         if (currentRequest?.rideId) {
-            socketService.emit('rejectRide', { rideId: currentRequest.rideId });
+            socketService.emit('rejectRide', {
+                rideId: currentRequest.rideId,
+                reason: declineInfo?.reason === 'timeout' ? 'timeout' : 'rejected',
+            });
         }
         stopRideRequestAlertSound();
         setShowRequest(false);

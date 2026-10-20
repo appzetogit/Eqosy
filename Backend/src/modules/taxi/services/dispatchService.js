@@ -17,6 +17,9 @@ import { RideBid } from '../user/models/RideBid.js';
 import { getIO } from '../../../config/socket.js';
 
 const activeDispatches = new Map();
+// A driver who explicitly rejects a ride is left alone this long. A driver who just let the request
+// expire (ignored it) is asked again on the next dispatch attempt, i.e. after the accept window.
+const REJECT_COOLDOWN_MS = 3 * 60 * 1000;
 let ioInstance = null;
 const scheduledDispatchTimers = new Map();
 const actualTimeNotificationTimers = new Map();
@@ -158,6 +161,8 @@ const getDispatchState = (rideId) => {
     driverIds: Array.isArray(state.driverIds) ? state.driverIds : [],
     notifiedDriverIds: Array.isArray(state.notifiedDriverIds) ? state.notifiedDriverIds : [],
     rejectedDriverIds: Array.isArray(state.rejectedDriverIds) ? state.rejectedDriverIds : [],
+    notifiedAt: state.notifiedAt && typeof state.notifiedAt === 'object' ? state.notifiedAt : {},
+    rejectedAt: state.rejectedAt && typeof state.rejectedAt === 'object' ? state.rejectedAt : {},
   };
 };
 
@@ -263,6 +268,8 @@ const emitRideRequestToDrivers = async ({
       : 'A new booking is waiting for your response.',
     data: {
       type: 'ride_request',
+      // The service worker only rings and keeps the notification on screen when ring === "true".
+      ring: 'true',
       rideId: String(ride._id),
       serviceType: ride.serviceType || 'ride',
       userId: String(ride.userId?._id || ride.userId || ''),
@@ -274,15 +281,24 @@ const emitRideRequestToDrivers = async ({
   });
 };
 
-export const markDriverRejectedFromDispatch = (rideId, driverId) => {
+export const markDriverRejectedFromDispatch = (rideId, driverId, reason = 'rejected') => {
   if (!rideId || !driverId) {
+    return;
+  }
+
+  // The driver app also sends rejectRide when the accept timer simply runs out. That is an ignored
+  // request, not a rejection, so the driver stays eligible for the next attempt.
+  if (reason === 'timeout') {
     return;
   }
 
   const state = getDispatchState(rideId);
   const rejectedDriverIds = [...new Set([...state.rejectedDriverIds, String(driverId)])];
 
-  saveDispatchState(rideId, { rejectedDriverIds });
+  saveDispatchState(rideId, {
+    rejectedDriverIds,
+    rejectedAt: { ...state.rejectedAt, [String(driverId)]: Date.now() },
+  });
 };
 
 const closeRideAsUnmatched = async (rideId) => {
@@ -713,24 +729,35 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       ? searchRadiusMeters
       : radius;
 
-    const rejectedDriverIds = new Set(dispatchState.rejectedDriverIds);
-    const notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
-    const availableDrivers = drivers.filter((driver) => {
-      const driverId = String(driver._id);
-      return !rejectedDriverIds.has(driverId) && !notifiedDriverIds.has(driverId);
-    });
+    const now = Date.now();
+    // Skip drivers who rejected recently and drivers whose previous request window is still open.
+    const availableDrivers = drivers
+      .filter((driver) => {
+        const driverId = String(driver._id);
+        const rejectedAt = dispatchState.rejectedAt[driverId];
+        const notifiedAt = dispatchState.notifiedAt[driverId];
+
+        if (dispatchState.rejectedDriverIds.includes(driverId) && !(rejectedAt && now - rejectedAt >= REJECT_COOLDOWN_MS)) {
+          return false;
+        }
+
+        return !(notifiedAt && now - notifiedAt < dispatchConfig.retryDelayMs - 1000);
+      })
+      // Drivers never asked (or asked longest ago) go first; the distance order is kept for ties.
+      .sort((left, right) => (dispatchState.notifiedAt[String(left._id)] || 0) - (dispatchState.notifiedAt[String(right._id)] || 0));
     const targetDrivers = dispatchConfig.dispatchType === 'broadcast'
       ? availableDrivers
       : availableDrivers.slice(0, 1);
-    const nextNotifiedDriverIds = [
-      ...dispatchState.notifiedDriverIds,
-      ...targetDrivers.map((driver) => String(driver._id)),
-    ];
+    const targetDriverIds = targetDrivers.map((driver) => String(driver._id));
+    const nextNotifiedDriverIds = [...new Set([...dispatchState.notifiedDriverIds, ...targetDriverIds])];
 
     saveDispatchState(rideId, {
       radiusIndex: attemptIndex,
-      driverIds: targetDrivers.map((driver) => String(driver._id)),
+      driverIds: targetDriverIds,
       notifiedDriverIds: nextNotifiedDriverIds,
+      // A driver asked again after the reject cooldown must be allowed to accept, so lift their reject mark.
+      rejectedDriverIds: dispatchState.rejectedDriverIds.filter((id) => !targetDriverIds.includes(id)),
+      notifiedAt: { ...dispatchState.notifiedAt, ...Object.fromEntries(targetDriverIds.map((id) => [id, now])) },
       timer: null,
     });
 

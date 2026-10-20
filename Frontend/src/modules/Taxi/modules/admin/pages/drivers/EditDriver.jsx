@@ -18,6 +18,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 import { getUnifiedAdminToken } from '../../services/adminSession';
 import api from '../../../../shared/api/axiosInstance';
+import { filterServiceCategoriesForVehicle, isTwoWheelerVehicle } from '../../../driver/utils/vehicleServices';
 
 const serviceCategoryOptions = [
   { value: 'taxi', label: 'Taxi' },
@@ -278,9 +279,27 @@ const EditDriver = () => {
     }
   }, [vehicleTypes, formData.vehicleType]);
 
+  const selectedVehicleType =
+    vehicleTypes.find((item) => getVehicleTypeId(item) === String(formData.vehicleType)) ||
+    (vehicleTypeFallbackOption ? { name: vehicleTypeFallbackOption.label } : null);
+  const selectedIsTwoWheeler = selectedVehicleType ? isTwoWheelerVehicle(selectedVehicleType) : false;
+  const visibleServiceCategoryOptions = serviceCategoryOptions.filter(
+    (option) => filterServiceCategoriesForVehicle([option.value], selectedIsTwoWheeler ? selectedVehicleType : null).length > 0,
+  );
+
+  // Two-wheelers can't do Outstation/Pooling, so drop them when the vehicle type is (or becomes) a bike.
+  useEffect(() => {
+    if (!selectedIsTwoWheeler) return;
+    setFormData((prev) => {
+      const filtered = filterServiceCategoriesForVehicle(prev.serviceCategories, selectedVehicleType);
+      if (filtered.length === prev.serviceCategories.length) return prev;
+      return { ...prev, serviceCategories: filtered.length > 0 ? filtered : ['taxi'] };
+    });
+  }, [selectedIsTwoWheeler, formData.vehicleType]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'area') {
       const selectedLoc = locations.find(l => String(l._id) === String(value));
       if (selectedLoc) {
@@ -587,7 +606,7 @@ const EditDriver = () => {
               <div className="md:col-span-2">
                 <label className={labelClass}>Service Categories</label>
                 <div className="flex flex-wrap gap-2.5 rounded-2xl border border-gray-100 bg-gray-50/60 p-3.5">
-                  {serviceCategoryOptions.map((option) => {
+                  {visibleServiceCategoryOptions.map((option) => {
                     const selected = formData.serviceCategories.includes(option.value);
                     return (
                       <button
@@ -606,7 +625,9 @@ const EditDriver = () => {
                   })}
                 </div>
                 <p className="mt-2 text-xs text-gray-400">
-                  Matches the service selection used during driver onboarding.
+                  {selectedIsTwoWheeler
+                    ? 'Outstation and Pooling are available for 4-wheelers only.'
+                    : 'Matches the service selection used during driver onboarding.'}
                 </p>
               </div>
 

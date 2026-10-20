@@ -121,7 +121,7 @@ function CartInner() {
   }
 
   const { cart, updateQuantity, addToCart, getCartCount, clearCart, cleanCartForRestaurant } = cartContext;
-  const { getDefaultAddress, getDefaultPaymentMethod, setDefaultAddress, addresses, paymentMethods, userProfile } = useProfile()
+  const { getDefaultAddress, getDefaultPaymentMethod, setDefaultAddress, addresses, paymentMethods, userProfile, vegMode } = useProfile()
   const { createOrder, addOrder } = useOrders()
   const { openLocationSelector } = useLocationSelector()
   const { location: currentLocation, loading: currentLocationLoading } = useUserLocation() // Get live location address
@@ -344,6 +344,7 @@ function CartInner() {
 
   // Addons state
   const [addons, setAddons] = useState([])
+  const visibleAddons = vegMode ? addons.filter((addon) => addon.foodType !== 'Non-Veg') : addons
   const [loadingAddons, setLoadingAddons] = useState(false)
 
   // Coupons state - fetched from backend
@@ -2556,7 +2557,7 @@ function CartInner() {
               )}
 
               {/* Complete your meal section - Approved Addons */}
-              {addons.length > 0 && (
+              {visibleAddons.length > 0 && (
                 <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                   <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
                     <div className="w-6 h-6 md:w-8 md:h-8 bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center">
@@ -2576,7 +2577,7 @@ function CartInner() {
                     </div>
                   ) : (
                     <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 -mx-4 md:-mx-6 px-4 md:px-6 scrollbar-hide">
-                      {addons.map((addon) => (
+                      {visibleAddons.map((addon) => (
                         <div key={addon.id} className="flex-shrink-0 w-28 md:w-36">
                           <div className="relative bg-gray-100 dark:bg-gray-800 rounded-lg md:rounded-xl overflow-hidden">
                             <img

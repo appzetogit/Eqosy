@@ -55,7 +55,10 @@ function getTargetPathFromPayload(payload = {}) {
 async function hasVisibleClientForTarget(payload = {}) {
   const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
   const targetPath = getTargetPathFromPayload(payload);
-  const targetRoot = `/${String(targetPath).split("/").filter(Boolean)[0] || ""}`;
+  const targetSegments = String(targetPath).split("/").filter(Boolean);
+  // "/taxi" and "/food" hold several apps (user, driver, restaurant...). Match on the app, so a visible
+  // /taxi/user tab does not suppress the notification meant for a background /taxi/driver tab.
+  const targetRoot = `/${(["taxi", "food"].includes(targetSegments[0]) ? targetSegments.slice(0, 2) : targetSegments.slice(0, 1)).join("/")}`;
   const visibleClient = windowClients.find((client) => {
     const isVisible = client.visibilityState === "visible" || client.focused;
     if (!isVisible) return false;
@@ -156,7 +159,7 @@ async function loadFirebaseWebConfig() {
         tag: notificationKey,
         renotify: false,
         silent: !shouldPlaySound(payload),
-        requireInteraction: false,
+        requireInteraction: shouldPlaySound(payload),
         ...(shouldPlaySound(payload) ? { vibrate: [200, 100, 200, 100, 300] } : {}),
         data: payload?.data || {},
       });

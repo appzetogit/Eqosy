@@ -267,12 +267,12 @@ const registerTaxiSocketConnectionHandlers = (io) => {
       }),
     );
 
-    socket.on('rejectRide', ({ rideId }) => {
+    socket.on('rejectRide', ({ rideId, reason } = {}) => {
       if (identity.role !== 'driver' || !rideId) {
         return;
       }
 
-      markDriverRejectedFromDispatch(rideId, identity.sub);
+      markDriverRejectedFromDispatch(rideId, identity.sub, reason);
       socket.to(getRideRoom(rideId)).emit('driverRejectedRide', {
         rideId,
         driverId: identity.sub,

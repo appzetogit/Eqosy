@@ -383,9 +383,12 @@ const DriverRideRequestListener = () => {
         socketService.emit('acceptRide', { rideId: currentRequest.rideId });
     }, [acceptingRideId, currentRequest]);
 
-    const handleDecline = useCallback(() => {
+    const handleDecline = useCallback((declineInfo) => {
         if (currentRequest?.rideId) {
-            socketService.emit('rejectRide', { rideId: currentRequest.rideId });
+            socketService.emit('rejectRide', {
+                rideId: currentRequest.rideId,
+                reason: declineInfo?.reason === 'timeout' ? 'timeout' : 'rejected',
+            });
         }
         stopRideRequestAlertSound();
         setCurrentRequest(null);

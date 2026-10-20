@@ -272,8 +272,13 @@ const bindLifecycleListeners = () => {
 const tryPlayAlertAudio = () => {
     const audio = getAlertAudio();
     bindLifecycleListeners();
-    audio.load();
     getAudioContext()?.resume?.().catch?.(() => {});
+
+    // load() aborts any play() that is still pending, so a duplicate rideRequest or a retry would
+    // keep cancelling the ring. Only load when the element has no source loaded yet.
+    if (audio.readyState === 0 && audio.networkState === HTMLMediaElement.NETWORK_EMPTY) {
+        audio.load();
+    }
 
     if (playInFlight) {
         return playInFlight;
@@ -288,6 +293,10 @@ const tryPlayAlertAudio = () => {
         })
         .catch(() => {
             playInFlight = null;
+            // stop() pauses a pending play(), which lands here too; don't restart the beep after that.
+            if (!shouldKeepPlaying) {
+                return;
+            }
             startOscillatorLoop();
             scheduleRetry(isUnlocked ? 1200 : 500);
         });
@@ -346,7 +355,12 @@ export const playRideRequestAlertSound = () => {
     const audio = getAlertAudio();
     bindInteractionListeners();
     bindLifecycleListeners();
+    // A second rideRequest for the same ring must not restart the track that is already playing.
+    const alreadyRinging = shouldKeepPlaying && !audio.paused;
     shouldKeepPlaying = true;
+    if (alreadyRinging) {
+        return;
+    }
     audio.currentTime = 0;
     startNativePulse();
     startVibrationLoop();

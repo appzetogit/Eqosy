@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Banknote,
@@ -99,7 +100,7 @@ const IncomingRideRequest = ({
 
       if (!hasExpired && remainingSeconds <= 0) {
         hasExpired = true;
-        onDecline();
+        onDecline({ reason: 'timeout' });
       }
     };
 
@@ -167,13 +168,12 @@ const IncomingRideRequest = ({
     ? Array.from({ length: Math.max(1, Math.floor((bidMaxFare - bidFloorFare) / bidStepAmount) + 1) }, (_, index) => bidFloorFare + (index * bidStepAmount))
     : [];
 
-  return (
+  // Rendered into <body> so no ancestor transform/overflow/stacking context can hide or clip the card.
+  return createPortal(
     <AnimatePresence mode="wait">
       <Motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-950/55 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
+        data-incoming-ride-request
+        className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-slate-950/55 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
       >
         <Motion.div
           initial={{ y: 80, scale: 0.96 }}
@@ -450,7 +450,8 @@ const IncomingRideRequest = ({
           </div>
         </Motion.div>
       </Motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };
 
