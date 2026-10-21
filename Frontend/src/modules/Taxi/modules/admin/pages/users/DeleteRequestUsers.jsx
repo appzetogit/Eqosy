@@ -13,9 +13,6 @@ import {
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
 
-const inputClass =
-  'w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors';
-
 const formatDate = (date) => {
   if (!date) return 'Unknown';
   const parsed = new Date(date);
@@ -119,62 +116,85 @@ const DeleteRequestUsers = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
-      <div className="mb-6">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-          <span>Users</span>
-          <ChevronRight size={12} />
-          <span className="text-gray-700">Delete Requests</span>
+    <div className="min-h-screen bg-orange-50/60">
+      <div className="relative bg-gradient-to-br from-amber-400 via-orange-500 to-orange-600 px-6 pt-6 pb-24 lg:px-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute left-1/3 top-10 h-24 w-24 rounded-full bg-white/10" />
+
+        <div className="relative">
+          <div className="flex items-center gap-1.5 text-xs text-orange-100 mb-2">
+            <span>Users</span>
+            <ChevronRight size={12} />
+            <span className="text-white font-medium">Delete Requests</span>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-extrabold italic tracking-tight text-white">Delete Requests</h1>
+              <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-widest text-orange-50">
+                <span className="h-px w-8 bg-white/50" />
+                Review &amp; take action
+                <span className="h-px w-8 bg-white/50" />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/taxi/admin/users')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-600 bg-white rounded-full shadow-md shadow-orange-700/20 hover:bg-orange-50 transition-colors"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">Delete Requests</h1>
-          <button
-            type="button"
-            onClick={() => navigate('/taxi/admin/users')}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-        </div>
+        <svg
+          className="absolute bottom-0 left-0 w-full text-orange-50"
+          viewBox="0 0 1440 80"
+          preserveAspectRatio="none"
+          style={{ height: 48 }}
+          fill="currentColor"
+        >
+          <path d="M0,48 C240,96 480,0 760,32 C1040,64 1240,80 1440,24 L1440,80 L0,80 Z" />
+        </svg>
       </div>
 
-      {error && (
-        <div className="mb-6 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
-          {error}
-        </div>
-      )}
+      <div className="relative z-10 -mt-14 px-6 pb-8 lg:px-8">
+        {error && (
+          <div className="mb-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+            {error}
+          </div>
+        )}
 
-      <div>
         <div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+          <div className="bg-white rounded-[28px] border border-orange-100 p-6 shadow-xl shadow-orange-300/30">
+            <div className="flex flex-col gap-4 pb-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <div className="w-11 h-11 rounded-full bg-orange-50 ring-4 ring-orange-100/60 flex items-center justify-center text-orange-500">
                   <Trash2 size={18} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Pending Requests</h3>
-                  <p className="text-xs text-gray-400">Review customer account deletion requests</p>
+                  <h3 className="text-base font-bold text-gray-900">Pending Requests</h3>
+                  <p className="text-xs text-gray-500">Review customer account deletion requests</p>
+                  <div className="mt-1.5 h-1 w-10 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" />
                 </div>
               </div>
 
               <div className="relative w-full md:w-80">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" />
                 <input
                   type="text"
                   placeholder="Search delete requests..."
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  className={`${inputClass} pl-10`}
+                  className="w-full rounded-2xl border border-orange-100 bg-orange-50/50 py-3 pl-10 pr-4 text-sm text-gray-800 outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
                 />
               </div>
             </div>
 
-            <div className="mt-5 overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
+                  <tr className="bg-orange-50/70 border-b border-orange-100">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">User</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Reason</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Requested Date</th>
@@ -182,7 +202,7 @@ const DeleteRequestUsers = () => {
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-900">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-orange-50">
                   {filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-4 py-14 text-center text-sm font-medium text-gray-400">
@@ -191,17 +211,17 @@ const DeleteRequestUsers = () => {
                     </tr>
                   ) : (
                     filteredUsers.map((user) => (
-                      <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
+                      <tr key={user._id} className="hover:bg-orange-50/40 transition-colors">
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 font-medium text-xs flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white font-bold text-xs flex items-center justify-center shadow-md shadow-orange-300/50">
                               {getInitials(user.name || user.user_id?.name)}
                             </div>
                             <div>
                               <button
                                 type="button"
                                 onClick={() => navigate(`/taxi/admin/users/${user._id}`)}
-                                className="text-left text-sm font-medium text-gray-900 hover:text-indigo-600 hover:underline transition-colors"
+                                className="text-left text-sm font-medium text-gray-900 hover:text-orange-600 hover:underline transition-colors"
                               >
                                 {user.name || user.user_id?.name || 'Unknown'}
                               </button>
@@ -216,7 +236,7 @@ const DeleteRequestUsers = () => {
                           {formatDate(user.deletionRequest?.requestedAt)}
                         </td>
                         <td className="px-4 py-4">
-                          <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             Pending
                           </span>
@@ -228,7 +248,7 @@ const DeleteRequestUsers = () => {
                               disabled={isSubmitting}
                               onClick={() => navigate(`/taxi/admin/users/${user._id}`)}
                               title="View Customer Profile"
-                              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-colors disabled:opacity-50"
                             >
                               <Eye size={16} />
                             </button>
@@ -237,7 +257,7 @@ const DeleteRequestUsers = () => {
                               disabled={isSubmitting}
                               onClick={() => handleReject(user._id)}
                               title="Reject Request"
-                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors disabled:opacity-50"
                             >
                               <XCircle size={16} />
                             </button>
@@ -246,7 +266,7 @@ const DeleteRequestUsers = () => {
                               disabled={isSubmitting}
                               onClick={() => handleApprove(user._id)}
                               title="Approve Request"
-                              className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors disabled:opacity-50"
                             >
                               <CheckCircle2 size={16} />
                             </button>
@@ -259,18 +279,18 @@ const DeleteRequestUsers = () => {
               </table>
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 text-sm text-gray-500 md:flex-row md:items-center md:justify-between">
+            <div className="mt-5 flex flex-col gap-3 border-t border-orange-100 pt-4 text-sm text-gray-500 md:flex-row md:items-center md:justify-between">
               <span>
                 Showing {filteredUsers.length ? 1 : 0} to {filteredUsers.length} of {filteredUsers.length} entries
               </span>
               <div className="flex items-center gap-2">
-                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-gray-200 rounded-lg disabled:opacity-50" disabled>
+                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-orange-100 rounded-full disabled:opacity-50" disabled>
                   Prev
                 </button>
-                <button className="px-4 py-2 text-sm text-white bg-indigo-600 border border-indigo-600 rounded-lg">
+                <button className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-400 to-orange-500 rounded-full shadow-md shadow-orange-300/50">
                   1
                 </button>
-                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-gray-200 rounded-lg disabled:opacity-50" disabled>
+                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-orange-100 rounded-full disabled:opacity-50" disabled>
                   Next
                 </button>
               </div>

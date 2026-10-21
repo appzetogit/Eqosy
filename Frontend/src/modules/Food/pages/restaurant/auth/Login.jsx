@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Loader2, AlertCircle } from "lucide-react"
-import { Button } from "@food/components/ui/button"
+import { Store } from "lucide-react"
 import { restaurantAPI } from "@food/api"
 import { useCompanyName } from "@food/hooks/useCompanyName"
-import { motion, AnimatePresence } from "framer-motion"
 import logoImg from "@food/assets/eqosy-logo.png"
+import FloatingAuthLayout, { AUTH_THEMES, AuthButton, AuthError, AuthPhoneField } from "@/shared/components/auth/FloatingAuthLayout"
 
 const DEFAULT_COUNTRY_CODE = "+91"
 
@@ -110,118 +109,50 @@ export default function RestaurantLogin() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-white dark:bg-[#0A0A0B] flex flex-col font-sans overflow-hidden">
-      {/* Top Branding Section - 40% height */}
-      <div className="relative h-[40dvh] w-full bg-[#1A1A1A] overflow-hidden flex flex-col items-center justify-center">
-        {/* Subtle Decorative Elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] translate-x-1/3 -translate-y-1/3"></div>
-            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[60px] -translate-x-1/3 translate-y-1/3"></div>
+    <FloatingAuthLayout
+      theme={AUTH_THEMES.restaurant}
+      logo={logoImg}
+      logoAlt={`${companyName} logo`}
+      brand={`${companyName} Store`}
+      badge="Restaurant Partner"
+      BadgeIcon={Store}
+      title="Restaurant Portal"
+      subtitle="Sign in with your registered mobile number to manage your outlet."
+      bottomInset={keyboardInset}
+      footer={
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-zinc-500">
+            By continuing, you accept our{" "}
+            <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/login" }} className="font-black text-[#9D174D]">Terms</Link>
+            {" & "}
+            <Link to="/food/restaurant/privacy" state={{ returnTo: "/food/restaurant/login" }} className="font-black text-[#9D174D]">Privacy Policy</Link>
+          </p>
+          <p className="text-[11px] font-medium text-zinc-400">
+            Secure store login powered by <span className="font-black text-zinc-600">{companyName} Network</span>
+          </p>
         </div>
+      }
+    >
+      <AuthPhoneField
+        theme={AUTH_THEMES.restaurant}
+        inputRef={phoneInputRef}
+        value={formData.phone}
+        onChange={handlePhoneChange}
+        hasError={Boolean(error)}
+        label="Owner Contact Number"
+      />
 
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="relative z-10 flex flex-col items-center gap-4"
-        >
-          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-xl border-4 border-white/25 overflow-hidden">
-            <img src={logoImg} alt={`${companyName} logo`} className="w-full h-full object-cover scale-110" />
-          </div>
-          <div className="text-center text-white">
-            <h1 className="font-black text-3xl tracking-tight leading-none mb-1">
-              {companyName.toUpperCase()}<span className="opacity-60 italic">STORE</span>
-            </h1>
-            <div className="h-0.5 w-10 bg-white/40 mx-auto rounded-full" />
-          </div>
-        </motion.div>
-      </div>
+      <AuthError message={error} />
 
-      {/* Bottom Form Section - 60% height */}
-      <motion.div
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        className="flex-1 bg-white dark:bg-[#0A0A0B] rounded-t-[2.5rem] -mt-12 relative z-20 shadow-[0_-20px_40px_rgba(0,0,0,0.05)] px-6 pt-10 pb-6 flex flex-col"
-        style={{ marginBottom: keyboardInset ? `${keyboardInset}px` : 0 }}
+      <AuthButton
+        theme={AUTH_THEMES.restaurant}
+        onClick={handleSendOTP}
+        loading={isSending}
+        loadingLabel="Authorizing..."
+        disabled={formData.phone.length !== 10}
       >
-        <div className="max-w-md mx-auto w-full flex flex-col h-full">
-          <div className="space-y-2 mb-10">
-            <h2 className="text-3xl font-black text-[#1A1A1A] dark:text-white tracking-tight">
-              Restaurant Portal
-            </h2>
-            <p className="text-sm font-medium text-gray-500">
-              Signin with your registered mobile to manage your outlet.
-            </p>
-          </div>
-
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">
-                Owner Contact Number
-              </label>
-              
-              <div className="flex items-center gap-0 bg-[#F8F9FA] dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:ring-1 focus-within:ring-[color:var(--app-primary,#F38F24)] transition-all overflow-hidden group">
-                <div className="flex items-center px-4 h-14 bg-transparent text-gray-500 font-semibold text-lg border-r border-gray-200 dark:border-zinc-800">
-                  <span>+91</span>
-                </div>
-                <input
-                  ref={phoneInputRef}
-                  type="tel"
-                  maxLength={10}
-                  inputMode="numeric"
-                  placeholder="00000 00000"
-                  value={formData.phone}
-                  onChange={handlePhoneChange}
-                  className="flex-1 h-14 bg-transparent border-0 outline-none ring-0 placeholder:text-gray-400 text-lg font-semibold tracking-widest px-4 text-[#1A1A1A] dark:text-white"
-                />
-              </div>
-
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className="flex items-center gap-1.5 text-xs font-bold text-[#0D2A6B] pl-2"
-                  >
-                    <AlertCircle className="h-4 w-4" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <Button
-              onClick={handleSendOTP}
-              disabled={isSending || formData.phone.length !== 10}
-              className="w-full h-14 rounded-xl font-bold text-base transition-all bg-[#1A1A1A] hover:bg-black text-white hover:shadow-lg disabled:opacity-50 disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              {isSending ? (
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span>Authorizing...</span>
-                </div>
-              ) : (
-                "Continue Securely"
-              )}
-            </Button>
-          </div>
-
-          <footer className="mt-auto pt-6 text-center space-y-2">
-            <p className="text-xs text-gray-500 font-medium">
-              By continuing, you accept our{" "}
-              <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/login" }} className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Terms</Link>
-              {" & "}
-              <Link to="/food/restaurant/privacy" state={{ returnTo: "/food/restaurant/login" }} className="font-bold text-[#1A1A1A] hover:text-[color:var(--app-primary,#F38F24)]">Privacy Policy</Link>
-            </p>
-            <p className="text-[11px] text-gray-400 font-medium leading-relaxed">
-              Secure store login powered by<br />
-              <span className="text-[#1A1A1A] font-bold">{companyName} Network</span>
-            </p>
-          </footer>
-        </div>
-      </motion.div>
-    </div>
+        Continue Securely
+      </AuthButton>
+    </FloatingAuthLayout>
   )
 }

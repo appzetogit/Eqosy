@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Phone, ChevronRight, ShieldCheck, Briefcase, UserRound, Sparkles, Building2 } from 'lucide-react';
+import { ChevronRight, ShieldCheck, Briefcase, UserRound, Sparkles, Building2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
     clearDriverRegistrationSession,
     getStoredDriverRegistrationSession,
@@ -12,8 +12,8 @@ import {
 
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import { RENTAL_ENABLED } from '../../../../shared/featureFlags';
-import loginBg from '../../../../assets/images/driver-login-bg.png';
 import LegalSheetModal from '../../components/LegalSheetModal';
+import FloatingAuthLayout, { AUTH_THEMES, AuthButton, AuthError, AuthPhoneField } from '@/shared/components/auth/FloatingAuthLayout';
 
 const PhoneRegistration = () => {
     const navigate = useNavigate();
@@ -208,234 +208,111 @@ const PhoneRegistration = () => {
         }
     };
 
-    const containerVariants = {
-        hidden: { opacity: 0, y: 20 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            transition: {
-                duration: 0.6,
-                ease: [0.22, 1, 0.36, 1],
-                staggerChildren: 0.1
-            }
-        }
-    };
-
-    const itemVariants = {
-        hidden: { opacity: 0, y: 10 },
-        visible: { opacity: 1, y: 0 }
-    };
+    const theme = AUTH_THEMES.driver;
+    const logoSrc = settings.general?.logo || settings.customization?.logo || '/eqosy-logo.png';
 
     return (
-        <div
-            className="min-h-[100dvh] relative bg-slate-50 select-none overflow-x-hidden font-sans"
-        >
-            <div className="fixed inset-0 z-0 bg-slate-50">
-                <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none" />
-                <div className="absolute -top-24 -right-24 w-96 h-96 bg-[color:var(--app-primary,#F38F24)]/5 rounded-full blur-[80px] pointer-events-none" />
-            </div>
-
-            <main className="relative z-10 mx-auto max-w-sm px-6 pt-8 pb-20 flex flex-col min-h-[100dvh] justify-center">
-                <motion.header
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-4 mb-6 flex flex-col items-center text-center"
+        <>
+            <FloatingAuthLayout
+                theme={theme}
+                logo={logoSrc}
+                logoAlt={appName}
+                brand={appName}
+                badge={modeConfig.badge}
+                BadgeIcon={modeConfig.Icon}
+                title={modeConfig.title}
+                subtitle={modeConfig.subtitle}
+                footer={
+                    <p className="text-[11px] font-medium leading-tight text-zinc-500 select-none">
+                        By continuing, you agree to our{' '}
+                        <button type="button" onClick={() => handleOpenLegal('terms')} className="font-black hover:underline" style={{ color: theme.accentDark }}>
+                            Terms of Service
+                        </button>
+                        {' '}and{' '}
+                        <button type="button" onClick={() => handleOpenLegal('privacy')} className="font-black hover:underline" style={{ color: theme.accentDark }}>
+                            Privacy Policy
+                        </button>.
+                    </p>
+                }
+            >
+                <div
+                    className="flex w-full items-center gap-1.5 overflow-x-auto rounded-2xl p-1.5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+                    style={{ background: theme.accentSoft, border: `1px solid ${theme.accent}22` }}
                 >
-                    <div className="flex flex-col items-center gap-3">
-                        {settings.general?.logo || settings.customization?.logo ? (
-                            <div className="w-14 h-14 bg-white rounded-[1.25rem] flex items-center justify-center shadow-sm border border-slate-100 overflow-hidden">
-                                <img
-                                    src={settings.general?.logo || settings.customization?.logo}
-                                    alt={appName}
-                                    className="w-full h-full object-cover scale-110"
-                                />
-                            </div>
-                        ) : (
-                            <div className="rounded-xl bg-[#1A1A1A] px-4 py-2 text-sm font-black tracking-tight text-white shadow-sm">
-                                {appName}
-                            </div>
-                        )}
-                    </div>
-
-                    <motion.section
-                        variants={itemVariants}
-                        className="space-y-2 flex flex-col items-center"
-                    >
-                        <div className="flex items-center gap-2.5">
-                            <div
-                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-[color:var(--app-primary,#F38F24)]/10 text-[color:var(--app-primary,#F38F24)] shadow-sm border border-[color:var(--app-primary,#F38F24)]/20"
-                            >
-                                <modeConfig.Icon size={16} strokeWidth={2.5} />
-                            </div>
-                            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-[color:var(--app-primary,#F38F24)]">
-                                {modeConfig.badge}
-                            </span>
-                        </div>
-                        <h1 className="font-sans text-[32px] font-black leading-tight tracking-tight text-slate-900 mt-1">
-                            {modeConfig.title.split(' ')[0]} <span className="text-[color:var(--app-primary,#F38F24)]">{modeConfig.title.split(' ').slice(1).join(' ')}</span>
-                        </h1>
-                        <p className="text-[13px] leading-relaxed text-slate-500 font-medium max-w-[28ch]">
-                            {modeConfig.subtitle}
-                        </p>
-                    </motion.section>
-                </motion.header>
-
-                <motion.div
-                    variants={containerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className="space-y-5 relative z-20"
-                >
-                    <motion.div
-                        variants={itemVariants}
-                        className="flex items-center gap-1.5 mb-6 bg-[color:var(--app-primary,#F38F24)]/5 p-1.5 rounded-[1rem] overflow-x-auto scroll-smooth w-full border border-[color:var(--app-primary,#F38F24)]/10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
-                    >
-                        {roleOptions.map((option) => {
-                            const active = role === option.id;
-                            return (
-                                <motion.button
-                                    key={option.id}
-                                    layout
-                                    whileTap={{ scale: 0.97 }}
-                                    onClick={() => setRole(option.id)}
-                                    className={`flex-1 min-w-max flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all whitespace-nowrap ${active
-                                            ? 'bg-white text-[color:var(--app-primary,#F38F24)] shadow-sm border border-[color:var(--app-primary,#F38F24)]/20'
-                                            : 'text-slate-500 hover:text-slate-700'
-                                        }`}
-                                >
-                                    <option.Icon size={14} strokeWidth={active ? 2.5 : 2} className={active ? 'text-[color:var(--app-primary,#F38F24)]' : ''} />
-                                    <span className="text-[11px] font-bold uppercase tracking-wide">{option.label}</span>
-                                </motion.button>
-                            );
-                        })}
-                    </motion.div>
-
-                    <motion.section
-                        variants={itemVariants}
-                        ref={phoneCardRef}
-                        className="w-full relative bg-white p-5 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100"
-                        style={{ scrollMarginTop: '20vh' }}
-                    >
-                        <div className="space-y-6 w-full">
-                            <div className="space-y-3">
-                                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest ml-1">
-                                    Mobile Number
-                                </label>
-                                <div className={`flex items-center gap-0 bg-slate-50 border ${error ? 'border-red-300 ring-4 ring-red-50' : 'border-slate-200'} rounded-[1rem] focus-within:border-[color:var(--app-primary,#F38F24)] focus-within:bg-white focus-within:ring-4 focus-within:ring-[color:var(--app-primary,#F38F24)]/10 transition-all overflow-hidden h-14`}>
-                                    <div className="px-4 border-r border-slate-200 bg-transparent text-slate-900 font-bold text-lg h-full flex items-center">
-                                        +91
-                                    </div>
-                                    <input
-                                        ref={phoneInputRef}
-                                        type="tel"
-                                        inputMode="numeric"
-                                        pattern="[0-9]*"
-                                        autoFocus
-                                        maxLength={10}
-                                        value={phone}
-                                        onChange={(e) => {
-                                            const val = e.target.value.replace(/\D/g, '');
-                                            setPhone(val);
-                                            if (error) setError('');
-                                        }}
-                                        onFocus={() => phoneCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-                                        placeholder="00000 00000"
-                                        className="flex-1 bg-transparent border-0 outline-none ring-0 placeholder:text-slate-300 text-lg font-bold tracking-widest px-4 text-slate-900 h-full w-full"
-                                    />
-                                </div>
-                            </div>
-
-
-
-                            <AnimatePresence>
-                                {error && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="rounded-xl bg-red-50 border border-red-100 px-4 py-2.5 text-[11px] font-medium text-red-600 flex items-center gap-2"
-                                    >
-                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                                        {error}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </motion.section>
-
-                    <motion.div variants={itemVariants} className="space-y-4 pt-2">
-                        <div className="flex items-center justify-center gap-2 py-1 w-full flex-wrap mx-auto px-2 text-slate-500 text-center">
-                            <Sparkles size={12} className="text-[color:var(--app-primary,#F38F24)] shrink-0" />
-                            <span className="text-[9px] font-bold tracking-widest uppercase text-slate-400 leading-tight">{modeConfig.highlight}</span>
-                        </div>
-
-                        <motion.button
-                            variants={itemVariants}
-                            whileHover={{ y: -1 }}
-                            onClick={() => navigate(isLoginPage ? `${routePrefix}/reg-phone` : `${routePrefix}/login`)}
-                            className="w-full text-[12px] font-medium text-slate-500 transition-all pb-4"
-                        >
-                            {isLoginPage ? (
-                                <>Don't have an account? <span className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600">Join Now</span></>
-                            ) : (
-                                <>Already a captain? <span className="text-[color:var(--app-primary,#F38F24)] font-bold hover:text-orange-600">Sign in</span></>
-                            )}
-                        </motion.button>
-                    </motion.div>
-                </motion.div>
-
-                <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-4 bg-white/95 backdrop-blur-xl border-t border-slate-100 z-50">
-                    <div className="mx-auto max-w-sm space-y-2.5">
-                        <p className="text-[11px] text-slate-500 font-medium text-center leading-tight select-none">
-                            By continuing, you agree to our{' '}
-                            <button
+                    {roleOptions.map((option) => {
+                        const active = role === option.id;
+                        return (
+                            <motion.button
+                                key={option.id}
                                 type="button"
-                                onClick={() => handleOpenLegal('terms')}
-                                className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
+                                layout
+                                whileTap={{ scale: 0.97 }}
+                                onClick={() => setRole(option.id)}
+                                className={`flex min-w-max flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 transition-all ${active ? 'bg-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}
+                                style={active ? { color: theme.accentDark, boxShadow: `0 6px 14px -8px ${theme.accentDark}88` } : undefined}
                             >
-                                Terms of Service
-                            </button>
-                            {' '}and{' '}
-                            <button
-                                type="button"
-                                onClick={() => handleOpenLegal('privacy')}
-                                className="text-[color:var(--app-primary,#F38F24)] font-bold hover:underline"
-                            >
-                                Privacy Policy
-                            </button>.
-                        </p>
-                        <motion.button
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={handleSendOTP}
-                            disabled={loading || !agreed || phone.length !== 10}
-                            className={`group flex h-12 w-full items-center justify-center gap-2 rounded-[0.85rem] text-[14px] font-bold transition-all relative overflow-hidden ${agreed && phone.length === 10
-                                    ? 'bg-[#1A1A1A] text-white shadow-[0_4px_14px_rgba(26,26,26,0.15)] active:bg-black'
-                                    : 'bg-slate-100 text-slate-400'
-                                }`}
-                        >
-                            {loading ? (
-                                <div className="h-5 w-5 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    <span className="relative z-10 uppercase tracking-[0.1em]">Send OTP Code</span>
-                                    <ChevronRight size={18} strokeWidth={3} className="relative z-10 group-hover:translate-x-1 transition-transform" />
-                                </>
-                            )}
-                        </motion.button>
-                    </div>
+                                <option.Icon size={14} strokeWidth={active ? 2.5 : 2} />
+                                <span className="text-[11px] font-black uppercase tracking-wide">{option.label}</span>
+                            </motion.button>
+                        );
+                    })}
                 </div>
 
-                <LegalSheetModal
-                    isOpen={!!legalModalTab}
-                    initialTab={legalModalTab || 'terms'}
-                    role={role}
-                    onClose={() => setLegalModalTab(null)}
-                    onNavigateFull={handleNavigateFullLegal}
-                />
-            </main>
-        </div>
+                <div ref={phoneCardRef} style={{ scrollMarginTop: '20vh' }}>
+                    <AuthPhoneField
+                        theme={theme}
+                        inputRef={phoneInputRef}
+                        value={phone}
+                        hasError={Boolean(error)}
+                        pattern="[0-9]*"
+                        autoFocus
+                        onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setPhone(val);
+                            if (error) setError('');
+                        }}
+                        onFocus={() => phoneCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    />
+                </div>
+
+                <AuthError message={error} />
+
+                <div className="flex w-full flex-wrap items-center justify-center gap-2 px-2 text-center">
+                    <Sparkles size={12} className="shrink-0" style={{ color: theme.accent }} />
+                    <span className="text-[10px] font-bold uppercase leading-tight tracking-widest text-zinc-400">{modeConfig.highlight}</span>
+                </div>
+
+                <AuthButton
+                    theme={theme}
+                    onClick={handleSendOTP}
+                    loading={loading}
+                    disabled={!agreed || phone.length !== 10}
+                >
+                    <span>Send OTP Code</span>
+                    <ChevronRight size={18} strokeWidth={3} />
+                </AuthButton>
+
+                <button
+                    type="button"
+                    onClick={() => navigate(isLoginPage ? `${routePrefix}/reg-phone` : `${routePrefix}/login`)}
+                    className="w-full text-center text-[12px] font-medium text-zinc-500"
+                >
+                    {isLoginPage ? (
+                        <>Don't have an account? <span className="font-black" style={{ color: theme.accentDark }}>Join Now</span></>
+                    ) : (
+                        <>Already a captain? <span className="font-black" style={{ color: theme.accentDark }}>Sign in</span></>
+                    )}
+                </button>
+            </FloatingAuthLayout>
+
+            <LegalSheetModal
+                isOpen={!!legalModalTab}
+                initialTab={legalModalTab || 'terms'}
+                role={role}
+                onClose={() => setLegalModalTab(null)}
+                onNavigateFull={handleNavigateFullLegal}
+            />
+        </>
     );
 };
 

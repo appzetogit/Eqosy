@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X, UtensilsCrossed, Car, Package } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
@@ -520,342 +520,281 @@ export default function UnifiedOTPFastLogin() {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
 
-  return (
-    <div className="min-h-screen flex flex-col md:flex-row overflow-hidden font-sans bg-[#F8F9FA] dark:bg-[#1A1A1A]">
-      {/* Premium Branding Panel (Hidden on mobile) */}
-      <motion.div
-        layout
-        className="hidden md:flex flex-col justify-between w-[45%] lg:w-[50%] bg-[#1A1A1A] p-12 text-white relative overflow-hidden shadow-[20px_0_40px_rgba(0,0,0,0.1)] z-10"
+  const buttonDisabled =
+    loading ||
+    (step === 1 && String(phoneNumber).length < 10) ||
+    (step === 2 && (!agreeTerms || otp.length !== 4)) ||
+    (step === 3 && (!agreeTerms || String(name).trim().length < 2))
+
+  const heading =
+    step === 1
+      ? { title: "Welcome to Eqosy", subtitle: "Enter your mobile number to continue" }
+      : step === 2
+        ? { title: "Verify your number", subtitle: "Enter the 4-digit code we sent you" }
+        : { title: "One last step", subtitle: "Tell us your name to finish up" }
+
+  const fieldClass =
+    "border-[1.5px] border-[#E4E8F4] bg-white transition-all focus-within:border-[#F7931E] focus-within:shadow-[0_0_0_4px_rgba(247,147,30,0.2)]"
+
+  const numberChip = (label) => (
+    <div className="flex items-center justify-between rounded-2xl bg-[#FFF0CF] px-4 py-2.5">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#7A6A3A]">{label}</p>
+        <p className="text-[15px] font-extrabold text-[#0C1336]">+91 {phoneNumber}</p>
+      </div>
+      <button
+        type="button"
+        onClick={handleEditNumber}
+        className="rounded-full bg-white px-3.5 py-1.5 text-[12px] font-extrabold text-[#B84A06] shadow-sm active:scale-95"
       >
-        {/* Subtle orange accent glow */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-[#F38F24]/5 rounded-full blur-[120px]" />
-          <div className="absolute top-[60%] right-[10%] w-[50%] h-[50%] bg-white/5 rounded-full blur-[100px]" />
+        Edit
+      </button>
+    </div>
+  )
+
+  const policyLinks = (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); openPolicyModal("terms") }}
+        className="font-extrabold text-[#B84A06] underline decoration-[#F7931E]/50 underline-offset-2"
+      >
+        Terms of Service
+      </button>
+      {" "}and{" "}
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); openPolicyModal("privacy") }}
+        className="font-extrabold text-[#B84A06] underline decoration-[#F7931E]/50 underline-offset-2"
+      >
+        Privacy Policy
+      </button>
+    </>
+  )
+
+  return (
+    <div className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-[#060A22] via-[#0C1336] to-[#16204F] font-sans">
+      {/* warm glow + soft rings */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -top-24 left-1/4 h-72 w-72 -translate-x-1/2 rounded-full bg-[#F7931E]/35 blur-[90px]" />
+        <div className="absolute top-10 right-0 h-60 w-60 rounded-full bg-[#7ED321]/25 blur-[90px]" />
+        <div className="absolute left-1/2 top-16 h-64 w-64 -translate-x-1/2 rounded-full border border-white/10" />
+        <div className="absolute left-1/2 top-4 h-96 w-96 -translate-x-1/2 rounded-full border border-white/5" />
+      </div>
+
+      <button
+        type="button"
+        onClick={handleBack}
+        aria-label="Back"
+        className="absolute left-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-transform active:scale-95"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
+
+      {/* Hero */}
+      <div className="relative z-10 flex flex-col items-center px-6 pb-12 pt-16 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-[25px] bg-gradient-to-br from-[#7ED321] via-[#FFC400] to-[#F7931E] p-[3px] shadow-[0_18px_40px_-12px_rgba(247,147,30,0.7)]"
+        >
+          <div className="h-[68px] w-[68px] overflow-hidden rounded-[22px] bg-white">
+            <img src="/eqosy-logo.png" alt="Eqosy" className="h-full w-full scale-110 object-cover" />
+          </div>
+        </motion.div>
+
+        <p className="mt-3 text-[20px] font-black leading-none tracking-tight">
+          <span className="text-[#8BE02A]">E</span>
+          <span className="text-[#F7931E]">q</span>
+          <span className="text-white">osy</span>
+        </p>
+        <h1 className="mt-2 text-[25px] font-black leading-[1.15] tracking-tight text-white">
+          Everything you need,
+          <br />
+          <span className="bg-gradient-to-r from-[#8BE02A] via-[#FFC400] to-[#F7931E] bg-clip-text text-transparent">delivered.</span>
+        </h1>
+
+        <div className="pointer-events-none mt-3 flex select-none items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
+            <UtensilsCrossed className="h-3.5 w-3.5 text-[#F7931E]" /> Food
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
+            <Car className="h-3.5 w-3.5 text-[#8BE02A]" /> Rides
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
+            <Package className="h-3.5 w-3.5 text-[#FFC400]" /> Parcel
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom sheet */}
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 mx-auto flex w-full max-w-[460px] flex-1 flex-col rounded-t-[32px] bg-[#FFFDF6] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-20px_50px_-20px_rgba(0,0,0,0.6)]"
+      >
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[#D9DEEE]" />
+
+        <div className="mb-4">
+          <h2 className="text-[22px] font-black leading-tight text-[#0C1336]">{heading.title}</h2>
+          <p className="mt-0.5 text-[14px] font-medium text-[#5E678A]">{heading.subtitle}</p>
         </div>
 
-        <div className="relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex items-center gap-4 mb-16"
-          >
-            <div className="w-12 h-12 flex items-center justify-center bg-white rounded-xl shadow-lg">
-              <img src="/eqosy-logo.png" alt="Eqosy" className="w-8 h-8 object-contain" />
+        <form
+          onSubmit={step === 1 ? handleSendOTP : step === 2 ? handleVerifyOTP : handleCompleteProfile}
+          className="mb-6 space-y-4"
+        >
+          {step === 1 ? (
+            <div className={`flex h-16 items-center overflow-hidden rounded-2xl ${fieldClass}`}>
+              <span className="flex h-full items-center bg-[#FFF0CF] px-5 text-[18px] font-black text-[#B84A06]">+91</span>
+              <input
+                type="tel"
+                inputMode="numeric"
+                required
+                autoFocus
+                maxLength={10}
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="Mobile number"
+                className="h-full min-w-0 flex-1 bg-transparent px-4 text-[22px] font-extrabold tracking-[0.14em] text-[#0C1336] outline-none placeholder:text-[17px] placeholder:font-semibold placeholder:tracking-normal placeholder:text-[#AEB5CE]"
+              />
             </div>
-            <h1 className="text-3xl font-black tracking-tight">Eqosy</h1>
-          </motion.div>
+          ) : step === 2 ? (
+            <>
+              {numberChip("Code sent to")}
 
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-6 max-w-md"
+              <div className="flex justify-between gap-3">
+                {[0, 1, 2, 3].map((index) => (
+                  <input
+                    key={index}
+                    id={`otp-${index}`}
+                    type="tel"
+                    inputMode="numeric"
+                    required
+                    autoFocus={index === 0}
+                    value={otp[index] || ""}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "")
+                      const current = (otp || "").split("")
+                      while (current.length < 4) current.push("")
+
+                      if (!digits) {
+                        current[index] = ""
+                        setOtp(current.join(""))
+                        if (index > 0) document.getElementById(`otp-${index - 1}`)?.focus()
+                        return
+                      }
+
+                      if (digits.length >= 4) {
+                        setOtp(digits.slice(0, 4))
+                        document.getElementById(`otp-3`)?.focus()
+                        return
+                      }
+
+                      const newDigit = digits.slice(-1)
+                      current[index] = newDigit
+                      setOtp(current.join(""))
+                      if (index < 3 && newDigit) {
+                        document.getElementById(`otp-${index + 1}`)?.focus()
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace") {
+                        if (!otp[index] && index > 0) {
+                          e.preventDefault()
+                          const current = (otp || "").split("")
+                          while (current.length < 4) current.push("")
+                          current[index - 1] = ""
+                          setOtp(current.join(""))
+                          document.getElementById(`otp-${index - 1}`)?.focus()
+                        }
+                      }
+                    }}
+                    className="h-16 w-full rounded-2xl border-[1.5px] border-[#E4E8F4] bg-white text-center text-[28px] font-black text-[#0C1336] outline-none transition-all placeholder:text-[#C4CAE0] focus:border-[#F7931E] focus:shadow-[0_0_0_4px_rgba(247,147,30,0.2)]"
+                    placeholder="-"
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[12px] font-medium text-[#5E678A]">Didn't receive it?</span>
+                {resendTimer > 0 ? (
+                  <span className="text-[12px] font-bold text-[#9AA2C0]">Resend in {formatResendTimer(resendTimer)}</span>
+                ) : (
+                  <button type="button" onClick={handleResendOTP} className="text-[12px] font-extrabold text-[#F7931E]">
+                    Resend Code
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {numberChip("New account")}
+              <div className={`flex h-16 items-center rounded-2xl ${fieldClass}`}>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="h-full min-w-0 flex-1 bg-transparent px-4 text-[18px] font-bold text-[#0C1336] outline-none placeholder:font-semibold placeholder:text-[#AEB5CE]"
+                />
+              </div>
+            </>
+          )}
+
+          {step > 1 && (
+            <label htmlFor="agreeTermsCheck" className="flex cursor-pointer select-none items-start gap-2.5 px-1 text-[11.5px] font-medium leading-snug text-[#4A5378]">
+              <input
+                type="checkbox"
+                id="agreeTermsCheck"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[#C4CAE0] accent-[#E85D04]"
+              />
+              <span>I agree to the {policyLinks}.</span>
+            </label>
+          )}
+
+          <button
+            type="submit"
+            disabled={buttonDisabled}
+            className={`flex h-16 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-black tracking-wide transition-all ${
+              buttonDisabled
+                ? "cursor-not-allowed bg-[#E9ECF6] text-[#A3AAC6]"
+                : "bg-gradient-to-r from-[#F7931E] to-[#E85D04] text-white shadow-[0_14px_26px_-10px_rgba(232,93,4,0.7)] active:scale-[0.98]"
+            }`}
           >
-            <h2 className="text-5xl font-bold tracking-tight leading-[1.1]">
-              The unified <br />
-              <span className="text-[#F38F24]">ecosystem</span> <br />
-              for everything.
-            </h2>
-            <p className="text-gray-400 text-lg leading-relaxed">
-              Food delivery, ride-hailing, and more. Experience seamless services crafted with enterprise-grade reliability and premium design.
-            </p>
-          </motion.div>
-        </div>
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                {step === 1 ? "Get OTP" : step === 2 ? "Verify & Login" : "Complete Profile"}
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </form>
 
-        <div className="relative z-10 flex gap-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-          <span>Food</span>
-          <span className="text-[#F38F24]">•</span>
-          <span>Rides</span>
-          <span className="text-gray-700">•</span>
-          <span>Logistics</span>
+        {/* Legal footer */}
+        <div className="mt-auto border-t border-[#E4E8F4] pt-3 text-center">
+          {step === 1 && (
+            <p className="text-[11px] font-medium leading-relaxed text-[#5E678A]">
+              By continuing, you agree to our {policyLinks}.
+            </p>
+          )}
+          <div className="mt-1.5 flex items-center justify-center gap-3 text-[11px] font-bold text-[#5E678A]">
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-[#5FB410]" /> Secure login
+            </span>
+            <span className="h-3 w-px bg-[#D9DEEE]" />
+            <Link to="/support" className="hover:underline">Help & Support</Link>
+          </div>
         </div>
       </motion.div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 w-full flex flex-col lg:flex-row relative z-20 bg-[#F8F9FA] overflow-hidden h-[100dvh] lg:h-auto font-sans">
-
-        {/* Abstract Background Elements (Mobile Only) */}
-        <div className="lg:hidden absolute top-0 left-0 w-56 h-56 pointer-events-none z-0 opacity-70">
-          <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-            <path d="M-20 120 L120 -20" stroke="#1A1A1A" strokeWidth="1" />
-            <path d="M-40 80 Q 60 10 120 40" stroke="#F38F24" strokeWidth="0.5" fill="none" />
-            <rect x="70" y="20" width="36" height="36" rx="8" stroke="#F38F24" strokeWidth="0.5" transform="rotate(45 88 38)" />
-          </svg>
-        </div>
-
-        <div className="lg:hidden absolute bottom-0 right-0 w-64 h-64 pointer-events-none z-0 opacity-70">
-          <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full translate-y-8 translate-x-8">
-            <path d="M60 200 Q 60 100 200 100" stroke="#1A1A1A" strokeWidth="1" fill="none" />
-            <path d="M100 250 L250 100" stroke="#F38F24" strokeWidth="0.5" />
-            <rect x="130" y="120" width="28" height="28" rx="6" stroke="#F38F24" strokeWidth="0.5" transform="rotate(45 144 134)" />
-          </svg>
-        </div>
-
-        {/* Mobile Header / Form Area */}
-        <div className="flex-1 w-full relative z-20 flex flex-col items-center justify-start pt-4 lg:justify-center">
-          {/* Top Action Bar (Single Back Button) */}
-          <div className="w-full max-w-[420px] px-6 py-2 flex items-center justify-start z-[100] relative">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="w-10 h-10 rounded-full bg-white hover:bg-gray-50 active:scale-95 flex items-center justify-center text-[#1A1A1A] transition-all border border-gray-300 shadow-md cursor-pointer pointer-events-auto relative z-[100]"
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-5 h-5 pointer-events-none" />
-            </button>
-          </div>
-
-          <div className="w-full max-w-[420px] px-6 flex flex-col items-center">
-
-            <motion.div
-              key="auth-view"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full flex flex-col items-center"
-            >
-              {/* Circular Logo */}
-              <img
-                src="/eqosy-logo.png"
-                alt="Eqosy"
-                className="w-[84px] h-[84px] rounded-full object-cover shadow-lg mb-6"
-              />
-
-              <div className="text-center mb-8">
-                <h2 className="text-[32px] leading-tight font-black text-[#1A1A1A] tracking-tight mb-2">
-                  Welcome to Eqosy
-                </h2>
-                <p className="text-[#1A1A1A] text-[15px] font-medium max-w-[28ch] mx-auto">
-                  Enter your phone number to<br />access the unified ecosystem.
-                </p>
-              </div>
-
-              <form
-                onSubmit={
-                  step === 1
-                    ? handleSendOTP
-                    : step === 2
-                      ? handleVerifyOTP
-                      : handleCompleteProfile
-                }
-                className="w-full flex flex-col space-y-6"
-              >
-                <div className="w-full">
-                  {step === 1 ? (
-                    <div className="w-full">
-                      <div className="relative w-full h-[60px] rounded-full border-[1.5px] border-[#F38F24] shadow-[inset_0_4px_16px_rgba(0,0,0,0.06)] bg-gradient-to-b from-white to-gray-200/80 flex items-center px-6 overflow-hidden">
-                        <span className="text-[20px] font-medium text-[#1A1A1A] shrink-0">+91</span>
-                        <div className="w-[1px] h-[26px] bg-gray-400 mx-3 opacity-50 shrink-0"></div>
-                        <input
-                          type="tel"
-                          required
-                          autoFocus
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                          maxLength={10}
-                          className="flex-1 min-w-0 h-full bg-transparent text-[20px] font-medium text-[#1A1A1A] outline-none placeholder:text-gray-500 tracking-wider"
-                          placeholder="9999999999"
-                        />
-                      </div>
-                    </div>
-                  ) : step === 2 ? (
-                    <div className="space-y-5">
-                      <div className="flex items-center justify-between p-3 bg-white rounded-full border border-gray-200 shadow-sm px-5">
-                        <div>
-                          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Code sent to</p>
-                          <p className="text-[15px] font-black text-slate-900 tracking-wide">+91 {phoneNumber}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleEditNumber}
-                          className="px-4 py-1.5 hover:bg-gray-100 rounded-full text-[13px] font-bold text-slate-900 transition-colors"
-                        >
-                          Edit
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="flex justify-between gap-3">
-                          {[0, 1, 2, 3].map((index) => (
-                            <input
-                              key={index}
-                              id={`otp-${index}`}
-                              type="tel"
-                              inputMode="numeric"
-                              required
-                              autoFocus={index === 0}
-                              value={otp[index] || ""}
-                              onChange={(e) => {
-                                const digits = e.target.value.replace(/\D/g, "");
-                                const current = (otp || "").split("");
-                                while (current.length < 4) current.push("");
-
-                                if (!digits) {
-                                  current[index] = "";
-                                  setOtp(current.join(""));
-                                  if (index > 0) document.getElementById(`otp-${index - 1}`)?.focus();
-                                  return;
-                                }
-
-                                if (digits.length >= 4) {
-                                  setOtp(digits.slice(0, 4));
-                                  document.getElementById(`otp-3`)?.focus();
-                                  return;
-                                }
-
-                                const newDigit = digits.slice(-1);
-                                current[index] = newDigit;
-                                setOtp(current.join(""));
-                                if (index < 3 && newDigit) {
-                                  document.getElementById(`otp-${index + 1}`)?.focus();
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Backspace") {
-                                  if (!otp[index] && index > 0) {
-                                    e.preventDefault();
-                                    const current = (otp || "").split("");
-                                    while (current.length < 4) current.push("");
-                                    current[index - 1] = "";
-                                    setOtp(current.join(""));
-                                    document.getElementById(`otp-${index - 1}`)?.focus();
-                                  }
-                                }
-                              }}
-                              className="w-full aspect-square text-center text-[28px] font-black bg-white border border-gray-200 focus:border-[#F38F24] rounded-2xl outline-none transition-all text-slate-900 shadow-sm"
-                              placeholder="-"
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-4 px-2">
-                        <span className="text-[14px] font-medium text-gray-600">Didn't receive it?</span>
-                        {resendTimer > 0 ? (
-                          <span className="text-[14px] font-bold text-gray-400">
-                            Resend in {formatResendTimer(resendTimer)}
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleResendOTP}
-                            className="text-[14px] font-bold text-[#F38F24] hover:text-[#d97716] transition-colors"
-                          >
-                            Resend Code
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-5">
-                      <div className="flex items-center justify-between p-3 bg-white rounded-full border border-gray-200 shadow-sm px-5">
-                        <div>
-                          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">New account</p>
-                          <p className="text-[15px] font-black text-slate-900 tracking-wide">+91 {phoneNumber}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleEditNumber}
-                          className="px-4 py-1.5 hover:bg-gray-100 rounded-full text-[13px] font-bold text-slate-900 transition-colors"
-                        >
-                          Edit
-                        </button>
-                      </div>
-
-                      <div className="relative w-full h-[60px] rounded-full border-[1.5px] border-[#F38F24] shadow-[inset_0_4px_16px_rgba(0,0,0,0.06)] bg-gradient-to-b from-white to-gray-200/80 flex items-center px-6 overflow-hidden">
-                        <input
-                          type="text"
-                          required
-                          autoFocus
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="flex-1 min-w-0 h-full bg-transparent text-[20px] font-medium text-[#1A1A1A] outline-none placeholder:text-gray-500"
-                          placeholder="Enter your full name"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 pt-2 flex flex-col items-center">
-                  {step > 1 && (
-                    <div className="flex items-start gap-2.5 mb-5 px-3 text-left cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="agreeTermsCheck"
-                        checked={agreeTerms}
-                        onChange={(e) => setAgreeTerms(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-[#F38F24] focus:ring-[#F38F24] cursor-pointer mt-0.5"
-                      />
-                      <label htmlFor="agreeTermsCheck" className="text-[13px] text-gray-800 font-medium leading-relaxed cursor-pointer select-none">
-                        I agree to the{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); openPolicyModal("terms"); }}
-                          className="font-bold text-slate-900 hover:underline inline-block"
-                        >
-                          Terms
-                        </button>
-                        {" "}and{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); openPolicyModal("privacy"); }}
-                          className="font-bold text-slate-900 hover:underline inline-block"
-                        >
-                          Privacy Policy
-                        </button>.
-                      </label>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={
-                      loading ||
-                      (step === 1 && String(phoneNumber).length < 10) ||
-                      (step === 2 && (!agreeTerms || otp.length !== 4)) ||
-                      (step === 3 && (!agreeTerms || String(name).trim().length < 2))
-                    }
-                    className={`w-full h-[60px] rounded-full font-semibold text-[17px] transition-all flex items-center justify-center gap-3 ${loading ||
-                      (step === 1 && String(phoneNumber).length < 10) ||
-                      (step === 2 && (!agreeTerms || otp.length !== 4)) ||
-                      (step === 3 && (!agreeTerms || String(name).trim().length < 2))
-                      ? "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed shadow-inner"
-                      : "bg-[#1A1A1A] text-white shadow-lg active:scale-[0.98]"
-                      }`}
-                  >
-                    {loading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        {step === 1 ? "Continue securely" : step === 2 ? "Verify & Login" : "Complete Profile"}
-                        <ArrowRight className={`w-5 h-5 ${loading ||
-                          (step === 1 && String(phoneNumber).length < 10) ||
-                          (step === 2 && (!agreeTerms || otp.length !== 4)) ||
-                          (step === 3 && (!agreeTerms || String(name).trim().length < 2))
-                          ? 'text-[#9CA3AF]'
-                          : 'text-[#F38F24]'
-                          }`} />
-                      </>
-                    )}
-                  </button>
-
-                  <div className="mt-6 mb-2 flex flex-col items-center justify-center gap-3">
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-700">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span className="tracking-wide">SECURELY ENCRYPTED</span>
-                    </div>
-
-                    <div className="flex items-center text-[14px] font-medium text-gray-800">
-                      <Link to="/support" className="hover:text-black transition-colors">Help & Support</Link>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        </div>
-      </div>
       {/* Legal Policy In-Page Modal */}
       {policyModal.open && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -877,7 +816,7 @@ export default function UnifiedOTPFastLogin() {
             <div className="p-6 overflow-y-auto flex-1 text-slate-700 text-sm leading-relaxed">
               {policyModal.loading ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#F38F24]" />
+                  <Loader2 className="w-8 h-8 animate-spin text-[#F7931E]" />
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Loading policy...</p>
                 </div>
               ) : (
