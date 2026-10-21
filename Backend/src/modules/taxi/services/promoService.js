@@ -391,6 +391,53 @@ export const applyPromoToRideInTransaction = async ({
   return { promo: promoUpdated.toObject(), breakdown };
 };
 
+/**
+ * Gives a promo use back when the ride it was applied to gets cancelled.
+ * Whether it is given back depends on the promo's `restore_on_cancel` setting
+ * ('always' | 'if_no_fee' | 'never') and on whether a cancellation fee was charged;
+ * `riderAtFault: false` skips that setting and always gives it back.
+ * Safe to call more than once: only an 'applied' redemption is ever released.
+ */
+export const releasePromoForCancelledRide = async ({ session, ride, cancellationFeeApplied = false, riderAtFault = true }) => {
+  if (!ride?._id || !ride?.promo?.promo_id) {
+    return { released: false, reason: 'NO_PROMO' };
+  }
+
+  const promo = await PromoCode.findById(ride.promo.promo_id).select('restore_on_cancel').session(session).lean();
+  const mode = promo?.restore_on_cancel || 'if_no_fee';
+
+  // When the rider is not the reason for the cancellation (no driver found, admin/system cancel) the use is always given back.
+  if (riderAtFault && (mode === 'never' || (mode === 'if_no_fee' && cancellationFeeApplied))) {
+    return { released: false, reason: 'POLICY_KEEPS_USAGE' };
+  }
+
+  const redemption = await PromoRedemption.findOneAndUpdate(
+    { ride_id: ride._id, promo_id: ride.promo.promo_id, status: 'applied' },
+    { $set: { status: 'cancelled' } },
+    { returnDocument: 'after', session },
+  );
+  if (!redemption) {
+    return { released: false, reason: 'ALREADY_RELEASED' };
+  }
+
+  const discountAmount = Math.max(0, Number(redemption.discount_amount || 0));
+
+  await PromoCode.updateOne(
+    { _id: redemption.promo_id, usage_count: { $gt: 0 } },
+    { $inc: { usage_count: -1 } },
+    { session },
+  );
+
+  const counter = await PromoUserCounter.findOne({ promo_id: redemption.promo_id, user_id: redemption.user_id }).session(session);
+  if (counter) {
+    counter.uses_count = Math.max(0, Number(counter.uses_count || 0) - 1);
+    counter.cumulative_discount_amount = Math.max(0, Number(counter.cumulative_discount_amount || 0) - discountAmount);
+    await counter.save({ session });
+  }
+
+  return { released: true, discountAmount, code: redemption.code };
+};
+
 export const listAvailablePromosForUser = async ({
   userId,
   service_location_id,

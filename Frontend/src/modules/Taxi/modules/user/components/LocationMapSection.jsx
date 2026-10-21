@@ -218,7 +218,9 @@ const LocationMapSection = ({ plain = false }) => {
     };
 
     fetchNearby();
-    const interval = setInterval(fetchNearby, 15000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchNearby();
+    }, 15000);
     return () => {
       active = false;
       clearInterval(interval);

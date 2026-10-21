@@ -1485,24 +1485,21 @@ export async function updateOrderStatusRestaurant(
           logger.warn(`Push notification on order_ready failed: ${pErr.message}`);
         }
       } else {
-        // No partner accepted yet — reset dispatch and find the nearest available partner
+        // No partner accepted yet — run the exact same flow as the restaurant's "Resend" button
+        // (fresh dispatch reset + offer to nearest online partner), so no manual resend is needed.
         try {
-          logger.info(`[DeliveryDispatch] Mark Ready triggered — resetting dispatch and searching for nearest partner. Order: ${order._id}`);
-          // Reset dispatch completely so tryAutoAssign treats this as a fresh search.
-          // Clearing offeredTo is critical — if any partners were offered before (and timed out),
-          // they would be excluded from the eligible list causing a silent 15s retry loop.
-          await FoodOrder.updateOne(
-            { _id: order._id },
-            {
-              $unset: { 'dispatch.dispatchingAt': 1 },
-              $set: {
-                'dispatch.status': 'unassigned',
-                'dispatch.deliveryPartnerId': null,
-                'dispatch.offeredTo': [],
-              },
-            }
-          );
-          await tryAutoAssign(order._id, { forceRebroadcast: true, attempt: 1 });
+          logger.info(`[DeliveryDispatch] Mark Ready triggered — auto-resending delivery request. Order: ${order._id}`);
+          // Release any in-flight dispatch lock first, otherwise tryAutoAssign silently skips.
+          await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
+          const result = await resendDeliveryNotificationRestaurant(order._id, restaurantId);
+          if (!result?.notifiedCount) {
+            // Lock was still held by a concurrent run — retry once shortly after it releases.
+            setTimeout(() => {
+              resendDeliveryNotificationRestaurant(order._id, restaurantId).catch((e) =>
+                logger.warn(`Mark Ready delayed resend failed: ${e?.message || e}`),
+              );
+            }, 3000);
+          }
         } catch (err) {
           logger.warn(`Auto-assign on ready_for_pickup failed: ${err?.message || err}`);
         }

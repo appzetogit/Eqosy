@@ -65,7 +65,7 @@ export default function useNotificationInbox(module, options = {}) {
   useEffect(() => {
     if (!pollMs || pollMs < 1000 || !module) return undefined;
     const timer = window.setInterval(() => {
-      fetchInbox();
+      if (document.visibilityState === "visible") fetchInbox();
     }, pollMs);
     return () => window.clearInterval(timer);
   }, [fetchInbox, module, pollMs]);

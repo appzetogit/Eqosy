@@ -264,7 +264,10 @@ export default function DiningReservations() {
         }
 
         fetchBookingsData()
-        const intervalId = setInterval(fetchBookingsData, 3000)
+        // New/cancelled bookings arrive via the realtime events below; polling is only a fallback.
+        const intervalId = setInterval(() => {
+            if (document.visibilityState === "visible") fetchBookingsData()
+        }, 30000)
 
         const handleRealtimeBookingEvent = () => {
             fetchBookingsData()

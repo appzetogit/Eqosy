@@ -6,6 +6,7 @@ import { Driver } from '../driver/models/Driver.js';
 import { WalletTransaction } from '../driver/models/WalletTransaction.js';
 import { applyDriverWalletAdjustment } from '../driver/services/walletService.js';
 import { resolveSetPriceForRide } from './rideService.js';
+import { releasePromoForCancelledRide } from './promoService.js';
 import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 import { createDefaultBusinessSettings } from '../admin/data/defaultBusinessSettings.js';
 
@@ -104,7 +105,10 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
   let driverPenalty = 0;
   let paymentStatus = 'not_applicable';
 
-  const estimatedFare = Number(ride.fare || ride.baseFare || 0);
+  // Percentage fee is charged on the ride's own fare, never on dues carried over from earlier cancellations.
+  const previousCancellationFee = Math.max(0, Number(ride.previousCancellationFee || 0));
+  const estimatedFare = Number(ride.baseRideFare)
+    || Math.max(0, Number(ride.fare || ride.baseFare || 0) - previousCancellationFee);
 
   if (!policy.enable_cancellation_charge) {
     isWaived = true;
@@ -188,6 +192,51 @@ export const calculateCancellationBill = async ({ ride, cancelledBy = 'user', re
   };
 };
 
+/**
+ * Rebuilds the bill of a ride that is already cancelled from what was saved at cancellation time.
+ * Re-running calculateCancellationBill later would use the current clock and can show a different
+ * fee than the one actually charged. Returns null when the ride has no saved cancellation.
+ */
+export const getStoredCancellationBill = (ride) => {
+  const saved = ride?.cancellation;
+  if (!saved?.cancelled_at) {
+    return null;
+  }
+
+  const cancellationFee = Math.round(Number(saved.cancellation_charge || 0));
+  const isWaived = !saved.is_fee_applied;
+  const driverPayout = Math.round(Number(saved.driver_compensation_amount || 0));
+  const driverPenalty = Math.round(Number(saved.driver_penalty_amount || 0));
+
+  return {
+    rideId: String(ride._id),
+    cancelledBy: saved.cancelled_by || 'user',
+    cancelledAt: new Date(saved.cancelled_at).toISOString(),
+    cancellationStage: saved.stage || 'searching',
+    cancellationReason: saved.reason || '',
+    billBreakdown: {
+      baseFare: 0,
+      cancellationFee,
+      taxAmount: 0,
+      totalAmount: cancellationFee,
+      isWaived,
+      feeWaivedReason: saved.fee_waived_reason || '',
+    },
+    driverBreakdown: {
+      driverPayout,
+      driverPenalty,
+      netWalletChange: driverPayout - driverPenalty,
+    },
+    paymentDetails: {
+      status: saved.payment_status || 'not_applicable',
+      note: cancellationFee > 0
+        ? 'This amount will be added to your next ride fare.'
+        : 'No fee charged for this cancellation.',
+    },
+    currency: '₹',
+  };
+};
+
 const FLAGGED_DRIVER_REASONS = [
   'driver asked me to cancel',
   'driver asked for extra fare',
@@ -227,6 +276,14 @@ export const processRideCancellation = async ({ ride, cancelledBy = 'user', reas
     driver_penalty_amount: driverBreakdown.driverPenalty,
     payment_status: paymentDetails.status,
   };
+
+  // Give the promo use back to the rider as per the promo's restore_on_cancel setting
+  await releasePromoForCancelledRide({
+    session,
+    ride,
+    cancellationFeeApplied: !billBreakdown.isWaived && billBreakdown.totalAmount > 0,
+    riderAtFault: cancelledBy === 'user',
+  });
 
   // Reset driver isOnRide status & driver wallet transactions
   if (ride.driverId) {

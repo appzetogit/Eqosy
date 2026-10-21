@@ -197,7 +197,9 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchOrders();
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 

@@ -250,9 +250,9 @@ export default function Orders() {
       return [...firstPageOrders, ...remainingOrders]
     }
 
-    const fetchOrders = async () => {
+    const fetchOrders = async ({ silent = false } = {}) => {
       try {
-        setLoading(true)
+        if (!silent) setLoading(true)
         const ordersData = await fetchAllOrders()
 
         if (ordersData.length > 0) {
@@ -377,6 +377,8 @@ export default function Orders() {
         }
       } catch (error) {
         debugError('Error fetching user orders:', error)
+        // A failed background poll should not wipe the list or toast every 20s.
+        if (silent) return
         let errorMessage = 'Failed to load orders'
         if (error?.response?.status === 401) {
           errorMessage = 'Please login to view your orders'
@@ -395,7 +397,7 @@ export default function Orders() {
     // Poll for order updates every 20 seconds to detect delivered orders
     // This ensures rating popup shows quickly when order is delivered
     const pollInterval = setInterval(() => {
-      fetchOrders()
+      if (document.visibilityState === 'visible') fetchOrders({ silent: true })
     }, 20000) // Poll every 20 seconds
 
     return () => clearInterval(pollInterval)

@@ -38,7 +38,7 @@ import {
 import { getTipSettings } from '../../services/appSettingsService.js';
 
 const formatMoneyDisplay = (val) => (Number.isInteger(Number(val)) ? String(val) : Number(val).toFixed(2));
-import { calculateCancellationBill } from '../../services/cancellationService.js';
+import { calculateCancellationBill, getStoredCancellationBill } from '../../services/cancellationService.js';
 import { Ride } from '../models/Ride.js';
 import { UserWallet } from '../models/UserWallet.js';
 
@@ -1015,7 +1015,8 @@ export const cancelRide = async (req, res) => {
     throw new ApiError(404, 'Ride not found');
   }
 
-  const cancellationBill = await calculateCancellationBill({
+  // Use the bill saved at cancellation time so the fee shown matches the fee charged.
+  const cancellationBill = getStoredCancellationBill(ride) || await calculateCancellationBill({
     ride,
     cancelledBy: 'user',
     reason,
@@ -1045,7 +1046,7 @@ export const getCancellationBillReceipt = async (req, res) => {
   const cancelledBy = ride.cancellation?.cancelled_by || 'user';
   const reason = ride.cancellation?.reason || '';
 
-  const cancellationBill = await calculateCancellationBill({
+  const cancellationBill = getStoredCancellationBill(ride) || await calculateCancellationBill({
     ride,
     cancelledBy,
     reason,

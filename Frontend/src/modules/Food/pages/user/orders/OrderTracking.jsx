@@ -1352,9 +1352,10 @@ export default function OrderTracking({ isSharedView = false }) {
       if (pollRef.current) pollRef.current(false);
     };
 
-    // Fast polling (3s) while order is active for rapid fallback
+    // Socket pushes live updates, so polling is only a safety net while it is connected;
+    // poll fast only when the socket is down.
     const isTerminal = orderStatus === 'delivered' || orderStatus === 'cancelled';
-    const pollInterval = isTerminal ? 15000 : 3000;
+    const pollInterval = isTerminal ? 30000 : isSocketConnected ? 15000 : 5000;
     const interval = setInterval(tick, pollInterval);
 
     return () => clearInterval(interval);

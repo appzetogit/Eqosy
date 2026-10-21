@@ -184,7 +184,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       }
     }
     fetchBadges()
-    const timer = setInterval(fetchBadges, 10000)
+    // Badges also refresh on "adminNotificationsUpdated"; skip polling while the tab is hidden.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") fetchBadges()
+    }, 30000)
 
     const handleUpdate = () => fetchBadges()
     window.addEventListener("adminNotificationsUpdated", handleUpdate)

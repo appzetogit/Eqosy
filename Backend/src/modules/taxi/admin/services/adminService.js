@@ -64,6 +64,7 @@ import {
 } from '../../services/dispatchService.js';
 import { buildRentalTrackingSnapshot, listActiveRentalTrackingBookings } from '../../services/rentalTrackingService.js';
 import { sendEmail } from '../../services/mailService.js';
+import { getTransportRideSettings, invalidateTransportSettingsCache } from '../../services/transportSettingsService.js';
 import { createTaxiPayout } from '../../services/withdrawalPayout.service.js';
 import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
 import { getActivePaymentGateway, normalizePaymentSettingsPayload } from '../../services/paymentGatewayService.js';
@@ -10095,6 +10096,7 @@ export const buildDriverDutyReport = async (query = {}) => {
     bizSettings[bizKey] = { ...(bizSettings[bizKey] || {}), ...newValues };
     bizSettings.markModified(bizKey);
     await bizSettings.save();
+    invalidateTransportSettingsCache();
     return { settings: bizSettings[bizKey] };
   };
 

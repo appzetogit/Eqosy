@@ -1088,7 +1088,9 @@ const AdminLayout = () => {
       } catch (_) {}
     };
     fetchSupportStats();
-    const interval = setInterval(fetchSupportStats, 10000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchSupportStats();
+    }, 30000);
     return () => {
       active = false;
       clearInterval(interval);

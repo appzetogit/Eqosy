@@ -868,37 +868,6 @@ const ActiveTrip = () => {
         };
     }, [rideId, exitToDriverHome]);
 
-    // Live continuous GPS watcher for Active Trip (runs in background & syncs Firebase Realtime DB + Socket.IO)
-    useEffect(() => {
-        if (!rideId || typeof navigator === 'undefined' || !navigator.geolocation) {
-            return undefined;
-        }
-
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const { latitude: lat, longitude: lng, heading, speed } = pos.coords;
-                const coords = [lng, lat];
-
-                // 1. Emit via Socket.IO
-                socketService.emit('driver_location_update', {
-                    rideId,
-                    coordinates: coords,
-                    latitude: lat,
-                    longitude: lng,
-                    heading: heading || 0,
-                    speed: speed || 0
-                });
-
-                // 2. Emit via Firebase Realtime DB for live passenger tracking map
-                pushDriverLocationRealtime(rideId, { lat, lng }, { heading, speed });
-            },
-            (err) => console.warn('ActiveTrip continuous background GPS watcher warning:', err),
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-        );
-
-        return () => navigator.geolocation.clearWatch(watchId);
-    }, [rideId]);
-
     const pickupAddressLabel = String(
         liveRaw?.pickupAddress ||
         liveRequest?.pickup ||
@@ -2221,18 +2190,15 @@ const ActiveTrip = () => {
                         heading: nextHeading,
                         speed: pos.coords.speed,
                     });
+                    // 'driver_location_update' hits the same server handler, so one event is enough.
                     socketService.emit('locationUpdate', {
                         coordinates: [nextPosition.lng, nextPosition.lat],
                         lat: nextPosition.lat,
                         lng: nextPosition.lng,
                         heading: nextHeading,
                     });
-                    socketService.emit('driver_location_update', {
-                        coordinates: [nextPosition.lng, nextPosition.lat],
-                        latitude: nextPosition.lat,
-                        longitude: nextPosition.lng,
-                        heading: nextHeading,
-                    });
+                    // Passenger live map reads this; each push is an HTTP PATCH, so keep it on the same throttle.
+                    pushDriverLocationRealtime(rideId, nextPosition, { heading: nextHeading, speed: pos.coords.speed });
                 }
                 if (rideId && now - lastLocationPatchAt >= LOCATION_PATCH_MIN_MS) {
                     lastLocationPatchAt = now;

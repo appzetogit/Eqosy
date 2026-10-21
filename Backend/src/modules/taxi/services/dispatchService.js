@@ -12,6 +12,7 @@ import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
 import { processRideCancellation } from './cancellationService.js';
+import { releasePromoForCancelledRide } from './promoService.js';
 import { Notification } from '../admin/promotions/models/Notification.js';
 import { RideBid } from '../user/models/RideBid.js';
 import { getIO } from '../../../config/socket.js';
@@ -60,6 +61,15 @@ export const addSocketSubscriptions = (socket, { role, entityId }) => {
   if (role === 'driver') {
     socket.join(getDriverRoom(entityId));
   }
+};
+
+const haversineDistanceMeters = ([lngA, latA] = [], [lngB, latB] = []) => {
+  const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+  const dLat = toRad(latB - latA);
+  const dLng = toRad(lngB - lngA);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(latA)) * Math.cos(toRad(latB)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
 };
 
 const getDispatchVehicleTypeIds = (ride) => {
@@ -326,6 +336,9 @@ const closeRideAsUnmatched = async (rideId) => {
 
   await User.findByIdAndUpdate(ride.userId, { currentRideId: null });
 
+  // Rider never got a driver, so the coupon use should not be wasted.
+  await releasePromoForCancelledRide({ ride, riderAtFault: false }).catch((err) => console.error('[closeRideAsUnmatched] Failed to release promo:', err));
+
   emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
     rideId: String(ride._id),
     room: getRideRoom(ride._id),
@@ -379,6 +392,8 @@ export const cancelRideByAdmin = async (rideId) => {
     User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
     ride.driverId ? Driver.findByIdAndUpdate(ride.driverId, { isOnRide: false }) : Promise.resolve(),
   ]);
+
+  await releasePromoForCancelledRide({ ride, riderAtFault: false }).catch((err) => console.error('[cancelRideByAdmin] Failed to release promo:', err));
 
   emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
     rideId: String(ride._id),
@@ -952,31 +967,66 @@ export const notifyLateAvailableDriver = async (driverId) => {
     return;
   }
 
-  const activeRideIds = Array.from(activeDispatches.keys());
+  const driverKey = String(driver._id);
 
-  for (const rideId of activeRideIds) {
-    const ride = await Ride.findById(rideId).populate('userId', 'name phone countryCode');
+  // Skip rides this driver was already offered or rejected using in-memory state, before touching Mongo.
+  const candidateRideIds = Array.from(activeDispatches.keys()).filter((rideId) => {
+    const state = getDispatchState(rideId);
+    return !state.notifiedDriverIds.includes(driverKey) && !state.rejectedDriverIds.includes(driverKey);
+  });
 
-    if (!ride || ride.status !== RIDE_STATUS.SEARCHING) {
-      continue;
-    }
+  if (!candidateRideIds.length) {
+    return;
+  }
 
+  // One lean query for all candidates instead of a populated findById per ride per ping.
+  const candidateRides = await Ride.find({
+    _id: { $in: candidateRideIds.filter((id) => mongoose.Types.ObjectId.isValid(id)) },
+    status: RIDE_STATUS.SEARCHING,
+  })
+    .select('_id pickupLocation vehicleTypeId dispatchVehicleTypeIds serviceType bookingMode')
+    .lean();
+
+  if (!candidateRides.length) {
+    return;
+  }
+
+  const dispatchConfig = await resolveTransportDispatchConfig();
+
+  for (const candidateRide of candidateRides) {
+    const rideId = String(candidateRide._id);
     const dispatchState = getDispatchState(rideId);
-    const driverKey = String(driver._id);
 
+    // The state may have changed while awaiting (another ping or an accept).
     if (
+      !activeDispatches.has(rideId) ||
       dispatchState.notifiedDriverIds.includes(driverKey) ||
       dispatchState.rejectedDriverIds.includes(driverKey)
     ) {
       continue;
     }
 
-    const dispatchConfig = await resolveTransportDispatchConfig();
     const attemptIndex = Number.isInteger(dispatchState.radiusIndex) ? dispatchState.radiusIndex : 0;
     const radius = getAttemptRadiusMeters(
       dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
       attemptIndex,
     );
+
+    // Cheap distance check: a driver outside the search radius can never match, so skip the geo query.
+    const pickupCoords = candidateRide.pickupLocation?.coordinates;
+    if (
+      Array.isArray(pickupCoords) &&
+      pickupCoords.length >= 2 &&
+      haversineDistanceMeters(driver.location.coordinates, pickupCoords) > radius * 1.05
+    ) {
+      continue;
+    }
+
+    const ride = await Ride.findById(rideId).populate('userId', 'name phone countryCode');
+    if (!ride || ride.status !== RIDE_STATUS.SEARCHING) {
+      continue;
+    }
+
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const { zone, drivers, searchRadiusMeters } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,

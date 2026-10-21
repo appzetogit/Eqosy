@@ -1287,7 +1287,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               ? availablePayload
               : [];
 
-        const nextIncomingOrder = availableOrders.find((order) => {
+        const isShowable = (order) => {
           const oId = String(order?.orderId || order?._id || order?.orderMongoId || '');
           if (ignoredOrderIdsRef.current.has(oId)) return false;
 
@@ -1303,7 +1303,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             ['unassigned', 'assigned'].includes(dispatchStatus) &&
             ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(orderStatus)
           );
-        });
+        };
+        // The order dispatch actually offered to this rider comes first.
+        const isOfferedToMe = (order) =>
+          (order?.dispatch?.offeredTo || []).some(
+            (o) => String(o?.partnerId) === String(deliveryPartnerId) && o?.action === 'offered'
+          );
+        const nextIncomingOrder =
+          availableOrders.find((order) => isShowable(order) && isOfferedToMe(order)) ||
+          availableOrders.find(isShowable);
 
         if (!cancelled && nextIncomingOrder) {
           setIncomingOrder((prev) => {

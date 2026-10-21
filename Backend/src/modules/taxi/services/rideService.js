@@ -17,7 +17,7 @@ import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 import { UserWallet } from '../user/models/UserWallet.js';
 import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '../user/services/subscriptionService.js';
-import { applyPromoToRideInTransaction } from './promoService.js';
+import { applyPromoToRideInTransaction, releasePromoForCancelledRide } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
 import { emitToDriver, emitToRoom, getDriverRoom, getRideRoom, getUserRoom } from './dispatchService.js';
@@ -49,6 +49,7 @@ const clearUserActiveRideIfPresent = async (user) => {
   activeRide.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
   await activeRide.save();
   await syncDeliveryWithRide(activeRide);
+  await releasePromoForCancelledRide({ ride: activeRide, riderAtFault: false }).catch((err) => console.error('[clearUserActiveRideIfPresent] Failed to release promo:', err));
 
   await Promise.all([
     activeRide.driverId ? Driver.findByIdAndUpdate(activeRide.driverId, { isOnRide: false }) : Promise.resolve(),
@@ -2222,13 +2223,12 @@ export const appendRideMessage = async ({ rideId, role, senderId, message }) => 
 
 export const updateRideDriverLocation = async ({ rideId, driverId, coordinates, heading = null, speed = null }) => {
   const normalizedCoords = normalizePoint(coordinates, 'coordinates');
-  const ride = await Ride.findOne({ _id: rideId, driverId });
 
-  if (!ride) {
+  if (!rideId || !mongoose.Types.ObjectId.isValid(rideId)) {
     throw new ApiError(404, 'Assigned ride not found');
   }
 
-  ride.lastDriverLocation = {
+  const lastDriverLocation = {
     type: 'Point',
     coordinates: normalizedCoords,
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
@@ -2236,14 +2236,24 @@ export const updateRideDriverLocation = async ({ rideId, driverId, coordinates, 
     updatedAt: new Date(),
   };
 
-  await ride.save();
+  // Called every couple of seconds per active ride: one atomic update instead of load + full-document save.
+  // The { driverId } filter doubles as the "is this driver assigned" check.
+  const ride = await Ride.findOneAndUpdate(
+    { _id: rideId, driverId },
+    { $set: { lastDriverLocation } },
+    { projection: { _id: 1 } },
+  ).lean();
+
+  if (!ride) {
+    throw new ApiError(404, 'Assigned ride not found');
+  }
 
   return {
     rideId: String(ride._id),
     coordinates: normalizedCoords,
-    heading: ride.lastDriverLocation.heading,
-    speed: ride.lastDriverLocation.speed,
-    updatedAt: ride.lastDriverLocation.updatedAt,
+    heading: lastDriverLocation.heading,
+    speed: lastDriverLocation.speed,
+    updatedAt: lastDriverLocation.updatedAt,
   };
 };
 

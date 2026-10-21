@@ -36,7 +36,7 @@ import {
   signAccessToken,
 } from "../services/authService.js";
 import { cancelScheduledRideByDriver, emitToDriver } from "../../services/dispatchService.js";
-import { calculateCancellationBill } from "../../services/cancellationService.js";
+import { calculateCancellationBill, getStoredCancellationBill } from "../../services/cancellationService.js";
 import { notifyLateAvailableDriver, getActivePendingDispatchForDriver } from "../../services/dispatchService.js";
 import { findZoneByPickup } from "../services/locationService.js";
 import { listDriverServiceLocations } from "../services/serviceLocationService.js";
@@ -2857,7 +2857,7 @@ export const cancelDriverScheduledRide = async (req, res) => {
     throw new ApiError(404, "Scheduled ride not found for this driver");
   }
 
-  const cancellationBill = await calculateCancellationBill({
+  const cancellationBill = getStoredCancellationBill(ride) || await calculateCancellationBill({
     ride,
     cancelledBy: 'driver',
     reason,

@@ -103,6 +103,8 @@ const RideComplete = () => {
   const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
   const rideId = state.rideId || '';
   const fare = Number(state.fare || 22);
+  const previousCancellationFee = Math.min(fare, Math.max(0, Number(state.previousCancellationFee || 0)));
+  const rideOnlyFare = fare - previousCancellationFee;
   const paymentMethod = state.paymentMethod || 'Cash';
   const paymentMethodLabel = PAYMENT_OPTIONS.find((option) => option.id === selectedPaymentMethod)?.label || paymentMethod;
   const pickup = state.pickup || 'Pickup';
@@ -197,7 +199,7 @@ const RideComplete = () => {
 
     hydrateCompletedRide();
     const refreshTimer = window.setInterval(() => {
-      hydrateCompletedRide();
+      if (document.visibilityState === 'visible') hydrateCompletedRide();
     }, 5000);
 
     return () => {
@@ -641,8 +643,14 @@ const RideComplete = () => {
             <div className="rounded-[18px] border border-slate-100 bg-white p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-bold text-slate-500">Base fare</span>
-                <span className="text-[13px] font-black text-slate-900">Rs {fare.toFixed(2)}</span>
+                <span className="text-[13px] font-black text-slate-900">Rs {rideOnlyFare.toFixed(2)}</span>
               </div>
+              {previousCancellationFee > 0 && (
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-amber-600">Previous cancellation charge</span>
+                  <span className="text-[13px] font-black text-amber-600">Rs {previousCancellationFee.toFixed(2)}</span>
+                </div>
+              )}
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-[12px] font-bold text-slate-500">Tip</span>
                 <span className="text-[13px] font-black text-slate-900">Rs {Number(selectedTip || 0).toFixed(2)}</span>

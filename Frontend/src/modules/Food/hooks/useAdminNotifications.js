@@ -828,7 +828,7 @@ export default function useAdminNotifications(options = {}) {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      loadNotifications();
+      if (document.visibilityState === "visible") loadNotifications();
     }, 30 * 1000);
     return () => window.clearInterval(timer);
   }, [loadNotifications]);

@@ -29,6 +29,9 @@ export const config = {
     mongodbDnsServers: process.env.MONGODB_DNS_SERVERS || '8.8.8.8,1.1.1.1',
     mongodbServerSelectionTimeoutMs: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS || 30000),
     mongodbConnectTimeoutMs: Number(process.env.MONGODB_CONNECT_TIMEOUT_MS || 30000),
+    // Cap connections per process so a PM2 cluster (workers x pool) stays under the Atlas tier limit.
+    mongodbMaxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE || 30),
+    mongodbMinPoolSize: Number(process.env.MONGODB_MIN_POOL_SIZE || 0),
 
     // JWT
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET,

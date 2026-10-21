@@ -63,6 +63,18 @@ import {
 
 const Motion = motion;
 
+const LOCATION_SYNC_MIN_GAP_MS = 3000;
+const LOCATION_SYNC_MIN_INTERVAL_MS = 5000;
+const LOCATION_SYNC_MIN_MOVE_METERS = 20;
+
+// Equirectangular approximation; accurate enough for the few-metre movement checks below.
+const approxDistanceMeters = ([lngA, latA] = [], [lngB, latB] = []) => {
+    const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+    const x = (toRad(lngB) - toRad(lngA)) * Math.cos((toRad(latA) + toRad(latB)) / 2);
+    const y = toRad(latB) - toRad(latA);
+    return Math.sqrt(x * x + y * y) * 6371000;
+};
+
 const containerStyle = {
     width: '100%',
     height: '100%'
@@ -677,6 +689,8 @@ const DriverHome = () => {
         isBlocked: false,
     });
     const driverCoordsRef = useRef(readStoredDriverCoords());
+    // Last time a location was pushed to the server; shared by the GPS watcher and the periodic fallbacks.
+    const lastLocationSyncAtRef = useRef(0);
     const selfieCameraInputRef = useRef(null);
     const selfieVideoRef = useRef(null);
     const selfieStreamRef = useRef(null);
@@ -873,22 +887,37 @@ const DriverHome = () => {
 
         let lastRestSyncAt = 0;
 
-        const syncLocationPayload = (coords, { lat, lng, heading = 0, speed = 0 } = {}) => {
+        const syncLocationPayload = (coords, { lat, lng, heading = 0, speed = 0 } = {}, { force = false } = {}) => {
+            // watchPosition fires about once a second; re-rendering this page and emitting on every fix
+            // makes the app laggy and the server drops pings closer than 3s anyway. Sync only when the
+            // driver actually moved or enough time has passed.
+            const now = Date.now();
+            const previous = driverCoordsRef.current;
+            const movedMeters = Array.isArray(previous) && previous.length >= 2
+                ? approxDistanceMeters(previous, coords)
+                : Infinity;
+            const sinceLastSync = now - lastLocationSyncAtRef.current;
+            const tooSoon = sinceLastSync < LOCATION_SYNC_MIN_GAP_MS
+                || (sinceLastSync < LOCATION_SYNC_MIN_INTERVAL_MS && movedMeters < LOCATION_SYNC_MIN_MOVE_METERS);
+            if (!force && tooSoon) {
+                return;
+            }
+            lastLocationSyncAtRef.current = now;
+
             setDriverCoords(coords);
             driverCoordsRef.current = coords;
 
-            // 1. Emit via Socket.IO (both standard and legacy channel names)
+            // 1. Emit via Socket.IO. The server handles 'locationUpdate' and 'driver_location_update' with the
+            // same handler, so sending both only doubled traffic.
             socketService.emit('locationUpdate', { coordinates: coords, lat, lng, heading, speed });
-            socketService.emit('driver_location_update', { coordinates: coords, latitude: lat, longitude: lng, heading, speed });
 
             // 2. Emit via Firebase Realtime if ride active
             if (currentRequestRef.current?.rideId) {
                 pushDriverLocationRealtime(currentRequestRef.current.rideId, { lat, lng }, { heading, speed });
             }
 
-            // 3. Periodic HTTP REST fallback sync every 12 seconds for full database reliability
-            const now = Date.now();
-            if (now - lastRestSyncAt > 12000) {
+            // 3. HTTP REST fallback only when the socket is down; while connected the socket already persists it.
+            if (!socketService.isConnected?.() && now - lastRestSyncAt > 12000) {
                 lastRestSyncAt = now;
                 api.patch('/drivers/location', { coordinates: coords, lat, lng }).catch(() => {});
             }
@@ -903,10 +932,11 @@ const DriverHome = () => {
             { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
         );
 
+        // Heartbeat for a stationary driver (watchPosition stays quiet when not moving).
         const syncInterval = setInterval(() => {
-            if (driverCoordsRef.current) {
+            if (driverCoordsRef.current && Date.now() - lastLocationSyncAtRef.current >= 10000) {
                 const [lng, lat] = driverCoordsRef.current;
-                syncLocationPayload([lng, lat], { lat, lng });
+                syncLocationPayload([lng, lat], { lat, lng }, { force: true });
             }
         }, 10000);
 
@@ -1954,6 +1984,10 @@ const DriverHome = () => {
             socket.io.on('reconnect_attempt', onSocketReconnectAttempt);
 
             const locationInterval = setInterval(() => {
+                // The live GPS watcher already synced recently; skip the extra GPS read and emit.
+                if (Date.now() - lastLocationSyncAtRef.current < 10000) {
+                    return;
+                }
                 getCurrentCoords({ purpose: 'background' })
                     .then((coordinates) => {
                         driverCoordsRef.current = coordinates;
@@ -1964,8 +1998,8 @@ const DriverHome = () => {
                             },
                             coordinates,
                         });
+                        lastLocationSyncAtRef.current = Date.now();
                         socketService.emit('locationUpdate', { coordinates });
-                        console.info('[driver-home] periodic locationUpdate emitted', coordinates);
                     })
                     .catch((error) => {
                         console.warn('[driver-home] periodic location update skipped', error?.message || error);

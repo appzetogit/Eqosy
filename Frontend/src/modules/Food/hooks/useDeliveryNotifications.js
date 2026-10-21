@@ -594,12 +594,14 @@ export const useDeliveryNotifications = () => {
         deliveryAPI.getCurrentDelivery(),
       ]);
 
-      const currentTrip =
+      // API responds with { data: { activeOrder: <order|null> } }; an empty wrapper is NOT a current trip.
+      const currentTripRaw =
         currentTripResult.status === 'fulfilled'
-          ? currentTripResult.value?.data?.data ??
-          currentTripResult.value?.data ??
+          ? currentTripResult.value?.data?.data?.activeOrder ??
+          currentTripResult.value?.data?.data ??
           null
           : null;
+      const currentTrip = currentTripRaw && (currentTripRaw._id || currentTripRaw.orderId) ? currentTripRaw : null;
 
       if (currentTrip) {
         debugLog('Recovered current delivery trip after reconnect/focus:', currentTrip);
@@ -624,13 +626,21 @@ export const useDeliveryNotifications = () => {
             ? availablePayload
             : [];
 
-      const recoverableOrder = availableOrders.find((order) => {
-        const dispatchStatus = or9der?.dispatch?.status;
+      const isOpenOrder = (order) => {
+        const dispatchStatus = order?.dispatch?.status;
         return (
           ['unassigned', 'assigned'].includes(dispatchStatus) &&
           ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order?.orderStatus)
         );
-      });
+      };
+      // Prefer the order the dispatcher actually offered to this partner (the one the push rang for).
+      const isOfferedToMe = (order) =>
+        (order?.dispatch?.offeredTo || []).some(
+          (o) => String(o?.partnerId) === String(deliveryPartnerId) && o?.action === 'offered'
+        );
+      const recoverableOrder =
+        availableOrders.find((order) => isOpenOrder(order) && isOfferedToMe(order)) ||
+        availableOrders.find(isOpenOrder);
 
       if (recoverableOrder && !activeOrderRef.current) {
         debugLog('Recovered available delivery order after reconnect/focus:', recoverableOrder);
@@ -1383,7 +1393,16 @@ export const useDeliveryNotifications = () => {
       }
     };
 
+    // Push rang but the socket may have missed new_order (app was backgrounded) — fetch the offer.
+    const handlePushReceived = (event) => {
+      const type = String(event?.detail?.data?.type || event?.detail?.type || '').toLowerCase();
+      if (type.includes('new_order') || type.includes('order_assign') || type.includes('order_ready')) {
+        void recoverDeliveryState();
+      }
+    };
+
     window.addEventListener('deliveryAuthChanged', handleAuthChange);
+    window.addEventListener('delivery-push-received', handlePushReceived);
     window.addEventListener('authRefreshed', handleAuthRefreshed);
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1393,6 +1412,7 @@ export const useDeliveryNotifications = () => {
       stopAlertLoop();
       joinedDeliveryRoomRef.current = null;
       window.removeEventListener('deliveryAuthChanged', handleAuthChange);
+      window.removeEventListener('delivery-push-received', handlePushReceived);
       window.removeEventListener('authRefreshed', handleAuthRefreshed);
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);

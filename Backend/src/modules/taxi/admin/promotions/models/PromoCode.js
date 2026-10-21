@@ -111,6 +111,14 @@ const promoCodeSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // What happens to the redemption when the rider cancels the ride:
+    // 'always' = coupon use is always given back, 'if_no_fee' = given back only when no cancellation fee is charged,
+    // 'never' = coupon use is consumed even if the ride is cancelled.
+    restore_on_cancel: {
+      type: String,
+      enum: ['always', 'if_no_fee', 'never'],
+      default: 'if_no_fee',
+    },
     active: {
       type: Boolean,
       default: true,

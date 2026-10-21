@@ -77,6 +77,7 @@ const createInitialFormData = () => ({
   from: '',
   to: '',
   uses_per_user: '1',
+  restore_on_cancel: 'if_no_fee',
   active: true,
 });
 
@@ -472,6 +473,7 @@ const PromoCodes = () => {
           from: promo.from ? new Date(promo.from).toISOString().split('T')[0] : '',
           to: promo.to ? new Date(promo.to).toISOString().split('T')[0] : '',
           uses_per_user: promo.uses_per_user || '1',
+          restore_on_cancel: promo.restore_on_cancel || 'if_no_fee',
           active: promo.active !== false,
         });
       }
@@ -1123,6 +1125,22 @@ const PromoCodes = () => {
                       onChange={(e) => handleFieldChange('uses_per_user', e.target.value)}
                       className={inputClass}
                     />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <FieldLabel icon={ShieldCheck}>If the rider cancels the ride</FieldLabel>
+                    <select
+                      value={formData.restore_on_cancel}
+                      onChange={(e) => handleFieldChange('restore_on_cancel', e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="if_no_fee">Give the promo use back only if no cancellation fee is charged</option>
+                      <option value="always">Always give the promo use back</option>
+                      <option value="never">Never give the promo use back</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-400">
+                      If no driver is found or the driver/admin cancels, the promo use is always given back.
+                    </p>
                   </div>
 
                   <div className="md:col-span-2">

@@ -579,6 +579,7 @@ const RideTracking = () => {
         ...state,
         rideId,
         fare,
+        previousCancellationFee,
         paymentMethod,
         driverPaymentCollection: rideRealtime?.driverPaymentCollection || state.driverPaymentCollection || null,
         pickup: pickupLabel,
@@ -597,7 +598,7 @@ const RideTracking = () => {
         state: completedRideSnapshot,
       });
     },
-    [driver, dropLabel, fare, navigate, paymentMethod, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
+    [driver, dropLabel, fare, navigate, paymentMethod, previousCancellationFee, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
   );
 
   useEffect(() => {

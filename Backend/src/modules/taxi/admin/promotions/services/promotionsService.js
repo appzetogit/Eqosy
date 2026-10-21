@@ -11,6 +11,7 @@ import { sendPushNotificationToAudience } from '../../../services/pushNotificati
 
 const nextId = () => new mongoose.Types.ObjectId().toString();
 const PROMO_TRANSPORT_TYPES = ['taxi', 'delivery', 'pooling', 'bus', 'self_drive', 'all'];
+const PROMO_RESTORE_ON_CANCEL_MODES = ['always', 'if_no_fee', 'never'];
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Math.max(1, Number(page) || 1);
@@ -135,6 +136,7 @@ const serializePromoCode = (item) => ({
   uses_per_user: Number(item.uses_per_user || 1),
   max_uses_total: Number(item.max_uses_total || 0),
   usage_count: Number(item.usage_count || 0),
+  restore_on_cancel: PROMO_RESTORE_ON_CANCEL_MODES.includes(item.restore_on_cancel) ? item.restore_on_cancel : 'if_no_fee',
   active: item.active !== false,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
@@ -324,6 +326,11 @@ const normalizePromoPayload = async (payload, existing = null) => {
     throw new ApiError(400, 'From date must be earlier than or equal to To date');
   }
 
+  const restoreOnCancel = normalizeText(payload.restore_on_cancel ?? existing?.restore_on_cancel ?? 'if_no_fee');
+  if (!PROMO_RESTORE_ON_CANCEL_MODES.includes(restoreOnCancel)) {
+    throw new ApiError(400, 'Restore on cancel must be one of always, if_no_fee, or never');
+  }
+
   return {
     ...serviceLocationData,
     user_id: userSpecific ? user?._id || userId : '',
@@ -340,6 +347,7 @@ const normalizePromoPayload = async (payload, existing = null) => {
     to_date: toDate,
     uses_per_user: usesPerUser,
     max_uses_total: maxUsesTotal,
+    restore_on_cancel: restoreOnCancel,
     active: normalizeBoolean(payload.active, existing?.active ?? true),
   };
 };

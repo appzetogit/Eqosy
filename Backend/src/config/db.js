@@ -26,6 +26,8 @@ export const connectDB = async () => {
         const conn = await mongoose.connect(config.mongodbUri, {
             serverSelectionTimeoutMS: config.mongodbServerSelectionTimeoutMs,
             connectTimeoutMS: config.mongodbConnectTimeoutMs,
+            maxPoolSize: config.mongodbMaxPoolSize,
+            minPoolSize: config.mongodbMinPoolSize,
             family: 4, // Prefer IPv4 where local resolvers have IPv6/SRV issues.
         });
         logger.info(`MongoDB connected: ${conn.connection.host}`);

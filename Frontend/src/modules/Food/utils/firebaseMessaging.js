@@ -872,6 +872,12 @@ function attachServiceWorkerMessageListener() {
 }
 
 function scheduleForegroundNotification(payload) {
+  // Let the delivery app pull the order card even when its socket missed the event (mobile background).
+  try {
+    window.dispatchEvent(new CustomEvent("delivery-push-received", { detail: payload }));
+  } catch {
+    // ignore
+  }
   // Keep message handlers fast to avoid Chrome [Violation] warnings.
   // Defer heavier work (toast, audio) to idle time / next tick.
   const run = () => showForegroundNotification(payload);

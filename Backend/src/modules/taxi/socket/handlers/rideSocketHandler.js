@@ -86,8 +86,8 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
         throw new Error('Only drivers can update live ride location');
       }
 
-      await authorizeRideRoomAccess({ socket, rideId });
-
+      // No separate authorizeRideRoomAccess here: updateRideDriverLocation only matches a ride assigned
+      // to this driver, which is the same check, and skipping it saves a DB read on every GPS ping.
       const locationUpdate = await updateRideDriverLocation({
         rideId,
         driverId: socket.auth.sub,

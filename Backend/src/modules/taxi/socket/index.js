@@ -40,7 +40,20 @@ const onAsync = (socket, handler) => async (payload = {}) => {
   }
 };
 
-const TAXI_SOCKET_ROLES = new Set(['driver', 'user', 'admin', 'owner']);
+const DRIVER_LOCATION_MIN_INTERVAL_MS = Number(process.env.DRIVER_LOCATION_MIN_INTERVAL_MS) || 3000;
+const DRIVER_LATE_NOTIFY_MIN_INTERVAL_MS = Number(process.env.DRIVER_LATE_NOTIFY_MIN_INTERVAL_MS) || 8000;
+// Zone polygons are large; re-run the $geoIntersects lookup only after real movement or a while.
+const DRIVER_ZONE_RECHECK_METERS = 300;
+const DRIVER_ZONE_RECHECK_MS = 2 * 60 * 1000;
+
+const approxDistanceMeters = ([lngA, latA], [lngB, latB]) => {
+  const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+  const x = (toRad(lngB) - toRad(lngA)) * Math.cos((toRad(latA) + toRad(latB)) / 2);
+  const y = toRad(latB) - toRad(latA);
+  return Math.sqrt(x * x + y * y) * 6371000;
+};
+
+const TAXI_SOCKET_ROLES =new Set(['driver', 'user', 'admin', 'owner']);
 
 const resolveTaxiSocketIdentity = (socket) => {
   if (socket.auth?.sub && socket.auth?.role) {
@@ -151,10 +164,20 @@ const registerTaxiSocketConnectionHandlers = (io) => {
 
     registerRideSocketHandlers({ io, socket, onAsync });
 
+    // Drivers ping every few seconds; each ping costs a zone query + a Driver write, so cap both per socket.
+    let lastLocationWriteAt = 0;
+    let lastLateNotifyAt = 0;
+    let cachedZone = null;
+
     const handleDriverLocationSocketUpdate = async (payload = {}) => {
       if (identity.role !== 'driver') {
         return;
       }
+      const nowMs = Date.now();
+      if (nowMs - lastLocationWriteAt < DRIVER_LOCATION_MIN_INTERVAL_MS) {
+        return;
+      }
+      lastLocationWriteAt = nowMs;
       const coordsInput = payload.coordinates || payload.location || (
         Number.isFinite(Number(payload.latitude ?? payload.lat)) && Number.isFinite(Number(payload.longitude ?? payload.lng))
           ? [Number(payload.longitude ?? payload.lng), Number(payload.latitude ?? payload.lat)]
@@ -163,16 +186,27 @@ const registerTaxiSocketConnectionHandlers = (io) => {
       if (!coordsInput) return;
 
       const normalizedCoords = normalizePoint(coordsInput, 'coordinates');
-      const zone = await findZoneByPickup(normalizedCoords);
+      if (
+        !cachedZone ||
+        nowMs - cachedZone.checkedAt > DRIVER_ZONE_RECHECK_MS ||
+        approxDistanceMeters(cachedZone.coords, normalizedCoords) > DRIVER_ZONE_RECHECK_METERS
+      ) {
+        const found = await findZoneByPickup(normalizedCoords);
+        cachedZone = { zoneId: found?._id || null, coords: normalizedCoords, checkedAt: nowMs };
+      }
+      const zone = cachedZone.zoneId ? { _id: cachedZone.zoneId } : null;
 
       await Driver.findByIdAndUpdate(identity.sub, {
         socketId: socket.id,
         location: toPoint(normalizedCoords, 'coordinates'),
         zoneId: zone?._id || null,
       });
-      notifyLateAvailableDriver(identity.sub).catch((error) => {
-        console.error('Failed to notify late-available driver on location update', error);
-      });
+      if (nowMs - lastLateNotifyAt >= DRIVER_LATE_NOTIFY_MIN_INTERVAL_MS) {
+        lastLateNotifyAt = nowMs;
+        notifyLateAvailableDriver(identity.sub).catch((error) => {
+          console.error('Failed to notify late-available driver on location update', error);
+        });
+      }
     };
 
     socket.on('locationUpdate', onAsync(socket, handleDriverLocationSocketUpdate));

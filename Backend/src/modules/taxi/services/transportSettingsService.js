@@ -9,10 +9,44 @@ const toPositiveNumber = (value, fallback) => {
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : fallback;
 };
 
+// The dispatch/notify loops read these settings per ride per driver ping, but the values change
+// only when an admin edits them. Cache the single AdminBusinessSetting read for a short TTL so a
+// busy dispatch does not hammer Mongo; edits propagate within TTL_MS (no explicit invalidation).
+const SETTINGS_CACHE_TTL_MS = Number(process.env.TRANSPORT_SETTINGS_CACHE_TTL_MS) || 30000;
+let settingsCache = null;
+let settingsCacheExpiresAt = 0;
+let settingsCachePromise = null;
+
+const loadBusinessSettings = async () => {
+  const now = Date.now();
+  if (settingsCache && now < settingsCacheExpiresAt) {
+    return settingsCache;
+  }
+  // Collapse concurrent callers onto a single in-flight read.
+  if (!settingsCachePromise) {
+    settingsCachePromise = AdminBusinessSetting.findOne({ scope: 'default' })
+      .select('transport_ride bid_ride')
+      .lean()
+      .then((doc) => {
+        settingsCache = doc || {};
+        settingsCacheExpiresAt = Date.now() + SETTINGS_CACHE_TTL_MS;
+        return settingsCache;
+      })
+      .finally(() => {
+        settingsCachePromise = null;
+      });
+  }
+  return settingsCachePromise;
+};
+
+// Drop the cache immediately after an admin writes settings, so changes take effect at once.
+export const invalidateTransportSettingsCache = () => {
+  settingsCache = null;
+  settingsCacheExpiresAt = 0;
+};
+
 export const getTransportRideSettings = async () => {
-  const businessSettings = await AdminBusinessSetting.findOne({ scope: 'default' })
-    .select('transport_ride')
-    .lean();
+  const businessSettings = await loadBusinessSettings();
 
   return {
     ...defaultTransportRideSettings,
@@ -21,9 +55,7 @@ export const getTransportRideSettings = async () => {
 };
 
 export const getBidRideSettings = async () => {
-  const businessSettings = await AdminBusinessSetting.findOne({ scope: 'default' })
-    .select('bid_ride')
-    .lean();
+  const businessSettings = await loadBusinessSettings();
 
   return {
     ...defaultBidRideSettings,
