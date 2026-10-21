@@ -291,52 +291,6 @@ function CartInner() {
   const [openSuggestions, setOpenSuggestions] = useState([])
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
 
-  useEffect(() => {
-    if (!isRestaurantOffline) {
-      setOpenSuggestions([])
-      return
-    }
-
-    let isMounted = true
-    const fetchOpenSuggestions = async () => {
-      setLoadingSuggestions(true)
-      try {
-        // Only suggest restaurants from the same zone as the closed restaurant.
-        const zoneOf = (r) => String(r?.zoneId?._id || r?.zoneId?.id || r?.zoneId || "")
-        const currentZoneId = zoneOf(restaurantData)
-        const response = await restaurantAPI.getRestaurants({
-          limit: 30,
-          ...(currentZoneId ? { zoneId: currentZoneId } : {}),
-        })
-        const list = response?.data?.data?.restaurants || response?.data?.data || []
-        const currentId = String(restaurantData?._id || restaurantData?.restaurantId || "")
-
-        const openRestos = list.filter((r) => {
-          const rId = String(r._id || r.restaurantId || "")
-          if (rId && currentId && rId === currentId) return false
-          const rZoneId = zoneOf(r)
-          if (currentZoneId && rZoneId && rZoneId !== currentZoneId) return false
-          const status = getRestaurantAvailabilityStatus(r)
-          return status.isOpen
-        })
-
-        if (isMounted) {
-          setOpenSuggestions(openRestos.slice(0, 6))
-        }
-      } catch (err) {
-        debugWarn("Failed to fetch open restaurant suggestions:", err)
-      } finally {
-        if (isMounted) setLoadingSuggestions(false)
-      }
-    }
-
-    fetchOpenSuggestions()
-
-    return () => {
-      isMounted = false
-    }
-  }, [isRestaurantOffline, restaurantData])
-
   const [pricing, setPricing] = useState(null)
   const [loadingPricing, setLoadingPricing] = useState(false)
   const [pricingError, setPricingError] = useState(null)
@@ -664,6 +618,61 @@ function CartInner() {
     persistToStorage: false,
     usePersistedFallback: false,
   }) // Resolve zone for cart pricing only; do not overwrite global browse zone
+
+  const zoneOfRestaurant = (r) => String(r?.zoneId?._id || r?.zoneId?.id || r?.zoneId || "")
+  // Cart restaurant belongs to another zone than the delivery location (e.g. Indore restaurant, Dewas address).
+  const isRestaurantOutOfZone = useMemo(() => {
+    // Backend pricing also rejects it (covers restaurants without an explicit zoneId).
+    if (/does not deliver/i.test(String(pricingError || ""))) return true
+    const restZoneId = zoneOfRestaurant(restaurantData)
+    return Boolean(zoneId && restZoneId && String(zoneId) !== restZoneId)
+  }, [zoneId, restaurantData, pricingError])
+
+  useEffect(() => {
+    if (!isRestaurantOffline && !isRestaurantOutOfZone) {
+      setOpenSuggestions([])
+      return
+    }
+
+    let isMounted = true
+    const fetchOpenSuggestions = async () => {
+      setLoadingSuggestions(true)
+      try {
+        // Suggest open restaurants from the user's delivery zone, not the cart restaurant's zone.
+        const targetZoneId = String(zoneId || zoneOfRestaurant(restaurantData) || "")
+        const response = await restaurantAPI.getRestaurants({
+          limit: 30,
+          ...(targetZoneId ? { zoneId: targetZoneId } : {}),
+        })
+        const list = response?.data?.data?.restaurants || response?.data?.data || []
+        const currentId = String(restaurantData?._id || restaurantData?.restaurantId || "")
+
+        const openRestos = list.filter((r) => {
+          const rId = String(r._id || r.restaurantId || "")
+          if (rId && currentId && rId === currentId) return false
+          const rZoneId = zoneOfRestaurant(r)
+          if (targetZoneId && rZoneId && rZoneId !== targetZoneId) return false
+          const status = getRestaurantAvailabilityStatus(r)
+          return status.isOpen
+        })
+
+        if (isMounted) {
+          setOpenSuggestions(openRestos.slice(0, 6))
+        }
+      } catch (err) {
+        debugWarn("Failed to fetch open restaurant suggestions:", err)
+      } finally {
+        if (isMounted) setLoadingSuggestions(false)
+      }
+    }
+
+    fetchOpenSuggestions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isRestaurantOffline, isRestaurantOutOfZone, restaurantData, zoneId])
+
   const defaultPayment = getDefaultPaymentMethod()
 
   useEffect(() => {
@@ -1785,6 +1794,10 @@ function CartInner() {
       toast.error("Restaurant is offline. Cannot place order.")
       return
     }
+    if (isRestaurantOutOfZone) {
+      toast.error("This restaurant does not deliver to your selected location.")
+      return
+    }
 
     if (!hasSavedAddress) {
       toast.error("Please choose a delivery location to continue")
@@ -2414,6 +2427,36 @@ function CartInner() {
                 className="text-xs font-bold bg-white text-red-600 hover:bg-red-50 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs flex-shrink-0 self-stretch md:self-auto text-center cursor-pointer"
               >
                 View Open Outlets 👇
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Restaurant Outside Delivery Zone Banner (shown only when it is open; closed banner takes priority) */}
+        {!isRestaurantOffline && isRestaurantOutOfZone && (
+          <div className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white px-4 md:px-6 py-3.5 shadow-md flex-shrink-0">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-white/20 backdrop-blur-xs rounded-xl flex-shrink-0 mt-0.5">
+                  <MapPin className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm md:text-base font-bold tracking-tight">Doesn't Deliver to Your Location</h3>
+                  <p className="text-xs text-white/90 mt-0.5">
+                    <span className="font-semibold">{restaurantName}</span> is outside your current delivery zone. Change your address or order from a restaurant near you.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const suggestionsEl = document.getElementById("open-restaurant-suggestions");
+                  if (suggestionsEl) {
+                    suggestionsEl.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+                className="text-xs font-bold bg-white text-red-600 hover:bg-red-50 px-3.5 py-1.5 rounded-xl transition-colors shadow-xs flex-shrink-0 self-stretch md:self-auto text-center cursor-pointer"
+              >
+                View Nearby Restaurants 👇
               </button>
             </div>
           </div>
@@ -3279,8 +3322,8 @@ function CartInner() {
                 </div>
               </div>
 
-              {/* Open Restaurants Suggestions when offline */}
-              {isRestaurantOffline && (
+              {/* Open Restaurants Suggestions when offline or outside the delivery zone */}
+              {(isRestaurantOffline || isRestaurantOutOfZone) && (
                 <div id="open-restaurant-suggestions" className="mt-6 mb-6 p-4 md:p-6 bg-gradient-to-br from-orange-50/90 to-amber-50/50 dark:from-orange-950/20 dark:to-amber-950/10 border border-orange-200/80 dark:border-orange-900/40 rounded-3xl shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -3413,13 +3456,15 @@ function CartInner() {
                   ? handleLoginRedirect
                   : isRestaurantOffline
                   ? () => toast.error("Restaurant is currently closed. Please order from an open outlet.")
+                  : isRestaurantOutOfZone
+                  ? () => toast.error("This restaurant does not deliver to your selected location.")
                   : pricingError
                   ? () => toast.error(pricingError)
                   : handlePlaceOrder
               }
-              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || !!pricingError || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline)}
+              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || !!pricingError || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline || isRestaurantOutOfZone)}
               className={`w-full ${
-                isRestaurantOffline || pricingError
+                isRestaurantOffline || isRestaurantOutOfZone || pricingError
                   ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed shadow-none"
                   : "bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-[#E23744] hover:from-[color:var(--app-secondary,#D94F0C)] hover:to-[#CF2834] shadow-lg shadow-[color:var(--app-primary,#EB590E)]/30"
               } text-white px-6 h-12 md:h-14 rounded-2xl font-bold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]`}
@@ -3435,6 +3480,8 @@ function CartInner() {
                   ? "Login to Place Order"
                   : isRestaurantOffline
                   ? "Restaurant Closed"
+                  : isRestaurantOutOfZone
+                  ? "Doesn't Deliver Here"
                   : pricingError
                   ? (/outside|service zone/i.test(String(pricingError)) ? "Location Outside Delivery Zone" : "Cart needs an update")
                   : isPlacingOrder

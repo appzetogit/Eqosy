@@ -275,6 +275,14 @@ export async function calculateOrderPricing(userId, dto) {
       if (!customerZoneId) {
         throw new ValidationError('Your selected delivery location is outside our service zone. Delivery is not available to this location.');
       }
+      // Restaurant only delivers inside its own zone (e.g. an Indore restaurant cannot deliver to Dewas).
+      const explicitRestZoneId = restaurant?.zoneId ? String(restaurant.zoneId) : '';
+      const restaurantZoneId = activeZones.some((z) => String(z._id) === explicitRestZoneId)
+        ? explicitRestZoneId
+        : await detectZoneIdFromAddress(restaurant);
+      if (restaurantZoneId && String(restaurantZoneId) !== String(customerZoneId)) {
+        throw new ValidationError('This restaurant does not deliver to your selected location. Please choose a restaurant near you.');
+      }
     }
 
     // 2. Maximum Delivery Distance Validation

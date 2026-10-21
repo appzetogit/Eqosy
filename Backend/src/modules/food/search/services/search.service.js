@@ -5,6 +5,21 @@ import { FoodZone } from '../../admin/models/zone.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import mongoose from 'mongoose';
 
+/** Ray-casting point-in-polygon over zone coordinates ({ latitude, longitude } points). */
+function isPointInZone(lat, lng, polygon = []) {
+    if (!Array.isArray(polygon) || polygon.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = Number(polygon[i]?.longitude ?? polygon[i]?.lng);
+        const yi = Number(polygon[i]?.latitude ?? polygon[i]?.lat);
+        const xj = Number(polygon[j]?.longitude ?? polygon[j]?.lng);
+        const yj = Number(polygon[j]?.latitude ?? polygon[j]?.lat);
+        const intersects = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+        if (intersects) inside = !inside;
+    }
+    return inside;
+}
+
 /**
  * Unified Search Service
  * Searches for restaurants by name and also searches for food items, 
@@ -45,8 +60,8 @@ export const searchUnified = async (query = {}, options = {}) => {
         const lngNum = parseFloat(lng);
         if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
             try {
-                const { findMatchingZone } = await import('../../restaurant/services/zone.service.js');
-                const matchedZone = await findMatchingZone(latNum, lngNum);
+                const zones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
+                const matchedZone = zones.find((z) => isPointInZone(latNum, lngNum, z.coordinates));
                 if (matchedZone?._id) {
                     resolvedZoneId = new mongoose.Types.ObjectId(String(matchedZone._id));
                 }
