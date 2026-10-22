@@ -344,6 +344,13 @@ async function filterPartnersByCodCashLimit(partners = [], order = null) {
     );
   }
 
+  if (eligiblePartners.length === 0 && partners.length > 0) {
+    logger.warn(
+      `[DeliveryDispatch] All ${partners.length} online partner(s) exceed COD cash limit for order ${order?._id || ''}. Falling back to available online partners so order is not stuck.`,
+    );
+    return partners;
+  }
+
   return eligiblePartners;
 }
 
@@ -474,7 +481,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       }
     }
 
-    const codEligiblePartners = await filterPartnersByCodCashLimit(partners, order);
+    const codEligiblePartners = forceRebroadcast ? partners : await filterPartnersByCodCashLimit(partners, order);
 
     // Filter to strictly ONLINE delivery partners right now
     const partnerIdsToVerify = codEligiblePartners.map(p => p.partnerId).filter(Boolean);
@@ -515,53 +522,55 @@ export async function tryAutoAssign(orderId, options = {}) {
       eligible.push(targets[0]);
     }
 
-    // Pick the SINGLE CLOSEST delivery partner from eligible
-    const targetPartner = eligible[0];
-    const roundedDistanceKm = Number.isFinite(Number(targetPartner.distanceKm))
-      ? Math.round(Number(targetPartner.distanceKm) * 10) / 10
-      : 0;
-    const formattedDistanceKmStr = roundedDistanceKm.toFixed(1);
-
-    logger.info(`tryAutoAssign: Offering order ${order._id} to CLOSEST partner ${targetPartner.partnerId} (${formattedDistanceKmStr} km).`);
-
+    const targetsToNotify = forceRebroadcast ? (eligible.length > 0 ? eligible : partners) : [eligible[0]];
     const io = getIO();
     const payload = buildDeliverySocketPayload(order, order.restaurantId);
 
-    if (io) {
-      const roomName = rooms.delivery(targetPartner.partnerId);
-      io.to(roomName).emit('new_order', { ...payload, pickupDistanceKm: roundedDistanceKm, forceAlert: true });
-      io.to(roomName).emit('play_notification_sound', { ...payload, pickupDistanceKm: roundedDistanceKm });
-    }
+    for (const targetPartner of targetsToNotify) {
+      const roundedDistanceKm = Number.isFinite(Number(targetPartner.distanceKm))
+        ? Math.round(Number(targetPartner.distanceKm) * 10) / 10
+        : 0;
+      const formattedDistanceKmStr = roundedDistanceKm.toFixed(1);
 
-    try {
-      await notifyOwnersSafely(
-        [{ ownerType: 'DELIVERY_PARTNER', ownerId: targetPartner.partnerId }],
-        {
-          title: 'New order request! 🛵',
-          body: `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). Accept now!`,
-          data: {
-            type: 'new_order',
-            orderId: order._id.toString(),
-            order_id: order.order_id || order.orderId || order._id.toString(),
-            displayOrderId: order.order_id || order.orderId || order._id.toString(),
-            targetUrl: '/food/delivery/feed',
-            link: '/food/delivery/feed',
-            click_action: '/food/delivery/feed',
-            role: 'delivery',
-          },
-        }
-      );
-    } catch (err) {
-      logger.warn(`Push notification failed for rider ${targetPartner.partnerId}: ${err.message}`);
+      logger.info(`tryAutoAssign: Offering order ${order._id} to partner ${targetPartner.partnerId} (${formattedDistanceKmStr} km).`);
+
+      if (io) {
+        const roomName = rooms.delivery(targetPartner.partnerId);
+        io.to(roomName).emit('new_order', { ...payload, pickupDistanceKm: roundedDistanceKm, forceAlert: true });
+        io.to(roomName).emit('play_notification_sound', { ...payload, pickupDistanceKm: roundedDistanceKm });
+      }
+
+      try {
+        await notifyOwnersSafely(
+          [{ ownerType: 'DELIVERY_PARTNER', ownerId: targetPartner.partnerId }],
+          {
+            title: 'New order request! 🛵',
+            body: `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). Accept now!`,
+            data: {
+              type: 'new_order',
+              orderId: order._id.toString(),
+              order_id: order.order_id || order.orderId || order._id.toString(),
+              displayOrderId: order.order_id || order.orderId || order._id.toString(),
+              targetUrl: '/food/delivery/feed',
+              link: '/food/delivery/feed',
+              click_action: '/food/delivery/feed',
+              role: 'delivery',
+            },
+          }
+        );
+      } catch (err) {
+        logger.warn(`Push notification failed for rider ${targetPartner.partnerId}: ${err.message}`);
+      }
+
+      order.dispatch.offeredTo.push({
+        partnerId: targetPartner.partnerId,
+        at: new Date(),
+        action: 'offered'
+      });
     }
 
     order.dispatch.status = 'unassigned';
     order.dispatch.deliveryPartnerId = null;
-    order.dispatch.offeredTo.push({
-      partnerId: targetPartner.partnerId,
-      at: new Date(),
-      action: 'offered'
-    });
     await order.save();
 
     // Schedule 30-second timeout check for this driver. If they don't accept in 30s, dispatch to the next closest driver!
@@ -569,7 +578,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       action: 'DISPATCH_TIMEOUT_CHECK',
       orderMongoId: order._id.toString(),
       orderId: order._id.toString(),
-      partnerId: targetPartner.partnerId.toString(),
+      partnerId: (targetsToNotify[0]?.partnerId || "").toString(),
       attempt: attempt + 1
     }, 30000);
 

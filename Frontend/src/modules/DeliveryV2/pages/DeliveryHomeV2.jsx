@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
 import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
-import { useDeliveryNotifications } from '@food/hooks/useDeliveryNotifications';
+import { useDeliveryNotifications, resolveDeliveryPartnerIdFromClient } from '@food/hooks/useDeliveryNotifications';
 import { writeOrderTracking } from '@food/realtimeTracking';
 import { deliveryAPI } from '@food/api';
 import { uploadService } from '@/modules/Taxi/shared/services/uploadService';
@@ -234,6 +234,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const { isWithinRange, distanceToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
   const {
+    deliveryPartnerId: hookPartnerId,
     newOrder,
     clearNewOrder,
     orderStatusUpdate,
@@ -248,6 +249,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const companyName = useCompanyName();
   const { unreadCount: notificationUnreadCount } = useNotificationInbox("delivery", { limit: 20 });
 
+  const deliveryPartnerId = hookPartnerId || resolveDeliveryPartnerIdFromClient();
   const [incomingOrder, setIncomingOrder] = useState(null);
   const [currentTab, setCurrentTab] = useState(tab);
   const ignoredOrderIdsRef = useRef(new Set());
@@ -1279,7 +1281,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           availableResponse?.data?.data ||
           availableResponse?.data ||
           {};
-        const availableOrders = Array.isArray(availablePayload?.docs)
+        const availableOrders = Array.isArray(availablePayload?.data)
+          ? availablePayload.data
+          : Array.isArray(availablePayload?.docs)
           ? availablePayload.docs
           : Array.isArray(availablePayload?.items)
             ? availablePayload.items
@@ -1293,7 +1297,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
           const offeredTo = order?.dispatch?.offeredTo || [];
           const isRejectedByMe = offeredTo.some(
-            (o) => String(o.partnerId) === String(deliveryPartnerId) && ['rejected', 'timeout', 'handed_over'].includes(o.action)
+            (o) => String(o.partnerId) === String(deliveryPartnerId) && ['rejected', 'handed_over'].includes(o.action)
           );
           if (isRejectedByMe) return false;
 

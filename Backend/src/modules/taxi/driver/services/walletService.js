@@ -118,14 +118,22 @@ const isEnabledSetting = (value, fallback = true) => {
 
 const resolveWalletRules = async () => {
   const walletSettings = await getWalletSettings();
-  const configuredMinimumBalance = Number(walletSettings.driver_wallet_minimum_amount_to_get_an_order);
-  const minimumBalanceForOrders = Number.isFinite(configuredMinimumBalance)
-    ? Math.round(configuredMinimumBalance * 100) / 100
-    : -toNonNegativeNumber(env.driverWallet.defaultCashLimit, 500);
+  const configuredValue = Number(walletSettings.driver_wallet_minimum_amount_to_get_an_order);
+  const defaultCashLimit = toNonNegativeNumber(env.driverWallet.defaultCashLimit, 500);
+
+  // If a negative minimum balance is explicitly configured (e.g. -500), honor it directly.
+  // If a positive value was entered as the cash debt limit (e.g. 100 or 500), or seeded as 100,
+  // interpret it as the cash limit floor (-configuredValue) so drivers with 0 balance are never blocked.
+  let minimumBalanceForOrders = -defaultCashLimit;
+  if (Number.isFinite(configuredValue) && configuredValue !== 0) {
+    minimumBalanceForOrders = configuredValue < 0 ? configuredValue : -configuredValue;
+  }
+
+  const effectiveCashLimit = Math.abs(minimumBalanceForOrders);
 
   return {
     minimumBalanceForOrders,
-    cashLimit: Math.abs(Math.min(minimumBalanceForOrders, 0)),
+    cashLimit: effectiveCashLimit,
     minimumTopUpAmount: toNonNegativeNumber(walletSettings.minimum_amount_added_to_wallet, 0),
     minimumTransferAmount: toNonNegativeNumber(walletSettings.minimum_wallet_amount_for_transfer, 0),
     isWalletEnabled: isEnabledSetting(walletSettings.show_wallet_feature_for_driver, true),
@@ -136,13 +144,19 @@ const resolveWalletRules = async () => {
 const getWalletSnapshot = async (driver) => {
   const rules = await resolveWalletRules();
   const balance = Number(driver?.wallet?.balance || 0);
+  const driverCustomCashLimit = Number(driver?.wallet?.cashLimit || 0);
+  const effectiveCashLimit = driverCustomCashLimit > 0 ? driverCustomCashLimit : rules.cashLimit;
+  const effectiveMinBalance = -Math.abs(effectiveCashLimit);
+
+  // Driver is only blocked if their balance drops below their negative cash limit (debt exceeded)
+  const isBlocked = !rules.isWalletEnabled || balance < effectiveMinBalance;
 
   return {
     balance,
-    cashLimit: rules.cashLimit,
-    minimumBalanceForOrders: rules.minimumBalanceForOrders,
-    availableForOrders: Math.round((balance - rules.minimumBalanceForOrders) * 100) / 100,
-    isBlocked: Boolean(driver?.wallet?.isBlocked),
+    cashLimit: effectiveCashLimit,
+    minimumBalanceForOrders: effectiveMinBalance,
+    availableForOrders: Math.round((balance - effectiveMinBalance) * 100) / 100,
+    isBlocked,
     rules,
   };
 };
@@ -159,7 +173,7 @@ export const serializeDriverWallet = async (driver) => {
     isTransferEnabled: wallet.rules.isTransferEnabled,
     minimumTopUpAmount: wallet.rules.minimumTopUpAmount,
     minimumTransferAmount: wallet.rules.minimumTransferAmount,
-    isBlocked: wallet.isBlocked || !wallet.rules.isWalletEnabled || wallet.balance <= wallet.minimumBalanceForOrders,
+    isBlocked: wallet.isBlocked,
   };
 };
 
@@ -174,7 +188,7 @@ export const ensureDriverWalletCanAcceptRide = async (driverOrId, { session } = 
   }
 
   const wallet = await getWalletSnapshot(driver);
-  const isBlocked = wallet.isBlocked || !wallet.rules.isWalletEnabled || wallet.balance <= wallet.minimumBalanceForOrders;
+  const isBlocked = wallet.isBlocked;
 
   if (isBlocked) {
     await Driver.findByIdAndUpdate(driver._id, {
@@ -219,7 +233,7 @@ export const applyDriverWalletAdjustment = async ({
 
   const before = await getWalletSnapshot(driver);
   const balanceAfter = Math.round((before.balance + normalizedAmount) * 100) / 100;
-  const isBlockedAfter = !before.rules.isWalletEnabled || balanceAfter <= before.minimumBalanceForOrders;
+  const isBlockedAfter = !before.rules.isWalletEnabled || balanceAfter < before.minimumBalanceForOrders;
 
   const updatedDriver = await Driver.findByIdAndUpdate(
     driverId,

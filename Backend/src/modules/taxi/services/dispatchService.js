@@ -729,9 +729,6 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     );
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const dispatchState = getDispatchState(rideId);
-    if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
-      closeDriverRequestWindow(rideId, dispatchState.driverIds);
-    }
 
     const { zone, drivers, searchRadiusMeters } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
@@ -765,6 +762,13 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       : availableDrivers.slice(0, 1);
     const targetDriverIds = targetDrivers.map((driver) => String(driver._id));
     const nextNotifiedDriverIds = [...new Set([...dispatchState.notifiedDriverIds, ...targetDriverIds])];
+
+    if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
+      const driversToClose = dispatchState.driverIds.filter((id) => !targetDriverIds.includes(String(id)));
+      if (driversToClose.length) {
+        closeDriverRequestWindow(rideId, driversToClose);
+      }
+    }
 
     saveDispatchState(rideId, {
       radiusIndex: attemptIndex,

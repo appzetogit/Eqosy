@@ -263,7 +263,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
       $not: {
         $elemMatch: {
           partnerId: partnerObjId,
-          action: { $in: ['handover', 'handed_over', 'rejected', 'timeout'] }
+          action: { $in: ['handover', 'handed_over', 'rejected'] }
         }
       }
     },

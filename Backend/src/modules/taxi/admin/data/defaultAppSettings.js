@@ -6,7 +6,7 @@ export const createDefaultAppSettings = () => ({
   scope: 'default',
   wallet_setting: {
     minimum_wallet_amount_for_transfer: '100',
-    driver_wallet_minimum_amount_to_get_an_order: '100',
+    driver_wallet_minimum_amount_to_get_an_order: '-500',
     owner_wallet_minimum_amount_to_get_an_order: '100',
     minimum_amount_added_to_wallet: '500',
     enable_joining_bonus: '1',

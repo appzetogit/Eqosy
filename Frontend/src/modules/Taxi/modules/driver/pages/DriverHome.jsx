@@ -1716,10 +1716,15 @@ const DriverHome = () => {
     }, [isOnline, presentRideRequest]);
 
     useEffect(() => {
-        if (isOnline && !isHydratingDriver) {
-            checkPendingDispatch();
-        }
-    }, [checkPendingDispatch, isHydratingDriver, isOnline]);
+        if (!isOnline || isHydratingDriver) return;
+        checkPendingDispatch();
+        const poller = setInterval(() => {
+            if (!document.hidden && !currentRequestRef.current && !activeTrip) {
+                checkPendingDispatch();
+            }
+        }, 5000);
+        return () => clearInterval(poller);
+    }, [checkPendingDispatch, isHydratingDriver, isOnline, activeTrip]);
 
     const recoverRealtimeSession = useCallback(async ({ reason = 'resume' } = {}) => {
         if (!isOnline || isHydratingDriver || isTogglingDuty) {
@@ -1847,7 +1852,7 @@ const DriverHome = () => {
                 // Events queued while the app was backgrounded arrive late on resume. An offer whose window
                 // already passed would flash and close; ask the server for what is still live instead.
                 const expiresAtMs = data?.requestExpiresAt ? new Date(data.requestExpiresAt).getTime() : NaN;
-                if (Number.isFinite(expiresAtMs) && expiresAtMs < Date.now() - 2000) {
+                if (Number.isFinite(expiresAtMs) && expiresAtMs < Date.now() - 30000) {
                     checkPendingDispatch(data.rideId);
                     return;
                 }

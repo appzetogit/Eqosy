@@ -147,7 +147,7 @@ const decodeJwtPayload = (token) => {
   }
 };
 
-const resolveDeliveryPartnerIdFromClient = () => {
+export const resolveDeliveryPartnerIdFromClient = () => {
   try {
     const storedUser =
       safeReadJson('delivery_user') ||
@@ -620,7 +620,9 @@ export const useDeliveryNotifications = () => {
           availableResult.value?.data ??
           {}
           : {};
-      const availableOrders = Array.isArray(availablePayload?.docs)
+      const availableOrders = Array.isArray(availablePayload?.data)
+        ? availablePayload.data
+        : Array.isArray(availablePayload?.docs)
         ? availablePayload.docs
         : Array.isArray(availablePayload?.items)
           ? availablePayload.items
@@ -1483,6 +1485,7 @@ export const useDeliveryNotifications = () => {
   }, []);
 
   return {
+    deliveryPartnerId,
     newOrder,
     clearNewOrder,
     orderReady,
