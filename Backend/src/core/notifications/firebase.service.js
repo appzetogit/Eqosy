@@ -291,14 +291,22 @@ const buildMessagePayload = (payload = {}, token) => {
     data.ring = ring ? 'true' : 'false';
     message.data = data;
 
+    // Android channel that plays the long order ringtone. The app must create this channel with its
+    // ringtone (Android 8+ ignores `sound` and uses the channel's sound); a missing channel falls back
+    // to the app's default channel, so the notification still shows.
+    const ringChannelId = process.env.FCM_RING_CHANNEL_ID || 'default';
+    const ringSound = process.env.FCM_RING_SOUND || 'default';
+
     message.android = {
         priority: 'high',
         notification: {
-            channel_id: isChat ? 'chat_messages' : (ring ? 'default' : 'silent_channel'),
-            ...(ring ? { sound: payload.sound || 'default' } : (isChat ? { sound: 'default' } : {})),
+            channel_id: isChat ? 'chat_messages' : (ring ? ringChannelId : 'silent_channel'),
+            ...(ring ? { sound: payload.sound || ringSound } : (isChat ? { sound: 'default' } : {})),
             default_vibrate_timings: ring || isChat,
             default_light_settings: true,
-            ...(targetLink ? { click_action: targetLink } : {})
+            // No click_action here: on Android it is an intent action, not a URL. A path like
+            // "/food/delivery/feed" matches no activity, so tapping the notification opened nothing.
+            // Without it Android opens the app; the target page travels in data.link / data.targetUrl.
         }
     };
 

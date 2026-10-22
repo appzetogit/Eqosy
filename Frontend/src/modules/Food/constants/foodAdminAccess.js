@@ -262,6 +262,7 @@ const PATH_RESOURCE_RULES = [
 
   { prefix: '/admin/food/reports', resource: 'reports' },
   { prefix: '/admin/food/transaction-report', resource: 'reports' },
+  { prefix: '/admin/food/new-repeat-orders', resource: 'reports' },
   { prefix: '/admin/food/order-report', resource: 'reports' },
   { prefix: '/admin/food/tax-report', resource: 'reports' },
   { prefix: '/admin/food/restaurant-report', resource: 'reports' },

@@ -25,9 +25,13 @@ import {
   CURRENT_RIDE_UPDATED_EVENT,
   getCurrentRide,
   isActiveCurrentRide,
+  isSearchingCurrentRide,
   saveCurrentRide,
   clearCurrentRide,
 } from '../services/currentRideService';
+
+// Home shows both live rides and bookings still searching for a captain.
+const isShownCurrentRide = (ride) => isActiveCurrentRide(ride) || isSearchingCurrentRide(ride);
 
 const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
@@ -210,7 +214,7 @@ const Home = ({ embedded = false }) => {
       clearCurrentRide();
       return null;
     }
-    return isActiveCurrentRide(ride) ? ride : null;
+    return isShownCurrentRide(ride) ? ride : null;
   });
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [endingRide, setEndingRide] = useState(false);
@@ -229,7 +233,7 @@ const Home = ({ embedded = false }) => {
   }, []);
 
   const persistCurrentRide = (ride) => {
-    const normalizedRide = isActiveCurrentRide(ride) ? ride : null;
+    const normalizedRide = isShownCurrentRide(ride) ? ride : null;
     setCurrentRide(normalizedRide);
 
     if (normalizedRide) {
@@ -324,7 +328,7 @@ const Home = ({ embedded = false }) => {
         setCurrentRide(isActiveCurrentRide(normalizedRentalRide) ? normalizedRentalRide : null);
         return;
       }
-      setCurrentRide(isActiveCurrentRide(ride) ? ride : null);
+      setCurrentRide(isShownCurrentRide(ride) ? ride : null);
     };
 
     refreshCurrentRide();
@@ -473,12 +477,17 @@ const Home = ({ embedded = false }) => {
   const serviceType = String(currentRide?.serviceType || currentRide?.type || 'ride').toLowerCase();
   const vehicleLabel = currentRide?.driver?.vehicle || currentRide?.driver?.vehicleType || (serviceType === 'parcel' ? 'Parcel' : serviceType === 'rental' ? 'Rental' : 'Taxi');
   const currentRideIcon = getCurrentRideIcon(currentRide);
+  const isSearchingRide = isSearchingCurrentRide(currentRide);
   const trackingPath =
-    serviceType === 'parcel'
+    isSearchingRide
+      ? `${routePrefix}/ride/searching`
+      : serviceType === 'parcel'
       ? `${routePrefix}/parcel/tracking`
       : serviceType === 'rental'
         ? `${routePrefix}/rental/confirmed`
         : `${routePrefix}/ride/tracking`;
+  // A searching booking reopens the search screen for that ride (no new booking is created).
+  const currentRideNavState = isSearchingRide ? { ...currentRide, resumeRideId: currentRide.rideId } : currentRide;
   const rideStage = String(currentRide?.liveStatus || currentRide?.status || 'accepted').toLowerCase();
   const hasAssignedDriver = Boolean(currentRide?.driver?._id || currentRide?.driver?.id || currentRide?.driver?.name);
   const scheduledTimestamp = currentRide?.scheduledAt ? new Date(currentRide.scheduledAt).getTime() : NaN;
@@ -486,7 +495,9 @@ const Home = ({ embedded = false }) => {
   const isScheduledUpcoming = isScheduledRide && scheduledTimestamp > clockNow;
   const isScheduledAcceptedRide = ['ride', 'intercity'].includes(serviceType) && isScheduledUpcoming && hasAssignedDriver && ['accepted', 'arriving'].includes(rideStage);
   const rideStageLabel =
-    serviceType === 'rental'
+    isSearchingRide
+      ? 'Searching for a captain…'
+      : serviceType === 'rental'
       ? rideStage === 'end_requested'
         ? 'End ride review pending'
         : rideStage === 'assigned'
@@ -745,7 +756,7 @@ const Home = ({ embedded = false }) => {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(trackingPath, { state: currentRide })}
+            onClick={() => navigate(trackingPath, { state: currentRideNavState })}
             className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[20px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900 shadow-lg">
@@ -755,7 +766,9 @@ const Home = ({ embedded = false }) => {
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
                 <p className="text-[9px] font-black uppercase tracking-[0.22em] text-orange-600">
-                  {isScheduledAcceptedRide
+                  {isSearchingRide
+                    ? 'Finding your ride'
+                    : isScheduledAcceptedRide
                     ? 'Scheduled ride ready'
                     : serviceType === 'parcel'
                       ? 'Parcel in progress'

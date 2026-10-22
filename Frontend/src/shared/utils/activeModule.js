@@ -1,5 +1,7 @@
 export const ACTIVE_MODULE_KEY = 'eqosy_active_module'
 export const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
+// When the user was last on NATIVE_LAST_ROUTE_KEY (updated when the app goes to the background).
+export const NATIVE_LAST_ROUTE_AT_KEY = 'native_last_route_at'
 
 export const FOOD_ADMIN_HOME = '/admin/food'
 export const TAXI_ADMIN_HOME = '/taxi/admin/dashboard'

@@ -4,7 +4,7 @@ import { Toaster } from 'sonner'
 import App from './app/App.jsx'
 import { isModuleAuthenticated } from './modules/Food/utils/auth.js'
 import { syncThemeForPath } from './shared/utils/theme.js'
-import { NATIVE_LAST_ROUTE_KEY } from './shared/utils/activeModule.js'
+import { NATIVE_LAST_ROUTE_AT_KEY, NATIVE_LAST_ROUTE_KEY } from './shared/utils/activeModule.js'
 import './shared/styles/global.css'
 import { registerSW } from 'virtual:pwa-register'
 
@@ -98,6 +98,41 @@ function isNativeLikeShell() {
   )
 }
 
+// Customer app: relaunching soon after leaving with the Home button reopens the page the user was on.
+// Exiting with Back always happens from a home screen, which is never restored, so that relaunch starts fresh.
+const USER_APP_ENTRY_ROUTES = ['/', '/food/user', '/taxi/user']
+const RESUME_LAST_ROUTE_MAX_AGE_MS = 30 * 60 * 1000
+
+function resolveResumableUserRoute(pathname) {
+  if (!USER_APP_ENTRY_ROUTES.includes(pathname.replace(/\/$/, '') || '/')) return ''
+  try {
+    const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
+    const leftAt = Number(localStorage.getItem(NATIVE_LAST_ROUTE_AT_KEY) || 0)
+    if (!storedRoute || !leftAt || Date.now() - leftAt > RESUME_LAST_ROUTE_MAX_AGE_MS) return ''
+
+    const storedPath = storedRoute.split('?')[0].replace(/\/$/, '')
+    const isInnerUserPage =
+      (storedPath.startsWith('/food/user/') || storedPath.startsWith('/taxi/user/')) &&
+      !/\/(auth|login|signup|onboarding|verify-otp)(\/|$)/.test(storedPath)
+    if (!isInnerUserPage) return ''
+
+    // Pages that need in-memory router state cannot be rebuilt after a relaunch.
+    const TRANSIENT_SEGMENTS = [
+      '/ride/select-vehicle', '/ride/select-location', '/ride/searching',
+      '/ride/tracking', '/ride/complete', '/ride/chat',
+      '/parcel/searching', '/parcel/tracking', '/parcel/details', '/parcel/contacts',
+      '/intercity/details', '/intercity/confirm',
+      '/rental/vehicle', '/rental/schedule', '/rental/kyc', '/rental/deposit', '/rental/confirmed',
+    ]
+    if (TRANSIENT_SEGMENTS.some((s) => storedPath.includes(s))) return ''
+    if (pathname === '/' && !isModuleAuthenticated('user')) return ''
+
+    return storedRoute
+  } catch {
+    return ''
+  }
+}
+
 function resolveNativeInitialRoute() {
   if (typeof window === 'undefined') return '/'
 
@@ -147,11 +182,23 @@ function bootstrapNativeHashRoute() {
 
   const rawPathname = String(window.location?.pathname || '')
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
+  const currentHash = String(window.location?.hash || '')
+
+  // Fresh launch (no hash yet) on a home screen: reopen the page left a moment ago,
+  // with home underneath so Back returns home instead of closing the app.
+  if (!currentHash.startsWith('#/')) {
+    const resumeRoute = resolveResumableUserRoute(pathname)
+    if (resumeRoute) {
+      const homeRoute = resumeRoute.startsWith('/taxi/') ? '/taxi/user' : '/food/user'
+      window.history.replaceState(null, '', `#${homeRoute}`)
+      window.history.pushState(null, '', `#${resumeRoute}`)
+      return
+    }
+  }
 
   // Web root domain '/' must never be redirected to a hash route
   if (pathname === '/' || pathname === '') return
 
-  const currentHash = String(window.location?.hash || '')
   const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
   const targetPath = resolveNativeInitialRoute()
   const search = String(window.location?.search || '')

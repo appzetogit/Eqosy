@@ -34,6 +34,8 @@ const applyZonePayload = (data, { setZoneId, setZone, setZoneStatus, persistToSt
     if (persistToStorage) {
       localStorage.setItem('userZoneId', data.zoneId)
       localStorage.setItem('userZone', JSON.stringify(data.zone))
+      // Same-tab listeners (e.g. the cart) need to know the user's browse zone changed.
+      window.dispatchEvent(new CustomEvent('userZoneChanged', { detail: { zoneId: String(data.zoneId) } }))
     }
   } else {
     setZoneId(null)

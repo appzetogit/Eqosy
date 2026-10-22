@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useLocation } from "react-router-dom"
+import { toast } from "sonner"
 import { buildCartLineId } from "@food/utils/foodVariants"
 import EqosyCartLoader from "@food/components/ui/EqosyCartLoader"
 const debugLog = (...args) => { }
@@ -222,12 +223,55 @@ export function CartProvider({ children }) {
     }, durationMs);
   }, []);
 
+  // A cart belongs to the zone the user was in when they filled it. Moving to another zone
+  // (e.g. Dewas -> Indore) clears it, since those restaurants cannot deliver there.
+  useEffect(() => {
+    try {
+      if (allCart.length === 0) {
+        localStorage.removeItem("cart_zone_id")
+      } else if (!localStorage.getItem("cart_zone_id")) {
+        const currentZoneId = localStorage.getItem("userZoneId")
+        if (currentZoneId) localStorage.setItem("cart_zone_id", currentZoneId)
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [allCart])
+
+  const allCartRef = useRef(allCart)
+  allCartRef.current = allCart
+
+  useEffect(() => {
+    const handleZoneChanged = (event) => {
+      const newZoneId = String(event?.detail?.zoneId || "")
+      let cartZoneId = ""
+      try {
+        cartZoneId = localStorage.getItem("cart_zone_id") || ""
+      } catch {
+        return
+      }
+      if (!newZoneId || !cartZoneId || newZoneId === cartZoneId) return
+      if (allCartRef.current.length > 0) {
+        setAllCart([])
+        toast.info("Your location changed to another zone, so your cart was cleared.")
+      }
+      try {
+        localStorage.removeItem("cart_zone_id")
+      } catch {
+        // ignore storage errors
+      }
+    }
+    window.addEventListener("userZoneChanged", handleZoneChanged)
+    return () => window.removeEventListener("userZoneChanged", handleZoneChanged)
+  }, [])
+
   // Persist to localStorage whenever cart changes
   useEffect(() => {
     try {
       // Only save if we have items or user is authenticated to avoid cluttering localStorage for every guest visitor
       const isAuthenticated = localStorage.getItem("user_authenticated") === "true" || !!localStorage.getItem("user_accessToken");
-      if (allCart.length > 0 || isAuthenticated) {
+      // Also write an emptied cart, otherwise a cleared guest cart comes back on reload.
+      if (allCart.length > 0 || isAuthenticated || localStorage.getItem("cart")) {
         localStorage.setItem("cart", JSON.stringify(normalizeCartData(allCart)))
       }
     } catch {

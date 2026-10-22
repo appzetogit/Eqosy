@@ -41,6 +41,23 @@ export const isActiveCurrentRide = (ride) => {
   return ACTIVE_RIDE_STATUSES.has(liveStatus || status || 'accepted');
 };
 
+// A booking still waiting for a captain. Shown on Home so the user can reopen the search or cancel it.
+// Parcel and rental bookings have their own flows, so only rides (incl. intercity) count here.
+export const isSearchingCurrentRide = (ride) => {
+  if (!ride?.rideId) {
+    return false;
+  }
+
+  const serviceType = String(ride.serviceType || ride.type || 'ride').toLowerCase();
+  if (serviceType === 'parcel' || serviceType === 'rental') {
+    return false;
+  }
+
+  const status = String(ride.status || '').toLowerCase();
+  const liveStatus = String(ride.liveStatus || '').toLowerCase();
+  return (liveStatus || status) === 'searching';
+};
+
 export const saveCurrentRide = (ride) => {
   if (typeof window === 'undefined' || !ride?.rideId) {
     return;

@@ -248,6 +248,7 @@ const DriverRideRequestListener = () => {
                 raw: data,
             };
 
+            requestRef.current = request;
             setCurrentRequest(request);
             playRideRequestAlertSound();
         };
@@ -256,7 +257,9 @@ const DriverRideRequestListener = () => {
             if (acceptingRideIdRef.current && acceptingRideIdRef.current === rideId) return;
 
             const activeRequest = requestRef.current;
-            if (!activeRequest?.rideId || activeRequest.rideId === rideId) {
+            // Close only the card this event is about; a close for another ride must not hide a new request.
+            if (!rideId || activeRequest?.rideId === rideId) {
+                requestRef.current = null;
                 stopRideRequestAlertSound();
                 setCurrentRequest(null);
             }

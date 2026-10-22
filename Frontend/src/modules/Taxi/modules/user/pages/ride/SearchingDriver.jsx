@@ -7,7 +7,7 @@ import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
-import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
+import { clearCurrentRide, getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import toast from 'react-hot-toast';
 
@@ -291,6 +291,8 @@ const SearchingDriver = () => {
   );
   const activeRideIdRef = useRef('');
   const searchNonce = String(routeState.searchNonce || '');
+  // Set when the user reopens a booking that is still searching (from Home): reuse it, never create a new one.
+  const resumeRideId = String(routeState.resumeRideId || '');
   // Only the negotiation mode decides: a city ride with bookingMode "bidding" is the "raise the fare" flow, not drivers
   // sending bids (that list would stay empty because no driver ever bids on it).
   const isDriverBidRide = biddingSummary.pricingNegotiationMode === 'driver_bid';
@@ -419,6 +421,10 @@ const SearchingDriver = () => {
   }, [canIncreaseFare, isUserIncrementRide]);
 
   useEffect(() => {
+    if (resumeRideId) {
+      return undefined;
+    }
+
     if (!searchNonce) {
       navigate(userHomeRoute, { replace: true });
       return;
@@ -467,7 +473,7 @@ const SearchingDriver = () => {
       }, 0);
       ACTIVE_SEARCH_NONCE_CLEANUPS.set(searchNonce, cleanupId);
     };
-  }, [navigate, routePrefix, searchNonce]);
+  }, [navigate, resumeRideId, routePrefix, searchNonce]);
 
   useEffect(() => {
     if (cleanupDelayRef.current) {
@@ -483,7 +489,7 @@ const SearchingDriver = () => {
       };
     }
 
-    if (!searchNonce || !selectedVehicleTypeId) {
+    if (!resumeRideId && (!searchNonce || !selectedVehicleTypeId)) {
       setSearchStatus('Vehicle type missing. Please select a vehicle again.');
       navigate(userHomeRoute, { replace: true });
       return undefined;
@@ -708,6 +714,26 @@ const SearchingDriver = () => {
             }
           : {};
 
+        let payload;
+        if (resumeRideId) {
+          // Reopened from Home: attach to the existing booking instead of creating another one.
+          const existingRide = await hydrateAcceptedRide().catch(() => null);
+          if (disposed) {
+            return;
+          }
+          if (!existingRide || String(existingRide.rideId || '') !== resumeRideId) {
+            clearCurrentRide();
+            toast('This booking is no longer active.');
+            navigate(userHomeRoute, { replace: true });
+            return;
+          }
+          const existingStatus = String(existingRide.liveStatus || existingRide.status || '').toLowerCase();
+          if (['accepted', 'arriving', 'started', 'ongoing'].includes(existingStatus)) {
+            moveToTracking({ acceptedDriver: existingRide.driver, rideId: existingRide.rideId, rideSnapshot: existingRide });
+            return;
+          }
+          payload = { data: { ride: { ...existingRide, _id: existingRide.rideId } } };
+        } else {
         const response = await api.post('/rides', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
@@ -736,7 +762,8 @@ const SearchingDriver = () => {
           return;
         }
 
-        const payload = response?.data || response;
+        payload = response?.data || response;
+        }
         const ride = payload?.data?.ride || payload?.ride || payload;
         const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
         const normalizedRideId = String(rideId || '');
@@ -841,7 +868,15 @@ const SearchingDriver = () => {
         cleanupSearchRef.current?.();
       }, 0);
     };
-  }, [isScheduledBiddingRide, isScheduledRide, navigate, routePrefix, routeState, searchNonce, selectedVehicleTypeId, userHomeRoute]);
+  }, [isScheduledBiddingRide, isScheduledRide, navigate, resumeRideId, routePrefix, routeState, searchNonce, selectedVehicleTypeId, userHomeRoute]);
+
+  // Drop the "Finding your ride" card on Home once this booking is cancelled.
+  const clearSearchingRideSnapshot = (rideId) => {
+    const stored = getCurrentRide();
+    if (stored?.rideId && String(stored.rideId) === String(rideId)) {
+      clearCurrentRide();
+    }
+  };
 
   const handleCancelWithPayload = async (cancellationData = {}) => {
     clearTimeout(timerRef.current);
@@ -861,6 +896,7 @@ const SearchingDriver = () => {
       toast.success("Your ride has been cancelled successfully.");
     }
 
+    clearSearchingRideSnapshot(rideId);
     setShowCancelConfirm(false);
     navigate(userHomeRoute, { replace: true });
   };
@@ -948,6 +984,7 @@ const SearchingDriver = () => {
       // Navigation should still proceed even if cancellation races with another update.
     }
 
+    clearSearchingRideSnapshot(rideId);
     navigate(`${routePrefix}/ride/select-vehicle`, {
       replace: true,
       state: {

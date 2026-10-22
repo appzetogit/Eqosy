@@ -816,6 +816,122 @@ function formatTimeAgo(date) {
 }
 
 
+// Orders that count for new/repeat analytics: actually placed and not cancelled.
+const CUSTOMER_REPORT_EXCLUDED_STATUSES = ['pending_payment', 'cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin'];
+const REPORT_TZ = 'Asia/Kolkata';
+const REPORT_TZ_OFFSET = '+05:30';
+const REPORT_MAX_DAYS = 366;
+
+const toReportDayKey = (date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: REPORT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+
+/**
+ * New vs repeat orders per day (IST).
+ * An order is "new" when it is the customer's first valid order on the whole platform
+ * (any restaurant, any zone, any time); every later valid order is "repeat".
+ * Query: fromDate, toDate (YYYY-MM-DD, inclusive), zoneId, restaurantId.
+ */
+export async function getCustomerOrdersReport(query = {}, adminContext = null) {
+    const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+    const todayKey = toReportDayKey(new Date());
+    const fromKey = isDay(query.fromDate) ? String(query.fromDate) : todayKey;
+    const toKey = isDay(query.toDate) ? String(query.toDate) : fromKey;
+    if (fromKey > toKey) throw new ValidationError('From date must be on or before To date.');
+
+    const start = new Date(`${fromKey}T00:00:00.000${REPORT_TZ_OFFSET}`);
+    const end = new Date(`${toKey}T23:59:59.999${REPORT_TZ_OFFSET}`);
+    const dayCount = Math.round((end - start) / 86400000);
+    if (dayCount > REPORT_MAX_DAYS) throw new ValidationError(`Please choose a range of ${REPORT_MAX_DAYS} days or less.`);
+
+    const match = {
+        createdAt: { $gte: start, $lte: end },
+        orderStatus: { $nin: CUSTOMER_REPORT_EXCLUDED_STATUSES },
+        userId: { $ne: null },
+    };
+
+    // Restaurant scope: sub-admin zones, then the zone / restaurant filters.
+    const restFilter = {};
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const zoneIds = normalizeObjectIdList(adminContext.food_zone_ids || adminContext.zone_ids || [])
+            .map((id) => new mongoose.Types.ObjectId(id));
+        if (zoneIds.length === 0) restFilter.zoneId = { $in: [] };
+        else restFilter.zoneId = { $in: zoneIds };
+    }
+    if (query.zoneId && mongoose.Types.ObjectId.isValid(String(query.zoneId))) {
+        const zoneId = new mongoose.Types.ObjectId(String(query.zoneId));
+        if (restFilter.zoneId && !restFilter.zoneId.$in.some((z) => String(z) === String(zoneId))) {
+            restFilter.zoneId = { $in: [] };
+        } else {
+            restFilter.zoneId = zoneId;
+        }
+    }
+    if (query.restaurantId && mongoose.Types.ObjectId.isValid(String(query.restaurantId))) {
+        restFilter._id = new mongoose.Types.ObjectId(String(query.restaurantId));
+    }
+    if (Object.keys(restFilter).length > 0) {
+        const allowed = await FoodRestaurant.find(restFilter).select('_id').lean();
+        match.restaurantId = { $in: allowed.map((r) => r._id) };
+    }
+
+    const orders = await FoodOrder.find(match).select('_id userId createdAt').lean();
+
+    // First valid order of each customer across the whole platform.
+    const userIds = [...new Set(orders.map((o) => String(o.userId)))].map((id) => new mongoose.Types.ObjectId(id));
+    const firstOrders = userIds.length
+        ? await FoodOrder.aggregate([
+            { $match: { userId: { $in: userIds }, orderStatus: { $nin: CUSTOMER_REPORT_EXCLUDED_STATUSES } } },
+            { $sort: { createdAt: 1, _id: 1 } },
+            { $group: { _id: '$userId', firstOrderId: { $first: '$_id' } } },
+        ])
+        : [];
+    const firstOrderIds = new Set(firstOrders.map((f) => String(f.firstOrderId)));
+
+    // One row per day in the range, including days with no orders.
+    const days = new Map();
+    for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+        const key = toReportDayKey(new Date(t));
+        days.set(key, { date: key, totalOrders: 0, newOrders: 0, repeatOrders: 0, customers: new Set() });
+    }
+
+    const repeatCustomerIds = new Set();
+    for (const order of orders) {
+        const day = days.get(toReportDayKey(order.createdAt));
+        if (!day) continue;
+        day.totalOrders += 1;
+        day.customers.add(String(order.userId));
+        if (firstOrderIds.has(String(order._id))) {
+            day.newOrders += 1;
+        } else {
+            day.repeatOrders += 1;
+            repeatCustomerIds.add(String(order.userId));
+        }
+    }
+
+    const daily = [...days.values()].map(({ customers, ...d }) => ({
+        ...d,
+        uniqueCustomers: customers.size,
+        repeatPercent: d.totalOrders ? Math.round((d.repeatOrders / d.totalOrders) * 1000) / 10 : 0,
+    }));
+
+    const totalOrders = orders.length;
+    const newOrders = daily.reduce((s, d) => s + d.newOrders, 0);
+    const repeatOrders = totalOrders - newOrders;
+
+    return {
+        range: { fromDate: fromKey, toDate: toKey, timezone: REPORT_TZ },
+        summary: {
+            totalOrders,
+            newOrders,
+            repeatOrders,
+            repeatPercent: totalOrders ? Math.round((repeatOrders / totalOrders) * 1000) / 10 : 0,
+            uniqueCustomers: userIds.length,
+            newCustomers: newOrders, // each new order is one customer's first order
+            repeatCustomers: repeatCustomerIds.size,
+        },
+        daily,
+    };
+}
+
 export async function getTransactionReport(query = {}, adminContext = null) {
     const { fromDate, toDate, zone, restaurant, search } = query;
     const match = {};

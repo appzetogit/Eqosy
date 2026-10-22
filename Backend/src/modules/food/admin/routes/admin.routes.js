@@ -78,6 +78,7 @@ router.get('/restaurants', requireFoodResourceAccess('restaurants', 'restaurants
 router.get('/dashboard-stats', adminController.getDashboardStats);
 router.get('/reports/restaurants', requireFoodResourceAccess('reports', 'reports'), adminController.getRestaurantReport);
 router.get('/reports/transactions', requireFoodResourceAccess('reports', 'reports'), adminController.getTransactionReport);
+router.get('/reports/customer-orders', requireFoodResourceAccess('reports', 'reports'), adminController.getCustomerOrdersReport);
 router.get('/reports/tax', requireFoodResourceAccess('reports', 'reports'), adminController.getTaxReport);
 router.get('/reports/tax/:id', requireFoodResourceAccess('reports', 'reports'), adminController.getTaxReportDetail);
 router.get('/restaurants/pending', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.getPendingRestaurants);

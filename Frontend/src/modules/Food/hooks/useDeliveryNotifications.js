@@ -316,6 +316,8 @@ export const useDeliveryNotifications = () => {
 
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
+  const newOrderRef = useRef(null);
+  newOrderRef.current = newOrder;
   const [orderReady, setOrderReady] = useState(null);
   const [orderStatusUpdate, setOrderStatusUpdate] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -642,7 +644,9 @@ export const useDeliveryNotifications = () => {
         availableOrders.find((order) => isOpenOrder(order) && isOfferedToMe(order)) ||
         availableOrders.find(isOpenOrder);
 
-      if (recoverableOrder && !activeOrderRef.current) {
+      // Gate on the card actually on screen, not activeOrderRef: that ref is set by every alert
+      // (sound/push) and only cleared on accept/reject, so a stale earlier offer used to block recovery.
+      if (recoverableOrder && !newOrderRef.current) {
         debugLog('Recovered available delivery order after reconnect/focus:', recoverableOrder);
         setNewOrder(recoverableOrder);
         handleIncomingOrderAlert(recoverableOrder);

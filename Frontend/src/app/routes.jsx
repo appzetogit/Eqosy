@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import { toast } from 'sonner'
 import SmartRouteSkeleton from '../shared/components/skeletons/SmartRouteSkeleton'
 import {
+  NATIVE_LAST_ROUTE_AT_KEY,
   NATIVE_LAST_ROUTE_KEY,
   syncActiveModule,
 } from '../shared/utils/activeModule.js'
@@ -199,8 +200,28 @@ const AppRoutes = () => {
 
     if (route.startsWith('/taxi/') || route.startsWith('/food/') || route.startsWith('/admin')) {
       localStorage.setItem(NATIVE_LAST_ROUTE_KEY, route)
+      localStorage.setItem(NATIVE_LAST_ROUTE_AT_KEY, String(Date.now()))
     }
   }, [location.pathname, location.search])
+
+  // Leaving the app with the Home button: remember when, so a relaunch soon after reopens this page.
+  useEffect(() => {
+    const markLeftAt = () => {
+      if (document.visibilityState === 'hidden') {
+        try {
+          if (localStorage.getItem(NATIVE_LAST_ROUTE_KEY)) {
+            localStorage.setItem(NATIVE_LAST_ROUTE_AT_KEY, String(Date.now()))
+          }
+        } catch { /* ignore storage errors */ }
+      }
+    }
+    document.addEventListener('visibilitychange', markLeftAt)
+    window.addEventListener('pagehide', markLeftAt)
+    return () => {
+      document.removeEventListener('visibilitychange', markLeftAt)
+      window.removeEventListener('pagehide', markLeftAt)
+    }
+  }, [])
 
   return (
     <Routes>

@@ -52,7 +52,7 @@ import SuvIcon from '@/assets/icons/SUV.png';
 import { socketService } from '../../../shared/api/socket';
 import { pushDriverLocationRealtime } from '../../../shared/services/rideRealtime';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
-import { cancelDriverScheduledRide, getCurrentDriver, getDriverDocumentTemplates, getDriverNotifications, getDriverScheduledRides, getLocalDriverToken } from '../services/registrationService';
+import { cancelDriverScheduledRide, getCurrentDriver, getDriverDocumentTemplates, getDriverNotifications, getDriverPendingDispatch, getDriverScheduledRides, getLocalDriverToken } from '../services/registrationService';
 import { addLocalDriverNotification, getUnreadDriverNotificationCount, getVisibleDriverNotifications } from '../utils/notificationState';
 import { getScheduledRideCountdown } from '../utils/scheduledRideTime';
 import {
@@ -1658,6 +1658,69 @@ const DriverHome = () => {
         stopSelfieCameraStream();
     }, [stopSelfieCameraStream]);
 
+    // Opens the incoming ride request card. Shared by the socket event and the pending-dispatch recovery.
+    const presentRideRequest = useCallback((data) => {
+        const requestType = normalizeJobType(data);
+        const request = {
+            type: requestType,
+            title: getJobTitle(requestType),
+            fare: `Rs ${data.fare || 0}`,
+            payment: data.paymentMethod || 'Cash',
+            pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
+            drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
+            distance: formatTripDistance(data),
+            requestId: data.rideId,
+            rideId: data.rideId,
+            attempt: data.attempt,
+            maxAttempts: data.maxAttempts,
+            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+            requestExpiresAt: data.requestExpiresAt || null,
+            customer: data.user || null,
+            bookingMode: data.bookingMode || 'normal',
+            bidding: data.bidding || { enabled: false },
+            raw: data,
+        };
+        // Update the ref now: a rideRequestClosed handled before the next render must see this request.
+        currentRequestRef.current = request;
+        setCurrentRequest(request);
+        setShowRequest(true);
+        playRideRequestAlertSound();
+        showRideRequestSystemNotification(request);
+        setStatusMessage('New booking received.');
+    }, []);
+
+    // A request missed while the app was in the background (socket asleep) is still live on the
+    // server; fetch it so the card opens on resume, or from the push link (/taxi/driver/home?rideId=…).
+    const checkPendingDispatch = useCallback(async (targetRideId = '') => {
+        if (!isOnline || currentRequestRef.current?.rideId || !getLocalDriverToken()) {
+            return;
+        }
+        try {
+            const searchParams = new URLSearchParams(window.location.search);
+            const rideId = targetRideId || searchParams.get('rideId') || searchParams.get('openRideId') || '';
+            const response = await getDriverPendingDispatch(rideId ? { rideId } : {});
+            const data = response?.data?.data || response?.data || response;
+            if (!data?.rideId || currentRequestRef.current?.rideId) {
+                return;
+            }
+            presentRideRequest(data);
+            if (searchParams.has('rideId') || searchParams.has('openRideId')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('rideId');
+                url.searchParams.delete('openRideId');
+                window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+            }
+        } catch (error) {
+            console.warn('[driver-home] pending dispatch check failed', error?.message || error);
+        }
+    }, [isOnline, presentRideRequest]);
+
+    useEffect(() => {
+        if (isOnline && !isHydratingDriver) {
+            checkPendingDispatch();
+        }
+    }, [checkPendingDispatch, isHydratingDriver, isOnline]);
+
     const recoverRealtimeSession = useCallback(async ({ reason = 'resume' } = {}) => {
         if (!isOnline || isHydratingDriver || isTogglingDuty) {
             return;
@@ -1711,6 +1774,8 @@ const DriverHome = () => {
                 // Realtime recovery should continue even if active-job hydration fails.
             }
 
+            await checkPendingDispatch();
+
             setStatusMessage(
                 reason === 'visibility'
                     ? 'Realtime connection refreshed.'
@@ -1719,7 +1784,7 @@ const DriverHome = () => {
         } finally {
             recoveryInFlightRef.current = false;
         }
-    }, [fetchActiveJob, isHydratingDriver, isOnline, isTogglingDuty, openActiveJob, updateDriverLocation]);
+    }, [checkPendingDispatch, fetchActiveJob, isHydratingDriver, isOnline, isTogglingDuty, openActiveJob, updateDriverLocation]);
 
     const scheduleRecoveryBurst = useCallback(({ reason = 'resume' } = {}) => {
         if (!isOnline || isHydratingDriver || isTogglingDuty) {
@@ -1779,27 +1844,14 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
-                const requestType = normalizeJobType(data);
-                const request = {
-                    type: requestType,
-                    title: getJobTitle(requestType),
-                    fare: `Rs ${data.fare || 0}`,
-                    payment: data.paymentMethod || 'Cash',
-                    pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
-                    drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
-                    distance: formatTripDistance(data),
-                    requestId: data.rideId,
-                    rideId: data.rideId,
-                    acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
-                    bookingMode: data.bookingMode || 'normal',
-                    bidding: data.bidding || { enabled: false },
-                    raw: data,
-                };
-                setCurrentRequest(request);
-                setShowRequest(true);
-                playRideRequestAlertSound();
-                showRideRequestSystemNotification(request);
-                setStatusMessage('New booking received.');
+                // Events queued while the app was backgrounded arrive late on resume. An offer whose window
+                // already passed would flash and close; ask the server for what is still live instead.
+                const expiresAtMs = data?.requestExpiresAt ? new Date(data.requestExpiresAt).getTime() : NaN;
+                if (Number.isFinite(expiresAtMs) && expiresAtMs < Date.now() - 2000) {
+                    checkPendingDispatch(data.rideId);
+                    return;
+                }
+                presentRideRequest(data);
             };
 
             const onRideRequestClosed = ({ rideId, reason, message }) => {
@@ -1808,7 +1860,9 @@ const DriverHome = () => {
                     return;
                 }
                 const activeRequest = currentRequestRef.current;
-                if (!activeRequest?.rideId || activeRequest.rideId === rideId) {
+                // Close only the card this event is about; a close for another ride must not hide a new request.
+                if (!rideId || activeRequest?.rideId === rideId) {
+                    currentRequestRef.current = null;
                     setShowRequest(false);
                     setCurrentRequest(null);
                     stopRideRequestAlertSound();
@@ -2031,7 +2085,7 @@ const DriverHome = () => {
             socketService.disconnect();
         }
         return undefined;
-    }, [clearRecoveryBurst, fetchActiveJob, isOnline, isOwnerManagedDriver, loadScheduledRides, navigate, scheduleRecoveryBurst]);
+    }, [checkPendingDispatch, clearRecoveryBurst, fetchActiveJob, isOnline, isOwnerManagedDriver, loadScheduledRides, navigate, presentRideRequest, scheduleRecoveryBurst]);
 
     useEffect(() => {
         if (!isOnline) {

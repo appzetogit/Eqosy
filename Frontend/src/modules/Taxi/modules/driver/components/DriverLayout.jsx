@@ -119,6 +119,43 @@ const isPendingAllowedRoute = (pathname = '') =>
         '/taxi/owner/support/tickets',
     ].includes(pathname);
 
+// Reopening the app should land on the page the driver left, not always on Home.
+// Only pages that render without router state are restored; an active trip reopens from Home on its own.
+const LAST_ROUTE_KEY = 'taxi_driver_last_route';
+const LAST_ROUTE_MAX_AGE_MS = 30 * 60 * 1000;
+const RESTORABLE_DRIVER_ROUTES = new Set([
+    '/taxi/driver/wallet',
+    '/taxi/driver/earnings',
+    '/taxi/driver/profile',
+    '/taxi/driver/history',
+    '/taxi/driver/incentives',
+    '/taxi/driver/edit-profile',
+    '/taxi/driver/documents',
+    '/taxi/driver/notifications',
+    '/taxi/driver/payout-methods',
+    '/taxi/driver/referral',
+    '/taxi/driver/security',
+    '/taxi/driver/support',
+    '/taxi/driver/help-support',
+    '/taxi/driver/support/tickets',
+    '/taxi/driver/vehicle-fleet',
+]);
+const DRIVER_ENTRY_ROUTES = new Set(['/taxi/driver', '/taxi/driver/', '/taxi/driver/home']);
+// Module-level, so it resets on every full page load (app launch / WebView reload) but not on in-app navigation.
+let lastRouteRestoreDone = false;
+
+const readLastDriverRoute = () => {
+    try {
+        const saved = JSON.parse(localStorage.getItem(LAST_ROUTE_KEY) || 'null');
+        if (saved?.path && RESTORABLE_DRIVER_ROUTES.has(saved.path) && Date.now() - Number(saved.at || 0) <= LAST_ROUTE_MAX_AGE_MS) {
+            return saved.path;
+        }
+    } catch {
+        // ignore storage errors
+    }
+    return '';
+};
+
 const DriverLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -126,6 +163,36 @@ const DriverLayout = () => {
     const [isAllowed, setIsAllowed] = useState(true);
     const verifiedTokenRef = useRef('');
     const verifiedApprovalRef = useRef(false);
+
+    useEffect(() => {
+        const path = location.pathname;
+        const hasToken = Boolean(getLocalDriverToken());
+
+        if (!lastRouteRestoreDone && DRIVER_ENTRY_ROUTES.has(path)) {
+            // Wait for the index route to redirect to Home before deciding.
+            if (path !== '/taxi/driver/home') return;
+            lastRouteRestoreDone = true;
+            // Opened from a ride-request notification: stay on Home so the request card opens.
+            const opensRideRequest = /[?&](rideId|openRideId)=/.test(location.search);
+            const lastPath = hasToken && !opensRideRequest && getStoredRole() === 'driver' ? readLastDriverRoute() : '';
+            if (lastPath) {
+                // Push (not replace) so Back from the restored page returns to Home instead of closing the app.
+                navigate(lastPath);
+                return;
+            }
+        }
+        lastRouteRestoreDone = true;
+
+        try {
+            if (hasToken && RESTORABLE_DRIVER_ROUTES.has(path)) {
+                localStorage.setItem(LAST_ROUTE_KEY, JSON.stringify({ path, at: Date.now() }));
+            } else if (path === '/taxi/driver/home' || !hasToken) {
+                localStorage.removeItem(LAST_ROUTE_KEY);
+            }
+        } catch {
+            // ignore storage errors
+        }
+    }, [location.pathname, location.search, navigate]);
 
     useEffect(() => {
         const currentPath = location.pathname;

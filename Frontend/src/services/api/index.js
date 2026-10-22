@@ -672,6 +672,12 @@ export const adminAPI = {
       params: { page: 1, limit: 1000, ...params },
       contextModule: "admin",
     }),
+  /** New vs repeat orders per day. params: fromDate, toDate (YYYY-MM-DD), zoneId, restaurantId */
+  getCustomerOrdersReport: (params = {}) =>
+    apiClient.get("/food/admin/reports/customer-orders", {
+      params,
+      contextModule: "admin",
+    }),
   getTaxReport: (params = {}) =>
     apiClient.get("/food/admin/reports/tax", {
       params: { page: 1, limit: 1000, ...params },

@@ -178,6 +178,19 @@ export async function getTransactionReport(req, res, next) {
     }
 }
 
+export async function getCustomerOrdersReport(req, res, next) {
+    try {
+        const data = await adminService.getCustomerOrdersReport(req.query || {}, req.adminContext);
+        res.status(200).json({
+            success: true,
+            message: 'New vs repeat orders report fetched successfully',
+            data
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function getTaxReport(req, res, next) {
     try {
         const data = await adminService.getTaxReport(req.query || {});
