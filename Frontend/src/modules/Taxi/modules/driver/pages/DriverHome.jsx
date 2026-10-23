@@ -1719,12 +1719,17 @@ const DriverHome = () => {
         if (!isOnline || isHydratingDriver) return;
         checkPendingDispatch();
         const poller = setInterval(() => {
-            if (!document.hidden && !currentRequestRef.current && !activeTrip) {
+            let hasActiveStoredTrip = false;
+            try {
+                hasActiveStoredTrip = Boolean(localStorage.getItem('driverActiveTripSnapshot'));
+            } catch {}
+
+            if (!document.hidden && !currentRequestRef.current && !hasActiveStoredTrip) {
                 checkPendingDispatch();
             }
         }, 5000);
         return () => clearInterval(poller);
-    }, [checkPendingDispatch, isHydratingDriver, isOnline, activeTrip]);
+    }, [checkPendingDispatch, isHydratingDriver, isOnline]);
 
     const recoverRealtimeSession = useCallback(async ({ reason = 'resume' } = {}) => {
         if (!isOnline || isHydratingDriver || isTogglingDuty) {
