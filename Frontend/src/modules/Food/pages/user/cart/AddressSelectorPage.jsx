@@ -249,7 +249,7 @@ export default function AddressSelectorPage() {
     goBack()
   }
 
-  // Real-time keyword address searching for top search bar
+  // Real-time Google Places Autocomplete search for top search bar
   useEffect(() => {
     const q = topSearchQuery.trim()
     if (!q || q.length < 2) {
@@ -264,37 +264,69 @@ export default function AddressSelectorPage() {
         const refLat = Number.isFinite(location?.latitude) ? location.latitude : mapPosition?.[0] ?? 22.7196
         const refLng = Number.isFinite(location?.longitude) ? location.longitude : mapPosition?.[1] ?? 75.8577
 
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=12&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, {
-          headers: { Accept: "application/json" },
-        })
-        const json = await res.json()
-        const list = Array.isArray(json) ? json : []
-        const mapped = list.map((r) => {
-          const displayParts = (r.display_name || "").split(",")
-          const title = displayParts[0]?.trim() || r.name || "Location"
-          const subtitle = displayParts.slice(1).join(",").trim()
-          const lat = Number(r.lat)
-          const lng = Number(r.lon)
-          const meters = (Number.isFinite(refLat) && Number.isFinite(refLng) && Number.isFinite(lat) && Number.isFinite(lng))
-            ? calculateDistance(refLat, refLng, lat, lng)
-            : null
-          return {
-            id: r.place_id || r.osm_id || `${lat},${lng}`,
-            title,
-            subtitle,
-            lat,
-            lng,
-            distanceMeters: meters,
-            raw: r,
+        const fetchBackendPlaces = async () => {
+          try {
+            const queryParams = new URLSearchParams({ input: q })
+            if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+              queryParams.set('lat', String(refLat))
+              queryParams.set('lng', String(refLng))
+            }
+            const res = await fetch(`/api/v1/food/location/places-autocomplete?${queryParams.toString()}`)
+            const json = await res.json()
+            if (json.success && Array.isArray(json.predictions) && json.predictions.length > 0) {
+              const mapped = json.predictions.map((p) => ({
+                id: p.placeId,
+                placeId: p.placeId,
+                title: p.title,
+                subtitle: p.subtitle,
+                description: p.description,
+                distanceMeters: null,
+              }))
+              setTopSearchResults(mapped)
+            } else {
+              setTopSearchResults([])
+            }
+          } catch {
+            setTopSearchResults([])
+          } finally {
+            setIsTopSearching(false)
           }
-        })
+        }
 
-        mapped.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
-        setTopSearchResults(mapped)
+        if (window.google?.maps?.places?.AutocompleteService) {
+          const service = new window.google.maps.places.AutocompleteService()
+          const request = {
+            input: q,
+            componentRestrictions: { country: 'in' },
+          }
+          if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+            request.locationBias = new window.google.maps.Circle({
+              center: { lat: refLat, lng: refLng },
+              radius: 50000,
+            })
+          }
+          service.getPlacePredictions(request, (predictions, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && Array.isArray(predictions) && predictions.length > 0) {
+              const mapped = predictions.map((p) => ({
+                id: p.place_id,
+                placeId: p.place_id,
+                title: p.structured_formatting?.main_text || p.description.split(',')[0],
+                subtitle: p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(', ').trim(),
+                description: p.description,
+                distanceMeters: p.distance_meters || null,
+              }))
+              setTopSearchResults(mapped)
+              setIsTopSearching(false)
+            } else {
+              fetchBackendPlaces()
+            }
+          })
+          return
+        }
+
+        await fetchBackendPlaces()
       } catch (e) {
         setTopSearchResults([])
-      } finally {
         setIsTopSearching(false)
       }
     }, 300)
@@ -323,20 +355,69 @@ export default function AddressSelectorPage() {
 
   const handleSelectSearchSuggestion = async (suggestion) => {
     try {
-      const latitude = suggestion.lat
-      const longitude = suggestion.lng
-      const displayAddress = suggestion.subtitle
+      let latitude = suggestion.lat
+      let longitude = suggestion.lng
+      let displayAddress = suggestion.subtitle
         ? `${suggestion.title}, ${suggestion.subtitle}`
-        : suggestion.title
+        : suggestion.title || suggestion.description
+      let city = ""
+      let state = ""
+      let area = ""
+      let postalCode = ""
+
+      if ((!latitude || !longitude) && suggestion.placeId) {
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder()
+          const geoRes = await new Promise((resolve) => {
+            geocoder.geocode({ placeId: suggestion.placeId }, (results, status) => {
+              if (status === 'OK' && results?.[0]) resolve(results[0])
+              else resolve(null)
+            })
+          })
+          if (geoRes?.geometry?.location) {
+            latitude = geoRes.geometry.location.lat()
+            longitude = geoRes.geometry.location.lng()
+            displayAddress = geoRes.formatted_address || displayAddress
+            const comps = geoRes.address_components || []
+            const getC = (types) => comps.find((c) => types.some((t) => c.types.includes(t)))?.long_name || ''
+            city = getC(['locality', 'administrative_area_level_2'])
+            state = getC(['administrative_area_level_1'])
+            area = getC(['sublocality', 'sublocality_level_1', 'neighborhood'])
+            postalCode = getC(['postal_code'])
+          }
+        }
+
+        if (!latitude || !longitude) {
+          try {
+            const detailRes = await fetch(`/api/v1/food/location/place-details?placeId=${encodeURIComponent(suggestion.placeId)}`)
+            const detailJson = await detailRes.json()
+            if (detailJson.success && detailJson.result) {
+              const r = detailJson.result
+              latitude = r.lat
+              longitude = r.lng
+              displayAddress = r.formattedAddress || displayAddress
+              city = r.city || city
+              state = r.state || state
+              area = r.area || area
+              postalCode = r.pincode || ""
+            }
+          } catch {}
+        }
+      }
+
+      if (!latitude || !longitude) {
+        toast.error("Could not find location coordinates")
+        return
+      }
 
       const locationData = {
         latitude,
         longitude,
-        city: suggestion.raw?.address?.city || suggestion.raw?.address?.town || suggestion.raw?.address?.village || "",
-        state: suggestion.raw?.address?.state || "",
-        area: suggestion.raw?.address?.suburb || suggestion.raw?.address?.neighbourhood || "",
+        city: city || "",
+        state: state || "",
+        area: area || "",
         street: displayAddress,
-        postalCode: suggestion.raw?.address?.postcode || "",
+        postalCode: postalCode || "",
         address: displayAddress,
         formattedAddress: displayAddress,
         label: suggestion.title,
@@ -347,6 +428,10 @@ export default function AddressSelectorPage() {
       await persistActiveLocation(locationData, "current")
       setMapPosition([latitude, longitude])
       setCurrentAddress(displayAddress)
+      if (googleMapRef.current) {
+        googleMapRef.current.panTo({ lat: latitude, lng: longitude })
+        googleMapRef.current.setZoom(17)
+      }
       toast.success(`Location set: ${suggestion.title}`, { duration: 2000 })
       handleBack()
     } catch (error) {
@@ -467,7 +552,6 @@ export default function AddressSelectorPage() {
         const request = {
           input: String(addressAutocompleteValue || "").trim(),
           componentRestrictions: { country: 'in' }, // Restrict to India
-          types: ["geocode"],
           origin: location ? { lat: location.latitude, lng: location.longitude } : undefined,
         };
 
@@ -533,22 +617,23 @@ export default function AddressSelectorPage() {
         setIsKeywordSearching(true)
         const refLat = location?.latitude ?? 22.7196
         const refLng = location?.longitude ?? 75.8577
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, { headers: { Accept: "application/json" } })
+        const queryParams = new URLSearchParams({ input: q, lat: String(refLat), lng: String(refLng) })
+        const res = await fetch(`/api/v1/food/location/places-autocomplete?${queryParams.toString()}`)
         const json = await res.json()
-        const mapped = (Array.isArray(json) ? json : []).map(r => ({
-          id: r.place_id || r.osm_id,
-          display: r.display_name || "",
-          lat: Number(r.lat),
-          lng: Number(r.lon),
-          address: r.address || {},
-        }))
-        const withDistance = mapped
-          .filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lng))
-          .map(x => ({ ...x, distanceMeters: calculateDistance(refLat, refLng, x.lat, x.lng) }))
-          .sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
-          .slice(0, 4)
-        setKeywordAddressSuggestions(withDistance)
+        if (json.success && Array.isArray(json.predictions) && json.predictions.length > 0) {
+          const mapped = json.predictions.map((p) => ({
+            id: p.placeId,
+            display: p.description,
+            mainText: p.title,
+            secondaryText: p.subtitle,
+            source: 'google',
+            distanceMeters: null,
+          }))
+          setGooglePlacesSuggestions(mapped)
+          setKeywordAddressSuggestions([])
+        } else {
+          setKeywordAddressSuggestions([])
+        }
       } catch (e) {
         setKeywordAddressSuggestions([])
       } finally {
@@ -1035,47 +1120,73 @@ export default function AddressSelectorPage() {
                       <button
                         key={s.id}
                         onClick={async () => {
-                          const geocoder = new window.google.maps.Geocoder();
-                          geocoder.geocode({ placeId: s.id }, (results, status) => {
-                            if (status === "OK" && results[0]) {
-                              const res = results[0];
-                              const lat = res.geometry.location.lat();
-                              const lng = res.geometry.location.lng();
-                              setMapPosition([lat, lng]);
-                              if (googleMapRef.current) {
-                                googleMapRef.current.panTo({ lat, lng });
-                                googleMapRef.current.setZoom(17);
-                              }
-                              setAddressAutocompleteValue(s.display);
-                              
-                              let street = "", city = "", state = "", postcode = "";
-                              res.address_components.forEach(comp => {
-                                const types = comp.types;
-                                if (types.includes("route") || types.includes("sublocality") || types.includes("neighborhood")) {
-                                  street = street ? `${street}, ${comp.long_name}` : comp.long_name;
-                                } else if (types.includes("locality")) {
-                                  city = comp.long_name;
-                                } else if (types.includes("administrative_area_level_1")) {
-                                  state = comp.long_name;
-                                } else if (types.includes("postal_code")) {
-                                  postcode = comp.long_name;
-                                }
+                          let lat = null, lng = null, street = "", city = "", state = "", postcode = "", formatted = s.display;
+                          if (window.google?.maps?.Geocoder) {
+                            try {
+                              const geocoder = new window.google.maps.Geocoder();
+                              const geoRes = await new Promise((resolve) => {
+                                geocoder.geocode({ placeId: s.id }, (results, status) => {
+                                  if (status === "OK" && results?.[0]) resolve(results[0]);
+                                  else resolve(null);
+                                });
                               });
+                              if (geoRes?.geometry?.location) {
+                                lat = geoRes.geometry.location.lat();
+                                lng = geoRes.geometry.location.lng();
+                                formatted = geoRes.formatted_address || formatted;
+                                geoRes.address_components?.forEach(comp => {
+                                  const types = comp.types;
+                                  if (types.includes("route") || types.includes("sublocality") || types.includes("neighborhood")) {
+                                    street = street ? `${street}, ${comp.long_name}` : comp.long_name;
+                                  } else if (types.includes("locality")) {
+                                    city = comp.long_name;
+                                  } else if (types.includes("administrative_area_level_1")) {
+                                    state = comp.long_name;
+                                  } else if (types.includes("postal_code")) {
+                                    postcode = comp.long_name;
+                                  }
+                                });
+                              }
+                            } catch {}
+                          }
 
-                              setAddressFormData((prev) => ({
-                                ...prev,
-                                street: street || s.mainText || prev.street,
-                                city: city || prev.city,
-                                state: state || prev.state,
-                                zipCode: postcode || prev.zipCode,
-                              }));
-                              setCurrentAddress(res.formatted_address);
-                              suppressAutocompleteFetchRef.current = true;
-                              setIsSearchFocused(false);
-                              setGooglePlacesSuggestions([]);
-                              setKeywordAddressSuggestions([]);
+                          if (!lat || !lng) {
+                            try {
+                              const detailRes = await fetch(`/api/v1/food/location/place-details?placeId=${encodeURIComponent(s.id)}`);
+                              const detailJson = await detailRes.json();
+                              if (detailJson.success && detailJson.result) {
+                                const r = detailJson.result;
+                                lat = r.lat;
+                                lng = r.lng;
+                                formatted = r.formattedAddress || formatted;
+                                city = r.city || city;
+                                state = r.state || state;
+                                street = r.area || r.name || street;
+                                postcode = r.pincode || postcode;
+                              }
+                            } catch {}
+                          }
+
+                          if (lat && lng) {
+                            setMapPosition([lat, lng]);
+                            if (googleMapRef.current) {
+                              googleMapRef.current.panTo({ lat, lng });
+                              googleMapRef.current.setZoom(17);
                             }
-                          });
+                            setAddressAutocompleteValue(s.display);
+                            setAddressFormData((prev) => ({
+                              ...prev,
+                              street: street || s.mainText || prev.street,
+                              city: city || prev.city,
+                              state: state || prev.state,
+                              zipCode: postcode || prev.zipCode,
+                            }));
+                            setCurrentAddress(formatted);
+                            suppressAutocompleteFetchRef.current = true;
+                            setIsSearchFocused(false);
+                            setGooglePlacesSuggestions([]);
+                            setKeywordAddressSuggestions([]);
+                          }
                         }}
                         className="w-full px-4 py-3 flex items-start gap-3 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left border-b border-gray-50 dark:border-gray-800 last:border-none"
                       >

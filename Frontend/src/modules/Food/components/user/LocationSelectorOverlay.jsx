@@ -96,7 +96,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const [topSearchResults, setTopSearchResults] = useState([])
   const [isTopSearching, setIsTopSearching] = useState(false)
 
-  // Real-time keyword address searching for top search bar
+  // Real-time Google Places Autocomplete search for top search bar
   useEffect(() => {
     const q = topSearchQuery.trim()
     if (!q || q.length < 2) {
@@ -111,37 +111,71 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         const refLat = Number.isFinite(location?.latitude) ? location.latitude : mapPosition?.[0] ?? 22.7196
         const refLng = Number.isFinite(location?.longitude) ? location.longitude : mapPosition?.[1] ?? 75.8577
 
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=12&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, {
-          headers: { Accept: "application/json" },
-        })
-        const json = await res.json()
-        const list = Array.isArray(json) ? json : []
-        const mapped = list.map((r) => {
-          const displayParts = (r.display_name || "").split(",")
-          const title = displayParts[0]?.trim() || r.name || "Location"
-          const subtitle = displayParts.slice(1).join(",").trim()
-          const lat = Number(r.lat)
-          const lng = Number(r.lon)
-          const meters = (Number.isFinite(refLat) && Number.isFinite(refLng) && Number.isFinite(lat) && Number.isFinite(lng))
-            ? calculateDistance(refLat, refLng, lat, lng)
-            : null
-          return {
-            id: r.place_id || r.osm_id || `${lat},${lng}`,
-            title,
-            subtitle,
-            lat,
-            lng,
-            distanceMeters: meters,
-            raw: r,
+        const fetchBackendPlaces = async () => {
+          try {
+            const queryParams = new URLSearchParams({ input: q })
+            if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+              queryParams.set('lat', String(refLat))
+              queryParams.set('lng', String(refLng))
+            }
+            const res = await fetch(`/api/v1/food/location/places-autocomplete?${queryParams.toString()}`)
+            const json = await res.json()
+            if (json.success && Array.isArray(json.predictions) && json.predictions.length > 0) {
+              const mapped = json.predictions.map((p) => ({
+                id: p.placeId,
+                placeId: p.placeId,
+                title: p.title,
+                subtitle: p.subtitle,
+                description: p.description,
+                distanceMeters: null,
+              }))
+              setTopSearchResults(mapped)
+            } else {
+              setTopSearchResults([])
+            }
+          } catch {
+            setTopSearchResults([])
+          } finally {
+            setIsTopSearching(false)
           }
-        })
+        }
 
-        mapped.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
-        setTopSearchResults(mapped)
+        // Use Google Maps JS SDK AutocompleteService if available
+        if (window.google?.maps?.places?.AutocompleteService) {
+          const service = new window.google.maps.places.AutocompleteService()
+          const request = {
+            input: q,
+            componentRestrictions: { country: 'in' },
+          }
+          if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+            request.locationBias = new window.google.maps.Circle({
+              center: { lat: refLat, lng: refLng },
+              radius: 50000,
+            })
+          }
+
+          service.getPlacePredictions(request, (predictions, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && Array.isArray(predictions) && predictions.length > 0) {
+              const mapped = predictions.map((p) => ({
+                id: p.place_id,
+                placeId: p.place_id,
+                title: p.structured_formatting?.main_text || p.description.split(',')[0],
+                subtitle: p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(', ').trim(),
+                description: p.description,
+                distanceMeters: p.distance_meters || null,
+              }))
+              setTopSearchResults(mapped)
+              setIsTopSearching(false)
+            } else {
+              fetchBackendPlaces()
+            }
+          })
+          return
+        }
+
+        await fetchBackendPlaces()
       } catch (e) {
         setTopSearchResults([])
-      } finally {
         setIsTopSearching(false)
       }
     }, 300)
@@ -170,22 +204,69 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   const handleSelectSearchSuggestion = async (suggestion) => {
     try {
-      const latitude = suggestion.lat
-      const longitude = suggestion.lng
-      const displayAddress = suggestion.subtitle
+      let latitude = suggestion.lat
+      let longitude = suggestion.lng
+      let displayAddress = suggestion.subtitle
         ? `${suggestion.title}, ${suggestion.subtitle}`
-        : suggestion.title
+        : suggestion.title || suggestion.description
+      let city = ""
+      let state = ""
+      let area = ""
+
+      // If coordinates missing from Google Places, resolve via Geocoder or Backend
+      if ((!latitude || !longitude) && suggestion.placeId) {
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder()
+          const geoRes = await new Promise((resolve) => {
+            geocoder.geocode({ placeId: suggestion.placeId }, (results, status) => {
+              if (status === 'OK' && results?.[0]) resolve(results[0])
+              else resolve(null)
+            })
+          })
+          if (geoRes?.geometry?.location) {
+            latitude = geoRes.geometry.location.lat()
+            longitude = geoRes.geometry.location.lng()
+            displayAddress = geoRes.formatted_address || displayAddress
+            const comps = geoRes.address_components || []
+            const getC = (types) => comps.find((c) => types.some((t) => c.types.includes(t)))?.long_name || ''
+            city = getC(['locality', 'administrative_area_level_2'])
+            state = getC(['administrative_area_level_1'])
+            area = getC(['sublocality', 'sublocality_level_1', 'neighborhood'])
+          }
+        }
+
+        if (!latitude || !longitude) {
+          try {
+            const detailRes = await fetch(`/api/v1/food/location/place-details?placeId=${encodeURIComponent(suggestion.placeId)}`)
+            const detailJson = await detailRes.json()
+            if (detailJson.success && detailJson.result) {
+              const r = detailJson.result
+              latitude = r.lat
+              longitude = r.lng
+              displayAddress = r.formattedAddress || displayAddress
+              city = r.city || city
+              state = r.state || state
+              area = r.area || area
+            }
+          } catch {}
+        }
+      }
+
+      if (!latitude || !longitude) {
+        toast.error("Could not find location coordinates")
+        return
+      }
 
       const locationData = {
         label: suggestion.title,
-        city: suggestion.raw?.address?.city || suggestion.raw?.address?.town || suggestion.raw?.address?.village || "",
-        state: suggestion.raw?.address?.state || "",
+        city: city || "",
+        state: state || "",
         address: displayAddress,
-        area: suggestion.raw?.address?.suburb || suggestion.raw?.address?.neighbourhood || "",
+        area: area || "",
         latitude,
         longitude,
         formattedAddress: displayAddress,
-        isManual: true
+        isManual: true,
       }
 
       try {
@@ -196,7 +277,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           city: locationData.city,
           state: locationData.state,
           area: locationData.area,
-          formattedAddress: displayAddress
+          formattedAddress: displayAddress,
         })
       } catch (e) {
         debugError("Error updating location on search select:", e)
@@ -209,7 +290,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           address: displayAddress,
           lat: Number(latitude),
           lon: Number(longitude),
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
         }))
         window.dispatchEvent(new Event("storage"))
         window.dispatchEvent(new Event("eqosy:location-updated"))
@@ -219,6 +300,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
       setMapPosition([latitude, longitude])
       setCurrentAddress(displayAddress)
+      if (googleMapRef.current) {
+        googleMapRef.current.panTo({ lat: latitude, lng: longitude })
+        googleMapRef.current.setZoom(17)
+        if (greenMarkerRef.current) {
+          greenMarkerRef.current.setPosition({ lat: latitude, lng: longitude })
+        }
+      }
       onClose()
       toast.success(`Location set: ${suggestion.title}`, { duration: 2000 })
     } catch (error) {
@@ -275,12 +363,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   useEffect(() => {
     if (!showAddressForm) return
     const q = String(addressAutocompleteValue || "").trim()
-    if (!ENABLE_NOMINATIM_SEARCH) {
-      setKeywordAddressSuggestions([])
-      setIsKeywordSearching(false)
-      return
-    }
-    if (q.length < 3) {
+    if (q.length < 2) {
       setKeywordAddressSuggestions([])
       setIsKeywordSearching(false)
       return
@@ -289,40 +372,76 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     const t = setTimeout(async () => {
       try {
         setIsKeywordSearching(true)
-        // Reference point for "nearest" sorting.
-        // Prefer currently selected map position, fallback to live location, then Indore default.
         const refLat = Number.isFinite(mapPosition?.[0]) ? Number(mapPosition[0]) : (location?.latitude ?? 22.7196)
         const refLng = Number.isFinite(mapPosition?.[1]) ? Number(mapPosition[1]) : (location?.longitude ?? 75.8577)
 
-        const url =
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&q=${encodeURIComponent(q)}`
-        const res = await fetch(url, {
-          headers: {
-            Accept: "application/json",
-          },
-        })
-        const json = await res.json()
-        const list = Array.isArray(json) ? json : []
-        const mapped = list.map((r) => ({
-          id: r.place_id || r.osm_id || `${r.lat},${r.lon}`,
-          display: r.display_name || "",
-          lat: Number(r.lat),
-          lng: Number(r.lon),
-          address: r.address || {},
-        }))
-        const withDistance = mapped
-          .filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lng))
-          .map((x) => ({
-            ...x,
-            distanceMeters: calculateDistance(refLat, refLng, x.lat, x.lng),
-          }))
-          .sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity))
-          .slice(0, 4)
+        const fetchBackendPlaces = async () => {
+          try {
+            const queryParams = new URLSearchParams({ input: q })
+            if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+              queryParams.set('lat', String(refLat))
+              queryParams.set('lng', String(refLng))
+            }
+            const res = await fetch(`/api/v1/food/location/places-autocomplete?${queryParams.toString()}`)
+            const json = await res.json()
+            if (json.success && Array.isArray(json.predictions) && json.predictions.length > 0) {
+              const mapped = json.predictions.map((p) => ({
+                id: p.placeId,
+                placeId: p.placeId,
+                display: p.description,
+                title: p.title,
+                subtitle: p.subtitle,
+                lat: null,
+                lng: null,
+                address: {},
+              }))
+              setKeywordAddressSuggestions(mapped)
+            } else {
+              setKeywordAddressSuggestions([])
+            }
+          } catch {
+            setKeywordAddressSuggestions([])
+          } finally {
+            setIsKeywordSearching(false)
+          }
+        }
 
-        setKeywordAddressSuggestions(withDistance)
+        if (window.google?.maps?.places?.AutocompleteService) {
+          const service = new window.google.maps.places.AutocompleteService()
+          const request = {
+            input: q,
+            componentRestrictions: { country: 'in' },
+          }
+          if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+            request.locationBias = new window.google.maps.Circle({
+              center: { lat: refLat, lng: refLng },
+              radius: 50000,
+            })
+          }
+          service.getPlacePredictions(request, (predictions, status) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && Array.isArray(predictions) && predictions.length > 0) {
+              const mapped = predictions.map((p) => ({
+                id: p.place_id,
+                placeId: p.place_id,
+                display: p.description,
+                title: p.structured_formatting?.main_text || p.description.split(',')[0],
+                subtitle: p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(', ').trim(),
+                lat: null,
+                lng: null,
+                address: {},
+              }))
+              setKeywordAddressSuggestions(mapped)
+              setIsKeywordSearching(false)
+            } else {
+              fetchBackendPlaces()
+            }
+          })
+          return
+        }
+
+        await fetchBackendPlaces()
       } catch (e) {
         setKeywordAddressSuggestions([])
-      } finally {
         setIsKeywordSearching(false)
       }
     }, 350)
@@ -2467,25 +2586,64 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                         key={p.id}
                         type="button"
                         onClick={async () => {
-                          const latitude = p.lat
-                          const longitude = p.lng
+                          let latitude = p.lat
+                          let longitude = p.lng
+                          let street = ""
+                          let city = ""
+                          let state = ""
+                          let zipCode = ""
+                          let display = p.display || p.title || ""
 
-                          setAddressAutocompleteValue(p.display || "")
+                          if ((!latitude || !longitude) && p.placeId) {
+                            if (window.google?.maps?.Geocoder) {
+                              const geocoder = new window.google.maps.Geocoder()
+                              const geoRes = await new Promise((resolve) => {
+                                geocoder.geocode({ placeId: p.placeId }, (results, status) => {
+                                  if (status === 'OK' && results?.[0]) resolve(results[0])
+                                  else resolve(null)
+                                })
+                              })
+                              if (geoRes?.geometry?.location) {
+                                latitude = geoRes.geometry.location.lat()
+                                longitude = geoRes.geometry.location.lng()
+                                display = geoRes.formatted_address || display
+                                const comps = geoRes.address_components || []
+                                const getC = (types) => comps.find((c) => types.some((t) => c.types.includes(t)))?.long_name || ''
+                                city = getC(['locality', 'administrative_area_level_2'])
+                                state = getC(['administrative_area_level_1'])
+                                zipCode = getC(['postal_code'])
+                                const subloc = getC(['sublocality', 'sublocality_level_1', 'neighborhood', 'route'])
+                                street = subloc || p.title || ""
+                              }
+                            }
+
+                            if (!latitude || !longitude) {
+                              try {
+                                const detailRes = await fetch(`/api/v1/food/location/place-details?placeId=${encodeURIComponent(p.placeId)}`)
+                                const detailJson = await detailRes.json()
+                                if (detailJson.success && detailJson.result) {
+                                  const r = detailJson.result
+                                  latitude = r.lat
+                                  longitude = r.lng
+                                  display = r.formattedAddress || display
+                                  city = r.city || city
+                                  state = r.state || state
+                                  street = r.area || r.name || ""
+                                  zipCode = r.pincode || ""
+                                }
+                              } catch {}
+                            }
+                          }
+
+                          if (!latitude || !longitude) {
+                            toast.error("Could not find location coordinates")
+                            return
+                          }
+
+                          setAddressAutocompleteValue(display)
                           setKeywordAddressSuggestions([])
 
-                          // Pre-fill fields from keyword search response (best-effort)
-                          const a = p.address || {}
-                          const city = a.city || a.town || a.village || a.county || ""
-                          const state = a.state || ""
-                          const zipCode = a.postcode || ""
-                          const street =
-                            a.road ||
-                            a.neighbourhood ||
-                            a.suburb ||
-                            a.hamlet ||
-                            (String(p.display || "").split(",")[0] || "").trim()
-
-                          setCurrentAddress(p.display || "")
+                          setCurrentAddress(display)
                           setAddressFormData((prev) => ({
                             ...prev,
                             street: street || prev.street,
@@ -2512,10 +2670,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                         className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 last:border-b-0"
                       >
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                          {p.display}
+                          {p.title || p.display}
                         </p>
                         <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                          {p.address?.city || p.address?.town || p.address?.village || p.address?.state || " "}
+                          {p.subtitle || p.display}
                         </p>
                       </button>
                     ))}

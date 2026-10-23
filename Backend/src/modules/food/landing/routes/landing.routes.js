@@ -1,3 +1,4 @@
+import { placesAutocompleteController, placeDetailsController } from '../controllers/placesPublic.controller.js';
 import express from 'express';
 import { upload } from '../../../../middleware/upload.js';
 import {
@@ -172,6 +173,8 @@ router.get('/hero-banners/home-promotion/public', getPublicHomePromotionBannersC
 router.get('/hero-banners/gourmet/public', getPublicGourmetController);
 router.get('/landing/settings/public', getPublicLandingSettingsController);
 router.get('/demo-mode/public', getPublicDemoMode);
+router.get('/location/places-autocomplete', placesAutocompleteController);
+router.get('/location/place-details', placeDetailsController);
 router.get('/zones/detect', detectZonePublicController);
 router.get('/zones/nearby', listZonesNearbyPublicController);
 router.get('/zones/public', listZonesPublicController);
