@@ -214,7 +214,9 @@ const loadGroceryCategories = (zoneId) =>
       ...(zoneId ? { zoneId } : {}),
     });
     const list = res?.data?.data?.categories || [];
-    return Array.isArray(list) ? list : [];
+    return (Array.isArray(list) ? list : []).sort((a, b) =>
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
+    );
   });
 
 /** Warm the cache early (called from Home) so opening the Grocery tab is instant. */
@@ -266,10 +268,10 @@ const GroceryCategories = ({ zoneId, zoneChecking }) => {
       </div>
     );
   }
-  // Like Food: only categories with a real image + name (no placeholder basket icons).
-  const visibleCategories = categories.filter((cat) =>
-    Boolean(normalizeImageUrl(typeof cat.image === 'string' ? cat.image : cat.image?.url || '')),
-  );
+  // Like Food: only categories with a real image + name (no placeholder basket icons), sorted alphabetically (A-Z).
+  const visibleCategories = categories
+    .filter((cat) => Boolean(normalizeImageUrl(typeof cat.image === 'string' ? cat.image : cat.image?.url || '')))
+    .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }));
   if (visibleCategories.length === 0) return null;
 
   return (

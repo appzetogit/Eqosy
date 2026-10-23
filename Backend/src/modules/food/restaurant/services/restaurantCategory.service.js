@@ -224,7 +224,8 @@ export async function listPublicCategories(query = {}) {
 
     const [list, total] = await Promise.all([
         FoodCategory.find(filter)
-            .sort({ sortOrder: 1, createdAt: -1 })
+            .collation({ locale: 'en', strength: 2 })
+            .sort({ sortOrder: 1, name: 1 })
             .skip(skip)
             .limit(limit)
             .select('name image type section foodTypeScope zoneId sortOrder createdAt updatedAt')

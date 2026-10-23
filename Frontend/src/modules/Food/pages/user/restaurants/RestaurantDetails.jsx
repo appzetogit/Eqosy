@@ -1371,11 +1371,11 @@ function RestaurantDetailsContent() {
     return firstSubsectionImage || ""
   }
 
-  // Menu categories - dynamically generated from restaurant menu sections
+  // Menu categories - dynamically generated from restaurant menu sections, sorted alphabetically (A-Z)
   const menuCategories = useMemo(() => {
     if (!restaurant?.menuSections || !Array.isArray(restaurant.menuSections)) return []
 
-    return restaurant.menuSections
+    const list = restaurant.menuSections
       .map((section, index) => {
         if (isRecommendedSection(section)) return null
 
@@ -1395,6 +1395,10 @@ function RestaurantDetailsContent() {
         }
       })
       .filter(Boolean)
+
+    return list.sort((a, b) =>
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
+    )
   }, [restaurant?.menuSections])
 
   // Count active filters
@@ -1841,6 +1845,18 @@ function RestaurantDetailsContent() {
       })
 
     if (!filters.sortBy) {
+      if (restaurant?.isRestaurant === false) {
+        // In grocery mode, display sections alphabetically (keeping recommended sections at top)
+        return [...visibleSections].sort((a, b) => {
+          const aRec = isRecommendedSection(a.section)
+          const bRec = isRecommendedSection(b.section)
+          if (aRec && !bRec) return -1
+          if (!aRec && bRec) return 1
+          const aName = getSectionDisplayName(a.section)
+          const bName = getSectionDisplayName(b.section)
+          return String(aName || '').localeCompare(String(bName || ''), undefined, { sensitivity: 'base' })
+        })
+      }
       return visibleSections
     }
 
