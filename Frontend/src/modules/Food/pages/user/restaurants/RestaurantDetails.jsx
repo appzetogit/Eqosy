@@ -115,7 +115,19 @@ function RestaurantDetailsContent() {
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart, triggerEqosyCartLoader } = useCart()
   const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
-  const { zoneId, isOutOfService } = useZone(userLocation) // Get user's zone for zone-based filtering
+  const activeUserLocation = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("userLocation");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Number.isFinite(Number(parsed?.latitude)) && Number.isFinite(Number(parsed?.longitude))) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return userLocation;
+  }, [userLocation]);
+  const { zoneId, isOutOfService } = useZone(activeUserLocation) // Get user's zone for zone-based filtering
   const [quantities, setQuantities] = useState({})
   const [showManageCollections, setShowManageCollections] = useState(false)
   const [showItemDetail, setShowItemDetail] = useState(false)
@@ -529,8 +541,8 @@ function RestaurantDetailsContent() {
           debugLog('? Restaurant coordinates:', { restaurantLat, restaurantLng, locationObj })
 
           // Get user coordinates
-          const userLat = userLocation?.latitude
-          const userLng = userLocation?.longitude
+          const userLat = activeUserLocation?.latitude || userLocation?.latitude
+          const userLng = activeUserLocation?.longitude || userLocation?.longitude
 
           debugLog('? User location:', { userLat, userLng, userLocation })
 
@@ -1060,11 +1072,11 @@ function RestaurantDetailsContent() {
 
   // Recalculate distance when user location updates
   useEffect(() => {
-    if (!restaurant || !userLocation?.latitude || !userLocation?.longitude) return
+    if (!restaurant || !activeUserLocation?.latitude || !activeUserLocation?.longitude) return
     if (!restaurantLat || !restaurantLng) return
 
-    const userLat = userLocation.latitude
-    const userLng = userLocation.longitude
+    const userLat = Number(activeUserLocation.latitude)
+    const userLng = Number(activeUserLocation.longitude)
 
     // Check if coordinates have actually changed (with small threshold to avoid floating point issues)
     const coordsChanged =
@@ -1125,8 +1137,42 @@ function RestaurantDetailsContent() {
           }
         })
       }
+
+      // Check if Google Maps DirectionsService is available for accurate road driving distance
+      if (window.google?.maps?.DirectionsService) {
+        try {
+          const directionsService = new window.google.maps.DirectionsService();
+          directionsService.route(
+            {
+              origin: { lat: restaurantLat, lng: restaurantLng },
+              destination: { lat: userLat, lng: userLng },
+              travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+              if (status === 'OK' && result?.routes?.[0]?.legs?.[0]) {
+                const leg = result.routes[0].legs[0];
+                const roadDistMeters = leg.distance?.value || 0;
+                const roadDistKm = roadDistMeters / 1000;
+                let roadFormatted = null;
+                if (roadDistKm >= 1) {
+                  roadFormatted = `${roadDistKm.toFixed(1)} km`;
+                } else {
+                  roadFormatted = `${Math.round(roadDistMeters)} m`;
+                }
+                if (roadFormatted && roadFormatted !== prevDistanceRef.current) {
+                  prevDistanceRef.current = roadFormatted;
+                  setRestaurant(prev => {
+                    if (prev?.distance === roadFormatted) return prev;
+                    return { ...prev, distance: roadFormatted };
+                  });
+                }
+              }
+            }
+          );
+        } catch {}
+      }
     }
-  }, [userLocation?.latitude, userLocation?.longitude, restaurantLat, restaurantLng])
+  }, [activeUserLocation?.latitude, activeUserLocation?.longitude, restaurantLat, restaurantLng])
 
   // Sync quantities from cart on mount and when restaurant changes
   useEffect(() => {

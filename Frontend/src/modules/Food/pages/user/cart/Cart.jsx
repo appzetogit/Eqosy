@@ -24,7 +24,7 @@ import { determineIsVeg } from "@food/utils/menuItems"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { CartPageSkeleton } from "@food/components/ui/loading-skeletons"
-import { calculateDistance, getOrderDisplayDistance } from "@food/utils/common"
+import { calculateDistance, getOrderDisplayDistance, formatOrderDistance } from "@food/utils/common"
 import { calculateDistanceInKm, extractCoords } from "@food/utils/geoDistance"
 import { isModuleAuthenticated, clearModuleAuth, clearAuthData } from "@food/utils/auth"
 import zoopSound from "@food/assets/audio/zomato_sms.mp3"
@@ -536,7 +536,9 @@ function CartInner() {
       locFromStorage = null
     }
 
-    const loc = currentLocation?.latitude && currentLocation?.longitude ? currentLocation : locFromStorage
+    const loc = locFromStorage?.isManual
+      ? locFromStorage
+      : (currentLocation?.latitude && currentLocation?.longitude ? currentLocation : locFromStorage)
     if (!loc?.latitude || !loc?.longitude) return null
 
     const formattedAddress = loc?.formattedAddress || loc?.address || ""
@@ -1387,6 +1389,15 @@ function CartInner() {
 
   const getCartActualDistanceKm = () => {
     return getOrderDisplayDistance({
+      pricing,
+      restaurantId: restaurantData,
+      restaurantLocation: restaurantData?.location,
+      deliveryAddress: selectedAddress || defaultAddress
+    });
+  };
+
+  const getCartFormattedDistance = () => {
+    return formatOrderDistance({
       pricing,
       restaurantId: restaurantData,
       restaurantLocation: restaurantData?.location,
@@ -3224,7 +3235,7 @@ function CartInner() {
                           onClick={() => setShowDeliveryFeeModal(true)}
                           className="text-gray-800 dark:text-gray-200 font-medium hover:text-gray-900 dark:hover:text-white transition-colors underline decoration-dotted underline-offset-4 decoration-gray-400 dark:decoration-gray-500 text-left w-fit"
                         >
-                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                          Delivery partner fee ({getCartFormattedDistance()})
                         </button>
                         <span className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 font-medium">Goes to them for their time and effort</span>
                       </div>
@@ -4148,7 +4159,7 @@ function CartInner() {
                     <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
                       <div>
                         <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
-                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                          Delivery partner fee ({getCartFormattedDistance()})
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                           Goes to them for their time and effort
@@ -4160,7 +4171,7 @@ function CartInner() {
                     </div>
 
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                      {pricing?.deliveryFeeBreakdown?.baseSlabMaxKm ? `Base fee covers deliveries up to ${pricing.deliveryFeeBreakdown.baseSlabMaxKm} km. ` : ""}100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
                     </p>
                   </div>
 
@@ -4361,7 +4372,7 @@ function CartInner() {
                     <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
                       <div>
                         <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
-                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                          Delivery partner fee ({getCartFormattedDistance()})
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                           Goes to them for their time and effort
@@ -4373,7 +4384,7 @@ function CartInner() {
                     </div>
 
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                      {pricing?.deliveryFeeBreakdown?.baseSlabMaxKm ? `Base fee covers deliveries up to ${pricing.deliveryFeeBreakdown.baseSlabMaxKm} km. ` : ""}100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
                     </p>
                   </div>
 
@@ -4613,7 +4624,7 @@ function CartInner() {
                     <div className="flex justify-between items-start border-b border-gray-100 dark:border-gray-800 pb-4">
                       <div>
                         <p className="text-base font-bold text-gray-900 dark:text-white underline decoration-dotted underline-offset-4 decoration-gray-400">
-                          Delivery partner fee (up to {getCartActualDistanceKm()} km)
+                          Delivery partner fee ({getCartFormattedDistance()})
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                           Goes to them for their time and effort
@@ -4625,7 +4636,7 @@ function CartInner() {
                     </div>
 
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                      100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
+                      {pricing?.deliveryFeeBreakdown?.baseSlabMaxKm ? `Base fee covers deliveries up to ${pricing.deliveryFeeBreakdown.baseSlabMaxKm} km. ` : ""}100% of the delivery charge goes directly to your delivery partner to compensate for food pickup and delivery effort.
                     </p>
                   </div>
 

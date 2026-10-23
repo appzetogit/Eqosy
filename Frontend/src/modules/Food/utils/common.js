@@ -163,3 +163,17 @@ export const getOrderDisplayDistance = (orderLike) => {
   return "--";
 };
 
+/**
+ * Formats order distance with appropriate units (meters if < 1 km, else km)
+ */
+export const formatOrderDistance = (orderLike) => {
+  if (!orderLike) return "--";
+  const distStr = getOrderDisplayDistance(orderLike);
+  if (!distStr || distStr === "--") return "--";
+  const distNum = parseFloat(distStr);
+  if (isNaN(distNum) || distNum <= 0) return distStr;
+  if (distNum < 1) {
+    return `${Math.round(distNum * 1000)} m`;
+  }
+  return `${distNum % 1 === 0 ? distNum.toFixed(0) : distNum.toFixed(1)} km`;
+};

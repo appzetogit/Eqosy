@@ -111,12 +111,24 @@ export default function AddressSelectorPage() {
 
   const persistActiveLocation = useCallback(async (locationData, mode = "current") => {
     if (!locationData) return
+    const isManual = locationData.isManual === true || (mode === "saved" && locationData.isManual !== false)
+    const dataToSave = { ...locationData, isManual }
     try {
-      const dataToSave = { ...locationData, isManual: mode === "saved" || locationData.isManual === true }
       localStorage.setItem("userLocation", JSON.stringify(dataToSave))
       localStorage.setItem("deliveryAddressMode", mode)
+      try {
+        localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+          address: dataToSave.formattedAddress || dataToSave.address || dataToSave.city || "",
+          lat: dataToSave.latitude,
+          lon: dataToSave.longitude,
+          updatedAt: Date.now()
+        }))
+      } catch {}
       window.dispatchEvent(new Event("deliveryAddressModeChanged"))
       window.dispatchEvent(new Event("storage"))
+      window.dispatchEvent(new Event("eqosy:location-updated"))
+      window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: dataToSave }))
+      window.dispatchEvent(new CustomEvent("locationChanged", { detail: dataToSave }))
     } catch {
       // ignore storage errors
     }
@@ -426,7 +438,7 @@ export default function AddressSelectorPage() {
         isManual: true,
       }
 
-      await persistActiveLocation(locationData, "current")
+      await persistActiveLocation(locationData, "saved")
       setMapPosition([latitude, longitude])
       setCurrentAddress(displayAddress)
       if (googleMapRef.current) {
@@ -804,6 +816,7 @@ export default function AddressSelectorPage() {
         zipCode: locationData.postalCode || locationData.zipCode || prev.zipCode,
       }))
 
+      locationData.isManual = false
       await persistActiveLocation(locationData, "current")
 
       const addressPayload = {
@@ -835,7 +848,6 @@ export default function AddressSelectorPage() {
           await setDefaultAddress(savedAddressId)
         }
       }
-      await persistActiveLocation(locationData, "saved")
 
       if (googleMapRef.current) {
         googleMapRef.current.panTo({ lat, lng })

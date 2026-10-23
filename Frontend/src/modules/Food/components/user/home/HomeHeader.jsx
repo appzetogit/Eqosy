@@ -507,42 +507,30 @@ export default function HomeHeader({
 
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  const defaultContentTemplates = useMemo(() => [
-    { title: "FLAT", highlight: "50% OFF", subTitle: "with FREE delivery" },
-    { title: "FLAT", highlight: "₹150 OFF", subTitle: "on Premium Dining" },
-    { title: "FREE", highlight: "Delivery", subTitle: "on orders above ₹199" },
-  ], []);
-
   const slideBanners = useMemo(() => {
     if (Array.isArray(heroBanners) && heroBanners.length > 0) {
       return heroBanners.map((banner, index) => {
         const isObj = typeof banner === 'object' && banner !== null;
         const imageUrl = isObj ? (banner.imageUrl || banner.image) : banner;
-        const title = isObj && banner.title ? banner.title : defaultContentTemplates[index % defaultContentTemplates.length].title;
-        const highlight = isObj && banner.title ? "" : defaultContentTemplates[index % defaultContentTemplates.length].highlight;
-        const subTitle = isObj && (banner.subTitle || banner.ctaText) ? (banner.subTitle || banner.ctaText) : defaultContentTemplates[index % defaultContentTemplates.length].subTitle;
 
         return {
           id: isObj ? (banner._id || banner.id || index) : index,
           imageUrl: imageUrl || bannerImages[index % bannerImages.length],
-          title,
-          highlight,
-          subTitle,
+          title: isObj ? (banner.title || "") : "",
+          raw: isObj ? banner : null,
         };
       });
     }
 
     return bannerImages.map((img, index) => {
-      const template = defaultContentTemplates[index % defaultContentTemplates.length];
       return {
         id: index,
         imageUrl: img,
-        title: template.title,
-        highlight: template.highlight,
-        subTitle: template.subTitle,
+        title: "",
+        raw: null,
       };
     });
-  }, [heroBanners, bannerImages, defaultContentTemplates]);
+  }, [heroBanners, bannerImages]);
 
   useEffect(() => {
     if (!isFood) return undefined;
@@ -852,33 +840,25 @@ export default function HomeHeader({
               style={{ transform: `translateX(-${currentSlide * 100}%)` }}
             >
               {slideBanners.map((banner, index) => {
+                const linkedRestaurants = banner.raw?.linkedRestaurants || [];
                 return (
-                  <div key={banner.id || index} className="relative w-full h-full shrink-0">
+                  <div
+                    key={banner.id || index}
+                    className={`relative w-full h-full shrink-0 ${linkedRestaurants.length > 0 ? "cursor-pointer" : ""}`}
+                    onClick={() => {
+                      if (linkedRestaurants.length > 0) {
+                        const firstRestaurant = linkedRestaurants[0];
+                        const restaurantSlug = firstRestaurant.slug || firstRestaurant.restaurantId || firstRestaurant._id;
+                        if (restaurantSlug) navigate(`/food/user/restaurants/${restaurantSlug}`);
+                      }
+                    }}
+                  >
                     <img
                       src={banner.imageUrl}
                       alt={banner.title || "Banner"}
                       className="absolute inset-0 w-full h-full object-cover"
                       loading={index === 0 ? "eager" : "lazy"}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-transparent" />
-                    <div className="relative z-10 h-full flex items-center">
-                      <div className="px-4 pt-5 pb-1">
-                        <h2 className="text-white text-[24px] md:text-[26px] font-black leading-[1.05] drop-shadow-lg uppercase tracking-tight">
-                          {banner.title}
-                          {banner.highlight ? (
-                            <>
-                              <br />
-                              <span className="text-[36px] md:text-[40px] text-yellow-300 font-extrabold">{banner.highlight}</span>
-                            </>
-                          ) : null}
-                        </h2>
-                        {banner.subTitle && (
-                          <p className="text-white/95 text-[14px] md:text-[16px] font-bold mt-1 drop-shadow-md">
-                            {banner.subTitle}
-                          </p>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 );
               })}

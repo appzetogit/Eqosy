@@ -147,8 +147,12 @@ export function useLocation() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleLocationSync = () => {
+    const handleLocationSync = (e) => {
       try {
+        if (e?.detail && e.detail.latitude && e.detail.longitude) {
+          setLocation(e.detail);
+          return;
+        }
         const stored = localStorage.getItem("userLocation");
         if (stored) {
           const parsed = JSON.parse(stored);
@@ -814,6 +818,22 @@ export function useLocation() {
 
   /* ===================== MAIN LOCATION ===================== */
   const getLocation = async (updateDB = true, forceFresh = false, showLoading = false) => {
+    // If not forcing fresh, check if user has manually set location
+    if (!forceFresh) {
+      try {
+        const storedRaw = localStorage.getItem("userLocation");
+        if (storedRaw) {
+          const storedLoc = JSON.parse(storedRaw);
+          if (storedLoc?.isManual === true && storedLoc.latitude && storedLoc.longitude) {
+            debugLog("User has manually set location; returning stored manual location without GPS fetch");
+            setLocation(storedLoc);
+            if (showLoading) setLoading(false);
+            return storedLoc;
+          }
+        }
+      } catch {}
+    }
+
     // If not forcing fresh, try DB first (faster)
     let dbLocation = !forceFresh ? await fetchLocationFromDB() : null
     if (dbLocation && !forceFresh) {
@@ -1208,6 +1228,18 @@ export function useLocation() {
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (pos) => {
           try {
+            // Immediate guard: If user manually set their location, do not overwrite with live GPS watch
+            try {
+              const storedRaw = localStorage.getItem("userLocation");
+              if (storedRaw) {
+                const storedLoc = JSON.parse(storedRaw);
+                if (storedLoc?.isManual === true) {
+                  return;
+                }
+              }
+            } catch {}
+            if (location?.isManual === true) return;
+
             const { latitude, longitude, accuracy } = pos.coords
             debugLog("?? Location updated:", { latitude, longitude, accuracy: `${accuracy}m` })
 
@@ -1660,6 +1692,11 @@ export function useLocation() {
                 setLocation(parsedStored)
                 setPermissionGranted(true)
                 setLoading(false)
+                if (parsedStored?.isManual === true) {
+                  // User manually set this location (e.g. Salinda).
+                  // Do NOT start live watch and do NOT overwrite with background GPS fetch.
+                  return;
+                }
                 if (AUTO_START_LIVE_WATCH) startWatchingLocation()
                 // Still do a quiet background fresh fetch if permission is granted
                 if (permissionGranted) {

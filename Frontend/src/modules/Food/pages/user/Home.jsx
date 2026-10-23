@@ -1564,6 +1564,7 @@ export default function Home() {
         state: parsed?.state || "",
         address: parsed?.address || "",
         formattedAddress: parsed?.formattedAddress || "",
+        isManual: parsed?.isManual === true,
       };
     } catch {
       return null;
@@ -1571,6 +1572,9 @@ export default function Home() {
   }, [deliveryAddressMode, defaultSavedAddress?.id, defaultSavedAddress?._id]);
 
   const effectiveLocation = useMemo(() => {
+    if (savedLocationCache?.isManual) {
+      return savedLocationCache;
+    }
     // Only use the saved/cached address when the user is actually in "saved" mode.
     // (Previously the `||` escaped the mode check, so "current" mode still resolved to the saved address.)
     const useSavedAddress =
@@ -1672,6 +1676,18 @@ export default function Home() {
 
     const previousMode = window.localStorage.getItem("deliveryAddressMode") || "saved";
     const previousLocation = window.localStorage.getItem("userLocation");
+    let isManual = false;
+    try {
+      if (previousLocation) {
+        const parsed = JSON.parse(previousLocation);
+        if (parsed?.isManual === true) isManual = true;
+      }
+    } catch {}
+
+    if (isManual || previousMode === "saved") {
+      // User has a manual/saved location selected; do not overwrite it on launch
+      return;
+    }
 
     window.localStorage.setItem("deliveryAddressMode", "current");
     setDeliveryAddressMode("current");
