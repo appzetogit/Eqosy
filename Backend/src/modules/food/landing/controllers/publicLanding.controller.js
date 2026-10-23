@@ -17,11 +17,25 @@ export const getPublicHeroBannersController = async (req, res, next) => {
             .sort({ sortOrder: 1, createdAt: -1 })
             .populate({
                 path: 'linkedRestaurantIds',
-                select: '_id restaurantName slug area city rating cuisines profileImage pureVegRestaurant',
+                select: '_id restaurantName slug area city rating cuisines profileImage pureVegRestaurant isRestaurant',
                 model: 'FoodRestaurant'
             })
             .lean();
-        const banners = (docs || []).map((b) => {
+
+        const isGroceryQuery = req.query.section === 'grocery' || req.query.vertical === 'grocery' || req.query.isRestaurant === 'false';
+        const filteredDocs = (docs || []).filter((b) => {
+            const linked = Array.isArray(b.linkedRestaurantIds) ? b.linkedRestaurantIds : [];
+            if (linked.length === 0) return !isGroceryQuery;
+            const hasFoodStore = linked.some((r) => r && r.isRestaurant !== false);
+            const hasGroceryStore = linked.some((r) => r && r.isRestaurant === false);
+            if (isGroceryQuery) {
+                return hasGroceryStore && !hasFoodStore;
+            } else {
+                return hasFoodStore || !hasGroceryStore;
+            }
+        });
+
+        const banners = filteredDocs.map((b) => {
             const { linkedRestaurantIds, ...rest } = b;
             return {
                 ...rest,
@@ -75,7 +89,8 @@ export const getPublicExploreIconsController = async (req, res, next) => {
 export const getPublicHomePromotionBannersController = async (req, res, next) => {
     try {
         const { zoneId } = req.query;
-        const banners = await getPublicHomePromotionBanners(zoneId);
+        const section = req.query.section || req.query.vertical || 'food';
+        const banners = await getPublicHomePromotionBanners(zoneId, section);
         return sendResponse(res, 200, 'Home promotion banners fetched', { banners });
     } catch (error) {
         next(error);

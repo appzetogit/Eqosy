@@ -129,26 +129,36 @@ export function resolveCurrentAppHomeRoute(candidatePath = '') {
   try {
     const storedRoute = getCleanPath(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '')
     if (storedRoute && storedRoute !== '/') {
+      const isAuthPath = storedRoute.includes('/login') || storedRoute.includes('/auth/') || storedRoute.includes('/register') || storedRoute.includes('/reg-') || storedRoute.includes('/otp');
       if (storedRoute.startsWith('/food/delivery') || storedRoute.startsWith('/delivery')) {
-        return '/food/delivery'
+        if (isRoleAuthenticated('delivery')) return '/food/delivery';
+        if (isAuthPath) return storedRoute;
+        return '/food/delivery/login';
       }
       if (storedRoute.startsWith('/food/restaurant') || storedRoute.startsWith('/restaurant')) {
-        return '/food/restaurant'
+        if (isRoleAuthenticated('restaurant')) return '/food/restaurant';
+        if (isAuthPath) return storedRoute;
+        return '/food/restaurant/login';
       }
       if (storedRoute.startsWith('/taxi/driver') || storedRoute.startsWith('/driver')) {
-        return '/taxi/driver/home'
+        if (isRoleAuthenticated('driver')) return '/taxi/driver/home';
+        if (isAuthPath) return storedRoute;
+        return '/taxi/driver/login';
       }
       if (storedRoute.startsWith('/taxi/owner') || storedRoute.startsWith('/owner')) {
-        return '/taxi/owner/dashboard'
+        if (isRoleAuthenticated('owner')) return '/taxi/owner/dashboard';
+        if (isAuthPath) return storedRoute;
+        return '/taxi/owner/login';
       }
       if (storedRoute.startsWith('/admin')) {
-        return '/admin'
+        if (isRoleAuthenticated('admin')) return '/admin';
+        return '/admin/login';
       }
       if (storedRoute.startsWith('/taxi')) {
-        return '/taxi/user'
+        return '/taxi/user';
       }
       if (storedRoute.startsWith('/food')) {
-        return '/food/user'
+        return '/food/user';
       }
     }
   } catch { /* ignore */ }
@@ -157,6 +167,18 @@ export function resolveCurrentAppHomeRoute(candidatePath = '') {
   try {
     const activeModule = String(localStorage.getItem(ACTIVE_MODULE_KEY) || '').trim()
     if (activeModule) {
+      if (activeModule === 'taxi_driver' && !isRoleAuthenticated('driver')) {
+        return '/taxi/driver/login';
+      }
+      if (activeModule === 'taxi_owner' && !isRoleAuthenticated('owner')) {
+        return '/taxi/owner/login';
+      }
+      if (activeModule === 'restaurant' && !isRoleAuthenticated('restaurant')) {
+        return '/food/restaurant/login';
+      }
+      if (activeModule === 'delivery' && !isRoleAuthenticated('delivery')) {
+        return '/food/delivery/login';
+      }
       const home = getModuleHomeRoute(activeModule)
       if (home && home !== '/food/user') return home
       if (activeModule === 'food' || activeModule === 'food_user') return '/food/user'

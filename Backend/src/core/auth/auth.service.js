@@ -19,6 +19,9 @@ import { sendAdminResetOtpEmail } from "../../utils/email.js";
 import mongoose from "mongoose";
 import { detachTokenFromOtherOwners } from "../notifications/firebase.service.js";
 import { creditReferralReward } from "../../modules/food/user/services/userWallet.service.js";
+import { Driver as TaxiDriver } from "../../modules/taxi/driver/models/Driver.js";
+import { Owner as TaxiOwner } from "../../modules/taxi/admin/models/Owner.js";
+import { User as TaxiUser } from "../../modules/taxi/user/models/User.js";
 
 const ROLES = {
   USER: "USER",
@@ -602,41 +605,47 @@ export const verifyDeliveryOtpAndLogin = async (phone, otp, fcmToken, platform) 
 };
 
 export const logout = async (refreshToken, fcmToken, platform) => {
-  if (!refreshToken) {
-    throw new ValidationError("Refresh token is required");
-  }
-
   // 1. Remove specific FCM token from ALL collections if provided
   if (fcmToken) {
     console.log(`[FCM-Logout] Starting logout-driven token removal: platform=${platform}, tokenPreview=${fcmToken?.slice(0, 10)}...`);
     
-    // We try to remove the token from all 4 possible models regardless of the user ID, 
-    // ensuring no stale connections are left across any role or app the user was logged into.
-    // Pull from both token lists: the client may report the wrong platform, and a stale token left
-    // behind keeps delivering pushes to a logged-out device.
-    const fields = ["fcmTokens", "fcmTokenMobile"];
-    const models = [FoodUser, FoodRestaurant, FoodDeliveryPartner, FoodAdmin];
+    // We try to remove the token from all collections regardless of role,
+    // ensuring no stale connections or ring alerts are left behind on a logged-out device.
+    const arrayFields = ["fcmTokens", "fcmTokenMobile"];
+    const arrayModels = [FoodUser, FoodRestaurant, FoodDeliveryPartner, FoodAdmin, TaxiUser].filter(Boolean);
     
     try {
-      await Promise.all(
-        models.flatMap((model) =>
-          fields.map((field) =>
+      await Promise.all([
+        ...arrayModels.flatMap((model) =>
+          arrayFields.map((field) =>
             model.updateMany(
               { [field]: fcmToken },
               { $pull: { [field]: fcmToken } },
             ),
           ),
         ),
-      );
+        TaxiDriver.updateMany(
+          { $or: [{ fcmTokenWeb: fcmToken }, { fcmTokenMobile: fcmToken }] },
+          { $set: { fcmTokenWeb: "", fcmTokenMobile: "" } }
+        ),
+        TaxiOwner.updateMany(
+          { $or: [{ fcmTokenWeb: fcmToken }, { fcmTokenMobile: fcmToken }] },
+          { $set: { fcmTokenWeb: "", fcmTokenMobile: "" } }
+        ),
+      ]);
       console.log("[FCM-Logout] Token removed from all collections successfully");
     } catch (err) {
       logger.warn({ err }, "Failed to remove FCM token from all collections during logout");
     }
   }
 
-  // 2. Invalidate the refresh token (standard logout procedure)
-  const deleted = await FoodRefreshToken.deleteOne({ token: refreshToken });
-  return { invalidated: deleted.deletedCount > 0 };
+  // 2. Invalidate the refresh token (if provided)
+  let invalidated = false;
+  if (refreshToken) {
+    const deleted = await FoodRefreshToken.deleteOne({ token: refreshToken });
+    invalidated = deleted.deletedCount > 0;
+  }
+  return { invalidated };
 };
 
 export const getProfile = async (userId, role) => {

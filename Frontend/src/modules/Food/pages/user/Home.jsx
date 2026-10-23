@@ -1149,10 +1149,10 @@ export default function Home() {
     setLoadingRealCategories(true);
 
     Promise.allSettled([
-      publicGetOnce("/food/hero-banners/public").catch(() => null),
+      publicGetOnce("/food/hero-banners/public?section=food").catch(() => null),
       publicGetOnce("/food/explore-icons/public").catch(() => null),
       publicGetOnce("/food/landing/settings/public").catch(() => null),
-      adminAPI.getPublicCategories({}).catch(() => null),
+      adminAPI.getPublicCategories({ section: 'food', isRestaurant: 'true' }).catch(() => null),
     ]).then(([bannerRes, exploreRes, settingsRes, catRes]) => {
       if (cancelled) return;
 
@@ -1608,7 +1608,7 @@ export default function Home() {
     if (zoneLoading || !zoneId) return undefined;
     let cancelled = false;
     adminAPI
-      .getPublicCategories({ zoneId })
+      .getPublicCategories({ zoneId, section: 'food', isRestaurant: 'true' })
       .then((res) => {
         if (cancelled) return;
         const list = res?.data?.data?.categories || res?.data?.categories || [];
@@ -3546,7 +3546,7 @@ export default function Home() {
                   toggleRef={vegModeToggleRef}
                 />
 
-                <PromotionBannerCarousel zoneId={zoneId} />
+                <PromotionBannerCarousel zoneId={zoneId} section={superAppVertical || 'food'} />
 
                 {/* Category sticky anchor sentinel — must be before any sticky elements */}
                 <div ref={categoryAnchorRef} className="h-px w-full" aria-hidden="true" />

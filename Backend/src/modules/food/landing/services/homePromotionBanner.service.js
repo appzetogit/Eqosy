@@ -5,7 +5,7 @@ export const listHomePromotionBanners = async () => {
     return HomePromotionBanner.find().sort({ sortOrder: 1, createdAt: -1 }).lean();
 };
 
-export const getPublicHomePromotionBanners = async (zoneId = null) => {
+export const getPublicHomePromotionBanners = async (zoneId = null, section = 'food') => {
     const now = new Date();
     const filter = {
         isActive: true,
@@ -33,9 +33,25 @@ export const getPublicHomePromotionBanners = async (zoneId = null) => {
         filter.zoneId = zoneId;
     }
 
-    return HomePromotionBanner.find(filter)
-    .sort({ sortOrder: 1, createdAt: -1 })
-    .lean();
+    const docs = await HomePromotionBanner.find(filter)
+        .populate({
+            path: 'restaurantId',
+            select: '_id restaurantName isRestaurant isGrocery',
+            model: 'FoodRestaurant'
+        })
+        .sort({ sortOrder: 1, createdAt: -1 })
+        .lean();
+
+    const isGrocery = section === 'grocery';
+    return (docs || []).filter((b) => {
+        if (!b.restaurantId) {
+            const text = `${b.title || ''} ${b.ctaLink || ''} ${b.deepLink || ''}`.toLowerCase();
+            const hintsGrocery = text.includes('grocery') || text.includes('supermarket') || text.includes('kirana');
+            return isGrocery ? hintsGrocery : !hintsGrocery;
+        }
+        const isStoreGrocery = b.restaurantId.isRestaurant === false || b.restaurantId.isGrocery === true;
+        return isGrocery ? isStoreGrocery : !isStoreGrocery;
+    });
 };
 
 export const createHomePromotionBanner = async (file, meta = {}) => {

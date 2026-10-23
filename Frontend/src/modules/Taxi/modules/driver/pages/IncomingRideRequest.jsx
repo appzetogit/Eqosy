@@ -197,7 +197,7 @@ const IncomingRideRequest = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
+        className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto"
       >
         <Motion.div
           initial={{ y: 80, scale: 0.96 }}

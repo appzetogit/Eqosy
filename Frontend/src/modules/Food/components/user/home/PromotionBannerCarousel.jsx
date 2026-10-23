@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api, { publicGetOnce } from "@food/api";
 
-const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
+const PromotionBannerCarousel = ({ zoneId: propZoneId, section = 'food' }) => {
   const navigate = useNavigate();
   const [banners, setBanners] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -18,7 +18,7 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
     if (!zoneId) return;
     try {
       setLoading(true);
-      const response = await publicGetOnce(`/food/hero-banners/home-promotion/public?zoneId=${zoneId}`);
+      const response = await publicGetOnce(`/food/hero-banners/home-promotion/public?zoneId=${zoneId}&section=${section}`);
       if (response.data?.success && response.data?.data?.banners) {
         setBanners(response.data.data.banners);
       }
@@ -27,7 +27,7 @@ const PromotionBannerCarousel = ({ zoneId: propZoneId }) => {
     } finally {
       setLoading(false);
     }
-  }, [zoneId]);
+  }, [zoneId, section]);
 
   useEffect(() => {
     fetchBanners();

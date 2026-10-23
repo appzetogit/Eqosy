@@ -1,8 +1,31 @@
 import api from "../../../shared/api/axiosInstance";
 import { BACKEND_ORIGIN } from "../../../shared/api/runtimeConfig";
+import { socketService } from "../../../shared/api/socket";
+import { stopRideRequestAlertSound } from "../utils/rideRequestAlertSound";
 
 const STORAGE_KEY = "driverRegistrationSession";
-const DRIVER_AUTH_KEYS = ["token", "driverToken", "driverInfo", "role", "driverRole", "chatRole"];
+const DRIVER_AUTH_KEYS = [
+  "token",
+  "driverToken",
+  "driverInfo",
+  "role",
+  "driverRole",
+  "chatRole",
+  "driver_accessToken",
+  "driver_refreshToken",
+  "driver_authenticated",
+  "driver_user",
+  "driver",
+  "last_taxi_portal",
+  "taxi_driver_last_route",
+  "driverActiveTripSnapshot",
+  "pendingRideId",
+  "fcm_web_registered_token_driver",
+  "fcm_web_registered_token_owner",
+  "fcm_web_registered_token_bus_driver",
+  "pendingNativeFcmRegistration",
+  "lastNativeFcmRegistration",
+];
 const readSessionValue = (key) => {
   try {
     return sessionStorage.getItem(key) || "";
@@ -48,10 +71,49 @@ export const clearDriverRegistrationSession = () => {
 
 export const clearDriverAuthState = () => {
   clearDriverRegistrationSession();
+
+  // Stop any active ride alert sound
+  try {
+    stopRideRequestAlertSound();
+  } catch {}
+
+  // Disconnect driver socket
+  try {
+    socketService.disconnect();
+  } catch {}
+
+  // Unregister driver FCM token from server so no further push rings arrive
+  try {
+    const fcmToken = localStorage.getItem("fcm_web_registered_token_driver") || null;
+    const platform = (typeof window !== "undefined" && window.flutter_inappwebview) ? "mobile" : "web";
+    if (fcmToken) {
+      api.post("/food/auth/logout", { fcmToken, platform }).catch(() => {});
+    }
+  } catch {}
+
+  // Clean driver auth keys from session and local storage
   DRIVER_AUTH_KEYS.forEach((key) => {
     removeSessionValue(key);
     localStorage.removeItem(key);
   });
+
+  // Clear native last route if it was a driver or owner route
+  try {
+    const lastRoute = String(localStorage.getItem("eqosy_native_last_route") || "").toLowerCase();
+    if (
+      lastRoute.includes("/taxi/driver") ||
+      lastRoute.includes("/taxi/owner") ||
+      lastRoute.includes("/driver") ||
+      lastRoute.includes("/owner")
+    ) {
+      localStorage.removeItem("eqosy_native_last_route");
+      localStorage.removeItem("eqosy_native_last_route_at");
+    }
+    const activeMod = String(localStorage.getItem("eqosy_active_module") || "").toLowerCase();
+    if (activeMod === "taxi_driver" || activeMod === "taxi_owner") {
+      localStorage.removeItem("eqosy_active_module");
+    }
+  } catch {}
 };
 
 export const persistDriverAuthSession = ({ token = "", role = "driver" } = {}) => {

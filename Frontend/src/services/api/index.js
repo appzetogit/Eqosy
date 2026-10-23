@@ -1042,6 +1042,22 @@ export const restaurantAPI = {
       return Promise.reject(new Error("Phone and OTP are required"));
     return authService.verifyRestaurantOtp(phone, otp, fcmToken, platform);
   },
+  logout: async (refreshToken) => {
+    restaurantCurrentCached = null;
+    restaurantCurrentCacheTime = 0;
+    try {
+      localStorage.removeItem("restaurant_online_status");
+      localStorage.removeItem("restaurant_pendingPhone");
+      sessionStorage.removeItem("restaurant_current_id");
+    } catch (_) {}
+    const token =
+      refreshToken ||
+      (typeof localStorage !== "undefined"
+        ? localStorage.getItem("restaurant_refreshToken")
+        : null);
+    const { fcmToken, platform } = await authService.resolveLogoutFcmToken("restaurant");
+    return authService.logout(token, fcmToken, platform);
+  },
   getMe: () => authService.getMe("restaurant"),
   /** Restaurant dashboard: fetch current restaurant profile (deduped + short-cached). */
   getCurrentRestaurant: () => getRestaurantCurrentOnce(),

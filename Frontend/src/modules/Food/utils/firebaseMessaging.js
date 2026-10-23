@@ -251,6 +251,13 @@ export function isPushRingEvent(payload = {}) {
   const sound = String(payload.sound || data.sound || '').toLowerCase();
   const moduleName = normalizeModuleFromPath();
 
+  // GUARD: Never ring if the user is on an auth / login / welcome screen or logged out
+  const currentPath = typeof window !== 'undefined' ? String(window.location.pathname || '').toLowerCase() : '';
+  const isAuthScreen = currentPath.includes('/login') || currentPath.includes('/auth/') || currentPath.includes('/welcome');
+  if (isAuthScreen) {
+    return false;
+  }
+
   // 1. EXPLICIT GUARD: Chat messages must NEVER trigger loud order ringtone or alert loop
   if (
     type === 'chat_message' ||
@@ -304,8 +311,12 @@ export function isPushRingEvent(payload = {}) {
     type.includes('gig_reminder');
 
   if (isDeliveryRequest) {
-    // Delivery requests should ONLY ring when the app is currently in the delivery module!
+    // Delivery requests should ONLY ring when the app is currently in the delivery module AND authenticated!
     if (moduleName !== 'delivery') {
+      return false;
+    }
+    const deliveryToken = typeof localStorage !== 'undefined' ? localStorage.getItem('delivery_accessToken') : null;
+    if (!deliveryToken) {
       return false;
     }
 
@@ -357,6 +368,12 @@ export function isPushRingEvent(payload = {}) {
     // "order_created" is the customer's own confirmation push — never ring a restaurant tab for it.
     if (moduleName === 'restaurant' && type.includes('order_created')) {
       return false;
+    }
+    if (moduleName === 'restaurant') {
+      const restToken = typeof localStorage !== 'undefined' ? localStorage.getItem('restaurant_accessToken') : null;
+      if (!restToken) {
+        return false;
+      }
     }
     if (isPushForOtherRestaurant(payload)) {
       return false;

@@ -18,10 +18,15 @@
     .taxi-low-power .blur-xl,
     .taxi-low-power .blur-2xl,
     .taxi-low-power .blur-3xl,
-    .taxi-low-power [class*="blur-["] {
+    .taxi-low-power :not([class*="backdrop-blur"])[class*="blur-["] {
         display: none !important;
     }
     .taxi-low-power .animate-pulse {
         animation: none;
     }
+}
+
+/* Ensure incoming ride request modal is never suppressed by low-power blur rules */
+[data-incoming-ride-request] {
+    display: flex !important;
 }

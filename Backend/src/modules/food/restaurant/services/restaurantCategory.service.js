@@ -171,7 +171,7 @@ export async function listPublicCategories(query = {}) {
 
     const search = typeof query.search === 'string' ? query.search.trim() : '';
     const zoneIdRaw = typeof query.zoneId === 'string' ? query.zoneId.trim() : '';
-    const publicSection = query.isRestaurant === 'false' ? 'grocery' : 'food';
+    const publicSection = query.section === 'grocery' || query.vertical === 'grocery' || query.isRestaurant === 'false' ? 'grocery' : 'food';
 
     // Only global (admin-managed or "made global") categories are public. A category owned by a
     // single restaurant/store is private to it, even when approved, until an admin makes it global.

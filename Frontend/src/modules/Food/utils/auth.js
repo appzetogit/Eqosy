@@ -185,8 +185,26 @@ export function clearModuleAuth(module) {
   if (module === "restaurant") {
     clearRestaurantSessionCache();
   }
+  if (module === "delivery") {
+    localStorage.removeItem("delivery_online_status");
+    localStorage.removeItem("delivery_user_level");
+  }
   // Also clear any sessionStorage data
   sessionStorage.removeItem(`${module}AuthData`);
+
+  // Clear native last route if it pointed to this module's protected portal
+  try {
+    const lastRoute = String(localStorage.getItem("eqosy_native_last_route") || "").toLowerCase();
+    if (
+      (module === "restaurant" && (lastRoute.includes("/restaurant") || lastRoute.includes("/food/restaurant"))) ||
+      (module === "delivery" && (lastRoute.includes("/delivery") || lastRoute.includes("/food/delivery"))) ||
+      (module === "admin" && lastRoute.includes("/admin")) ||
+      (module === "driver" && (lastRoute.includes("/driver") || lastRoute.includes("/taxi/driver")))
+    ) {
+      localStorage.removeItem("eqosy_native_last_route");
+      localStorage.removeItem("eqosy_native_last_route_at");
+    }
+  } catch (_) {}
 }
 
 /**
