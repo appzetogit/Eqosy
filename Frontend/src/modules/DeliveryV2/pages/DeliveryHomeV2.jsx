@@ -245,7 +245,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     emitLocation,
     joinTrackingForOrder,
     leaveAllTrackingRooms,
-  } = useDeliveryNotifications();
+  } = useDeliveryNotifications({ isOnline });
   const companyName = useCompanyName();
   const { unreadCount: notificationUnreadCount } = useNotificationInbox("delivery", { limit: 20 });
 
@@ -778,6 +778,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     try {
       await deliveryAPI.updateOnlineStatus(false);
       setOnline(false);
+      setIncomingOrder(null);
+      clearNewOrder?.();
       toast('You are now offline');
     } catch (error) {
       const errCode = error?.response?.data?.code || error?.code;
@@ -790,7 +792,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     } finally {
       setIsTogglingDuty(false);
     }
-  }, [setOnline]);
+  }, [setOnline, clearNewOrder]);
 
   const handleSubmitEmergencyOffline = async () => {
     if (!emergencyOfflineReason.trim()) {
@@ -1243,7 +1245,20 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     };
   }, [isOnline, setRiderLocation, publishLiveRiderLocation]);
 
-  useEffect(() => { setIncomingOrder(newOrder); }, [newOrder]);
+  useEffect(() => {
+    if (!isOnline) {
+      setIncomingOrder(null);
+      clearNewOrder?.();
+    }
+  }, [isOnline, clearNewOrder]);
+
+  useEffect(() => {
+    if (isOnline && !activeOrder) {
+      setIncomingOrder(newOrder);
+    } else {
+      setIncomingOrder(null);
+    }
+  }, [newOrder, isOnline, activeOrder]);
 
   useEffect(() => {
     if (activeOrder && incomingOrder) {
@@ -1729,7 +1744,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       </div>
 
       {/* OVERLAYS (Persistent if active) - Outside flex container to avoid clipping and z-index issues */}
-      {(currentTab === 'feed' || activeOrder || incomingOrder) && (
+      {(currentTab === 'feed' || activeOrder || (isOnline && incomingOrder)) && (
         <AnimatePresence>
           {!isModalMinimized && (
             <motion.div
@@ -1741,7 +1756,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               className="fixed inset-0 z-[300] pointer-events-none flex items-end"
             >
               <div className="w-full pointer-events-auto relative">
-                {incomingOrder && (
+                {isOnline && incomingOrder && (
                   <NewOrderModal
                     order={incomingOrder}
                     onAccept={async (o) => {

@@ -299,11 +299,15 @@ const leaveAllOrderTrackingRooms = (socket, joinedRooms) => {
   joinedRooms.clear();
 };
 
-export const useDeliveryNotifications = () => {
+export const useDeliveryNotifications = (options = {}) => {
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
 
   // Step 1: All refs first (unconditional)
+  const isOnlineOption = options?.isOnline;
+  const isOnlineRef = useRef(isOnlineOption !== undefined ? Boolean(isOnlineOption) : true);
+  isOnlineRef.current = isOnlineOption !== undefined ? Boolean(isOnlineOption) : true;
+
   const socketRef = useRef(null);
   const audioRef = useRef(null);
   const audioUnlockAttemptedRef = useRef(false);
@@ -503,6 +507,11 @@ export const useDeliveryNotifications = () => {
   }, []);
 
   const handleIncomingOrderAlert = useCallback((orderData = {}) => {
+    if (!isOnlineRef.current) {
+      debugLog('Delivery partner is offline; suppressing incoming order alert sound and notification');
+      return;
+    }
+
     const dataType = String(orderData?.type || orderData?.data?.type || '').toLowerCase();
     const chatType = String(orderData?.chatType || orderData?.data?.chatType || '').toLowerCase();
     if (dataType.includes('chat') || chatType.includes('chat') || orderData?.openChat === 'true' || orderData?.conversationId) {
@@ -614,6 +623,12 @@ export const useDeliveryNotifications = () => {
         return;
       }
 
+      // If partner is offline, never fetch or set incoming available orders
+      if (!isOnlineRef.current) {
+        debugLog('Delivery partner is offline; skipping available order recovery');
+        return;
+      }
+
       const availablePayload =
         availableResult.status === 'fulfilled'
           ? availableResult.value?.data?.data ??
@@ -722,6 +737,14 @@ export const useDeliveryNotifications = () => {
   }, [deliveryPartnerId, isConnected]);
 
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
+  useEffect(() => {
+    if (isOnlineOption === false) {
+      stopAlertLoop();
+      activeOrderRef.current = null;
+      setNewOrder(null);
+    }
+  }, [isOnlineOption, stopAlertLoop]);
+
   useEffect(() => {
     if (!supportsBrowserNotifications()) return;
 
@@ -1054,6 +1077,10 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('new_order', (orderData) => {
+      if (!isOnlineRef.current) {
+        debugLog('Ignoring new_order because delivery partner is offline');
+        return;
+      }
       debugLog('New order received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
@@ -1064,6 +1091,10 @@ export const useDeliveryNotifications = () => {
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
+      if (!isOnlineRef.current) {
+        debugLog('Ignoring new_order_available because delivery partner is offline');
+        return;
+      }
       debugLog('New order available received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         phase: orderData?.phase || 'unknown',
@@ -1075,6 +1106,10 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('order_assigned', (orderData) => {
+      if (!isOnlineRef.current) {
+        debugLog('Ignoring order_assigned because delivery partner is offline');
+        return;
+      }
       debugLog('Order assigned to partner received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
@@ -1084,6 +1119,10 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
+      if (!isOnlineRef.current) {
+        debugLog('Ignoring play_notification_sound because delivery partner is offline');
+        return;
+      }
       debugLog('play_notification_sound received', {
         orderId: data?.orderId || data?.orderMongoId || data?.order_id,
       });
@@ -1390,10 +1429,12 @@ export const useDeliveryNotifications = () => {
     };
 
     const handleWindowFocus = () => {
+      if (!isOnlineRef.current) return;
       void recoverDeliveryState();
     };
 
     const handleVisibilityChange = () => {
+      if (!isOnlineRef.current) return;
       if (document.visibilityState === 'visible') {
         void recoverDeliveryState();
       }
@@ -1401,6 +1442,7 @@ export const useDeliveryNotifications = () => {
 
     // Push rang but the socket may have missed new_order (app was backgrounded) — fetch the offer.
     const handlePushReceived = (event) => {
+      if (!isOnlineRef.current) return;
       const type = String(event?.detail?.data?.type || event?.detail?.type || '').toLowerCase();
       if (type.includes('new_order') || type.includes('order_assign') || type.includes('order_ready')) {
         void recoverDeliveryState();

@@ -256,8 +256,10 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
 
   // Fetch the delivery partner's zone info for filtering
   const partner = await FoodDeliveryPartner.findById(partnerObjId)
-    .select('zoneId lastLat lastLng vehicleType')
+    .select('zoneId lastLat lastLng vehicleType availabilityStatus')
     .lean();
+
+  const isOnline = partner?.availabilityStatus === 'online';
 
   const filter = {
     // Exclude orders that the current driver has explicitly handed over or rejected
@@ -269,34 +271,50 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
         }
       }
     },
-    $or: [
-      {
-        'dispatch.status': { $in: ['unassigned', 'assigned'] },
-        orderStatus: {
-          $nin: [
-            'delivered',
-            'cancelled_by_user',
-            'cancelled_by_restaurant',
-            'cancelled_by_admin',
-            'rejected',
-            'Rejected'
-          ]
-        },
-      },
-      {
-        'dispatch.deliveryPartnerId': partnerObjId,
-        orderStatus: {
-          $nin: [
-            'delivered',
-            'cancelled_by_user',
-            'cancelled_by_restaurant',
-            'cancelled_by_admin',
-            'rejected',
-            'Rejected'
-          ],
-        },
-      },
-    ],
+    $or: isOnline
+      ? [
+          {
+            'dispatch.status': { $in: ['unassigned', 'assigned'] },
+            orderStatus: {
+              $nin: [
+                'delivered',
+                'cancelled_by_user',
+                'cancelled_by_restaurant',
+                'cancelled_by_admin',
+                'rejected',
+                'Rejected'
+              ]
+            },
+          },
+          {
+            'dispatch.deliveryPartnerId': partnerObjId,
+            orderStatus: {
+              $nin: [
+                'delivered',
+                'cancelled_by_user',
+                'cancelled_by_restaurant',
+                'cancelled_by_admin',
+                'rejected',
+                'Rejected'
+              ],
+            },
+          },
+        ]
+      : [
+          {
+            'dispatch.deliveryPartnerId': partnerObjId,
+            orderStatus: {
+              $nin: [
+                'delivered',
+                'cancelled_by_user',
+                'cancelled_by_restaurant',
+                'cancelled_by_admin',
+                'rejected',
+                'Rejected'
+              ],
+            },
+          },
+        ],
   };
 
   const [docs, total] = await Promise.all([
