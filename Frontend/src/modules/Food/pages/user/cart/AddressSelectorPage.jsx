@@ -44,7 +44,7 @@ function formatDistanceText(meters) {
     return `${Math.round(meters)} m`
   }
   const km = meters / 1000
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
+  return `${km < 100 ? km.toFixed(1) : Math.round(km)} km`
 }
 
 // Get icon based on address type/label
@@ -280,7 +280,7 @@ export default function AddressSelectorPage() {
                 title: p.title,
                 subtitle: p.subtitle,
                 description: p.description,
-                distanceMeters: null,
+                distanceMeters: p.distanceMeters ?? null,
               }))
               setTopSearchResults(mapped)
             } else {
@@ -300,6 +300,7 @@ export default function AddressSelectorPage() {
             componentRestrictions: { country: 'in' },
           }
           if (Number.isFinite(refLat) && Number.isFinite(refLng)) {
+            request.origin = new window.google.maps.LatLng(refLat, refLng)
             request.locationBias = new window.google.maps.Circle({
               center: { lat: refLat, lng: refLng },
               radius: 50000,
@@ -313,7 +314,7 @@ export default function AddressSelectorPage() {
                 title: p.structured_formatting?.main_text || p.description.split(',')[0],
                 subtitle: p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(', ').trim(),
                 description: p.description,
-                distanceMeters: p.distance_meters || null,
+                distanceMeters: p.distance_meters != null ? Number(p.distance_meters) : null,
               }))
               setTopSearchResults(mapped)
               setIsTopSearching(false)
@@ -548,11 +549,17 @@ export default function AddressSelectorPage() {
           await loader.load();
         }
         
+        const refLat = Number.isFinite(location?.latitude) ? location.latitude : mapPosition?.[0] ?? 22.7196;
+        const refLng = Number.isFinite(location?.longitude) ? location.longitude : mapPosition?.[1] ?? 75.8577;
         const service = new window.google.maps.places.AutocompleteService();
         const request = {
           input: String(addressAutocompleteValue || "").trim(),
           componentRestrictions: { country: 'in' }, // Restrict to India
-          origin: location ? { lat: location.latitude, lng: location.longitude } : undefined,
+          origin: (Number.isFinite(refLat) && Number.isFinite(refLng)) ? { lat: refLat, lng: refLng } : undefined,
+          locationBias: (Number.isFinite(refLat) && Number.isFinite(refLng)) ? new window.google.maps.Circle({
+            center: { lat: refLat, lng: refLng },
+            radius: 50000,
+          }) : undefined,
         };
 
         service.getPlacePredictions(request, (predictions, status) => {
@@ -627,7 +634,7 @@ export default function AddressSelectorPage() {
             mainText: p.title,
             secondaryText: p.subtitle,
             source: 'google',
-            distanceMeters: null,
+            distanceMeters: p.distanceMeters ?? null,
           }))
           setGooglePlacesSuggestions(mapped)
           setKeywordAddressSuggestions([])
@@ -1191,8 +1198,16 @@ export default function AddressSelectorPage() {
                         className="w-full px-4 py-3 flex items-start gap-3 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left border-b border-gray-50 dark:border-gray-800 last:border-none"
                       >
                         <MapPin className="h-4 w-4 text-gray-400 mt-1 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.mainText}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.mainText}</p>
+                            {s.distanceMeters != null && (
+                              <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60">
+                                <Navigation className="w-3 h-3 rotate-45" />
+                                {formatDistanceText(s.distanceMeters)}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{s.secondaryText}</p>
                         </div>
                       </button>
@@ -1514,7 +1529,7 @@ export default function AddressSelectorPage() {
                     onClick={() => handleSelectSearchSuggestion(item)}
                     className="w-full flex items-start gap-4 text-left"
                   >
-                    <div className="flex flex-col items-center min-w-[48px]">
+                    <div className="flex flex-col items-center min-w-[48px] shrink-0">
                       <div className="h-10 w-10 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
                         <MapPin className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                       </div>
@@ -1525,9 +1540,17 @@ export default function AddressSelectorPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900 dark:text-white text-base">
-                        {item.title}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-gray-900 dark:text-white text-base">
+                          {item.title}
+                        </p>
+                        {distStr && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 shadow-xs">
+                            <Navigation className="w-3 h-3 rotate-45" />
+                            {distStr}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug line-clamp-2">
                         {item.subtitle}
                       </p>

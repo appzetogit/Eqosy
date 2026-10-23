@@ -16,7 +16,7 @@ export async function placesAutocompleteController(req, res) {
 
     const lat = req.query.lat ? Number(req.query.lat) : null;
     const lng = req.query.lng ? Number(req.query.lng) : null;
-    const cacheKey = `${input.toLowerCase()}_${lat ? lat.toFixed(2) : ''}_${lng ? lng.toFixed(2) : ''}`;
+    const cacheKey = `${input.toLowerCase()}_${Number.isFinite(lat) ? lat.toFixed(2) : ''}_${Number.isFinite(lng) ? lng.toFixed(2) : ''}`;
 
     const cached = placesCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < 10 * 60 * 1000) {
@@ -30,7 +30,7 @@ export async function placesAutocompleteController(req, res) {
 
     let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&components=country:in&key=${apiKey}`;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      url += `&location=${lat},${lng}&radius=50000`;
+      url += `&location=${lat},${lng}&radius=50000&origin=${lat},${lng}`;
     }
 
     const response = await fetch(url);
@@ -42,6 +42,7 @@ export async function placesAutocompleteController(req, res) {
         description: p.description,
         title: p.structured_formatting?.main_text || p.description.split(',')[0],
         subtitle: p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(',').trim(),
+        distanceMeters: p.distance_meters != null ? Number(p.distance_meters) : null,
       }));
 
       placesCache.set(cacheKey, { data: predictions, ts: Date.now() });
