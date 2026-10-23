@@ -1350,10 +1350,10 @@ function CartInner() {
   const surgeAmount = Number(pricing?.surgeAmount || 0)
   const surgeTitle = pricing?.surgeTitle || "Surge Charge"
   const gstCharges = Number(pricing?.tax ?? 0)
-  const discount = pricing?.discount ?? (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
+  const discount = Number(pricing?.discount ?? (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0))
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount
   const deliveryPartnerTip = Math.max(0, Number(selectedDeliveryTip) || 0)
-  const baseTotal = pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - (pricing?.discount ?? discount))
+  const baseTotal = Number(pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - discount))
 
   // Helper for GST breakdown
   const getGstBreakdown = () => {
@@ -1372,8 +1372,18 @@ function CartInner() {
     };
   };
   const gstBreakdown = getGstBreakdown();
-  const total = baseTotal + deliveryPartnerTip
-  const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - baseTotal)
+  const total = Math.round(baseTotal + deliveryPartnerTip)
+
+  // Savings: Only genuine coupon discounts or item MRP differences (never roundoff differences)
+  const itemSavings = cart.reduce((sum, item) => {
+    const orig = Number(item.originalPrice || item.mrp || 0)
+    const cur = Number(item.price || 0)
+    return sum + (orig > cur ? (orig - cur) * (item.quantity || 1) : 0)
+  }, 0)
+  const savings = Math.max(
+    0,
+    Math.round(pricing?.savings != null ? Number(pricing.savings) : (discount + itemSavings))
+  )
 
   const getCartActualDistanceKm = () => {
     return getOrderDisplayDistance({
@@ -2479,7 +2489,7 @@ function CartInner() {
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
             <div className="max-w-7xl mx-auto">
               <p className="text-sm md:text-base font-medium text-blue-800 dark:text-blue-200">
-                Saved {RUPEE_SYMBOL}{savings} on this order
+                Saved {RUPEE_SYMBOL}{Math.round(savings)} on this order
               </p>
             </div>
           </div>
@@ -2701,7 +2711,7 @@ function CartInner() {
                       <Percent className="h-5 w-5 text-[color:var(--app-primary,#EB590E)] mt-0.5" />
                       <div>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">'{appliedCoupon.code}' applied</p>
-                        <p className="text-xs text-[color:var(--app-primary,#EB590E)] font-medium mt-0.5">You saved {RUPEE_SYMBOL}{discount}</p>
+                        <p className="text-xs text-[color:var(--app-primary,#EB590E)] font-medium mt-0.5">You saved {RUPEE_SYMBOL}{Math.round(discount)}</p>
                       </div>
                     </div>
                     <button onClick={handleRemoveCoupon} className="text-[color:var(--app-primary,#EB590E)] text-xs font-semibold px-2 hover:underline">REMOVE</button>
@@ -3186,14 +3196,14 @@ function CartInner() {
                         <span className="text-base text-gray-800 dark:text-gray-200 font-semibold tracking-wide">Total Bill</span>
                         {savings > 0 ? (
                           <>
-                            <span className="text-base text-gray-400 dark:text-gray-500 line-through font-medium">{RUPEE_SYMBOL}{totalBeforeDiscount.toFixed(2)}</span>
-                            <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{total.toFixed(2)}</span>
+                            <span className="text-base text-gray-400 dark:text-gray-500 line-through font-medium">{RUPEE_SYMBOL}{Math.round(total + savings)}</span>
+                            <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{Math.round(total)}</span>
                             <span className="text-[11px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded text-center ml-1 font-semibold border border-blue-200 dark:border-blue-800">
-                              You saved {RUPEE_SYMBOL}{savings.toFixed(0)}
+                              You saved {RUPEE_SYMBOL}{Math.round(savings)}
                             </span>
                           </>
                         ) : (
-                          <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{total.toFixed(2)}</span>
+                          <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{Math.round(total)}</span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Incl. taxes and charges</p>
@@ -3263,12 +3273,12 @@ function CartInner() {
                     {discount > 0 && (
                       <div className="flex justify-between text-sm text-[color:var(--app-primary,#EB590E)] font-medium">
                         <span>Coupon Discount</span>
-                        <span>-{RUPEE_SYMBOL}{discount.toFixed(2)}</span>
+                        <span>-{RUPEE_SYMBOL}{Math.round(discount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-base font-bold pt-3 mt-1 border-t border-gray-100 dark:border-gray-800 text-gray-900 dark:text-white">
                       <span>To Pay</span>
-                      <span>{RUPEE_SYMBOL}{total.toFixed(2)}</span>
+                      <span>{RUPEE_SYMBOL}{Math.round(total)}</span>
                     </div>
                     {pricingError && (
                       <div className="mt-3 p-3.5 bg-red-50 dark:bg-red-950/40 rounded-2xl border border-red-200 dark:border-red-800 flex items-start gap-3 shadow-xs">
@@ -3471,7 +3481,7 @@ function CartInner() {
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
-                  <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{total.toFixed(2)}</span>
+                  <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{Math.round(total)}</span>
                   <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-white/80 mt-[-2px]">Total</span>
                 </div>
               )}
@@ -3523,9 +3533,9 @@ function CartInner() {
                 <div>
                   <p className="text-lg font-semibold text-gray-900">
                     {selectedPaymentMethod === "razorpay"
-                      ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} online (Razorpay)`
+                      ? `Pay ${RUPEE_SYMBOL}${Math.round(total)} online (Razorpay)`
                       : selectedPaymentMethod === "wallet"
-                        ? `Pay ${RUPEE_SYMBOL}${total.toFixed(2)} from Wallet`
+                        ? `Pay ${RUPEE_SYMBOL}${Math.round(total)} from Wallet`
                         : `Pay on delivery (COD)`}
                   </p>
                 </div>

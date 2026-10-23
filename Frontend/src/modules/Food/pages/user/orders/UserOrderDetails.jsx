@@ -207,10 +207,12 @@ export default function UserOrderDetails() {
       .filter(Boolean)
       .join(", ")
 
-  const savings =
-    (pricing.discount || 0) +
-    (pricing.originalItemTotal || 0) -
-    (pricing.subtotal || 0)
+  const savings = Math.max(
+    0,
+    Math.round(
+      Number(order.pricing?.savings ?? order.pricing?.discount ?? order.discount ?? 0)
+    )
+  )
 
   // Restaurant phone (multiple fallbacks) - use fetched restaurant data first
   const restaurantPhone =
@@ -612,9 +614,9 @@ export default function UserOrderDetails() {
               </div>
 
               <div className="flex items-center justify-center gap-2 pt-1 text-[color:var(--app-primary,#EB590E)] font-bold text-sm">
-                <span>??</span>
+                <span>🎉</span>
                 <span>
-                  You saved ₹{Number(savings).toFixed(2)} on this order!
+                  You saved ₹{Math.round(savings)} on this order!
                 </span>
               </div>
             </div>
