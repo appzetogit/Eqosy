@@ -1673,7 +1673,7 @@ const DriverHome = () => {
             rideId: data.rideId,
             attempt: data.attempt,
             maxAttempts: data.maxAttempts,
-            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds || 25,
             requestExpiresAt: data.requestExpiresAt || null,
             customer: data.user || null,
             bookingMode: data.bookingMode || 'normal',
@@ -1854,13 +1854,7 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
-                // Events queued while the app was backgrounded arrive late on resume. An offer whose window
-                // already passed would flash and close; ask the server for what is still live instead.
-                const expiresAtMs = data?.requestExpiresAt ? new Date(data.requestExpiresAt).getTime() : NaN;
-                if (Number.isFinite(expiresAtMs) && expiresAtMs < Date.now() - 30000) {
-                    checkPendingDispatch(data.rideId);
-                    return;
-                }
+                if (!data?.rideId) return;
                 presentRideRequest(data);
             };
 
@@ -1870,11 +1864,13 @@ const DriverHome = () => {
                     return;
                 }
                 const activeRequest = currentRequestRef.current;
-                // Close only the card this event is about; a close for another ride must not hide a new request.
-                if (!rideId || activeRequest?.rideId === rideId) {
+                // Close only if this closed event strictly matches our current active ride
+                if (rideId && activeRequest?.rideId === rideId) {
                     currentRequestRef.current = null;
                     setShowRequest(false);
                     setCurrentRequest(null);
+                    setAcceptingRideId('');
+                    acceptingRideIdRef.current = '';
                     stopRideRequestAlertSound();
                 }
             };
@@ -2171,41 +2167,49 @@ const DriverHome = () => {
     const dutyHours = Math.floor(liveActiveSeconds / 3600);
     const dutyMins = Math.floor((liveActiveSeconds % 3600) / 60);
 
-    const handleAccept = () => {
-        if (!currentRequest?.rideId || acceptingRideId) {
+    const handleAccept = useCallback(() => {
+        const activeRequest = currentRequestRef.current || currentRequest;
+        if (!activeRequest?.rideId || acceptingRideIdRef.current) {
             return;
         }
 
-        acceptingRideIdRef.current = currentRequest.rideId;
-        setAcceptingRideId(currentRequest.rideId);
+        acceptingRideIdRef.current = activeRequest.rideId;
+        setAcceptingRideId(activeRequest.rideId);
         setStatusMessage('Accepting ride...');
         stopRideRequestAlertSound();
-        socketService.emit('acceptRide', { rideId: currentRequest.rideId });
-    };
+        socketService.emit('acceptRide', { rideId: activeRequest.rideId });
+    }, [currentRequest]);
 
     // `reason: 'timeout'` means the accept timer ran out (ignored); anything else is a real reject.
-    const handleDecline = (declineInfo) => {
-        if (currentRequest?.rideId) {
+    const handleDecline = useCallback((declineInfo) => {
+        const activeRequest = currentRequestRef.current || currentRequest;
+        const rideId = activeRequest?.rideId;
+        if (rideId) {
             socketService.emit('rejectRide', {
-                rideId: currentRequest.rideId,
+                rideId,
                 reason: declineInfo?.reason === 'timeout' ? 'timeout' : 'rejected',
             });
         }
         stopRideRequestAlertSound();
+        currentRequestRef.current = null;
+        setCurrentRequest(null);
         setShowRequest(false);
-    };
+        setAcceptingRideId('');
+        acceptingRideIdRef.current = '';
+    }, [currentRequest]);
 
-    const handleSubmitBid = (bidFare) => {
-        if (!currentRequest?.rideId || acceptingRideId || currentRequest?.raw?.pricingNegotiationMode !== 'driver_bid') {
+    const handleSubmitBid = useCallback((bidFare) => {
+        const activeRequest = currentRequestRef.current || currentRequest;
+        if (!activeRequest?.rideId || acceptingRideIdRef.current || activeRequest?.raw?.pricingNegotiationMode !== 'driver_bid') {
             return;
         }
 
-        acceptingRideIdRef.current = currentRequest.rideId;
-        setAcceptingRideId(currentRequest.rideId);
+        acceptingRideIdRef.current = activeRequest.rideId;
+        setAcceptingRideId(activeRequest.rideId);
         setStatusMessage('Submitting bid...');
         stopRideRequestAlertSound();
-        socketService.emit('submitRideBid', { rideId: currentRequest.rideId, bidFare });
-    };
+        socketService.emit('submitRideBid', { rideId: activeRequest.rideId, bidFare });
+    }, [currentRequest]);
 
     return (
         <div className="h-screen w-full bg-[#E5E7EB] font-sans select-none overflow-hidden relative text-slate-900 border-x border-slate-200 shadow-2xl max-w-md mx-auto">

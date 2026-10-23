@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -26,7 +26,9 @@ const getRequestExpiryTime = (data, requestDurationSeconds) => {
   const rawExpiryTime = safeData.requestExpiresAt || safeData.raw?.requestExpiresAt;
   const expiryTimestamp = rawExpiryTime ? new Date(rawExpiryTime).getTime() : NaN;
 
-  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > Date.now()) {
+  // If server expiry is at least 5 seconds into the future, honor it.
+  // Otherwise, fallback to the full local duration to protect against clock drift and instant auto-close.
+  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > Date.now() + 5000) {
     return expiryTimestamp;
   }
 
@@ -85,6 +87,20 @@ const IncomingRideRequest = ({
   const [timer, setTimer] = useState(requestDurationSeconds);
   const [previewNow, setPreviewNow] = useState(() => Date.now());
   const data = requestData;
+  const onDeclineRef = useRef(onDecline);
+  const mountedTimestampRef = useRef(Date.now());
+
+  useEffect(() => {
+    onDeclineRef.current = onDecline;
+  }, [onDecline]);
+
+  // Reset timer whenever a new ride request arrives
+  useEffect(() => {
+    if (visible && data?.rideId) {
+      mountedTimestampRef.current = Date.now();
+      setTimer(requestDurationSeconds);
+    }
+  }, [visible, data?.rideId, requestDurationSeconds]);
 
   useEffect(() => {
     if (isPreviewMode || !visible || !data?.rideId) {
@@ -95,12 +111,14 @@ const IncomingRideRequest = ({
     let hasExpired = false;
 
     const syncTimer = () => {
-      const remainingSeconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      const now = Date.now();
+      const remainingSeconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
       setTimer(remainingSeconds);
 
-      if (!hasExpired && remainingSeconds <= 0) {
+      // Prevent instant timeout: offer must have been visible locally for at least 3 seconds
+      if (!hasExpired && remainingSeconds <= 0 && (now - mountedTimestampRef.current >= 3000)) {
         hasExpired = true;
-        onDecline({ reason: 'timeout' });
+        onDeclineRef.current?.({ reason: 'timeout' });
       }
     };
 
@@ -110,7 +128,7 @@ const IncomingRideRequest = ({
     return () => {
       clearInterval(interval);
     };
-  }, [visible, onDecline, requestDurationSeconds, data?.rideId, data?.requestExpiresAt, isPreviewMode]);
+  }, [visible, requestDurationSeconds, data?.rideId, data?.requestExpiresAt, isPreviewMode]);
 
   useEffect(() => {
     if (!visible || !isPreviewMode) {
@@ -164,16 +182,22 @@ const IncomingRideRequest = ({
   const bidMaxFare = Number(data.raw?.bidding?.userMaxBidFare || data.raw?.userMaxBidFare || bidBaseFare);
   const bidStepAmount = Number(data.raw?.bidding?.bidStepAmount || 10);
   const scheduledCountdown = getScheduledRideCountdown(scheduledAt, previewNow);
+  const safeBidStepAmount = Math.max(1, Number(bidStepAmount || 10));
+  const bidStepsCount = Math.min(20, Math.max(1, Math.floor((bidMaxFare - bidFloorFare) / safeBidStepAmount) + 1));
   const bidOptions = isBidding
-    ? Array.from({ length: Math.max(1, Math.floor((bidMaxFare - bidFloorFare) / bidStepAmount) + 1) }, (_, index) => bidFloorFare + (index * bidStepAmount))
+    ? Array.from({ length: bidStepsCount }, (_, index) => bidFloorFare + (index * safeBidStepAmount))
     : [];
 
   // Rendered into <body> so no ancestor transform/overflow/stacking context can hide or clip the card.
   return createPortal(
     <AnimatePresence mode="wait">
       <Motion.div
+        key={data?.rideId || 'incoming-ride-request'}
         data-incoming-ride-request
-        className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-slate-950/55 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-slate-950/60 p-3 sm:p-4 backdrop-blur-[2px] overflow-y-auto"
       >
         <Motion.div
           initial={{ y: 80, scale: 0.96 }}
