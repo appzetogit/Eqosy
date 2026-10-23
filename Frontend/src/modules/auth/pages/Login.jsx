@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion } from "framer-motion"
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X, UtensilsCrossed, Car, Package } from "lucide-react"
+import { ShieldCheck, Loader2, ArrowRight, ArrowLeft, X, UtensilsCrossed, ShoppingBasket, Car, Package } from "lucide-react"
 import { toast } from "sonner"
 import apiClient, { authAPI } from "@food/api"
 import { setUnifiedAuthData, isUnifiedAuthenticated } from "@food/utils/auth"
@@ -614,9 +614,12 @@ export default function UnifiedOTPFastLogin() {
           <span className="bg-gradient-to-r from-[#8BE02A] via-[#FFC400] to-[#F7931E] bg-clip-text text-transparent">delivered.</span>
         </h1>
 
-        <div className="pointer-events-none mt-3 flex select-none items-center gap-1.5">
+        <div className="pointer-events-none mt-3 flex flex-wrap justify-center select-none items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
             <UtensilsCrossed className="h-3.5 w-3.5 text-[#F7931E]" /> Food
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
+            <ShoppingBasket className="h-3.5 w-3.5 text-[#10B981]" /> Grocery
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">
             <Car className="h-3.5 w-3.5 text-[#8BE02A]" /> Rides
