@@ -632,34 +632,28 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           ? { lat: location.latitude, lng: location.longitude }
           : { lat: 22.7196, lng: 75.8577 }
 
-        // Create map
+        // Create full, interactive Google Map with native place names, roads, landmarks and POIs
         const map = new google.maps.Map(mapContainerRef.current, {
           center: initialLocation,
-          zoom: 15,
-          disableDefaultUI: true, // Eqosy-style clean look
+          zoom: 16,
+          disableDefaultUI: false,
           zoomControl: true,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
-          draggable: !lockMapToAutocomplete,
-          clickableIcons: false,
-          gestureHandling: lockMapToAutocomplete ? "none" : "auto",
-          // Hide basemap "tiles" (roads/labels/POIs) for pin-only UI.
-          // This keeps the map container usable for centering/pin placement without showing the full map details.
+          draggable: true,
+          clickableIcons: true,
+          gestureHandling: "greedy",
+          // Standard Google Maps view with all roads, places, labels, and landmarks visible
           styles: [
-            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
-            { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-            { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
-            { featureType: "road", elementType: "all", stylers: [{ visibility: "off" }] },
-            { featureType: "transit", elementType: "all", stylers: [{ visibility: "off" }] },
-            { featureType: "water", elementType: "all", stylers: [{ visibility: "off" }] },
-            { featureType: "landscape", elementType: "all", stylers: [{ color: "#f3f4f6" }] },
+            { featureType: "poi", stylers: [{ visibility: "on" }] },
+            { featureType: "all", elementType: "labels", stylers: [{ visibility: "on" }] },
           ],
         })
 
         googleMapRef.current = map
 
-        // Create Green Marker (locked to autocomplete selection)
+        // Create Green Marker for selected location
         const greenMarker = new google.maps.Marker({
           position: initialLocation,
           map: map,
@@ -668,13 +662,42 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             scaledSize: new google.maps.Size(40, 40),
             anchor: new google.maps.Point(20, 40)
           },
-          draggable: false,
+          draggable: true,
           title: "Selected location"
         })
 
         greenMarkerRef.current = greenMarker
 
-        // Note: marker drag disabled; location updates only via autocomplete selection.
+        // Drag marker to adjust location
+        greenMarker.addListener("dragend", (e) => {
+          if (!e?.latLng) return
+          const lat = e.latLng.lat()
+          const lng = e.latLng.lng()
+          handleMapMoveEnd(lat, lng)
+        })
+
+        // Pan map or click map to move pin and update location
+        map.addListener("dragend", () => {
+          const center = map.getCenter()
+          if (!center) return
+          const lat = center.lat()
+          const lng = center.lng()
+          if (greenMarkerRef.current) {
+            greenMarkerRef.current.setPosition({ lat, lng })
+          }
+          handleMapMoveEnd(lat, lng)
+        })
+
+        map.addListener("click", (e) => {
+          if (!e?.latLng) return
+          const lat = e.latLng.lat()
+          const lng = e.latLng.lng()
+          map.panTo({ lat, lng })
+          if (greenMarkerRef.current) {
+            greenMarkerRef.current.setPosition({ lat, lng })
+          }
+          handleMapMoveEnd(lat, lng)
+        })
 
         // Function to create/update blue dot and accuracy circle
         const createBlueDotWithCircle = (position, accuracyValue) => {

@@ -12,6 +12,7 @@ import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { haversineKm } from './order.helpers.js';
+import { getGoogleRoadDistance } from '../utils/googleMaps.js';
 import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
 function extractCoords(addressLike) {
@@ -266,7 +267,20 @@ export async function calculateOrderPricing(userId, dto) {
     }
     const [rLng, rLat] = restCoords;
     const [cLng, cLat] = customerCoords;
-    const distanceKm = haversineKm(rLat, rLng, cLat, cLng);
+    let distanceKm = haversineKm(rLat, rLng, cLat, cLng);
+
+    // Prefer accurate Google Maps road driving distance (e.g. 5.9 km instead of straight-line 5.2 km)
+    try {
+      const roadData = await getGoogleRoadDistance(
+        { lat: rLat, lng: rLng },
+        { lat: cLat, lng: cLng }
+      );
+      if (roadData?.distanceKm && Number.isFinite(roadData.distanceKm) && roadData.distanceKm > 0) {
+        distanceKm = roadData.distanceKm;
+      }
+    } catch {
+      // Fallback safely to straight-line haversineKm
+    }
 
     // 1. Zone Validation: Ensure customer location is inside an active service zone
     const activeZones = await FoodZone.find({ isActive: true }).select('_id name coordinates').lean();

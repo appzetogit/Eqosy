@@ -1078,8 +1078,12 @@ const SelectLocation = () => {
                     }
                   }}
                   options={{
-                    disableDefaultUI: true,
-                    clickableIcons: false,
+                    disableDefaultUI: false,
+                    zoomControl: true,
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    fullscreenControl: false,
+                    clickableIcons: true,
                     gestureHandling: 'greedy',
                   }}
                 />

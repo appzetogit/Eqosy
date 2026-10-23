@@ -576,13 +576,13 @@ export default function AddressSelectorPage() {
         const map = new google.maps.Map(mapContainerRef.current, {
           center: initialPos,
           zoom: 16,
-          disableDefaultUI: true,
+          disableDefaultUI: false,
           zoomControl: true,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
           gestureHandling: "greedy",
-          styles: [
-            { featureType: "poi", stylers: [{ visibility: "off" }] },
-            { featureType: "transit", stylers: [{ visibility: "off" }] }
-          ]
+          clickableIcons: true,
         })
         googleMapRef.current = map
 

@@ -43,12 +43,21 @@ const SELECT_VEHICLE_MAP_OPTIONS = {
 };
 
 const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
-  const [lng, lat] = coords || [];
-
-  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
-    return { lat: Number(lat), lng: Number(lng) };
+  if (!coords) return fallback;
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const lng = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng };
+    }
   }
-
+  if (typeof coords === 'object') {
+    const lat = Number(coords.lat ?? coords.latitude);
+    const lng = Number(coords.lng ?? coords.longitude ?? coords.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng };
+    }
+  }
   return fallback;
 };
 
@@ -621,25 +630,26 @@ const getParcelWeightCapacity = (type) => {
 const AVERAGE_CITY_SPEED_KMPH = 24;
 
 const calculateDistanceMeters = (fromCoords = [], toCoords = []) => {
-  const [fromLng, fromLat] = fromCoords;
-  const [toLng, toLat] = toCoords;
+  const fromLatLng = toLatLng(fromCoords, null);
+  const toLatLngPos = toLatLng(toCoords, null);
 
-  if (![fromLng, fromLat, toLng, toLat].every((value) => Number.isFinite(Number(value)))) {
+  if (!fromLatLng || !toLatLngPos) {
     return 0;
   }
 
   const toRadians = (value) => (Number(value) * Math.PI) / 180;
   const earthRadiusMeters = 6371000;
-  const latDelta = toRadians(toLat - fromLat);
-  const lngDelta = toRadians(toLng - fromLng);
-  const startLat = toRadians(fromLat);
-  const endLat = toRadians(toLat);
+  const latDelta = toRadians(toLatLngPos.lat - fromLatLng.lat);
+  const lngDelta = toRadians(toLatLngPos.lng - fromLatLng.lng);
+  const startLat = toRadians(fromLatLng.lat);
+  const endLat = toRadians(toLatLngPos.lat);
   const a =
     Math.sin(latDelta / 2) ** 2 +
     Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDelta / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  return Math.round(earthRadiusMeters * c);
+  // Multiplied by standard road circuity factor (1.18x) so fallback matches Google Maps driving route
+  return Math.round(earthRadiusMeters * c * 1.18);
 };
 
 const estimateDurationMinutes = (distanceMeters = 0) => {

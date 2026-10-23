@@ -241,6 +241,8 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
 
 /** Restaurant -> customer straight-line km for an order, 0 when coordinates are missing. */
 function getOrderTripKm(order) {
+  const storedDist = Number(order?.distanceKm ?? order?.pricing?.distanceKm ?? order?.pricing?.deliveryFeeBreakdown?.distanceKm);
+  if (Number.isFinite(storedDist) && storedDist > 0) return storedDist;
   const rest = order?.restaurantId?.location?.coordinates;
   const cust = order?.deliveryAddress?.location?.coordinates || order?.address?.location?.coordinates;
   if (!Array.isArray(rest) || !Array.isArray(cust)) return 0;
