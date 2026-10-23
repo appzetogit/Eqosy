@@ -1,4 +1,5 @@
 import React from 'react'
+import { resolveCurrentAppHomeRoute } from '../utils/activeModule.js'
 
 const isModuleChunkError = (error) => {
   if (!error) return false
@@ -81,6 +82,21 @@ class ErrorBoundary extends React.Component {
     } catch {
       // ignore
     }
+    const rawPath = String(window.location?.pathname || '').replace(/\/index\.html$/i, '') || '/'
+    const hash = String(window.location?.hash || '')
+    // If stuck at root in WebView or blank path, ensure reload navigates to the active app home
+    if ((rawPath === '/' || rawPath === '') && (!hash || hash === '#/' || hash === '#')) {
+      const home = resolveCurrentAppHomeRoute()
+      if (home && home !== '/') {
+        if (hash.startsWith('#/')) {
+          window.location.hash = `#${home}`
+          window.location.reload()
+        } else {
+          window.location.href = home
+        }
+        return
+      }
+    }
     window.location.reload()
   }
 
@@ -92,17 +108,12 @@ class ErrorBoundary extends React.Component {
     } catch {
       // ignore
     }
-    const pathname = String(window.location?.pathname || '').toLowerCase()
-    if (pathname.startsWith('/food/delivery') || pathname.startsWith('/delivery')) {
-      window.location.href = '/food/delivery'
-    } else if (pathname.startsWith('/food/restaurant') || pathname.startsWith('/restaurant')) {
-      window.location.href = '/food/restaurant'
-    } else if (pathname.startsWith('/admin')) {
-      window.location.href = '/admin'
-    } else if (pathname.startsWith('/taxi')) {
-      window.location.href = '/taxi/user'
+    const homeRoute = resolveCurrentAppHomeRoute()
+    if (window.location?.hash?.startsWith('#/')) {
+      window.location.hash = `#${homeRoute}`
+      window.location.reload()
     } else {
-      window.location.href = '/food/user'
+      window.location.href = homeRoute
     }
   }
 

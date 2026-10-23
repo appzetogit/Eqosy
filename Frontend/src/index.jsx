@@ -4,7 +4,12 @@ import { Toaster } from 'sonner'
 import App from './app/App.jsx'
 import { isModuleAuthenticated } from './modules/Food/utils/auth.js'
 import { syncThemeForPath } from './shared/utils/theme.js'
-import { NATIVE_LAST_ROUTE_AT_KEY, NATIVE_LAST_ROUTE_KEY } from './shared/utils/activeModule.js'
+import {
+  ACTIVE_MODULE_KEY,
+  NATIVE_LAST_ROUTE_AT_KEY,
+  NATIVE_LAST_ROUTE_KEY,
+  resolveCurrentAppHomeRoute,
+} from './shared/utils/activeModule.js'
 import './shared/styles/global.css'
 import { registerSW } from 'virtual:pwa-register'
 
@@ -98,23 +103,54 @@ function isNativeLikeShell() {
   )
 }
 
-// Customer app: relaunching soon after leaving with the Home button reopens the page the user was on.
+// Entry routes across apps: relaunching soon after leaving with the Home button reopens the page the user was on.
 // Exiting with Back always happens from a home screen, which is never restored, so that relaunch starts fresh.
-const USER_APP_ENTRY_ROUTES = ['/', '/food/user', '/taxi/user']
+const APP_ENTRY_ROUTES = [
+  '/',
+  '/food/user',
+  '/taxi/user',
+  '/food/delivery',
+  '/delivery',
+  '/food/restaurant',
+  '/restaurant',
+  '/taxi/driver',
+  '/taxi/driver/home',
+  '/driver',
+  '/taxi/owner',
+  '/taxi/owner/dashboard',
+  '/owner',
+  '/admin',
+]
 const RESUME_LAST_ROUTE_MAX_AGE_MS = 30 * 60 * 1000
 
+function getHomeRouteForResuming(resumeRoute) {
+  if (resumeRoute.startsWith('/food/delivery')) return '/food/delivery'
+  if (resumeRoute.startsWith('/food/restaurant')) return '/food/restaurant'
+  if (resumeRoute.startsWith('/taxi/driver')) return '/taxi/driver/home'
+  if (resumeRoute.startsWith('/taxi/owner')) return '/taxi/owner/dashboard'
+  if (resumeRoute.startsWith('/admin')) return '/admin'
+  if (resumeRoute.startsWith('/taxi/')) return '/taxi/user'
+  return '/food/user'
+}
+
 function resolveResumableUserRoute(pathname) {
-  if (!USER_APP_ENTRY_ROUTES.includes(pathname.replace(/\/$/, '') || '/')) return ''
+  const cleanPath = pathname.replace(/\/$/, '') || '/'
+  if (!APP_ENTRY_ROUTES.includes(cleanPath)) return ''
   try {
     const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
     const leftAt = Number(localStorage.getItem(NATIVE_LAST_ROUTE_AT_KEY) || 0)
     if (!storedRoute || !leftAt || Date.now() - leftAt > RESUME_LAST_ROUTE_MAX_AGE_MS) return ''
 
     const storedPath = storedRoute.split('?')[0].replace(/\/$/, '')
-    const isInnerUserPage =
-      (storedPath.startsWith('/food/user/') || storedPath.startsWith('/taxi/user/')) &&
+    const isInnerPage =
+      (storedPath.startsWith('/food/user/') ||
+        storedPath.startsWith('/taxi/user/') ||
+        storedPath.startsWith('/food/delivery/') ||
+        storedPath.startsWith('/food/restaurant/') ||
+        storedPath.startsWith('/taxi/driver/') ||
+        storedPath.startsWith('/taxi/owner/')) &&
       !/\/(auth|login|signup|onboarding|verify-otp)(\/|$)/.test(storedPath)
-    if (!isInnerUserPage) return ''
+    if (!isInnerPage) return ''
 
     // Pages that need in-memory router state cannot be rebuilt after a relaunch.
     const TRANSIENT_SEGMENTS = [
@@ -125,7 +161,15 @@ function resolveResumableUserRoute(pathname) {
       '/rental/vehicle', '/rental/schedule', '/rental/kyc', '/rental/deposit', '/rental/confirmed',
     ]
     if (TRANSIENT_SEGMENTS.some((s) => storedPath.includes(s))) return ''
-    if (pathname === '/' && !isModuleAuthenticated('user')) return ''
+
+    if (cleanPath === '/') {
+      if (storedPath.startsWith('/food/delivery') && !isModuleAuthenticated('delivery')) return ''
+      if (storedPath.startsWith('/food/restaurant') && !isModuleAuthenticated('restaurant')) return ''
+      if (storedPath.startsWith('/taxi/driver') && !isModuleAuthenticated('driver')) return ''
+      if (storedPath.startsWith('/taxi/owner') && !isModuleAuthenticated('driver')) return ''
+      if (storedPath.startsWith('/admin') && !isModuleAuthenticated('admin')) return ''
+      if ((storedPath.startsWith('/food/user') || storedPath.startsWith('/taxi/user')) && !isModuleAuthenticated('user')) return ''
+    }
 
     return storedRoute
   } catch {
@@ -138,9 +182,6 @@ function resolveNativeInitialRoute() {
 
   const rawPathname = String(window.location?.pathname || '')
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
-
-  // Root domain '/' or empty pathname must ALWAYS stay on '/' (Landing Page)
-  if (pathname === '/' || pathname === '') return '/'
 
   const storedRoute = String(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '').trim()
 
@@ -155,24 +196,44 @@ function resolveNativeInitialRoute() {
   ]
   const isTransient = (r) => TRANSIENT_SEGMENTS.some((s) => r.includes(s))
 
+  if (pathname.startsWith('/taxi/driver')) return '/taxi/driver/home'
+  if (pathname.startsWith('/taxi/owner')) return '/taxi/owner/dashboard'
   if (pathname.startsWith('/taxi/')) return isTransient(pathname) ? '/taxi/user' : pathname
+  if (pathname.startsWith('/food/delivery')) return pathname
+  if (pathname.startsWith('/food/restaurant')) return pathname
   if (pathname.startsWith('/food/')) return pathname
   if (pathname.startsWith('/restaurant')) return `/food${pathname}`
   if (pathname.startsWith('/delivery')) return `/food${pathname}`
+  if (pathname.startsWith('/driver')) return `/taxi/driver/home`
+  if (pathname.startsWith('/owner')) return `/taxi/owner/dashboard`
   if (pathname.startsWith('/user')) return `/food${pathname}`
   if (pathname.startsWith('/admin')) return pathname
-  if (storedRoute.startsWith('/taxi/')) {
-    return isTransient(storedRoute) ? '/taxi/user' : storedRoute
-  }
-  if (storedRoute.startsWith('/food/') || storedRoute.startsWith('/admin')) {
-    return storedRoute
-  }
 
-  if (isModuleAuthenticated('restaurant')) return '/food/restaurant'
-  if (isModuleAuthenticated('delivery')) return '/food/delivery'
-  if (isModuleAuthenticated('driver')) return '/taxi/driver'
-  if (isModuleAuthenticated('admin')) return '/admin'
-  if (isModuleAuthenticated('user')) return '/food/user'
+  if (isNativeLikeShell()) {
+    if (storedRoute) {
+      if (storedRoute.startsWith('/taxi/driver')) return '/taxi/driver/home'
+      if (storedRoute.startsWith('/taxi/owner')) return '/taxi/owner/dashboard'
+      if (storedRoute.startsWith('/taxi/')) return isTransient(storedRoute) ? '/taxi/user' : storedRoute
+      if (storedRoute.startsWith('/food/') || storedRoute.startsWith('/admin')) return storedRoute
+    }
+
+    if (isModuleAuthenticated('delivery')) return '/food/delivery'
+    if (isModuleAuthenticated('restaurant')) return '/food/restaurant'
+    if (isModuleAuthenticated('driver')) return '/taxi/driver/home'
+    if (isModuleAuthenticated('admin')) return '/admin'
+    if (isModuleAuthenticated('user')) {
+      const activeModule = String(localStorage.getItem(ACTIVE_MODULE_KEY) || '').trim()
+      return activeModule === 'taxi' ? '/taxi/user' : '/food/user'
+    }
+
+    const currentHome = resolveCurrentAppHomeRoute()
+    if (currentHome && currentHome !== '/') return currentHome
+  } else {
+    if (isModuleAuthenticated('delivery')) return '/food/delivery'
+    if (isModuleAuthenticated('restaurant')) return '/food/restaurant'
+    if (isModuleAuthenticated('driver')) return '/taxi/driver/home'
+    if (isModuleAuthenticated('admin')) return '/admin'
+  }
 
   return '/'
 }
@@ -184,24 +245,27 @@ function bootstrapNativeHashRoute() {
   const pathname = rawPathname.replace(/\/index\.html$/i, '') || '/'
   const currentHash = String(window.location?.hash || '')
 
-  // Fresh launch (no hash yet) on a home screen: reopen the page left a moment ago,
+  // Fresh launch (no hash yet) on an entry route: reopen the page left a moment ago,
   // with home underneath so Back returns home instead of closing the app.
   if (!currentHash.startsWith('#/')) {
     const resumeRoute = resolveResumableUserRoute(pathname)
     if (resumeRoute) {
-      const homeRoute = resumeRoute.startsWith('/taxi/') ? '/taxi/user' : '/food/user'
+      const homeRoute = getHomeRouteForResuming(resumeRoute)
       window.history.replaceState(null, '', `#${homeRoute}`)
       window.history.pushState(null, '', `#${resumeRoute}`)
       return
     }
   }
 
-  // Web root domain '/' must never be redirected to a hash route
-  if (pathname === '/' || pathname === '') return
-
-  const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
   const targetPath = resolveNativeInitialRoute()
   const search = String(window.location?.search || '')
+
+  // If already at root domain and targetPath is '/', do nothing
+  if ((pathname === '/' || pathname === '') && targetPath === '/' && !currentHash.startsWith('#/')) {
+    return
+  }
+
+  const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
 
   if (currentHash.startsWith('#/')) {
     const nativePathPrefix = targetPath.startsWith('/taxi/')
@@ -212,8 +276,8 @@ function bootstrapNativeHashRoute() {
           ? '/admin'
           : ''
 
-    const hashMatchesPrefix = nativePathPrefix ? hashPath.startsWith(nativePathPrefix) : false;
-    const pathSuggestsTaxi = pathname.startsWith('/taxi/');
+    const hashMatchesPrefix = nativePathPrefix ? hashPath.startsWith(nativePathPrefix) : false
+    const pathSuggestsTaxi = pathname.startsWith('/taxi/')
 
     // Normalize stale hash routes in native shells (e.g. /taxi/... with #/food/...)
     if ((pathSuggestsTaxi && !hashPath.startsWith('/taxi/')) || !hashMatchesPrefix) {

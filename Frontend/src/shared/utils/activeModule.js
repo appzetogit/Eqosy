@@ -8,18 +8,173 @@ export const TAXI_ADMIN_HOME = '/taxi/admin/dashboard'
 export const GLOBAL_ADMIN_HOME = '/admin/global/branding'
 
 export function getModuleFromPath(pathname = '') {
-  const path = String(pathname || '')
-  if (path.startsWith('/taxi/')) return 'taxi'
-  if (path.startsWith('/food/')) return 'food'
-  if (path.startsWith('/admin')) return 'admin'
+  const path = String(pathname || '').toLowerCase()
+  if (path.startsWith('/food/delivery') || path.startsWith('/delivery')) return 'delivery'
+  if (path.startsWith('/food/restaurant') || path.startsWith('/restaurant')) return 'restaurant'
+  if (path.startsWith('/taxi/driver') || path.startsWith('/driver')) return 'taxi_driver'
+  if (path.startsWith('/taxi/owner') || path.startsWith('/owner')) return 'taxi_owner'
+  if (path.startsWith('/admin') || path.startsWith('/food/admin') || path.startsWith('/taxi/admin')) return 'admin'
+  if (path.startsWith('/taxi')) return 'taxi'
+  if (path.startsWith('/food')) return 'food'
   return null
 }
 
 export function getModuleHomeRoute(module) {
-  if (module === 'taxi') return '/taxi/user'
-  if (module === 'food') return '/food/user'
+  if (module === 'delivery') return '/food/delivery'
+  if (module === 'restaurant') return '/food/restaurant'
+  if (module === 'taxi_driver' || module === 'driver') return '/taxi/driver/home'
+  if (module === 'taxi_owner' || module === 'owner') return '/taxi/owner/dashboard'
   if (module === 'admin') return '/admin'
+  if (module === 'taxi' || module === 'taxi_user') return '/taxi/user'
+  if (module === 'food' || module === 'food_user') return '/food/user'
   return '/food/user'
+}
+
+export function isRoleAuthenticated(role) {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    const isTokenNotExpired = (token) => {
+      if (!token) return false
+      try {
+        const parts = token.split('.')
+        if (parts.length !== 3) return false
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+        if (!payload || !payload.exp) return true
+        return payload.exp * 1000 > Date.now()
+      } catch {
+        return false
+      }
+    }
+
+    if (role === 'delivery') {
+      const t = localStorage.getItem('delivery_accessToken')
+      return Boolean(t && isTokenNotExpired(t))
+    }
+    if (role === 'restaurant') {
+      const t = localStorage.getItem('restaurant_accessToken')
+      return Boolean(t && isTokenNotExpired(t))
+    }
+    if (role === 'driver') {
+      const t =
+        localStorage.getItem('driver_accessToken') ||
+        localStorage.getItem('driverToken') ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('driverToken') : null) ||
+        (localStorage.getItem('role') === 'driver' ? localStorage.getItem('token') : null)
+      return Boolean(t && isTokenNotExpired(t))
+    }
+    if (role === 'owner') {
+      const t =
+        localStorage.getItem('owner_accessToken') ||
+        localStorage.getItem('driverToken') ||
+        (localStorage.getItem('role') === 'owner' ? localStorage.getItem('token') : null)
+      return Boolean(t && isTokenNotExpired(t))
+    }
+    if (role === 'admin') {
+      const t = localStorage.getItem('admin_accessToken')
+      return Boolean(t && isTokenNotExpired(t))
+    }
+    if (role === 'user') {
+      const t =
+        localStorage.getItem('user_accessToken') ||
+        localStorage.getItem('userToken') ||
+        (localStorage.getItem('role') === 'user' ? localStorage.getItem('token') : null)
+      return Boolean(t && isTokenNotExpired(t))
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
+export function resolveCurrentAppHomeRoute(candidatePath = '') {
+  if (typeof window === 'undefined') return '/food/user'
+
+  const getCleanPath = (raw) => {
+    if (!raw) return ''
+    const noHash = raw.startsWith('#') ? raw.slice(1) : raw
+    return noHash.split('?')[0].replace(/\/$/, '').toLowerCase()
+  }
+
+  // 1. Check candidatePath or window.location.hash or window.location.pathname
+  const hash = String(window.location?.hash || '')
+  const currentHashPath = hash.startsWith('#/') ? getCleanPath(hash) : ''
+  const currentPathname = getCleanPath(window.location?.pathname || '')
+  const checkPath = getCleanPath(candidatePath) || currentHashPath || currentPathname
+
+  if (checkPath && checkPath !== '/' && checkPath !== '') {
+    if (checkPath.startsWith('/food/delivery') || checkPath.startsWith('/delivery')) {
+      return '/food/delivery'
+    }
+    if (checkPath.startsWith('/food/restaurant') || checkPath.startsWith('/restaurant')) {
+      return '/food/restaurant'
+    }
+    if (checkPath.startsWith('/taxi/driver') || checkPath.startsWith('/driver')) {
+      return '/taxi/driver/home'
+    }
+    if (checkPath.startsWith('/taxi/owner') || checkPath.startsWith('/owner')) {
+      return '/taxi/owner/dashboard'
+    }
+    if (checkPath.startsWith('/admin') || checkPath.startsWith('/food/admin') || checkPath.startsWith('/taxi/admin')) {
+      return '/admin'
+    }
+    if (checkPath.startsWith('/taxi')) {
+      return '/taxi/user'
+    }
+    if (checkPath.startsWith('/food')) {
+      return '/food/user'
+    }
+  }
+
+  // 2. Check stored native last route
+  try {
+    const storedRoute = getCleanPath(localStorage.getItem(NATIVE_LAST_ROUTE_KEY) || '')
+    if (storedRoute && storedRoute !== '/') {
+      if (storedRoute.startsWith('/food/delivery') || storedRoute.startsWith('/delivery')) {
+        return '/food/delivery'
+      }
+      if (storedRoute.startsWith('/food/restaurant') || storedRoute.startsWith('/restaurant')) {
+        return '/food/restaurant'
+      }
+      if (storedRoute.startsWith('/taxi/driver') || storedRoute.startsWith('/driver')) {
+        return '/taxi/driver/home'
+      }
+      if (storedRoute.startsWith('/taxi/owner') || storedRoute.startsWith('/owner')) {
+        return '/taxi/owner/dashboard'
+      }
+      if (storedRoute.startsWith('/admin')) {
+        return '/admin'
+      }
+      if (storedRoute.startsWith('/taxi')) {
+        return '/taxi/user'
+      }
+      if (storedRoute.startsWith('/food')) {
+        return '/food/user'
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3. Check active module stored in localStorage
+  try {
+    const activeModule = String(localStorage.getItem(ACTIVE_MODULE_KEY) || '').trim()
+    if (activeModule) {
+      const home = getModuleHomeRoute(activeModule)
+      if (home && home !== '/food/user') return home
+      if (activeModule === 'food' || activeModule === 'food_user') return '/food/user'
+    }
+  } catch { /* ignore */ }
+
+  // 4. Check authenticated role from tokens
+  if (isRoleAuthenticated('delivery')) return '/food/delivery'
+  if (isRoleAuthenticated('restaurant')) return '/food/restaurant'
+  if (isRoleAuthenticated('driver')) return '/taxi/driver/home'
+  if (isRoleAuthenticated('owner')) return '/taxi/owner/dashboard'
+  if (isRoleAuthenticated('admin')) return '/admin'
+  if (isRoleAuthenticated('user')) {
+    const activeModule = String(localStorage.getItem(ACTIVE_MODULE_KEY) || '').trim()
+    return activeModule === 'taxi' ? '/taxi/user' : '/food/user'
+  }
+
+  return '/'
 }
 
 export function syncActiveModule(pathname = '') {

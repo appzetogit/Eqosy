@@ -77,6 +77,20 @@ function RestaurantGlobalNotificationListener() {
   return <RestaurantGlobalNotificationListenerInner />
 }
 
+const FoodRootRedirect = () => {
+  if (isModuleAuthenticated('delivery')) return <Navigate to="/food/delivery" replace />
+  if (isModuleAuthenticated('restaurant')) return <Navigate to="/food/restaurant" replace />
+  return <Navigate to="/food/user" replace />
+}
+
+const FoodFallbackRedirect = () => {
+  const location = useLocation()
+  const pathname = location.pathname.toLowerCase()
+  if (pathname.includes('/delivery')) return <Navigate to="/food/delivery" replace />
+  if (pathname.includes('/restaurant')) return <Navigate to="/food/restaurant" replace />
+  return <Navigate to="/food/user" replace />
+}
+
 export default function App() {
   const location = useLocation()
 
@@ -99,21 +113,27 @@ export default function App() {
 
           {/* Restaurant Module - Already mapped to /restaurant */}
           <Route
+            path="restaurant"
+            element={<RestaurantRouter />}
+          />
+          <Route
             path="restaurant/*"
-            element={
-              <RestaurantRouter />
-            }
+            element={<RestaurantRouter />}
           />
 
           {/* Delivery Module - Already mapped to /delivery */}
+          <Route
+            path="delivery"
+            element={<DeliveryRouter />}
+          />
           <Route
             path="delivery/*"
             element={<DeliveryRouter />}
           />
 
-          {/* Legacy Redirects & Fallbacks - use absolute path to avoid /user appended in a loop */}
-          <Route path="/" element={<Navigate to="/food/user" replace />} />
-          <Route path="*" element={<Navigate to="/food/user" replace />} />
+          {/* Fallbacks preserving app context */}
+          <Route path="/" element={<FoodRootRedirect />} />
+          <Route path="*" element={<FoodFallbackRedirect />} />
         </Routes>
       </Suspense>
     </>

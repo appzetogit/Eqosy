@@ -5,6 +5,7 @@ import SmartRouteSkeleton from '../shared/components/skeletons/SmartRouteSkeleto
 import {
   NATIVE_LAST_ROUTE_AT_KEY,
   NATIVE_LAST_ROUTE_KEY,
+  resolveCurrentAppHomeRoute,
   syncActiveModule,
 } from '../shared/utils/activeModule.js'
 import lazyWithRetry from '../shared/utils/lazyWithRetry.js'
@@ -73,21 +74,48 @@ const RedirectToFoodUser = () => {
   return <Navigate to={`/food/user${location.pathname}${location.search}`} replace />
 }
 
+const RedirectToTaxiDriver = () => {
+  const location = useLocation()
+  const subpath = location.pathname.replace(/^\/driver/, '') || ''
+  return <Navigate to={`/taxi/driver${subpath}${location.search}`} replace />
+}
+
+const RedirectToTaxiOwner = () => {
+  const location = useLocation()
+  const subpath = location.pathname.replace(/^\/owner/, '') || ''
+  return <Navigate to={`/taxi/owner${subpath}${location.search}`} replace />
+}
+
 const LandingPage = lazyWithRetry(() => import('../modules/Taxi/modules/shared/pages/LandingPage'))
 const AdminRouter = lazyWithRetry(() => import('../modules/Food/components/admin/AdminRouter'))
+
+const RootLandingOrAppRedirect = () => {
+  const home = resolveCurrentAppHomeRoute('/')
+  if (home && home !== '/') {
+    return <Navigate to={home} replace />
+  }
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <LandingPage />
+    </Suspense>
+  )
+}
 
 const SmartFallbackRedirect = () => {
   const location = useLocation()
   const pathname = location.pathname.toLowerCase()
 
   if (pathname.startsWith('/taxi/driver') || pathname.startsWith('/driver')) {
-    return <Navigate to="/taxi/driver" replace />
+    return <Navigate to="/taxi/driver/home" replace />
+  }
+  if (pathname.startsWith('/taxi/owner') || pathname.startsWith('/owner')) {
+    return <Navigate to="/taxi/owner/dashboard" replace />
   }
   if (pathname.startsWith('/taxi')) {
     return <Navigate to="/taxi/user" replace />
   }
   if (pathname.startsWith('/admin')) {
-    return <Navigate to="/admin/food" replace />
+    return <Navigate to="/admin" replace />
   }
   if (pathname.startsWith('/food/delivery') || pathname.startsWith('/delivery')) {
     return <Navigate to="/food/delivery" replace />
@@ -102,7 +130,8 @@ const SmartFallbackRedirect = () => {
     return <Navigate to="/login" replace />
   }
 
-  return <Navigate to="/food/user" replace />
+  const home = resolveCurrentAppHomeRoute(pathname)
+  return <Navigate to={home || '/food/user'} replace />
 }
 
 const AppRoutes = () => {
@@ -198,7 +227,15 @@ const AppRoutes = () => {
     const isTransient = TRANSIENT_ROUTE_SEGMENTS.some(seg => route.includes(seg))
     if (isTransient) return
 
-    if (route.startsWith('/taxi/') || route.startsWith('/food/') || route.startsWith('/admin')) {
+    if (
+      route.startsWith('/taxi/') ||
+      route.startsWith('/food/') ||
+      route.startsWith('/admin') ||
+      route.startsWith('/delivery') ||
+      route.startsWith('/restaurant') ||
+      route.startsWith('/driver') ||
+      route.startsWith('/owner')
+    ) {
       localStorage.setItem(NATIVE_LAST_ROUTE_KEY, route)
       localStorage.setItem(NATIVE_LAST_ROUTE_AT_KEY, String(Date.now()))
     }
@@ -225,7 +262,7 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+      <Route path="/" element={<RootLandingOrAppRedirect />} />
       <Route path="/landing" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
       <Route path="/login/*" element={<Suspense fallback={<PageLoader />}><AuthApp /></Suspense>} />
       <Route path="/terms" element={<Suspense fallback={<PageLoader />}><GlobalTerms /></Suspense>} />
@@ -249,6 +286,8 @@ const AppRoutes = () => {
       <Route path="/restaurant/*" element={<RedirectToFood />} />
       <Route path="/restaurants/*" element={<RedirectToFoodUser />} />
       <Route path="/delivery/*" element={<RedirectToFood />} />
+      <Route path="/driver/*" element={<RedirectToTaxiDriver />} />
+      <Route path="/owner/*" element={<RedirectToTaxiOwner />} />
       <Route path="/usermain/*" element={<RedirectToFood />} />
       <Route path="/profile/*" element={<RedirectToFoodUser />} />
       <Route path="/cart/*" element={<RedirectToFoodUser />} />
