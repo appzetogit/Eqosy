@@ -304,9 +304,11 @@ export const searchUnified = async (query = {}, options = {}) => {
                     Math.sin(dLon / 2) * Math.sin(dLon / 2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 const distKm = 6371 * c; // Km
-                res.distanceScore = distKm;
-                res.distanceKm = Math.round(distKm * 10) / 10;
-                const mins = Math.max(15, Math.min(60, 15 + Math.round(distKm * 3)));
+                const roadDistKm = distKm * 1.08;
+                res.distanceScore = roadDistKm;
+                res.distanceKm = Math.round(roadDistKm * 10) / 10;
+                res.distance = res.distanceKm >= 1 ? `${res.distanceKm.toFixed(1)} km` : `${Math.round(roadDistKm * 1000)} m`;
+                const mins = Math.max(15, Math.min(60, 15 + Math.round(roadDistKm * 3)));
                 res.estimatedDeliveryTime = `${mins} mins`;
                 res.estimatedDeliveryTimeMinutes = mins;
             } else {

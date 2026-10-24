@@ -114,7 +114,8 @@ const calculateDistanceKm = (fromCoords, toCoords) => {
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
 
-  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  // Road factor (~1.4x) so estimate aligns with driving road distance
+  return Math.round(earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * 1.4 * 10) / 10;
 };
 
 const getNearbyPopularLocations = (anchorCoords, excludedLocations = [], limit = 4) => {

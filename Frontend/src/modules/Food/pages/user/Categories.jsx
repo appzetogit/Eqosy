@@ -50,29 +50,62 @@ export default function Categories() {
     [getDefaultAddress],
   );
   const defaultSavedAddressLocation = useMemo(() => {
+    if (!defaultSavedAddress) return null;
     const coords = defaultSavedAddress?.location?.coordinates;
+    let lat = null;
+    let lng = null;
     if (Array.isArray(coords) && coords.length >= 2) {
-      const lng = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        return { latitude: lat, longitude: lng };
-      }
+      lng = Number(coords[0]);
+      lat = Number(coords[1]);
+    } else {
+      lat = Number(defaultSavedAddress?.latitude || defaultSavedAddress?.lat);
+      lng = Number(defaultSavedAddress?.longitude || defaultSavedAddress?.lng);
     }
-    const lat = Number(defaultSavedAddress?.latitude || defaultSavedAddress?.lat);
-    const lng = Number(defaultSavedAddress?.longitude || defaultSavedAddress?.lng);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      return { latitude: lat, longitude: lng };
+      const formatted = defaultSavedAddress.formattedAddress ||
+        [defaultSavedAddress.additionalDetails, defaultSavedAddress.street, defaultSavedAddress.city, defaultSavedAddress.state, defaultSavedAddress.zipCode]
+          .filter(Boolean).join(", ") || defaultSavedAddress.street || "";
+      return {
+        latitude: lat,
+        longitude: lng,
+        city: defaultSavedAddress.city || "",
+        state: defaultSavedAddress.state || "",
+        area: defaultSavedAddress.area || defaultSavedAddress.additionalDetails || "",
+        street: defaultSavedAddress.street || "",
+        postalCode: defaultSavedAddress.zipCode || "",
+        zipCode: defaultSavedAddress.zipCode || "",
+        address: defaultSavedAddress.street || formatted,
+        formattedAddress: formatted,
+        label: defaultSavedAddress.label || "Home",
+        isManual: true,
+      };
     }
     return null;
   }, [defaultSavedAddress]);
 
+  const savedLocationCache = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem("userLocation");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const lat = Number(parsed?.latitude);
+      const lng = Number(parsed?.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { ...parsed, latitude: lat, longitude: lng };
+    } catch {
+      return null;
+    }
+  }, [deliveryAddressMode, defaultSavedAddress?.id, defaultSavedAddress?._id]);
+
   const effectiveLocation = useMemo(() => {
-    const useSavedAddress =
-      deliveryAddressMode === "saved" &&
-      Number.isFinite(defaultSavedAddressLocation?.latitude) &&
-      Number.isFinite(defaultSavedAddressLocation?.longitude);
-    return useSavedAddress ? defaultSavedAddressLocation : location;
-  }, [deliveryAddressMode, defaultSavedAddressLocation, location]);
+    if (savedLocationCache?.isManual) return savedLocationCache;
+    const hasDefaultSaved = Number.isFinite(defaultSavedAddressLocation?.latitude) && Number.isFinite(defaultSavedAddressLocation?.longitude);
+    if (deliveryAddressMode === "saved" && hasDefaultSaved) return defaultSavedAddressLocation;
+    if (hasDefaultSaved && deliveryAddressMode !== "current") return defaultSavedAddressLocation;
+    if (savedLocationCache?.latitude && savedLocationCache?.longitude) return savedLocationCache;
+    return defaultSavedAddressLocation || location;
+  }, [deliveryAddressMode, defaultSavedAddressLocation, savedLocationCache, location]);
 
   const { zoneId, zoneStatus, loading: zoneLoading } = useZone(effectiveLocation);
   const [cachedZoneId, setCachedZoneId] = useState(() => {

@@ -40,7 +40,7 @@ const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[titl
 const DEFAULT_COORDS = [75.8577, 22.7196];
 const sanitizeLocationInput = (value) => String(value || '').replace(/^\s+/g, '').replace(/\s{2,}/g, ' ');
 
-const calculateHaversineDistance = (coords1, coords2) => {
+const calculateHaversineDistance = (coords1, coords2, useRoadFactor = true) => {
   if (!coords1 || !coords2) return null;
   const [lon1, lat1] = coords1;
   const [lon2, lat2] = coords2;
@@ -55,8 +55,9 @@ const calculateHaversineDistance = (coords1, coords2) => {
     Math.sin(dLon / 2) *
     Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
+  const straightKm = R * c; // Straight line distance in km
+  // Road circuity factor (~1.5x) so preliminary estimate closely aligns with Google Maps driving routes
+  return useRoadFactor ? Math.round(straightKm * 1.5 * 10) / 10 : straightKm;
 };
 
 const SelectLocation = () => {
@@ -85,6 +86,8 @@ const SelectLocation = () => {
   const [popularLocations, setPopularLocations] = useState([]);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [isLoadingPopularLocations, setIsLoadingPopularLocations] = useState(false);
+  const [roadDistances, setRoadDistances] = useState({});
+  const distanceMatrixCacheRef = useRef(new Map());
   const [gpsModalInfo, setGpsModalInfo] = useState(null);
   const mapInstanceRef = useRef(null);
   const lastCenterRef = useRef(INDIA_CENTER);
@@ -147,37 +150,53 @@ const SelectLocation = () => {
     };
   }, [serviceLocationId]);
 
-  // Automatically request GPS location permission on mount if default pickup is loaded
+  // Automatically request GPS location permission on mount to always use real user GPS location
   useEffect(() => {
-    if ((!routeState.pickup || pickup === 'Pipaliyahana, Indore') && typeof navigator !== 'undefined' && navigator.geolocation) {
+    if (!routeState.pickupCoords && typeof navigator !== 'undefined' && navigator.geolocation) {
       setIsLocating(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          const coords = [lng, lat];
-          setPickupCoords(coords);
-          setMapCenter({ lat, lng });
 
-          if (window.google?.maps?.Geocoder) {
-            const geocoder = new window.google.maps.Geocoder();
-            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                const addr = results[0].formatted_address;
-                setPickup(addr);
-                saveLocation({ address: addr, lat, lon: lng });
-              }
-              setIsLocating(false);
-            });
-          } else {
+      const onSuccess = (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const coords = [lng, lat];
+        setPickupCoords(coords);
+        setMapCenter({ lat, lng });
+
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results?.[0]) {
+              const addr = results[0].formatted_address;
+              setPickup(addr);
+              saveLocation({ address: addr, lat, lon: lng, updatedAt: Date.now() });
+            } else {
+              const raw = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+              setPickup(raw);
+              saveLocation({ address: raw, lat, lon: lng, updatedAt: Date.now() });
+            }
             setIsLocating(false);
-          }
-        },
-        (err) => {
-          console.warn('[SelectLocation] GPS permission denied or error:', err);
+          });
+        } else {
           setIsLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        }
+      };
+
+      const onError = (err) => {
+        console.warn('[SelectLocation] GPS high accuracy failed, trying low accuracy...', err);
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          (err2) => {
+            console.warn('[SelectLocation] GPS fallback failed:', err2);
+            setIsLocating(false);
+          },
+          { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+        );
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        onError,
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
       );
     }
   }, []);
@@ -516,6 +535,87 @@ const SelectLocation = () => {
     };
   }, [query, pickupCoords]);
 
+  // Batch resolve real Google Maps driving road distances for visible results
+  useEffect(() => {
+    if (!isLoaded || !window.google?.maps?.DistanceMatrixService || !pickupCoords || !Array.isArray(pickupCoords) || pickupCoords.length !== 2) {
+      return;
+    }
+
+    const [pickupLng, pickupLat] = pickupCoords;
+    if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) return;
+
+    const allResults = [...remoteResults, ...localSearchResults];
+    const seen = new Set();
+    const candidateResults = allResults.filter((result) => {
+      const key = `${String(result.title || '').trim().toLowerCase()}|${String(result.address || '').trim().toLowerCase()}`;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 10);
+
+    if (candidateResults.length === 0) return;
+
+    const uncalculated = [];
+    candidateResults.forEach((res) => {
+      const itemKey = res.placeId || `${res.title}|${res.address}`;
+      const cacheKey = `${pickupLat.toFixed(4)},${pickupLng.toFixed(4)}->${itemKey}`;
+      if (!distanceMatrixCacheRef.current.has(cacheKey)) {
+        uncalculated.push(res);
+      }
+    });
+
+    if (uncalculated.length === 0) return;
+
+    const origin = new window.google.maps.LatLng(pickupLat, pickupLng);
+    const destinations = uncalculated.map((res) => {
+      if (res.coords && Array.isArray(res.coords) && res.coords.length === 2 && Number.isFinite(res.coords[0]) && Number.isFinite(res.coords[1])) {
+        return new window.google.maps.LatLng(res.coords[1], res.coords[0]);
+      }
+      if (res.placeId) {
+        return { placeId: res.placeId };
+      }
+      return res.address || res.title;
+    });
+
+    try {
+      const matrixService = new window.google.maps.DistanceMatrixService();
+      matrixService.getDistanceMatrix(
+        {
+          origins: [origin],
+          destinations,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (response, status) => {
+          if (status === 'OK' && response?.rows?.[0]?.elements) {
+            const elements = response.rows[0].elements;
+            const newEntries = {};
+            elements.forEach((elem, idx) => {
+              if (elem?.status === 'OK' && elem?.distance?.value != null) {
+                const item = uncalculated[idx];
+                if (!item) return;
+                const itemKey = item.placeId || `${item.title}|${item.address}`;
+                const cacheKey = `${pickupLat.toFixed(4)},${pickupLng.toFixed(4)}->${itemKey}`;
+                const distKm = Math.round((elem.distance.value / 1000) * 10) / 10;
+                const entry = {
+                  distanceKm: distKm,
+                  distanceMeters: elem.distance.value,
+                  distanceText: elem.distance.text,
+                };
+                distanceMatrixCacheRef.current.set(cacheKey, entry);
+                newEntries[itemKey] = distKm;
+              }
+            });
+            if (Object.keys(newEntries).length > 0) {
+              setRoadDistances((prev) => ({ ...prev, ...newEntries }));
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.warn('[SelectLocation] DistanceMatrixService error:', err);
+    }
+  }, [isLoaded, pickupCoords, remoteResults, localSearchResults]);
+
   const searchResults = useMemo(() => {
     const merged = [...remoteResults, ...localSearchResults];
     const seen = new Set();
@@ -531,12 +631,29 @@ const SelectLocation = () => {
     });
 
     const getResultDistance = (res) => {
-      if (res.distance !== undefined && res.distance !== null) {
-        return res.distance;
+      const itemKey = res.placeId || `${res.title}|${res.address}`;
+      const cacheKey = (pickupCoords && Number.isFinite(pickupCoords[1]) && Number.isFinite(pickupCoords[0]))
+        ? `${pickupCoords[1].toFixed(4)},${pickupCoords[0].toFixed(4)}->${itemKey}`
+        : '';
+
+      // 1. Exact Google Maps driving road distance
+      if (cacheKey && distanceMatrixCacheRef.current.has(cacheKey)) {
+        return distanceMatrixCacheRef.current.get(cacheKey).distanceKm;
       }
+      if (roadDistances[itemKey] != null) {
+        return roadDistances[itemKey];
+      }
+
+      // 2. Coords-based road distance (using calibrated road curvature factor 1.5x)
       if (res.coords && pickupCoords) {
-        return calculateHaversineDistance(pickupCoords, res.coords);
+        return calculateHaversineDistance(pickupCoords, res.coords, true);
       }
+
+      // 3. Autocomplete straight-line distance with road factor
+      if (res.distance !== undefined && res.distance !== null) {
+        return Math.round(Number(res.distance) * 1.5 * 10) / 10;
+      }
+
       return null;
     };
 
@@ -552,7 +669,7 @@ const SelectLocation = () => {
     });
 
     return withDistance;
-  }, [localSearchResults, remoteResults, pickupCoords]);
+  }, [localSearchResults, remoteResults, pickupCoords, roadDistances]);
 
   const geocodeCoords = (lat, lng) => {
     setIsGeocoding(true);
@@ -676,59 +793,7 @@ const SelectLocation = () => {
     );
   };
 
-  // Auto-detect and set pickup location on load if not set
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!routeState.pickup && !savedPickupLabel) {
-      setIsLocating(true);
-      const onSuccess = (pos) => {
-        setIsLocating(false);
-        const { latitude, longitude } = pos.coords;
-        const coords = [longitude, latitude];
 
-        if (window.google?.maps?.Geocoder) {
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-            if (status === 'OK' && results[0]) {
-              const addr = results[0].formatted_address;
-              setPickup(addr);
-              setPickupCoords(coords);
-              saveLocation({
-                address: addr,
-                lat: latitude,
-                lon: longitude,
-              });
-            } else {
-              const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-              setPickup(raw);
-              setPickupCoords(coords);
-            }
-          });
-        } else {
-          const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-          setPickup(raw);
-          setPickupCoords(coords);
-        }
-      };
-
-      const onError = (err) => {
-        console.warn("Auto-location failed:", err);
-        setIsLocating(false);
-      };
-
-      const optionsHigh = { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 };
-      const optionsLow = { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 };
-
-      navigator.geolocation.getCurrentPosition(
-        onSuccess,
-        (err) => {
-          console.warn("Auto-location high accuracy failed, trying low accuracy...", err);
-          navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsLow);
-        },
-        optionsHigh
-      );
-    }
-  }, [isLoaded]);
 
   const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
@@ -782,6 +847,13 @@ const SelectLocation = () => {
       });
     }
 
+    const dropItemKey = optionalDrop || drop || '';
+    const matrixCacheKey = (resolvedPickupCoords && Number.isFinite(resolvedPickupCoords[1]) && Number.isFinite(resolvedPickupCoords[0]))
+      ? `${resolvedPickupCoords[1].toFixed(4)},${resolvedPickupCoords[0].toFixed(4)}->${dropItemKey}`
+      : '';
+    const cachedEntry = distanceMatrixCacheRef.current.get(matrixCacheKey);
+    const estimatedDistanceMeters = cachedEntry?.distanceMeters || (roadDistances[dropItemKey] ? Math.round(roadDistances[dropItemKey] * 1000) : undefined);
+
     navigate(targetPath, {
       state: {
         pickup: finalPickup,
@@ -790,6 +862,8 @@ const SelectLocation = () => {
         pickupCoords: resolvedPickupCoords,
         dropCoords: resolvedDropCoords,
         service_location_id: resolvedServiceLocationId,
+        estimatedDistanceMeters,
+        preferredCategory: routeState.preferredCategory,
       },
     });
   };
@@ -839,38 +913,30 @@ const SelectLocation = () => {
       const { latitude, longitude } = pos.coords;
       const coords = [longitude, latitude];
 
+      const applyLocation = (addrText) => {
+        setPickup(addrText);
+        setPickupCoords(coords);
+        saveLocation({
+          address: addrText,
+          lat: latitude,
+          lon: longitude,
+          updatedAt: Date.now()
+        });
+        setActiveInput('drop');
+        toast.success('Pickup updated to current location');
+      };
+
       if (window.google?.maps?.Geocoder) {
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
           if (status === 'OK' && results[0]) {
-            const addr = results[0].formatted_address;
-            if (activeInput === 'drop') {
-              setDrop(addr);
-              setDropCoords(coords);
-              handleConfirmNavigate(addr, coords);
-            } else {
-              handleSelectResult(addr, coords);
-            }
+            applyLocation(results[0].formatted_address);
           } else {
-            const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-            if (activeInput === 'drop') {
-              setDrop(raw);
-              setDropCoords(coords);
-              handleConfirmNavigate(raw, coords);
-            } else {
-              handleSelectResult(raw, coords);
-            }
+            applyLocation(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
           }
         });
       } else {
-        const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-        if (activeInput === 'drop') {
-          setDrop(raw);
-          setDropCoords(coords);
-          handleConfirmNavigate(raw, coords);
-        } else {
-          handleSelectResult(raw, coords);
-        }
+        applyLocation(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
       }
     };
 

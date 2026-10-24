@@ -1507,15 +1507,35 @@ const SelectVehicle = () => {
     String(routeState.serviceType || '').toLowerCase() === 'parcel' ||
     location.pathname.includes('/parcel');
 
-  const [vehicleCategory, setVehicleCategory] = useState('');
+  const [vehicleCategory, setVehicleCategory] = useState(() => routeState?.preferredCategory || routeState?.category || '');
   const availableCategories = useMemo(() => {
     if (isParcelBooking) return [];
     const present = new Set(pricedVehicles.map(getVehicleCategoryId));
-    return VEHICLE_CATEGORIES.filter((category) => present.has(category.id));
-  }, [pricedVehicles, isParcelBooking]);
-  const activeCategoryId = availableCategories.some((category) => category.id === vehicleCategory)
-    ? vehicleCategory
-    : (availableCategories[0]?.id || '');
+    const baseCats = VEHICLE_CATEGORIES.filter((category) => present.has(category.id));
+
+    // Sort categories dynamically so that any category with available drivers appears first
+    const sortedCats = [...baseCats].sort((a, b) => {
+      const aDrivers = pricedVehicles
+        .filter((v) => getVehicleCategoryId(v) === a.id)
+        .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
+      const bDrivers = pricedVehicles
+        .filter((v) => getVehicleCategoryId(v) === b.id)
+        .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
+      return bDrivers - aDrivers;
+    });
+
+    return [{ id: 'all', label: 'All' }, ...sortedCats];
+  }, [pricedVehicles, isParcelBooking, availabilityByVehicleId]);
+
+  const activeCategoryId = useMemo(() => {
+    if (vehicleCategory && availableCategories.some((category) => category.id === vehicleCategory)) {
+      return vehicleCategory;
+    }
+    if (routeState?.preferredCategory && availableCategories.some((category) => category.id === routeState.preferredCategory)) {
+      return routeState.preferredCategory;
+    }
+    return 'all';
+  }, [vehicleCategory, availableCategories, routeState?.preferredCategory]);
 
   const displayedVehicles = useMemo(() => {
     let baseList = [];
@@ -1573,7 +1593,7 @@ const SelectVehicle = () => {
 
     // One list: there is no separate "bid" list. A vehicle that supports bidding lets the rider raise the fare later on
     // the searching screen when no driver accepts.
-    if (activeCategoryId) {
+    if (activeCategoryId && activeCategoryId !== 'all') {
       return filteredBaseList.filter((vehicle) => getVehicleCategoryId(vehicle) === activeCategoryId);
     }
     return filteredBaseList;
@@ -2154,23 +2174,43 @@ const SelectVehicle = () => {
           </div>
         </div>
 
-        {/* Service tabs: Cab / Auto / Bike - each shows only its own vehicles */}
+        {/* Service tabs: All / Bike / Auto / Cab */}
         {availableCategories.length > 1 && (
           <div className="shrink-0 flex gap-2 px-4 pt-3 bg-white">
-            {availableCategories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setVehicleCategory(category.id)}
-                className={`flex-1 rounded-[12px] border py-2 text-[12px] font-extrabold transition-all duration-200 ${
-                  activeCategoryId === category.id
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-white text-slate-600'
-                }`}
-              >
-                {category.label}
-              </button>
-            ))}
+            {availableCategories.map((category) => {
+              const driverCount = category.id === 'all'
+                ? pricedVehicles.reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0)
+                : pricedVehicles
+                    .filter((v) => getVehicleCategoryId(v) === category.id)
+                    .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
+              const hasAvailable = driverCount > 0;
+
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setVehicleCategory(category.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-[12px] border py-2 text-[12px] font-extrabold transition-all duration-200 ${
+                    activeCategoryId === category.id
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{category.label}</span>
+                  {hasAvailable && (
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-black leading-none ${
+                        activeCategoryId === category.id
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      {driverCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
 

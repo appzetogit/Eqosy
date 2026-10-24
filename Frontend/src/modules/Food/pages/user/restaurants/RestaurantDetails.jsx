@@ -50,6 +50,7 @@ import { getCompanyNameAsync } from "@food/utils/businessSettings"
 import { isModuleAuthenticated } from "@food/utils/auth"
 import { determineIsVeg } from "@food/utils/menuItems"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
+import { calculateDistance } from "@food/utils/common"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import {
   buildCartLineId,
@@ -113,7 +114,7 @@ function RestaurantDetailsContent() {
   const showOnlyUnder250 = searchParams.get('under250') === 'true'
   const targetDishId = useMemo(() => String(searchParams.get('dish') || searchParams.get('item') || searchParams.get('itemId') || '').trim(), [searchParams])
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart, triggerEqosyCartLoader } = useCart()
-  const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite } = useProfile()
+  const { vegMode, addDishFavorite, removeDishFavorite, isDishFavorite, getDishFavorites, getFavorites, addFavorite, removeFavorite, isFavorite, getDefaultAddress } = useProfile()
   const { location: userLocation } = useLocation() // Get user's current location
   const activeUserLocation = useMemo(() => {
     try {
@@ -125,8 +126,22 @@ function RestaurantDetailsContent() {
         }
       }
     } catch {}
+    const defaultAddr = getDefaultAddress?.();
+    if (defaultAddr) {
+      const coords = defaultAddr?.location?.coordinates;
+      const lat = coords?.[1] ?? defaultAddr?.latitude ?? defaultAddr?.lat;
+      const lng = coords?.[0] ?? defaultAddr?.longitude ?? defaultAddr?.lng;
+      if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+        return {
+          ...defaultAddr,
+          latitude: Number(lat),
+          longitude: Number(lng),
+          formattedAddress: defaultAddr.formattedAddress || defaultAddr.street || ""
+        };
+      }
+    }
     return userLocation;
-  }, [userLocation]);
+  }, [userLocation, getDefaultAddress]);
   const { zoneId, isOutOfService } = useZone(activeUserLocation) // Get user's zone for zone-based filtering
   const [quantities, setQuantities] = useState({})
   const [showManageCollections, setShowManageCollections] = useState(false)
@@ -520,18 +535,7 @@ function RestaurantDetailsContent() {
           const formattedAddress = formatRestaurantAddress(locationObj)
           debugLog('? Final Formatted Address:', formattedAddress)
 
-          // Calculate distance from user to restaurant
-          const calculateDistance = (lat1, lng1, lat2, lng2) => {
-            const R = 6371 // Earth's radius in kilometers
-            const dLat = (lat2 - lat1) * Math.PI / 180
-            const dLng = (lng2 - lng1) * Math.PI / 180
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2)
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-            return R * c // Distance in kilometers
-          }
+          // Use calibrated calculateDistance
 
           // Get restaurant coordinates
           // Priority: latitude/longitude fields > coordinates array (GeoJSON format: [lng, lat])
@@ -1096,18 +1100,7 @@ function RestaurantDetailsContent() {
     if (userLat && userLng && restaurantLat && restaurantLng &&
       !isNaN(userLat) && !isNaN(userLng) && !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
 
-      // Calculate distance
-      const calculateDistance = (lat1, lng1, lat2, lng2) => {
-        const R = 6371 // Earth's radius in kilometers
-        const dLat = (lat2 - lat1) * Math.PI / 180
-        const dLng = (lng2 - lng1) * Math.PI / 180
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-          Math.sin(dLng / 2) * Math.sin(dLng / 2)
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return R * c // Distance in kilometers
-      }
+      // Use calibrated calculateDistance
 
       const distanceInKm = calculateDistance(userLat, userLng, restaurantLat, restaurantLng)
       let calculatedDistance = null

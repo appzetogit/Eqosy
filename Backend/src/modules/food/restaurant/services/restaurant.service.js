@@ -1,4 +1,5 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { haversineKm } from '../../orders/services/order.helpers.js';
 import { uploadImageBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import mongoose from 'mongoose';
@@ -1743,25 +1744,32 @@ export const listApprovedRestaurants = async (query = {}) => {
 
         const total = totalDocs?.[0]?.count || 0;
         const restaurantsWithRecommendedImages = await attachRecommendedImagesToRestaurants(pageDocs);
-        const mappedPageDocs = (restaurantsWithRecommendedImages || []).map((r) => ({
-            ...r,
-            restaurantId: r._id,
-            id: r._id,
-            name: r.restaurantName || '',
-            rating: normalizeRatingValue(r.rating),
-            totalRatings: normalizeTotalRatingsValue(r.totalRatings),
-            profileImage: r.profileImage ? { url: r.profileImage } : null,
-            coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
-            openingTime: r.openingTime || null,
-            closingTime: r.closingTime || null,
-            pureVegRestaurant: Boolean(r.pureVegRestaurant),
-            isRestaurant: r.isRestaurant !== false,
-            isSponsored: Boolean(r.isSponsored),
-            pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
-            openDays: Array.isArray(r.openDays) ? r.openDays : [],
-            menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
-            recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
-        }));
+        const mappedPageDocs = (restaurantsWithRecommendedImages || []).map((r) => {
+            const rawKm = r.distanceInKm != null ? Number(r.distanceInKm) : null;
+            const distKm = rawKm != null ? Math.round(rawKm * 1.08 * 10) / 10 : null;
+            const distStr = distKm != null ? (distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`) : undefined;
+            return {
+                ...r,
+                restaurantId: r._id,
+                id: r._id,
+                name: r.restaurantName || '',
+                distanceInKm: distKm,
+                distance: distStr,
+                rating: normalizeRatingValue(r.rating),
+                totalRatings: normalizeTotalRatingsValue(r.totalRatings),
+                profileImage: r.profileImage ? { url: r.profileImage } : null,
+                coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
+                openingTime: r.openingTime || null,
+                closingTime: r.closingTime || null,
+                pureVegRestaurant: Boolean(r.pureVegRestaurant),
+                isRestaurant: r.isRestaurant !== false,
+                isSponsored: Boolean(r.isSponsored),
+                pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
+                openDays: Array.isArray(r.openDays) ? r.openDays : [],
+                menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
+                recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
+            };
+        });
         const restaurants = await attachActiveOffersToRestaurants(mappedPageDocs);
         return { restaurants, total, page, limit };
     }
@@ -1788,27 +1796,43 @@ export const listApprovedRestaurants = async (query = {}) => {
     ]);
 
     const restaurantsWithRecommendedImages = await attachRecommendedImagesToRestaurants(restaurantsRaw || []);
-    const mappedRawDocs = restaurantsWithRecommendedImages.map((r) => ({
-        ...r,
-        // Frontend user app expects `name` and often checks `profileImage.url`
-        restaurantId: r._id,
-        id: r._id,
-        name: r.restaurantName || '',
-        rating: normalizeRatingValue(r.rating),
-        totalRatings: normalizeTotalRatingsValue(r.totalRatings),
-        profileImage: r.profileImage ? { url: r.profileImage } : null,
-        coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
-        openingTime: r.openingTime || null,
-        closingTime: r.closingTime || null,
-        pureVegRestaurant: Boolean(r.pureVegRestaurant),
-        isRestaurant: r.isRestaurant !== false,
-        isSponsored: Boolean(r.isSponsored),
-        pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
-        openDays: Array.isArray(r.openDays) ? r.openDays : [],
-        // Keep menuImages as an array for fallbacks; allow both string and {url} on client.
-        menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
-        recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
-    }));
+    const mappedRawDocs = restaurantsWithRecommendedImages.map((r) => {
+        let distKm = null;
+        let distStr = undefined;
+        if (lat !== null && lng !== null) {
+            const rCoords = r.location?.coordinates;
+            const rLng = Array.isArray(rCoords) && rCoords.length >= 2 ? rCoords[0] : (r.location?.longitude ?? r.longitude);
+            const rLat = Array.isArray(rCoords) && rCoords.length >= 2 ? rCoords[1] : (r.location?.latitude ?? r.latitude);
+            if (Number.isFinite(Number(rLat)) && Number.isFinite(Number(rLng))) {
+                const straightKm = haversineKm(lat, lng, Number(rLat), Number(rLng));
+                distKm = Math.round(straightKm * 1.08 * 10) / 10;
+                distStr = distKm >= 1 ? `${distKm.toFixed(1)} km` : `${Math.round(distKm * 1000)} m`;
+            }
+        }
+        return {
+            ...r,
+            // Frontend user app expects `name` and often checks `profileImage.url`
+            restaurantId: r._id,
+            id: r._id,
+            name: r.restaurantName || '',
+            distanceInKm: distKm,
+            distance: distStr,
+            rating: normalizeRatingValue(r.rating),
+            totalRatings: normalizeTotalRatingsValue(r.totalRatings),
+            profileImage: r.profileImage ? { url: r.profileImage } : null,
+            coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
+            openingTime: r.openingTime || null,
+            closingTime: r.closingTime || null,
+            pureVegRestaurant: Boolean(r.pureVegRestaurant),
+            isRestaurant: r.isRestaurant !== false,
+            isSponsored: Boolean(r.isSponsored),
+            pricingAttributes: Array.isArray(r.pricingAttributes) ? r.pricingAttributes : [],
+            openDays: Array.isArray(r.openDays) ? r.openDays : [],
+            // Keep menuImages as an array for fallbacks; allow both string and {url} on client.
+            menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
+            recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
+        };
+    });
 
     const restaurants = await attachActiveOffersToRestaurants(mappedRawDocs);
     return { restaurants, total, page, limit };

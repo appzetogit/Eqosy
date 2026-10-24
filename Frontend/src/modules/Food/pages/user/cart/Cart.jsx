@@ -1594,23 +1594,39 @@ function CartInner() {
       })
 
       // Update the location in localStorage
+      const formattedAddressStr = address.additionalDetails
+        ? `${address.additionalDetails}, ${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ""}`
+        : `${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ""}`
+
       const locationData = {
+        label: address.label || "Home",
         city: address.city,
         state: address.state,
+        street: address.street || "",
         address: `${address.street}, ${address.city}`,
         area: address.additionalDetails || "",
         zipCode: address.zipCode,
-        latitude,
-        longitude,
-        formattedAddress: address.additionalDetails
-          ? `${address.additionalDetails}, ${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
-          : `${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        formattedAddress: formattedAddressStr,
+        isManual: true,
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
       // User selected a saved address from Cart; prefer saved mode.
       try {
         localStorage.setItem("deliveryAddressMode", "saved")
         setDeliveryAddressMode("saved")
+        localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+          address: formattedAddressStr,
+          lat: Number(latitude),
+          lon: Number(longitude),
+          updatedAt: Date.now()
+        }))
+        window.dispatchEvent(new Event("deliveryAddressModeChanged"))
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new Event("eqosy:location-updated"))
+        window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }))
+        window.dispatchEvent(new CustomEvent("locationChanged", { detail: locationData }))
       } catch { }
 
       toast.success(`${address.label || "Saved"} address selected!`)

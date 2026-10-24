@@ -99,6 +99,7 @@ import api, { publicGetOnce, restaurantAPI, adminAPI, orderAPI } from "@food/api
 import { API_BASE_URL } from "@food/api/config";
 import OptimizedImage from "@food/components/OptimizedImage";
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability";
+import { calculateDistance } from "@food/utils/common";
 import HomeHeader from "@food/components/user/home/HomeHeader";
 import { getVerticalTheme } from "@/shared/constants/superAppVerticalTheme";
 import { syncThemeForPath } from "@/shared/utils/theme.js";
@@ -1526,23 +1527,36 @@ export default function Home() {
   );
 
   const defaultSavedAddressLocation = useMemo(() => {
+    if (!defaultSavedAddress) return null;
     const coords = defaultSavedAddress?.location?.coordinates;
+    let lat = null;
+    let lng = null;
     if (Array.isArray(coords) && coords.length >= 2) {
-      const lng = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        return { latitude: lat, longitude: lng };
-      }
+      lng = Number(coords[0]);
+      lat = Number(coords[1]);
+    } else {
+      lat = Number(defaultSavedAddress?.latitude || defaultSavedAddress?.lat);
+      lng = Number(defaultSavedAddress?.longitude || defaultSavedAddress?.lng);
     }
 
-    const lat = Number(
-      defaultSavedAddress?.latitude || defaultSavedAddress?.lat,
-    );
-    const lng = Number(
-      defaultSavedAddress?.longitude || defaultSavedAddress?.lng,
-    );
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      return { latitude: lat, longitude: lng };
+      const formatted = defaultSavedAddress.formattedAddress ||
+        [defaultSavedAddress.additionalDetails, defaultSavedAddress.street, defaultSavedAddress.city, defaultSavedAddress.state, defaultSavedAddress.zipCode]
+          .filter(Boolean).join(", ") || defaultSavedAddress.street || "";
+      return {
+        latitude: lat,
+        longitude: lng,
+        city: defaultSavedAddress.city || "",
+        state: defaultSavedAddress.state || "",
+        area: defaultSavedAddress.area || defaultSavedAddress.additionalDetails || "",
+        street: defaultSavedAddress.street || "",
+        postalCode: defaultSavedAddress.zipCode || "",
+        zipCode: defaultSavedAddress.zipCode || "",
+        address: defaultSavedAddress.street || formatted,
+        formattedAddress: formatted,
+        label: defaultSavedAddress.label || "Home",
+        isManual: true,
+      };
     }
 
     return null;
@@ -1572,20 +1586,23 @@ export default function Home() {
   }, [deliveryAddressMode, defaultSavedAddress?.id, defaultSavedAddress?._id]);
 
   const effectiveLocation = useMemo(() => {
+    // 1. User manual selection on map, search, or address picker always takes precedence
     if (savedLocationCache?.isManual) {
       return savedLocationCache;
     }
-    // Only use the saved/cached address when the user is actually in "saved" mode.
-    // (Previously the `||` escaped the mode check, so "current" mode still resolved to the saved address.)
-    const useSavedAddress =
-      deliveryAddressMode === "saved" &&
-      ((Number.isFinite(defaultSavedAddressLocation?.latitude) &&
-        Number.isFinite(defaultSavedAddressLocation?.longitude)) ||
-        (Number.isFinite(savedLocationCache?.latitude) &&
-          Number.isFinite(savedLocationCache?.longitude)));
-
-    if (!useSavedAddress) return location;
-    return defaultSavedAddressLocation || savedLocationCache || location;
+    // 2. Default saved address for logged-in users unless explicitly in "current" mode
+    const hasDefaultSaved = Number.isFinite(defaultSavedAddressLocation?.latitude) && Number.isFinite(defaultSavedAddressLocation?.longitude);
+    if (deliveryAddressMode === "saved" && hasDefaultSaved) {
+      return defaultSavedAddressLocation;
+    }
+    if (hasDefaultSaved && deliveryAddressMode !== "current") {
+      return defaultSavedAddressLocation;
+    }
+    // 3. Saved location cache
+    if (savedLocationCache?.latitude && savedLocationCache?.longitude) {
+      return savedLocationCache;
+    }
+    return defaultSavedAddressLocation || location;
   }, [deliveryAddressMode, defaultSavedAddressLocation, savedLocationCache, location]);
 
   const {
@@ -1684,7 +1701,7 @@ export default function Home() {
       }
     } catch {}
 
-    if (isManual || previousMode === "saved") {
+    if (isManual || previousMode === "saved" || defaultSavedAddress) {
       // User has a manual/saved location selected; do not overwrite it on launch
       return;
     }
@@ -2043,20 +2060,7 @@ export default function Home() {
             return;
           }
 
-          // Calculate distance helper function
-          const calculateDistance = (lat1, lng1, lat2, lng2) => {
-            const R = 6371; // Earth's radius in kilometers
-            const dLat = ((lat2 - lat1) * Math.PI) / 180;
-            const dLng = ((lng2 - lng1) * Math.PI) / 180;
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos((lat1 * Math.PI) / 180) *
-              Math.cos((lat2 * Math.PI) / 180) *
-              Math.sin(dLng / 2) *
-              Math.sin(dLng / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; // Distance in kilometers
-          };
+          // Use calibrated calculateDistance
 
           // Get user coordinates
           const userLat = effectiveLocation?.latitude;
@@ -2550,19 +2554,7 @@ export default function Home() {
     setRestaurantsData((prevData) => {
       if (!prevData || prevData.length === 0) return prevData;
 
-      const calculateDistance = (lat1, lng1, lat2, lng2) => {
-        const R = 6371; // Earth's radius in kilometers
-        const dLat = ((lat2 - lat1) * Math.PI) / 180;
-        const dLng = ((lng2 - lng1) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((lat1 * Math.PI) / 180) *
-          Math.cos((lat2 * Math.PI) / 180) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c; // Distance in kilometers
-      };
+      // Use calibrated calculateDistance
 
       const userLat = effectiveLocation.latitude;
       const userLng = effectiveLocation.longitude;

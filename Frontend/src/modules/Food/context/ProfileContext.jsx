@@ -58,7 +58,14 @@ export function ProfileProvider({ children }) {
   
   const [loading, setLoading] = useState(true)
 
-  const [addresses, setAddresses] = useState([])
+  const [addresses, setAddresses] = useState(() => {
+    try {
+      const saved = localStorage.getItem("userAddresses")
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
 
   const [paymentMethods, setPaymentMethods] = useState(() => {
     const saved = localStorage.getItem("userPaymentMethods")
@@ -167,6 +174,45 @@ export function ProfileProvider({ children }) {
           const normalizedAddresses = dedupeAddressesByLabel(addressesData)
           setAddresses(normalizedAddresses)
           localStorage.setItem("userAddresses", JSON.stringify(normalizedAddresses))
+
+          // Sync default address coordinates to active location if mode is saved or not explicitly manual
+          try {
+            const defAddr = normalizedAddresses.find((a) => a.isDefault) || normalizedAddresses[0]
+            if (defAddr) {
+              const currentMode = localStorage.getItem("deliveryAddressMode") || "saved"
+              const rawLoc = localStorage.getItem("userLocation")
+              const parsedLoc = rawLoc ? JSON.parse(rawLoc) : null
+              if (currentMode === "saved" || !parsedLoc?.isManual) {
+                const coords = defAddr.location?.coordinates
+                const lng = Array.isArray(coords) && coords.length >= 2 ? Number(coords[0]) : Number(defAddr.longitude || defAddr.lng)
+                const lat = Array.isArray(coords) && coords.length >= 2 ? Number(coords[1]) : Number(defAddr.latitude || defAddr.lat)
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                  const formatted = defAddr.formattedAddress ||
+                    [defAddr.additionalDetails, defAddr.street, defAddr.city, defAddr.state, defAddr.zipCode].filter(Boolean).join(", ") || defAddr.street || ""
+                  const locationData = {
+                    latitude: lat,
+                    longitude: lng,
+                    city: defAddr.city || "",
+                    state: defAddr.state || "",
+                    area: defAddr.area || defAddr.additionalDetails || "",
+                    street: defAddr.street || "",
+                    postalCode: defAddr.zipCode || "",
+                    zipCode: defAddr.zipCode || "",
+                    address: defAddr.street || formatted,
+                    formattedAddress: formatted,
+                    label: defAddr.label || "Home",
+                    isManual: true
+                  }
+                  localStorage.setItem("userLocation", JSON.stringify(locationData))
+                  localStorage.setItem("deliveryAddressMode", "saved")
+                  window.dispatchEvent(new Event("deliveryAddressModeChanged"))
+                  window.dispatchEvent(new Event("storage"))
+                  window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }))
+                  window.dispatchEvent(new CustomEvent("locationChanged", { detail: locationData }))
+                }
+              }
+            }
+          } catch {}
         } catch (addressError) {
           debugError("Error fetching addresses:", addressError)
           // Try to load from localStorage as fallback
@@ -271,13 +317,61 @@ export function ProfileProvider({ children }) {
   }, [])
 
   const setDefaultAddress = useCallback(async (id) => {
+    let targetAddress = null
     // Optimistic UI update first
-    setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isDefault: String(getAddressId(addr)) === String(id),
-      }))
-    )
+    setAddresses((prev) => {
+      const updated = prev.map((addr) => {
+        const isTarget = String(getAddressId(addr)) === String(id)
+        if (isTarget) targetAddress = addr
+        return {
+          ...addr,
+          isDefault: isTarget,
+        }
+      })
+      try {
+        localStorage.setItem("userAddresses", JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+
+    if (targetAddress) {
+      const coords = targetAddress.location?.coordinates
+      const lng = Array.isArray(coords) && coords.length >= 2 ? Number(coords[0]) : Number(targetAddress.longitude || targetAddress.lng)
+      const lat = Array.isArray(coords) && coords.length >= 2 ? Number(coords[1]) : Number(targetAddress.latitude || targetAddress.lat)
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const formatted = targetAddress.formattedAddress ||
+          [targetAddress.additionalDetails, targetAddress.street, targetAddress.city, targetAddress.state, targetAddress.zipCode].filter(Boolean).join(", ") || targetAddress.street || ""
+        const locationData = {
+          latitude: lat,
+          longitude: lng,
+          city: targetAddress.city || "",
+          state: targetAddress.state || "",
+          area: targetAddress.area || targetAddress.additionalDetails || "",
+          street: targetAddress.street || "",
+          postalCode: targetAddress.zipCode || "",
+          zipCode: targetAddress.zipCode || "",
+          address: targetAddress.street || formatted,
+          formattedAddress: formatted,
+          label: targetAddress.label || "Home",
+          isManual: true
+        }
+        try {
+          localStorage.setItem("userLocation", JSON.stringify(locationData))
+          localStorage.setItem("deliveryAddressMode", "saved")
+          localStorage.setItem("eqosy:lastLocation", JSON.stringify({
+            address: formatted,
+            lat: Number(lat),
+            lon: Number(lng),
+            updatedAt: Date.now()
+          }))
+          window.dispatchEvent(new Event("deliveryAddressModeChanged"))
+          window.dispatchEvent(new Event("storage"))
+          window.dispatchEvent(new Event("eqosy:location-updated"))
+          window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }))
+          window.dispatchEvent(new CustomEvent("locationChanged", { detail: locationData }))
+        } catch {}
+      }
+    }
 
     try {
       await userAPI.setDefaultAddress(id)

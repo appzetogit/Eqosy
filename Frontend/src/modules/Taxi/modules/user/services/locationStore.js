@@ -11,34 +11,48 @@ export const getSavedLocation = () => {
   }
 
   try {
-    // 1. Priority: Read Food/Grocery location key userLocation FIRST for full accuracy
-    const foodSaved = JSON.parse(window.localStorage.getItem(USER_LOCATION_KEY) || '{}');
-    if (foodSaved?.latitude && foodSaved?.longitude) {
-      const lat = Number(foodSaved.latitude);
-      const lon = Number(foodSaved.longitude);
-      const address = String(foodSaved.formattedAddress || foodSaved.address || foodSaved.city || '').trim();
-      const area = String(foodSaved.area || '').trim();
-      const city = String(foodSaved.city || '').trim();
-      const state = String(foodSaved.state || '').trim();
-      if (address) {
-        return {
-          address,
-          lat,
-          lon,
-          area,
-          city,
-          state,
-          formattedAddress: address,
-        };
-      }
-    }
-
-    // 2. Fallback to Taxi key eqosy:lastLocation
+    // 1. Priority: Read Taxi key eqosy:lastLocation FIRST for real user pickup location
     const saved = JSON.parse(window.localStorage.getItem(LOCATION_STORAGE_KEY) || '{}');
     let lat = Number(saved?.lat);
     let lon = Number(saved?.lon);
     let address = String(saved?.address || '').trim();
     let updatedAt = Number(saved?.updatedAt);
+
+    if (address && Number.isFinite(lat) && Number.isFinite(lon)) {
+      return {
+        address,
+        lat,
+        lon,
+        area: String(saved?.area || '').trim(),
+        city: String(saved?.city || '').trim(),
+        state: String(saved?.state || '').trim(),
+        formattedAddress: address,
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : null,
+      };
+    }
+
+    // 2. Fallback to Food/Grocery location key userLocation
+    const foodSaved = JSON.parse(window.localStorage.getItem(USER_LOCATION_KEY) || '{}');
+    if (foodSaved?.latitude && foodSaved?.longitude) {
+      const foodLat = Number(foodSaved.latitude);
+      const foodLon = Number(foodSaved.longitude);
+      const foodAddress = String(foodSaved.formattedAddress || foodSaved.address || foodSaved.city || '').trim();
+      const area = String(foodSaved.area || '').trim();
+      const city = String(foodSaved.city || '').trim();
+      const state = String(foodSaved.state || '').trim();
+      if (foodAddress && Number.isFinite(foodLat) && Number.isFinite(foodLon)) {
+        return {
+          address: foodAddress,
+          lat: foodLat,
+          lon: foodLon,
+          area,
+          city,
+          state,
+          formattedAddress: foodAddress,
+          updatedAt: null,
+        };
+      }
+    }
 
     if (!address && !Number.isFinite(lat)) return null;
 

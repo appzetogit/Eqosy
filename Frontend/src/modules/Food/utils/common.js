@@ -82,8 +82,8 @@ export const calculateDistance = (lat1, lng1, lat2, lng2, useRoadFactor = true) 
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const straightKm = R * c;
-  // Apply standard road curvature factor (~1.18x) so estimates align with Google Maps road driving distance
-  return useRoadFactor ? straightKm * 1.18 : straightKm;
+  // Apply standard road curvature factor (~1.08x) so estimates align with Google Maps road driving distance
+  return useRoadFactor ? straightKm * 1.08 : straightKm;
 };
 
 /**

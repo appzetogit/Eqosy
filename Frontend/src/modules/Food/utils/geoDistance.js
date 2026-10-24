@@ -35,8 +35,8 @@ export function calculateDistanceInKm(lat1, lon1, lat2, lon2) {
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  // Apply road curvature factor (~1.18x) so distance matches Google Maps driving route
-  const distance = R * c * 1.18;
+  // Apply road curvature factor (~1.08x) so distance matches Google Maps driving route
+  const distance = R * c * 1.08;
 
   return Math.round(distance * 10) / 10;
 }

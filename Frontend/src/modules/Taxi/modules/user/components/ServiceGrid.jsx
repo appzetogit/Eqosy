@@ -14,7 +14,7 @@ import outstationImg from '../../../assets/3d images/AutoCab/one way.png';
 import rideImg from '../../../assets/3d images/AutoCab/taxi.png';
 import deliveryImg from '../../../assets/icons/Delivery.png';
 
-const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradient, borderColor, delay }) => {
+const ServiceCard = ({ id, icon, fallbackIcon, label, description, path, iconGradient, borderColor, delay }) => {
   const navigate = useNavigate();
   const [coords, setCoords] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -56,7 +56,18 @@ const ServiceCard = ({ icon, fallbackIcon, label, description, path, iconGradien
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseEnter={() => setIsHovered(true)}
-        onClick={() => path && navigate(path)}
+        onClick={() => {
+          if (!path) return;
+          const isCab = id === 'cab' || String(label || '').toLowerCase().includes('cab') || String(label || '').toLowerCase().includes('taxi');
+          const isBike = id === 'bike' || String(label || '').toLowerCase().includes('bike');
+          const isAuto = id === 'auto' || String(label || '').toLowerCase().includes('auto');
+          const preferredCategory = isCab ? 'cab' : (isBike ? 'bike' : (isAuto ? 'auto' : undefined));
+          if (preferredCategory) {
+            navigate(path, { state: { preferredCategory } });
+          } else {
+            navigate(path);
+          }
+        }}
         animate={{ x: coords.x, y: coords.y }}
         whileHover={{ y: -6, scale: 1.03 }}
         whileTap={{ scale: 0.97 }}

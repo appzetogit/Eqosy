@@ -720,7 +720,7 @@ export default function HomeHeader({
             isCategoryStuck && isFood
               ? 'shadow-md pb-3'
               : `shadow-[0_10px_40px_rgba(0,0,0,0.18)] ${
-                  isFood ? 'pb-3' : 'rounded-b-[1.75rem] pb-4'
+                  isFood ? 'pb-4.5' : 'rounded-b-[1.75rem] pb-4'
                 }`
           }`}
           style={{ backgroundColor: verticalTheme.theme }}
@@ -831,10 +831,10 @@ export default function HomeHeader({
       {/* Container 3: Slide Banners — rounded corners and shadow at the bottom */}
       {isFood && (
         <div
-          className="relative z-10 w-full overflow-hidden rounded-b-[1.75rem] shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
+          className="relative z-10 w-full overflow-hidden rounded-b-[1.75rem] shadow-[0_10px_40px_rgba(0,0,0,0.18)] pt-2"
           style={{ backgroundColor: verticalTheme.theme }}
         >
-          <div className="relative w-full h-[168px] overflow-hidden">
+          <div className="relative w-full h-[182px] sm:h-[208px] md:h-[235px] overflow-hidden">
             <div
               className="absolute inset-0 flex transition-transform duration-700 ease-in-out"
               style={{ transform: `translateX(-${currentSlide * 100}%)` }}
@@ -856,7 +856,7 @@ export default function HomeHeader({
                     <img
                       src={banner.imageUrl}
                       alt={banner.title || "Banner"}
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="absolute inset-0 w-full h-full object-cover object-top"
                       loading={index === 0 ? "eager" : "lazy"}
                     />
                   </div>

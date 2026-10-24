@@ -119,7 +119,13 @@ export default function SuperAppHero({ onSearchFocus }) {
                 transition={{ delay: 0.9 + idx * 0.08, type: "spring", stiffness: 120 }}
                 whileHover={{ y: -3, scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate(item.path)}
+                onClick={() => {
+                  if (item.id === 'taxi') {
+                    navigate(item.path, { state: { preferredCategory: 'cab' } });
+                  } else {
+                    navigate(item.path);
+                  }
+                }}
                 className="flex flex-col items-center gap-1 flex-1 max-w-[50px] focus:outline-none group"
               >
                 <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${item.color} shadow-md border border-white/10 flex items-center justify-center text-white relative overflow-hidden`}>
