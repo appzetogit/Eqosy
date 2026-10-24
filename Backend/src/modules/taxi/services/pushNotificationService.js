@@ -167,6 +167,15 @@ const sendPushToTargets = async ({
     Object.entries(data || {}).map(([key, value]) => [key, String(value ?? '')]),
   );
 
+  const dataType = String(safeData.type || '').toLowerCase();
+  const isRing = safeData.ring === 'true' || dataType === 'ride_request' || dataType === 'new_ride' || Boolean(safeData.rideId);
+  const isChat = dataType.includes('chat') || safeData.openChat === 'true';
+  const ringChannelId = process.env.FCM_TAXI_RING_CHANNEL_ID || process.env.FCM_RING_CHANNEL_ID || 'ride_requests';
+  const ringSound = process.env.FCM_TAXI_RING_SOUND || process.env.FCM_RING_SOUND || 'ride_request_alert';
+  const channelId = isRing ? ringChannelId : (isChat ? 'chat_messages' : 'default');
+  const soundName = isRing ? ringSound : 'default';
+  const targetLink = safeData.targetUrl || safeData.link || safeData.click_action || '/taxi/driver/home';
+
   for (const batch of chunk(dedupedTargets, 500)) {
     const response = await messaging.sendEachForMulticast({
       tokens: batch.map((target) => target.token),
@@ -177,18 +186,56 @@ const sendPushToTargets = async ({
       },
       data: {
         ...safeData,
+        ring: isRing ? 'true' : 'false',
+        sound: soundName,
+        channel_id: channelId,
+        android_channel_id: channelId,
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
       },
       android: {
         priority: 'high',
-        notification: image ? { imageUrl: image } : undefined,
+        notification: {
+          channelId,
+          sound: soundName,
+          priority: isRing ? 'max' : 'high',
+          defaultSound: !isRing,
+          defaultVibrateTimings: true,
+          visibility: 'public',
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+          ...(image ? { imageUrl: image } : {}),
+        },
+      },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: {
+          aps: {
+            sound: isRing ? 'ride-request-alert.mp3' : 'default',
+            badge: 1,
+            'content-available': 1,
+          },
+        },
       },
       webpush: {
+        headers: {
+          Urgency: 'high',
+        },
         notification: {
           title,
           body,
+          icon: '/eqosy-logo.png',
+          badge: '/eqosy-logo.png',
+          sound: isRing ? '/ride-request-alert.mp3' : '/zomato_sms.mp3',
+          silent: false,
+          requireInteraction: isRing,
           ...(image ? { image } : {}),
         },
+        data: {
+          ...safeData,
+          ring: isRing ? 'true' : 'false',
+        },
+        ...(targetLink ? { fcmOptions: { link: targetLink } } : {}),
       },
     });
 
@@ -323,7 +370,16 @@ export const sendPushNotificationToAudience = async ({
         },
         android: {
           priority: 'high',
-          notification: image ? { imageUrl: image } : undefined,
+          notification: {
+            channelId: 'default',
+            sound: 'default',
+            priority: 'high',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            visibility: 'public',
+            clickAction: group.redirectUrl,
+            ...(image ? { imageUrl: image } : {}),
+          },
         },
         webpush: {
           notification: {

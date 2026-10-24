@@ -1322,10 +1322,50 @@ const SenderReceiverDetails = () => {
     }
     return [];
   }, [recoveredSelectedVehicles]);
-  const estimatedDistanceKm = useMemo(
-    () => calculateDistanceKm(pickupCoords, dropCoords),
-    [dropCoords, pickupCoords],
-  );
+  const [googleRoadDistanceKm, setGoogleRoadDistanceKm] = useState(null);
+
+  useEffect(() => {
+    if (!pickupCoords || !dropCoords || !window.google?.maps?.DirectionsService) {
+      return;
+    }
+    const [pLng, pLat] = pickupCoords;
+    const [dLng, dLat] = dropCoords;
+    if (!Number.isFinite(pLat) || !Number.isFinite(pLng) || !Number.isFinite(dLat) || !Number.isFinite(dLng)) {
+      return;
+    }
+
+    let active = true;
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+      directionsService.route(
+        {
+          origin: new window.google.maps.LatLng(pLat, pLng),
+          destination: new window.google.maps.LatLng(dLat, dLng),
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (!active) return;
+          if (status === 'OK' && result?.routes?.[0]?.legs?.[0]?.distance?.value != null) {
+            const meters = result.routes[0].legs[0].distance.value;
+            setGoogleRoadDistanceKm(Math.round((meters / 1000) * 10) / 10);
+          }
+        }
+      );
+    } catch (_err) {
+      // ignore and fallback
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [pickupCoords, dropCoords]);
+
+  const estimatedDistanceKm = useMemo(() => {
+    if (googleRoadDistanceKm != null && googleRoadDistanceKm > 0) {
+      return googleRoadDistanceKm;
+    }
+    return calculateDistanceKm(pickupCoords, dropCoords);
+  }, [googleRoadDistanceKm, dropCoords, pickupCoords]);
   const estimatedFare = useMemo(() => {
     if (!drop.trim()) {
       return null;

@@ -45,7 +45,12 @@ const notifyNativeAlertBridge = (action = 'start') => {
     } catch {}
 
     try {
-        window.flutter_inappwebview?.callHandler?.('driverOrderAlert', payload);
+        if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
+            window.flutter_inappwebview.callHandler('driverOrderAlert', payload).catch(() => {});
+            window.flutter_inappwebview.callHandler('playNotificationSound', payload).catch(() => {});
+            window.flutter_inappwebview.callHandler('triggerNotificationFeedback', payload).catch(() => {});
+            window.flutter_inappwebview.callHandler('onPushNotification', payload).catch(() => {});
+        }
     } catch {}
 
     try {
@@ -55,6 +60,9 @@ const notifyNativeAlertBridge = (action = 'start') => {
     try {
         if (typeof window.Android?.driverOrderAlert === 'function') {
             window.Android.driverOrderAlert(JSON.stringify(payload));
+        }
+        if (typeof window.Android?.playAlertSound === 'function') {
+            window.Android.playAlertSound(JSON.stringify(payload));
         }
     } catch {}
 

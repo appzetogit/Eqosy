@@ -1716,6 +1716,23 @@ const DriverHome = () => {
     }, [isOnline, presentRideRequest]);
 
     useEffect(() => {
+        const handlePushNotification = (event) => {
+            const payload = event?.detail || {};
+            const data = payload?.data || payload || {};
+            const rideId = data.rideId || data.orderId || "";
+            playRideRequestAlertSound();
+            if (rideId) {
+                checkPendingDispatch(rideId);
+            }
+        };
+
+        window.addEventListener("driver-ride-request-push", handlePushNotification);
+        return () => {
+            window.removeEventListener("driver-ride-request-push", handlePushNotification);
+        };
+    }, [checkPendingDispatch]);
+
+    useEffect(() => {
         if (!isOnline || isHydratingDriver) return;
         checkPendingDispatch();
         const poller = setInterval(() => {

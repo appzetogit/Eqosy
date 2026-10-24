@@ -939,6 +939,20 @@ const syncDeliveryWithRide = async (ride) => {
   return delivery;
 };
 
+const calculateHaversineMeters = (coordA, coordB) => {
+  if (!Array.isArray(coordA) || !Array.isArray(coordB) || coordA.length < 2 || coordB.length < 2) return 0;
+  const [lng1, lat1] = coordA.map(Number);
+  const [lng2, lat2] = coordB.map(Number);
+  if (![lng1, lat1, lng2, lat2].every(Number.isFinite)) return 0;
+  const R = 6371000;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const straightMeters = 2 * R * Math.asin(Math.sqrt(a));
+  return Math.round(straightMeters * 1.4); // 1.4x road factor
+};
+
 export const createRideRecord = async ({
   userId,
   pickupCoords,
@@ -973,8 +987,15 @@ export const createRideRecord = async ({
   await clearUserActiveRideIfPresent(user);
 
   const safeFare = Number(fare);
-  const safeEstimatedDistanceMeters = Math.max(0, Number(estimatedDistanceMeters || 0));
-  const safeEstimatedDurationMinutes = Math.max(0, Number(estimatedDurationMinutes || 0));
+  let safeEstimatedDistanceMeters = Math.max(0, Number(estimatedDistanceMeters || 0));
+  let safeEstimatedDurationMinutes = Math.max(0, Number(estimatedDurationMinutes || 0));
+
+  if (safeEstimatedDistanceMeters <= 0 && pickupCoords && dropCoords) {
+    safeEstimatedDistanceMeters = calculateHaversineMeters(pickupCoords, dropCoords);
+    if (safeEstimatedDurationMinutes <= 0 && safeEstimatedDistanceMeters > 0) {
+      safeEstimatedDurationMinutes = Math.max(1, Math.round((safeEstimatedDistanceMeters / 1000) * 2.5) + 2);
+    }
+  }
 
   if (!Number.isFinite(safeFare) || safeFare < 0) {
     throw new ApiError(400, 'fare must be a positive number or zero');

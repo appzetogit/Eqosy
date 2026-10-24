@@ -191,6 +191,25 @@ const DriverRideRequestListener = () => {
     useEffect(() => {
         if (!activeOnRoute) return undefined;
 
+        const handlePushNotification = (event) => {
+            const payload = event?.detail || {};
+            const data = payload?.data || payload || {};
+            const rideId = data.rideId || data.orderId || "";
+            playRideRequestAlertSound();
+            if (rideId) {
+                checkPendingDispatch(rideId);
+            }
+        };
+
+        window.addEventListener("driver-ride-request-push", handlePushNotification);
+        return () => {
+            window.removeEventListener("driver-ride-request-push", handlePushNotification);
+        };
+    }, [activeOnRoute, checkPendingDispatch]);
+
+    useEffect(() => {
+        if (!activeOnRoute) return undefined;
+
         checkPendingDispatch();
 
         const handleFocus = () => checkPendingDispatch();

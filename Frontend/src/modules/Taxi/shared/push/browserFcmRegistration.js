@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from 'firebase/app';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+import { playRideRequestAlertSound } from "../../modules/driver/utils/rideRequestAlertSound";
 import { getLocalDriverToken, saveDriverFcmToken } from '../../modules/driver/services/registrationService';
 import { getLocalUserToken, userAuthService } from '../../modules/user/services/authService';
 
@@ -13,6 +14,72 @@ const FIREBASE_CONFIG = {
   appId: String(import.meta.env.VITE_FIREBASE_APP_ID || '').trim(),
 };
 const VAPID_KEY = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
+
+let foregroundListenerBound = false;
+let swMessageListenerBound = false;
+
+const isRideAlertPayload = (payload = {}) => {
+  const data = payload?.data || {};
+  const type = String(data.type || payload?.type || "").toLowerCase();
+  const serviceType = String(data.serviceType || "").toLowerCase();
+  return (
+    type === "ride_request" ||
+    type === "new_ride" ||
+    type.includes("ride") ||
+    serviceType === "ride" ||
+    serviceType === "parcel" ||
+    serviceType === "intercity" ||
+    Boolean(data.rideId) ||
+    String(data.ring) === "true"
+  );
+};
+
+const dispatchRideRequestPushEvent = (payload) => {
+  const data = payload?.data || payload || {};
+  if (isRideAlertPayload(payload)) {
+    console.info("[taxi-push] ride request push received, playing alert ring", data);
+    playRideRequestAlertSound();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("driver-ride-request-push", { detail: payload }));
+    }
+  }
+};
+
+const attachForegroundPushListener = (messaging) => {
+  if (foregroundListenerBound || !messaging) return;
+  foregroundListenerBound = true;
+
+  try {
+    onMessage(messaging, (payload) => {
+      console.info("[taxi-push] foreground FCM message received", payload);
+      dispatchRideRequestPushEvent(payload);
+    });
+  } catch (err) {
+    console.warn("[taxi-push] onMessage listener error", err);
+  }
+};
+
+const attachSwMessageListener = () => {
+  if (swMessageListenerBound || typeof window === "undefined") return;
+  swMessageListenerBound = true;
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      const data = event?.data;
+      if (data?.type === "push-notification-received") {
+        dispatchRideRequestPushEvent(data.payload);
+      }
+    });
+  }
+
+  window.addEventListener("native-push-notification", (event) => {
+    dispatchRideRequestPushEvent(event?.detail);
+  });
+
+  window.__onNativePushNotification = (payload) => {
+    dispatchRideRequestPushEvent(payload);
+  };
+};
 
 let messagingSupportPromise = null;
 let lastFcmTokenErrorTime = 0;
@@ -153,6 +220,8 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
 
   const serviceWorkerRegistration = await navigator.serviceWorker.register(createServiceWorkerUrl());
   const messaging = getMessaging(app);
+  attachForegroundPushListener(messaging);
+  attachSwMessageListener();
 
   let token = null;
   try {
@@ -185,6 +254,7 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
 };
 
 export const installBrowserFcmRegistration = () => {
+  attachSwMessageListener();
   window.__registerBrowserFcmToken = (options) => registerBrowserFcmToken(options);
 
   const retryPassiveRegistration = () => {

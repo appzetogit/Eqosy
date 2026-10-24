@@ -20,9 +20,24 @@ const getNotificationKey = (payload) =>
 // Status updates (rider arrived, picked up, delivered...) are shown silently.
 function shouldPlaySound(payload = {}) {
   const data = payload?.data || {};
-  const type = String(data.type || "").toLowerCase();
+  const type = String(data.type || payload?.type || "").toLowerCase();
   if (type.includes("chat") || data.openChat === "true" || data.conversationId) return true;
+  if (type.includes("ride") || type.includes("delivery") || data.serviceType || data.rideId) return true;
   return String(data.ring) === "true";
+}
+
+function getSoundPath(payload = {}) {
+  const data = payload?.data || {};
+  const type = String(data.type || payload?.type || "").toLowerCase();
+  const serviceType = String(data.serviceType || "").toLowerCase();
+  const isTaxiRide =
+    type.includes("ride") ||
+    type === "ride_request" ||
+    serviceType === "ride" ||
+    serviceType === "parcel" ||
+    serviceType === "intercity" ||
+    Boolean(data.rideId);
+  return isTaxiRide ? "/ride-request-alert.mp3" : "/zomato_sms.mp3";
 }
 
 async function notifyOpenClients(payload) {
@@ -152,15 +167,22 @@ async function loadFirebaseWebConfig() {
         notificationKey,
       });
 
+      const playSound = shouldPlaySound(payload);
+      const isRide = String(payload?.data?.type || "").includes("ride") || Boolean(payload?.data?.rideId);
+
       self.registration.showNotification(title, {
         body,
         icon: "/eqosy-logo.png",
+        badge: "/eqosy-logo.png",
         image,
-        tag: notificationKey,
-        renotify: false,
-        silent: !shouldPlaySound(payload),
-        requireInteraction: shouldPlaySound(payload),
-        ...(shouldPlaySound(payload) ? { vibrate: [200, 100, 200, 100, 300] } : {}),
+        tag: notificationKey || ("ride_" + Date.now()),
+        renotify: true,
+        silent: !playSound,
+        requireInteraction: playSound,
+        sound: playSound ? getSoundPath(payload) : undefined,
+        vibrate: playSound
+          ? (isRide ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200, 100, 300])
+          : undefined,
         data: payload?.data || {},
       });
     }
@@ -198,16 +220,22 @@ self.addEventListener("push", (event) => {
 
       // If app/tab is closed or in background, show native OS notification popup!
       if (!visibleClient) {
+        const playSound = shouldPlaySound(payload);
+        const isRide = String(payload?.data?.type || "").includes("ride") || Boolean(payload?.data?.rideId);
+
         await self.registration.showNotification(title, {
           body,
           icon: "/eqosy-logo.png",
           badge: "/eqosy-logo.png",
           image,
-          tag: notificationKey || `push_${Date.now()}`,
-          renotify: shouldPlaySound(payload),
-          silent: !shouldPlaySound(payload),
-          requireInteraction: shouldPlaySound(payload),
-          ...(shouldPlaySound(payload) ? { vibrate: [200, 100, 200, 100, 300] } : {}),
+          tag: notificationKey || ("push_" + Date.now()),
+          renotify: true,
+          silent: !playSound,
+          requireInteraction: playSound,
+          sound: playSound ? getSoundPath(payload) : undefined,
+          vibrate: playSound
+            ? (isRide ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200, 100, 300])
+            : undefined,
           data: payload?.data || {},
         });
       }

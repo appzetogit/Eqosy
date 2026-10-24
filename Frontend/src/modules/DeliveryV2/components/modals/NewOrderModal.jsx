@@ -39,8 +39,8 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
     let pickupKm = null;
     if (!isNaN(riderLat) && !isNaN(riderLng) && !isNaN(resLat) && !isNaN(resLng)) {
       const distM = getHaversineDistance(riderLat, riderLng, resLat, resLng);
-      const computedKm = distM / 1000;
-      if (computedKm < 30) {
+      const computedKm = (distM / 1000) * 1.3; // Road factor so estimate aligns with driving distance
+      if (computedKm < 50) {
         pickupKm = computedKm;
       }
     }
@@ -126,16 +126,24 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
     const cusLat = parseFloat(customerLocation?.lat || customerLocation?.latitude || (Array.isArray(customerLocation?.coordinates) ? customerLocation.coordinates[1] : NaN));
     const cusLng = parseFloat(customerLocation?.lng || customerLocation?.longitude || (Array.isArray(customerLocation?.coordinates) ? customerLocation.coordinates[0] : NaN));
 
+    // 1. Prioritize Google road distance computed and stored on order pricing
+    const storedRoadDist = Number(
+      order.distanceKm ??
+      order.pricing?.distanceKm ??
+      order.pricing?.deliveryFeeBreakdown?.distanceKm ??
+      order.deliveryDistanceKm
+    );
+    if (Number.isFinite(storedRoadDist) && storedRoadDist > 0 && storedRoadDist < 100) {
+      return storedRoadDist.toFixed(1);
+    }
+
+    // 2. Fallback to coordinates with road factor (~1.3x) if stored road distance is absent
     if (!isNaN(resLat) && !isNaN(resLng) && !isNaN(cusLat) && !isNaN(cusLng)) {
       const distM = getHaversineDistance(resLat, resLng, cusLat, cusLng);
-      const km = distM / 1000;
-      if (km < 50) {
+      const km = (distM / 1000) * 1.3;
+      if (km < 100) {
         return km.toFixed(1);
       }
-    }
-    if (order.pricing?.deliveryFeeBreakdown?.distanceKm != null) {
-      const distBreakdown = Number(order.pricing.deliveryFeeBreakdown.distanceKm);
-      if (distBreakdown < 50) return distBreakdown.toFixed(1);
     }
     return '--';
   }, [order, customerLocation]);

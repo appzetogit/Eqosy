@@ -16,11 +16,18 @@ import { getGoogleRoadDistance } from '../utils/googleMaps.js';
 import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
 function extractCoords(addressLike) {
-  const coords = addressLike?.location?.coordinates;
-  if (!Array.isArray(coords) || coords.length !== 2) return null;
-  const [lng, lat] = coords;
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
-  return [Number(lng), Number(lat)];
+  if (!addressLike) return null;
+  const coords = addressLike?.location?.coordinates || addressLike?.coordinates;
+  if (Array.isArray(coords) && coords.length === 2) {
+    const [lng, lat] = coords.map(Number);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return [lng, lat];
+  }
+  const lat = Number(addressLike?.latitude ?? addressLike?.lat ?? addressLike?.location?.latitude ?? addressLike?.location?.lat);
+  const lng = Number(addressLike?.longitude ?? addressLike?.lng ?? addressLike?.location?.longitude ?? addressLike?.location?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return [lng, lat];
+  }
+  return null;
 }
 
 function isPointInPolygon(lat, lng, polygon = []) {
@@ -267,7 +274,9 @@ export async function calculateOrderPricing(userId, dto) {
     }
     const [rLng, rLat] = restCoords;
     const [cLng, cLat] = customerCoords;
-    let distanceKm = haversineKm(rLat, rLng, cLat, cLng);
+    const straightDistKm = haversineKm(rLat, rLng, cLat, cLng);
+    // Estimated road distance fallback (1.3x road factor) in case Google is unreachable
+    let distanceKm = Math.round(straightDistKm * 1.3 * 10) / 10;
 
     // Prefer accurate Google Maps road driving distance (e.g. 5.9 km instead of straight-line 5.2 km)
     try {
@@ -279,7 +288,7 @@ export async function calculateOrderPricing(userId, dto) {
         distanceKm = roadData.distanceKm;
       }
     } catch {
-      // Fallback safely to straight-line haversineKm
+      // Fallback safely to estimated road distance (haversineKm * 1.3)
     }
 
     // 1. Zone Validation: Ensure customer location is inside an active service zone
@@ -519,6 +528,7 @@ export async function calculateOrderPricing(userId, dto) {
       gstBreakdown,
       packagingFee,
       deliveryFee,
+      distanceKm: Math.round(Number(distanceKm || 0) * 10) / 10,
       deliveryFeeBreakdown,
       adminDeliveryCommissionEnabled,
       adminDeliveryCommissionPercent,
