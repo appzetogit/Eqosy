@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle, Navigation, AlertTriangle, ChevronRight } from 'lucide-react';
+import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle, Navigation, AlertTriangle, ChevronRight, Clock } from 'lucide-react';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
 import GpsEnableModal from '@/shared/components/GpsEnableModal';
 import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
-import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
+import { getSavedLocation, getSavedLocationCoords, saveLocation, getSearchHistory, addSearchHistory, clearSearchHistory } from '../../services/locationStore';
 import {
   fetchActiveRideZones,
   getBoundsFromPaths,
@@ -84,6 +84,7 @@ const SelectLocation = () => {
   const zonePaths = useMemo(() => getZonePathsFromZones(activeZones), [activeZones]);
   const [remoteResults, setRemoteResults] = useState([]);
   const [popularLocations, setPopularLocations] = useState([]);
+  const [searchHistory, setSearchHistory] = useState(() => getSearchHistory());
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [isLoadingPopularLocations, setIsLoadingPopularLocations] = useState(false);
   const [roadDistances, setRoadDistances] = useState({});
@@ -1005,6 +1006,11 @@ const SelectLocation = () => {
     const finalTitle = resolvedSelection.title || resolvedSelection.address;
     const resolvedCoords = selectedCoords || resolvedSelection.coords || DEFAULT_COORDS;
 
+    if (activeInput === 'drop' || activeInput === 'pickup') {
+      addSearchHistory({ title: finalTitle, address: resolvedSelection.address, coords: resolvedCoords });
+      setSearchHistory(getSearchHistory());
+    }
+
     resetAutocompleteSessionToken();
 
     if (activeInput === 'pickup') {
@@ -1453,6 +1459,36 @@ const SelectLocation = () => {
         onScroll={dismissKeyboard}
         onTouchMove={dismissKeyboard}
       >
+        {query.trim().length === 0 && searchHistory.length > 0 && (
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-3 mx-1">
+              <h2 className="text-[14px] font-bold text-slate-400 uppercase tracking-widest">Recent Searches</h2>
+              <button
+                type="button"
+                onClick={() => { clearSearchHistory(); setSearchHistory([]); }}
+                className="text-[12px] font-bold text-slate-400 hover:text-slate-700"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 overflow-hidden shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+              {searchHistory.map((item) => (
+                <button
+                  key={`${item.title}-${item.coords.join(',')}`}
+                  type="button"
+                  onClick={() => handleSelectResult(item, item.coords)}
+                  className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/70 last:border-none hover:bg-white/60 active:bg-slate-100 transition-colors"
+                >
+                  <Clock size={20} className="text-slate-500 shrink-0 mt-1" strokeWidth={2.5} />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-[15px] font-semibold text-slate-900 leading-tight">{item.title}</h4>
+                    <p className="text-[13px] text-slate-500 font-medium mt-1 line-clamp-1">{item.address}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <h2 className="text-[14px] font-bold text-slate-400 mb-3 ml-1 uppercase tracking-widest">
           {query.trim().length > 0 ? 'Search Results' : 'Popular Locations'}
         </h2>

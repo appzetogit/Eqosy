@@ -67,8 +67,24 @@ app.use(helmet({
     noSniff: true,
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
+// Mobile app WebViews send their own origin (https://localhost, capacitor://localhost, file:// => "null"),
+// which is not the website domain. Without allowing them the browser blocks every API call and the app
+// only shows "Network Error".
+const NATIVE_WEBVIEW_ORIGINS = new Set([
+    'null',
+    'http://localhost',
+    'https://localhost',
+    'capacitor://localhost',
+    'ionic://localhost',
+]);
+const allowedCorsOrigins = getCorsOrigins();
 app.use(cors({
-    origin: getCorsOrigins()
+    origin: (origin, callback) => {
+        if (!origin || allowedCorsOrigins.includes('*') || allowedCorsOrigins.includes(origin) || NATIVE_WEBVIEW_ORIGINS.has(origin)) {
+            return callback(null, true);
+        }
+        return callback(null, false);
+    },
 }));
 app.use(morgan('dev'));
 app.use(express.json({

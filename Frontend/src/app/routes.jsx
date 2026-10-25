@@ -175,7 +175,7 @@ const AppRoutes = () => {
         localStorage.removeItem('user_user')
         localStorage.removeItem('userInfo')
         toast.error('Session expired. Please log in again.')
-        navigate('/food/user/auth/login', { replace: true })
+        navigate((currentPath.startsWith('/taxi') || String(window.location.hash || '').startsWith('#/taxi')) ? '/login' : '/food/user/auth/login', { replace: true })
       }
     }
 

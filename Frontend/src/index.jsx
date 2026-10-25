@@ -268,21 +268,24 @@ function bootstrapNativeHashRoute() {
   const hashPath = currentHash.startsWith('#') ? currentHash.slice(1).split('?')[0] : ''
 
   if (currentHash.startsWith('#/')) {
-    const nativePathPrefix = targetPath.startsWith('/taxi/')
-      ? '/taxi/'
-      : targetPath.startsWith('/food/')
-        ? '/food/'
-        : targetPath.startsWith('/admin')
-          ? '/admin'
-          : ''
-
-    const hashMatchesPrefix = nativePathPrefix ? hashPath.startsWith(nativePathPrefix) : false
-    const pathSuggestsTaxi = pathname.startsWith('/taxi/')
-
-    // Normalize stale hash routes in native shells (e.g. /taxi/... with #/food/...)
-    if ((pathSuggestsTaxi && !hashPath.startsWith('/taxi/')) || !hashMatchesPrefix) {
-      window.history.replaceState(null, '', `#${targetPath}${search}`)
+    // A refresh must stay in the panel the user is already in. The hash is the source of truth;
+    // the stored "last route" may belong to another panel (e.g. food) and must not override it.
+    const HASH_PANEL_PREFIXES = ['/taxi/', '/food/', '/admin', '/login', '/driver', '/owner', '/restaurant', '/delivery']
+    if (HASH_PANEL_PREFIXES.some((p) => hashPath.startsWith(p))) {
+      // Router-state pages cannot be rebuilt after a reload, so fall back to the taxi home.
+      const TRANSIENT_HASH_SEGMENTS = [
+        '/ride/select-vehicle', '/ride/select-location', '/ride/searching',
+        '/ride/tracking', '/ride/complete', '/ride/chat',
+        '/parcel/searching', '/parcel/tracking', '/parcel/details', '/parcel/contacts',
+        '/intercity/details', '/intercity/confirm',
+        '/rental/vehicle', '/rental/schedule', '/rental/kyc', '/rental/deposit', '/rental/confirmed',
+      ]
+      if (hashPath.startsWith('/taxi/user/') && TRANSIENT_HASH_SEGMENTS.some((s) => hashPath.includes(s))) {
+        window.history.replaceState(null, '', '#/taxi/user')
+      }
+      return
     }
+    window.history.replaceState(null, '', `#${targetPath}${search}`)
     return
   }
 

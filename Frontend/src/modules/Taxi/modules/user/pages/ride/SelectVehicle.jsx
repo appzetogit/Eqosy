@@ -998,13 +998,6 @@ const getAvailabilityBadge = (availability) => {
   return null;
 };
 
-// Service tabs: a rider books from one tab (Cab / Auto / Bike) and sees only that kind of vehicle
-const VEHICLE_CATEGORIES = [
-  { id: 'cab', label: 'Cab' },
-  { id: 'auto', label: 'Auto' },
-  { id: 'bike', label: 'Bike' },
-];
-
 const getVehicleCategoryId = (vehicle) => {
   const icon = String(vehicle?.iconType || vehicle?.raw?.icon_types || 'car').trim().toLowerCase();
   if (icon === 'bike') return 'bike';
@@ -1501,41 +1494,8 @@ const SelectVehicle = () => {
 
   const hasAvailabilityResults = Object.keys(availabilityByVehicleId).length > 0;
 
-  const isParcelBooking =
-    bookingTab === 'parcel' ||
-    routeState.isParcel ||
-    String(routeState.serviceType || '').toLowerCase() === 'parcel' ||
-    location.pathname.includes('/parcel');
 
-  const [vehicleCategory, setVehicleCategory] = useState(() => routeState?.preferredCategory || routeState?.category || '');
-  const availableCategories = useMemo(() => {
-    if (isParcelBooking) return [];
-    const present = new Set(pricedVehicles.map(getVehicleCategoryId));
-    const baseCats = VEHICLE_CATEGORIES.filter((category) => present.has(category.id));
-
-    // Sort categories dynamically so that any category with available drivers appears first
-    const sortedCats = [...baseCats].sort((a, b) => {
-      const aDrivers = pricedVehicles
-        .filter((v) => getVehicleCategoryId(v) === a.id)
-        .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
-      const bDrivers = pricedVehicles
-        .filter((v) => getVehicleCategoryId(v) === b.id)
-        .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
-      return bDrivers - aDrivers;
-    });
-
-    return [{ id: 'all', label: 'All' }, ...sortedCats];
-  }, [pricedVehicles, isParcelBooking, availabilityByVehicleId]);
-
-  const activeCategoryId = useMemo(() => {
-    if (vehicleCategory && availableCategories.some((category) => category.id === vehicleCategory)) {
-      return vehicleCategory;
-    }
-    if (routeState?.preferredCategory && availableCategories.some((category) => category.id === routeState.preferredCategory)) {
-      return routeState.preferredCategory;
-    }
-    return 'all';
-  }, [vehicleCategory, availableCategories, routeState?.preferredCategory]);
+  const vehicleCategory = routeState?.preferredCategory || routeState?.category || '';
 
   const displayedVehicles = useMemo(() => {
     let baseList = [];
@@ -1593,11 +1553,20 @@ const SelectVehicle = () => {
 
     // One list: there is no separate "bid" list. A vehicle that supports bidding lets the rider raise the fare later on
     // the searching screen when no driver accepts.
-    if (activeCategoryId && activeCategoryId !== 'all') {
-      return filteredBaseList.filter((vehicle) => getVehicleCategoryId(vehicle) === activeCategoryId);
+    // Entered from a specific service (Cab / Auto / Bike): show only that kind of vehicle, never the others.
+    const lockedCategory = ['cab', 'auto', 'bike'].includes(vehicleCategory) ? vehicleCategory : '';
+    const categoryList = !isParcelService && lockedCategory
+      ? filteredBaseList.filter((vehicle) => getVehicleCategoryId(vehicle) === lockedCategory)
+      : filteredBaseList;
+
+    // Ride: one combined list of the vehicles that actually have drivers around. Parcel keeps every
+    // delivery vehicle but the ones drivers have enabled are already ranked on top.
+    if (!isParcelService && hasAvailabilityResults) {
+      const availableOnly = categoryList.filter((vehicle) => (availabilityByVehicleId[vehicle.id]?.totalDrivers || 0) > 0);
+      if (availableOnly.length > 0) return availableOnly;
     }
-    return filteredBaseList;
-  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, activeCategoryId, bookingTab, routeState.isParcel, routeState.serviceType, location.pathname]);
+    return categoryList;
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles, vehicleCategory, bookingTab, routeState.isParcel, routeState.serviceType, location.pathname]);
 
   const effectiveSelectedId = displayedVehicles.some((vehicle) => vehicle.id === selected)
     ? selected
@@ -2174,45 +2143,6 @@ const SelectVehicle = () => {
           </div>
         </div>
 
-        {/* Service tabs: All / Bike / Auto / Cab */}
-        {availableCategories.length > 1 && (
-          <div className="shrink-0 flex gap-2 px-4 pt-3 bg-white">
-            {availableCategories.map((category) => {
-              const driverCount = category.id === 'all'
-                ? pricedVehicles.reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0)
-                : pricedVehicles
-                    .filter((v) => getVehicleCategoryId(v) === category.id)
-                    .reduce((sum, v) => sum + (availabilityByVehicleId[v.id]?.totalDrivers || 0), 0);
-              const hasAvailable = driverCount > 0;
-
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => setVehicleCategory(category.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-[12px] border py-2 text-[12px] font-extrabold transition-all duration-200 ${
-                    activeCategoryId === category.id
-                      ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{category.label}</span>
-                  {hasAvailable && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-black leading-none ${
-                        activeCategoryId === category.id
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {driverCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
 
         <div className="shrink-0 h-2 border-b border-slate-100 bg-white" />
 

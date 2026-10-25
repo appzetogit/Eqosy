@@ -119,3 +119,39 @@ export const saveLocation = (nextLocation = {}) => {
 
   return next;
 };
+
+const SEARCH_HISTORY_KEY = 'eqosy:taxiSearchHistory';
+const SEARCH_HISTORY_LIMIT = 8;
+
+export const getSearchHistory = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.title && Array.isArray(item?.coords)) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const addSearchHistory = ({ title, address, coords }) => {
+  const cleanTitle = String(title || '').trim();
+  if (!cleanTitle || !Array.isArray(coords) || coords.length !== 2) return;
+  const entry = { title: cleanTitle, address: String(address || cleanTitle).trim(), coords };
+  const next = [
+    entry,
+    ...getSearchHistory().filter((item) => item.title.toLowerCase() !== cleanTitle.toLowerCase()),
+  ].slice(0, SEARCH_HISTORY_LIMIT);
+  try {
+    window.localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // ignore storage failures
+  }
+};
+
+export const clearSearchHistory = () => {
+  try {
+    window.localStorage.removeItem(SEARCH_HISTORY_KEY);
+  } catch {
+    // ignore storage failures
+  }
+};

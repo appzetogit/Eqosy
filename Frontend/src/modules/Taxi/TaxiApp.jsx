@@ -474,7 +474,7 @@ const UserAccountInvalidationListener = () => {
     const handleLogout = () => {
       clearUserSession();
       socketService.disconnect();
-      navigate('/food/user/auth/login', { replace: true, state: { from: location.pathname } });
+      navigate('/login', { replace: true, state: { from: location.pathname } });
     };
 
     const handleAdminChatMessage = (payload = {}) => {
