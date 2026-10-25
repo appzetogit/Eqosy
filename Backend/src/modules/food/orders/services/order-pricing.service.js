@@ -260,6 +260,7 @@ export async function calculateOrderPricing(userId, dto) {
     throw new ValidationError('Distance-based delivery fee settings are not configured.');
   }
 
+  let distanceKm = 0;
   if (mode === 'distance_order_value') {
     const restCoords = extractCoords(restaurant);
     const customerCoords = extractCoords(dto?.address || dto?.deliveryAddress);
@@ -276,7 +277,7 @@ export async function calculateOrderPricing(userId, dto) {
     const [cLng, cLat] = customerCoords;
     const straightDistKm = haversineKm(rLat, rLng, cLat, cLng);
     // Estimated road distance fallback (1.3x road factor) in case Google is unreachable
-    let distanceKm = Math.round(straightDistKm * 1.3 * 10) / 10;
+    distanceKm = Math.round(straightDistKm * 1.3 * 10) / 10;
 
     // Prefer accurate Google Maps road driving distance (e.g. 5.9 km instead of straight-line 5.2 km)
     try {
