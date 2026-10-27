@@ -1353,9 +1353,11 @@ function CartInner() {
   const surgeTitle = pricing?.surgeTitle || "Surge Charge"
   const gstCharges = Number(pricing?.tax ?? 0)
   const discount = Number(pricing?.discount ?? (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0))
-  const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount
+  const additionalCharges = Array.isArray(pricing?.additionalCharges) ? pricing.additionalCharges : []
+  const additionalChargesTotal = Number(pricing?.additionalChargesTotal || 0)
+  const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges + surgeAmount + additionalChargesTotal
   const deliveryPartnerTip = Math.max(0, Number(selectedDeliveryTip) || 0)
-  const baseTotal = Number(pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount - discount))
+  const baseTotal = Number(pricing?.total ?? (subtotal + deliveryFee + platformFee + gstCharges + surgeAmount + additionalChargesTotal - discount))
 
   // Helper for GST breakdown
   const getGstBreakdown = () => {
@@ -3280,6 +3282,21 @@ function CartInner() {
                         <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{surgeAmount.toFixed(2)}</span>
                       </div>
                     )}
+                    {additionalCharges.map((charge) => (
+                      <div key={charge.chargeId || charge.name} className="text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">{charge.name}</span>
+                          <span className={charge.isFree ? "text-[color:var(--app-primary,#EB590E)] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
+                            {charge.isFree ? charge.freeLabel : `${RUPEE_SYMBOL}${Number(charge.chargedAmount).toFixed(2)}`}
+                          </span>
+                        </div>
+                        {charge.message && (
+                          <p className={`text-xs mt-1 font-medium ${charge.isFree ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}>
+                            {charge.message}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                     <div className="flex justify-between text-sm items-center">
                       <button
                         onClick={() => setShowGstModal(true)}

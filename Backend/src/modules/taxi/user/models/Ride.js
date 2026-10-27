@@ -509,6 +509,13 @@ const rideSchema = new mongoose.Schema(
         type: [String],
         default: ['cash', 'online'],
       },
+      gst: {
+        serviceKey: { type: String, default: 'ride' },
+        enabled: { type: Boolean, default: false },
+        rate: { type: Number, default: 0, min: 0, max: 100 },
+        gstin: { type: String, default: '', trim: true },
+        showCgstSgstSplit: { type: Boolean, default: false },
+      },
       resolvedAt: {
         type: Date,
         default: null,

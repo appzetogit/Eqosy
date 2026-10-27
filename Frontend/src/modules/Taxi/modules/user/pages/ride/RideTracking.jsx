@@ -16,6 +16,8 @@ import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
 import deliveryIcon from '../../../../assets/icons/Delivery.png';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+import GstBreakdown from '../../../shared/components/GstBreakdown';
+import { resolveRideGst } from '../../../shared/utils/gst';
 // Cancellation receipt removed per requirements - user should not see bill on cancel
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -382,6 +384,7 @@ const RideTracking = () => {
   const previousCancellationFee = Math.round(Number(rideRealtime?.previousCancellationFee || state?.previousCancellationFee || 0));
   const baseRideFare = Math.round(Number(rideRealtime?.baseRideFare || state?.baseRideFare || (previousCancellationFee > 0 ? fare - previousCancellationFee : fare)));
   const displayFare = Math.round(previousCancellationFee > 0 ? baseRideFare + previousCancellationFee : fare);
+  const rideGst = resolveRideGst(rideRealtime) || resolveRideGst(state);
   const paymentMethod = rideRealtime?.paymentMethod || state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
     () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },
@@ -1548,6 +1551,12 @@ const RideTracking = () => {
                 </div>
               </div>
             )}
+            <GstBreakdown
+              gst={rideGst}
+              className="rounded-[16px] border border-slate-100 bg-slate-50/70 p-3 space-y-1"
+              labelClassName="text-[11px] font-bold text-slate-500"
+              valueClassName="text-[11px] font-bold text-slate-700"
+            />
             <div className="flex items-center justify-between gap-2">
               <div className="space-y-0.5">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] leading-none mb-1">Total Payable</p>

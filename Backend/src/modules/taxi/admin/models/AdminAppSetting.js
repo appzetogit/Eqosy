@@ -10,6 +10,7 @@ const adminAppSettingSchema = new mongoose.Schema(
     },
     wallet_setting: { type: mongoose.Schema.Types.Mixed, default: {} },
     tip_setting: { type: mongoose.Schema.Types.Mixed, default: {} },
+    gst_setting: { type: mongoose.Schema.Types.Mixed, default: {} },
     country: { type: mongoose.Schema.Types.Mixed, default: {} },
     onboarding_screens: { type: [mongoose.Schema.Types.Mixed], default: [] },
   },

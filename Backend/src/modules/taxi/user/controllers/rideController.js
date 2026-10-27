@@ -36,6 +36,7 @@ import {
   startDispatchFlow,
 } from '../../services/dispatchService.js';
 import { getTipSettings } from '../../services/appSettingsService.js';
+import { getGstSettings } from '../../services/gstService.js';
 
 const formatMoneyDisplay = (val) => (Number.isInteger(Number(val)) ? String(val) : Number(val).toFixed(2));
 import { calculateCancellationBill, getStoredCancellationBill } from '../../services/cancellationService.js';
@@ -974,6 +975,15 @@ export const verifyRazorpayRideTip = async (req, res) => {
   res.json({
     success: true,
     data: populatedRide,
+  });
+};
+
+export const getRideAppGstSettings = async (_req, res) => {
+  const settings = await getGstSettings();
+
+  res.json({
+    success: true,
+    data: { settings },
   });
 };
 

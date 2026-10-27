@@ -2221,6 +2221,7 @@ export async function upsertFeeSettings(body) {
         if (body.deliveryFeeComputationMode !== undefined) $set.deliveryFeeComputationMode = body.deliveryFeeComputationMode;
         if (body.distanceSlabAdminDeliveryCommission !== undefined) $set.distanceSlabAdminDeliveryCommission = body.distanceSlabAdminDeliveryCommission;
         if (body.deliveryPartnerIncentiveRule !== undefined) $set.deliveryPartnerIncentiveRule = body.deliveryPartnerIncentiveRule;
+        if (body.additionalCharges !== undefined) $set.additionalCharges = body.additionalCharges;
         // Legacy cleanup: this flow is removed, so always clear nested order-value slabs.
         $set.distanceOrderDeliveryFeeRules = [];
 
@@ -2255,6 +2256,7 @@ export async function upsertFeeSettings(body) {
         deliveryFeeComputationMode: body.deliveryFeeComputationMode || 'distance_order_value',
         distanceOrderDeliveryFeeRules: [],
         distanceSlabAdminDeliveryCommission: body.distanceSlabAdminDeliveryCommission ?? [],
+        additionalCharges: body.additionalCharges ?? [],
         deliveryPartnerIncentiveRule: body.deliveryPartnerIncentiveRule ?? {
             isEnabled: false,
             minOrderAmount: 0,

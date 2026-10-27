@@ -1,5 +1,27 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { haversineKm } from '../../orders/services/order.helpers.js';
+import { getGoogleRoadDistance } from '../../orders/utils/googleMaps.js';
+
+// Overwrite the estimated distance on listed restaurants with the actual Google road distance
+// (same source billing uses). Falls back silently to the existing estimate.
+const applyGoogleRoadDistance = async (docs, lat, lng) => {
+    if (lat === null || lng === null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return;
+    await Promise.all((docs || []).map(async (r) => {
+        const c = r.location?.coordinates;
+        const rLng = Array.isArray(c) && c.length >= 2 ? Number(c[0]) : Number(r.location?.longitude ?? r.longitude);
+        const rLat = Array.isArray(c) && c.length >= 2 ? Number(c[1]) : Number(r.location?.latitude ?? r.latitude);
+        if (!Number.isFinite(rLat) || !Number.isFinite(rLng)) return;
+        try {
+            const road = await getGoogleRoadDistance({ lat: Number(lat), lng: Number(lng) }, { lat: rLat, lng: rLng });
+            if (road?.distanceKm > 0) {
+                r.distanceInKm = road.distanceKm;
+                r.distance = road.distanceKm >= 1 ? `${road.distanceKm.toFixed(1)} km` : `${Math.round(road.distanceMeters)} m`;
+            }
+        } catch {
+            // keep estimate
+        }
+    }));
+};
 import { uploadImageBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import mongoose from 'mongoose';
@@ -1770,6 +1792,7 @@ export const listApprovedRestaurants = async (query = {}) => {
                 recommendedImages: Array.isArray(r.recommendedImages) ? r.recommendedImages : []
             };
         });
+        await applyGoogleRoadDistance(mappedPageDocs, lat, lng);
         const restaurants = await attachActiveOffersToRestaurants(mappedPageDocs);
         return { restaurants, total, page, limit };
     }
@@ -1834,6 +1857,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         };
     });
 
+    await applyGoogleRoadDistance(mappedRawDocs, lat, lng);
     const restaurants = await attachActiveOffersToRestaurants(mappedRawDocs);
     return { restaurants, total, page, limit };
 };

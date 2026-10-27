@@ -41,6 +41,8 @@ const pricingSchema = new mongoose.Schema(
     {
         subtotal: { type: Number, required: true, min: 0 },
         tax: { type: Number, default: 0, min: 0 },
+        gstRate: { type: Number, default: 0, min: 0, max: 100 },
+        gstBreakdown: { type: mongoose.Schema.Types.Mixed, default: null },
         packagingFee: { type: Number, default: 0, min: 0 },
         deliveryFee: { type: Number, default: 0, min: 0 },
         deliveryFeeBreakdown: { type: mongoose.Schema.Types.Mixed, default: null },
@@ -55,6 +57,25 @@ const pricingSchema = new mongoose.Schema(
         platformFee: { type: Number, default: 0, min: 0 },
         surgeAmount: { type: Number, default: 0, min: 0 },
         surgeTitle: { type: String, default: 'Surge Charge', trim: true },
+        // Snapshot of admin-configured additional charges (e.g. Small Cart Charge) as applied to this order.
+        additionalCharges: {
+            type: [
+                new mongoose.Schema(
+                    {
+                        chargeId: { type: String, default: '' },
+                        name: { type: String, required: true, trim: true },
+                        amount: { type: Number, default: 0, min: 0 },
+                        applicableUnder: { type: Number, default: 0, min: 0 },
+                        isFree: { type: Boolean, default: false },
+                        freeLabel: { type: String, default: '' },
+                        chargedAmount: { type: Number, default: 0, min: 0 }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
+        },
+        additionalChargesTotal: { type: Number, default: 0, min: 0 },
         restaurantCommission: { type: Number, default: 0, min: 0 },
         discount: { type: Number, default: 0, min: 0 },
         deliveryPartnerTip: { type: Number, default: 0, min: 0 },

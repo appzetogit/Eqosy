@@ -32,6 +32,11 @@ const methodLabel = (method) => {
 export const PaymentBadge = ({ order, className = '' }) => {
   const { isPaid, amount, method } = getRiderPaymentInfo(order);
   const billTotal = Number(order?.pricing?.total ?? order?.total ?? order?.amounts?.totalCustomerPaid ?? 0) || 0;
+  const gstAmount = Number(order?.pricing?.tax ?? 0) || 0;
+  const gstRate = Number(order?.pricing?.gstRate ?? 0) || 0;
+  const gstNote = gstAmount > 0
+    ? `Bill includes GST ₹${gstAmount.toFixed(2)}${gstRate > 0 ? ` (${gstRate}%)` : ''}`
+    : '';
 
   if (isPaid) {
     return (
@@ -46,6 +51,7 @@ export const PaymentBadge = ({ order, className = '' }) => {
           <span className="text-sm font-black text-emerald-900 leading-tight">
             {billTotal > 0 ? `Bill ₹${Math.round(billTotal)} already paid — collect ₹0` : 'Already paid — do not collect cash'}
           </span>
+          {gstNote && <span className="text-[11px] font-bold text-emerald-700">{gstNote}</span>}
         </div>
       </div>
     );
@@ -59,6 +65,7 @@ export const PaymentBadge = ({ order, className = '' }) => {
       <div className="flex flex-col">
         <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">Cash on delivery</span>
         <span className="text-sm font-black text-amber-900 leading-tight">Collect ₹{Math.round(amount)} from customer</span>
+        {gstNote && <span className="text-[11px] font-bold text-amber-700">{gstNote}</span>}
       </div>
     </div>
   );

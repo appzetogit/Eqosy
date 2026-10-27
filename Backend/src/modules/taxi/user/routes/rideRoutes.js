@@ -9,6 +9,7 @@ import {
   createRazorpayRideTipOrder,
   createRide,
   getRideBids,
+  getRideAppGstSettings,
   getRideAppTipSettings,
   getMyActiveRide,
   getRideById,
@@ -31,6 +32,7 @@ rideRouter.post('/', authenticateOrResolveUser(['user']), asyncHandler(createRid
 rideRouter.get('/', authenticateOrResolveUser(['user', 'driver']), asyncHandler(listMyRides));
 rideRouter.get('/pending-cancellation-dues', authenticate(['user']), asyncHandler(getPendingCancellationDues));
 rideRouter.get('/app-settings/tip', asyncHandler(getRideAppTipSettings));
+rideRouter.get('/app-settings/gst', asyncHandler(getRideAppGstSettings));
 rideRouter.get('/available-drivers', asyncHandler(listAvailableDrivers));
 rideRouter.get('/active/me', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));

@@ -505,8 +505,8 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
                   </div>
 
                   <div>
-                    <label className={labelClass}>Service Tax (%) <span className="text-rose-500">*</span></label>
-                    <input type="number" value={row.service_tax} onChange={(event) => updateRow(row.id, 'service_tax', event.target.value)} className={inputClass} placeholder="0" required />
+                    <label className={labelClass}>Service Tax (%) <span className="text-slate-400 normal-case font-medium">— no longer applied; set GST in App Settings &gt; GST Settings</span></label>
+                    <input type="number" value={row.service_tax} disabled className={inputClass} placeholder="Managed in GST Settings" />
                   </div>
 
                   <div>

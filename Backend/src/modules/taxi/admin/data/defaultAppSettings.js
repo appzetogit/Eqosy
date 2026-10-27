@@ -23,6 +23,16 @@ export const createDefaultAppSettings = () => ({
     enable_tips: '1',
     min_tip_amount: '10',
   },
+  // GST is configured per taxi service from the admin panel. Nothing is charged until admin enables a service and sets its rate.
+  gst_setting: {
+    gstin: '',
+    show_cgst_sgst_split: true,
+    services: {
+      ride: { enabled: false, rate: 0 },
+      parcel: { enabled: false, rate: 0 },
+      intercity: { enabled: false, rate: 0 },
+    },
+  },
   country: {
     default_country_code: 'IN',
     default_country_name: 'India',

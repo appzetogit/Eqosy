@@ -32,6 +32,8 @@ import carIcon from '../../../assets/icons/car.png';
 import { getLocalDriverToken } from '../services/registrationService';
 import CancellationReceiptModal from '../../shared/components/CancellationReceiptModal';
 import ParcelProofPanel from '../components/ParcelProofPanel';
+import GstBreakdown from '../../shared/components/GstBreakdown';
+import { resolveRideGst } from '../../shared/utils/gst';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 
 const resolveAssetUrl = (value = '') => {
@@ -1618,6 +1620,8 @@ const ActiveTrip = () => {
     const pickupArrivedAt = liveRaw?.arrivedAt || liveRequest?.raw?.arrivedAt || effectiveState?.arrivedAt || localArrivedAt || '';
     const tripStartedAt = liveRaw?.startedAt || liveRequest?.raw?.startedAt || effectiveState?.startedAt || '';
     const tripDestinationArrivedAt = localDestinationArrivedAt || '';
+    // Once completed, the backend has already folded the waiting charge into fare/baseRideFare.
+    const isRideSettled = ['completed', 'delivered'].includes(String(liveRaw?.liveStatus || liveRaw?.status || '').toLowerCase());
     const pickupWaitingSummary = useMemo(
         () => computePickupWaitingCharge({
             arrivedAt: pickupArrivedAt,
@@ -1629,7 +1633,9 @@ const ActiveTrip = () => {
     );
     const previousCancellationFee = Number(liveRaw?.previousCancellationFee || effectiveState?.previousCancellationFee || 0);
     const baseRideFare = Math.max(0, Number(liveRaw?.baseRideFare || effectiveState?.baseRideFare || (fareAmount - previousCancellationFee)));
-    const totalFareAmount = fareAmount + pickupWaitingSummary.waitingChargeTotal;
+    const pendingWaitingCharge = isRideSettled ? 0 : pickupWaitingSummary.waitingChargeTotal;
+    const totalFareAmount = fareAmount + pendingWaitingCharge;
+    const rideGst = resolveRideGst(liveRaw) || resolveRideGst(effectiveState) || resolveRideGst(effectiveState?.raw) || resolveRideGst(liveRequest?.raw);
     const tripArrivedAt = tripDestinationArrivedAt;
     const tripDurationLabel = formatDurationLabel(tripStartedAt, tripDestinationArrivedAt || Date.now());
     const tripSummaryTitle = isParcel ? 'Delivery Summary' : 'Ride Summary';
@@ -1639,7 +1645,7 @@ const ActiveTrip = () => {
         ? (selectedPaymentMode === 'cash' ? 'Cash' : 'Online')
         : (effectiveState?.paymentMethod || liveRequest?.payment || tripData.payment || 'Pending');
     const commissionSummary = computeCommissionSummary({
-        fare: baseRideFare + pickupWaitingSummary.waitingChargeTotal,
+        fare: baseRideFare + pendingWaitingCharge,
         pricingSnapshot: waitingPricing,
         explicitCommissionAmount: liveRaw?.commissionAmount ?? effectiveState?.commissionAmount,
         explicitDriverEarnings: liveRaw?.driverEarnings ?? effectiveState?.driverEarnings,
@@ -3020,6 +3026,16 @@ const ActiveTrip = () => {
                                         </div>
                                     </div>
                                 </div>
+                                {rideGst && (
+                                    <div className="border-t border-slate-100 px-5 pt-4">
+                                        <GstBreakdown
+                                            gst={rideGst}
+                                            className="space-y-1.5 rounded-2xl bg-white px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+                                            labelClassName="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400"
+                                            valueClassName="text-[13px] font-black text-slate-900"
+                                        />
+                                    </div>
+                                )}
                                 <div className={`grid gap-3 border-t border-slate-100 px-5 py-4 ${previousCancellationFee > 0 ? (pickupWaitingSummary.waitingChargeTotal > 0 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4') : (pickupWaitingSummary.waitingChargeTotal > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}`}>
                                     <div className="rounded-2xl bg-white px-4 py-3 text-center shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
                                         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Trip Fare</p>

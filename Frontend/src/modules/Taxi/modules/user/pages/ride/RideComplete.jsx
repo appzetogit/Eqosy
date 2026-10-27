@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Banknote, CheckCircle2, ChevronRight, CreditCard, MessageSquare, Receipt, Share2, Star, Wallet } from 'lucide-react';
 import api from '../../../../shared/api/axiosInstance';
+import GstBreakdown from '../../../shared/components/GstBreakdown';
+import { resolveRideGst } from '../../../shared/utils/gst';
 import { userAuthService } from '../../services/authService';
 import { clearCurrentRide, getCurrentRide } from '../../services/currentRideService';
 import carIcon from '../../../../assets/icons/car.png';
@@ -94,6 +96,7 @@ const RideComplete = () => {
   const [walletSnapshot, setWalletSnapshot] = useState({ balance: 0, currency: 'INR' });
   const [walletLoading, setWalletLoading] = useState(false);
   const [paymentCollection, setPaymentCollection] = useState(() => state.driverPaymentCollection || null);
+  const [rideGst, setRideGst] = useState(() => resolveRideGst(state));
   const [rideLiveStatus, setRideLiveStatus] = useState(() => String(state.liveStatus || state.status || '').toLowerCase());
   const [tipSettings, setTipSettings] = useState({
     enable_tips: '1',
@@ -179,6 +182,7 @@ const RideComplete = () => {
 
         if (active) {
           setPaymentCollection(payload?.driverPaymentCollection || null);
+          setRideGst(resolveRideGst(payload) || resolveRideGst(state));
           setRideLiveStatus(nextLiveStatus);
         }
 
@@ -642,9 +646,16 @@ const RideComplete = () => {
 
             <div className="rounded-[18px] border border-slate-100 bg-white p-3">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-bold text-slate-500">Base fare</span>
-                <span className="text-[13px] font-black text-slate-900">Rs {rideOnlyFare.toFixed(2)}</span>
+                <span className="text-[12px] font-bold text-slate-500">{rideGst ? 'Fare before GST' : 'Base fare'}</span>
+                <span className="text-[13px] font-black text-slate-900">Rs {(rideGst ? rideGst.taxableAmount : rideOnlyFare).toFixed(2)}</span>
               </div>
+              <GstBreakdown
+                gst={rideGst}
+                showTaxable={false}
+                className="mt-2 space-y-2"
+                labelClassName="text-[12px] font-bold text-slate-500"
+                valueClassName="text-[13px] font-black text-slate-900"
+              />
               {previousCancellationFee > 0 && (
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-[12px] font-bold text-amber-600">Previous cancellation charge</span>

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { getScheduledRideCountdown } from '../utils/scheduledRideTime';
+import { resolveRideGst } from '../../shared/utils/gst';
 
 const Motion = motion;
 const DEFAULT_ACCEPT_REJECT_SECONDS = 15;
@@ -173,6 +174,7 @@ const IncomingRideRequest = ({
     .filter(Boolean)
     .join(' ')
     .trim() || data.raw?.user?.phone || '';
+  const incomingGst = resolveRideGst(data.raw);
   const pricingNegotiationMode = String(data.raw?.pricingNegotiationMode || 'none').toLowerCase();
   const isBidding = pricingNegotiationMode === 'driver_bid' && (Boolean(data.raw?.bidding?.enabled) || String(data.raw?.bookingMode || '').toLowerCase() === 'bidding');
   const isUserIncrementOnly = pricingNegotiationMode === 'user_increment_only';
@@ -280,6 +282,9 @@ const IncomingRideRequest = ({
                   <p className="text-[8px] font-black uppercase tracking-widest">Earn</p>
                 </div>
                 <p className="truncate text-[18px] font-black leading-none text-slate-950">{data.fare || 'Rs 0'}</p>
+                {incomingGst && (
+                  <p className="mt-1 truncate text-[9px] font-bold text-slate-500">Incl. GST {incomingGst.rate}% (Rs {Number(incomingGst.gstAmount).toFixed(2)})</p>
+                )}
               </div>
               <div className="px-3 py-3">
                 <div className="mb-1 flex items-center gap-1.5 text-slate-400">

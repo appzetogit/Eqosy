@@ -1720,6 +1720,7 @@ function TaxiApp() {
                   path="settings/app/wallet" element={<Navigate to="/admin/global/app/wallet" replace />}
                 />
                 <Route path="settings/app/tip" element={<Navigate to="/admin/global/app/tip" replace />} />
+                <Route path="settings/app/gst" element={<Navigate to="/admin/global/app/gst" replace />} />
                 <Route
                   path="settings/app/country"
                   element={<AdminCountryManagement />}

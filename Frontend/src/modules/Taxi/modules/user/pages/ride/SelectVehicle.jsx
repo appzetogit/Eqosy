@@ -26,6 +26,7 @@ import PremiumIcon from '../../../../assets/icons/Premium.png';
 import LuxuryIcon from '../../../../assets/icons/Luxury.png';
 import SuvIcon from '../../../../assets/icons/SUV.png';
 import TruckIcon from '../../../../assets/icons/truck.png';
+import { getGstRateForService, useGstSettings } from '../../../../shared/hooks/useGstSettings';
 import LcvIcon from '../../../../assets/icons/LCV.png';
 import McvIcon from '../../../../assets/icons/mcv.png';
 import HcvIcon from '../../../../assets/icons/hcv.png';
@@ -768,7 +769,7 @@ const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transpor
   return candidates[0];
 };
 
-const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes }) => {
+const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes, gstRate = 0 }) => {
   const fallbackFare = getFallbackVehicleEstimate(vehicle?.raw || vehicle);
 
   if (!pricingRule) {
@@ -782,19 +783,20 @@ const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, duration
   const baseDistance = Math.max(0, toFiniteNumber(pricingRule.base_distance, 0));
   const pricePerDistance = toFiniteNumber(pricingRule.price_per_distance, 0);
   const timePrice = toFiniteNumber(pricingRule.time_price, 0);
-  const serviceTax = toFiniteNumber(pricingRule.service_tax, 0);
   const isWithinBaseDistance = baseDistance > 0 && distanceKm <= baseDistance;
   const extraDistanceKm = Math.max(0, distanceKm - baseDistance);
   const subtotal = isWithinBaseDistance
     ? basePrice
     : basePrice + (extraDistanceKm * pricePerDistance) + (Math.max(0, Number(durationMinutes || 0)) * timePrice);
 
-  const total = subtotal + (subtotal * serviceTax) / 100;
   const rideSurgeAmount = pricingRule.zone_id?.ride_surge_enabled
     ? toFiniteNumber(pricingRule.ride_surge_amount, 0)
     : 0;
+  // GST comes from admin GST Settings (per service) and is charged on the full fare including surge.
+  const taxableFare = subtotal + rideSurgeAmount;
+  const total = taxableFare + (taxableFare * gstRate) / 100;
 
-  return Math.max(basePrice > 0 ? basePrice : fallbackFare, Math.round(total + rideSurgeAmount));
+  return Math.max(basePrice > 0 ? basePrice : fallbackFare, Math.round(total));
 };
 
 const getDropTime = (minutesAway = 0) => {
@@ -1081,6 +1083,7 @@ const SelectVehicle = () => {
   const [vehicleLoadError, setVehicleLoadError] = useState('');
   const [driverLoadError, setDriverLoadError] = useState('');
   const [pricingRules, setPricingRules] = useState([]);
+  const { gstSettings } = useGstSettings();
   const [isLoadingPricingRules, setIsLoadingPricingRules] = useState(true);
   const [tripMetrics, setTripMetrics] = useState(() => {
     if (
@@ -1472,22 +1475,27 @@ const SelectVehicle = () => {
           vehicleName: vehicle.name,
         });
 
+        const routeServiceType = String(routeState.serviceType || '').toLowerCase();
+        const gst = getGstRateForService(gstSettings, ['parcel', 'intercity'].includes(routeServiceType) ? routeServiceType : 'ride');
         const baseCalculatedPrice = calculateEstimatedFare({
           vehicle,
           pricingRule,
           distanceMeters: tripMetrics.distanceMeters,
           durationMinutes: tripMetrics.durationMinutes,
+          gstRate: gst.rate,
         });
 
         return {
           ...vehicle,
           pricingRule,
           basePrice: baseCalculatedPrice,
+          gstRate: gst.rate,
+          gstAmount: gst.rate > 0 ? Math.round(baseCalculatedPrice - baseCalculatedPrice / (1 + gst.rate / 100)) : 0,
           previousCancellationFee: Math.round(pendingCancellationFee),
           price: Math.round(baseCalculatedPrice + pendingCancellationFee),
         };
       }),
-    [pricingRules, effectiveServiceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles, pendingCancellationFee],
+    [pricingRules, effectiveServiceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles, pendingCancellationFee, gstSettings, routeState.serviceType],
   );
 
   const isFarePending = isResolvingTripMetrics || isLoadingPricingRules;
@@ -2540,6 +2548,11 @@ const SelectVehicle = () => {
                   <p className="mt-1 text-[17px] font-extrabold text-slate-900">
                     {isFarePending ? 'Calculating...' : formatVehicleFare(previewVehicle, bookingTab === 'bid' ? bidStepCount : undefined, bookingTab)}
                   </p>
+                  {!isFarePending && previewVehicle.gstRate > 0 && (
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                      Incl. GST {previewVehicle.gstRate}% ({formatCurrency(previewVehicle.gstAmount)})
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-[18px] border border-slate-100 bg-slate-50/70 px-4 py-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">

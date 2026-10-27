@@ -193,6 +193,49 @@ export async function resolveServerPricedItems(rawItems, restaurantId) {
   });
 }
 
+/**
+ * Evaluates the admin-configured additional charges (e.g. "Small Cart Charge") against the item total.
+ * `itemTotal` must be the cart value before delivery/platform fees, taxes and other charges.
+ * A charge applies while itemTotal < applicableUnder and becomes FREE once it reaches it.
+ * Disabled charges are skipped entirely.
+ */
+const DEFAULT_BELOW_MESSAGE = 'Add items worth ₹{remaining} more to avoid the {name}.';
+const DEFAULT_FREE_MESSAGE = 'No {name} above ₹{threshold}.';
+const DEFAULT_FREE_LABEL = 'FREE';
+
+const fillChargeTemplate = (template, values) =>
+  String(template).replace(/\{(name|amount|threshold|remaining)\}/g, (_, key) => String(values[key]));
+
+export function evaluateAdditionalCharges(configuredCharges, itemTotal) {
+  const total = Number.isFinite(Number(itemTotal)) ? Number(itemTotal) : 0;
+  const charges = (Array.isArray(configuredCharges) ? configuredCharges : [])
+    .filter((c) => c && c.isEnabled !== false && Number(c.amount) > 0)
+    .map((c) => {
+      const amount = Math.round(Number(c.amount) * 100) / 100;
+      const applicableUnder = Math.round(Number(c.applicableUnder || 0) * 100) / 100;
+      const isFree = total >= applicableUnder;
+      const name = String(c.name || 'Additional Charge').trim();
+      const amountToAvoid = isFree ? 0 : Math.round((applicableUnder - total) * 100) / 100;
+      const message = fillChargeTemplate(
+        (isFree ? c.freeMessage : c.belowMessage) || (isFree ? DEFAULT_FREE_MESSAGE : DEFAULT_BELOW_MESSAGE),
+        { name, amount, threshold: applicableUnder, remaining: amountToAvoid },
+      );
+      return {
+        chargeId: c._id ? String(c._id) : '',
+        name,
+        amount,
+        applicableUnder,
+        isFree,
+        chargedAmount: isFree ? 0 : amount,
+        amountToAvoid,
+        freeLabel: String(c.freeLabel || '').trim() || DEFAULT_FREE_LABEL,
+        message,
+      };
+    });
+  const chargesTotal = Math.round(charges.reduce((sum, c) => sum + c.chargedAmount, 0) * 100) / 100;
+  return { charges, chargesTotal };
+}
+
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
     .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
@@ -414,11 +457,17 @@ export async function calculateOrderPricing(userId, dto) {
     ? Math.max(0, Number(feeSettings.gstRate))
     : 0;
 
+  // Admin-defined additional charges (threshold uses the item total only, before fees/taxes/these charges).
+  const { charges: additionalCharges, chargesTotal: additionalChargesTotal } =
+    evaluateAdditionalCharges(feeSettings.additionalCharges, subtotal);
+
+  // GST uses the same admin-configured Food GST rate for every component, including these charges.
   const itemGst = Math.round(subtotal * (configuredGstRate / 100));
   const platformGst = Math.round(platformFee * (configuredGstRate / 100));
   const deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
-  const tax = itemGst + platformGst + deliveryGst;
-  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst };
+  const additionalChargesGst = Math.round(additionalChargesTotal * (configuredGstRate / 100));
+  const tax = itemGst + platformGst + deliveryGst + additionalChargesGst;
+  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst };
 
   let discount = 0;
   let appliedCoupon = null;
@@ -513,7 +562,7 @@ export async function calculateOrderPricing(userId, dto) {
 
   const rawTotal = Math.max(
     0,
-    subtotal + packagingFee + deliveryFee + platformFee + tax + surgeAmount - discount,
+    subtotal + packagingFee + deliveryFee + platformFee + tax + surgeAmount + additionalChargesTotal - discount,
   );
   // Bill is rounded to a whole rupee so cash collection and online payment are exact amounts.
   const total = Math.round(rawTotal);
@@ -526,6 +575,7 @@ export async function calculateOrderPricing(userId, dto) {
     pricing: {
       subtotal,
       tax,
+      gstRate: configuredGstRate,
       gstBreakdown,
       packagingFee,
       deliveryFee,
@@ -542,6 +592,8 @@ export async function calculateOrderPricing(userId, dto) {
       platformFee,
       surgeAmount,
       surgeTitle,
+      additionalCharges,
+      additionalChargesTotal,
       discount,
       savings,
       roundOff,

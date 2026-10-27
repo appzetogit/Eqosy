@@ -447,6 +447,7 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     platformFee: apiOrder?.pricing?.platformFee || apiOrder?.platformFee || 0,
     surgeAmount: apiOrder?.pricing?.surgeAmount || apiOrder?.surgeAmount || previousOrder?.surgeAmount || 0,
     surgeTitle: apiOrder?.pricing?.surgeTitle || apiOrder?.surgeTitle || previousOrder?.surgeTitle || "Surge Charge",
+    additionalCharges: apiOrder?.pricing?.additionalCharges || previousOrder?.additionalCharges || [],
     deliveryPartnerTip: apiOrder?.pricing?.deliveryPartnerTip || apiOrder?.deliveryPartnerTip || apiOrder?.tip || previousOrder?.deliveryPartnerTip || 0,
     discount: apiOrder?.pricing?.discount || apiOrder?.discount || 0,
     subtotal: apiOrder?.pricing?.subtotal || apiOrder?.subtotal || 0,
@@ -2194,6 +2195,14 @@ export default function OrderTracking({ isSharedView = false }) {
                 <span className="font-medium text-gray-900 dark:text-white">{"\u20B9"}{Number(order.surgeAmount || order.pricing?.surgeAmount).toFixed(2)}</span>
               </div>
             )}
+            {(Array.isArray(order.additionalCharges) ? order.additionalCharges : []).map((charge) => (
+              <div key={charge.chargeId || charge.name} className="flex justify-between text-gray-600 dark:text-gray-400">
+                <span>{charge.name}</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {charge.isFree ? (charge.freeLabel || "FREE") : `₹${Number(charge.chargedAmount || 0).toFixed(2)}`}
+                </span>
+              </div>
+            ))}
             {Number(order.gst || order.tax || 0) > 0 && (
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>GST and {storeWord} Charges</span>

@@ -9,6 +9,20 @@ const deliveryFeeRangeSchema = new mongoose.Schema(
     { _id: false }
 );
 
+// Admin-defined extra charge, e.g. "Small Cart Charge": `amount` is charged while the item total
+// is below `applicableUnder`, and waived once the item total reaches it.
+const additionalChargeSchema = new mongoose.Schema({
+    name: { type: String, required: true, trim: true, maxlength: 60 },
+    amount: { type: Number, required: true, min: 0 },
+    applicableUnder: { type: Number, required: true, min: 0 },
+    isEnabled: { type: Boolean, default: true },
+    // Customer-facing texts, all admin-defined. Placeholders: {name} {amount} {threshold} {remaining}.
+    // Empty means "use the system default wording" (resolved on the server).
+    belowMessage: { type: String, default: '', trim: true, maxlength: 200 },
+    freeMessage: { type: String, default: '', trim: true, maxlength: 200 },
+    freeLabel: { type: String, default: '', trim: true, maxlength: 20 }
+});
+
 const feeSettingsSchema = new mongoose.Schema(
     {
         // No defaults here; admin must explicitly configure values.
@@ -75,6 +89,7 @@ const feeSettingsSchema = new mongoose.Schema(
         freeDeliveryThreshold: { type: Number, min: 0 },
         platformFee: { type: Number, min: 0 },
         surgeTitle: { type: String, default: 'Surge Charge', trim: true },
+        additionalCharges: { type: [additionalChargeSchema], default: [] },
         gstRate: { type: Number, min: 0, max: 100 },
         codLimit: { type: Number, min: 0 },
         // Which payment options customers may use at checkout (all open by default).

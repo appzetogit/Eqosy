@@ -19,7 +19,19 @@ const deliveryPartnerIncentiveRuleSchema = z.object({
     incentivePercent: z.number().min(0).max(100).optional()
 });
 
+const additionalChargeSchema = z.object({
+    _id: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+    name: z.string().min(1, 'Charge name is required').max(60, 'Charge name must be 60 characters or fewer'),
+    amount: z.number({ invalid_type_error: 'Charge amount must be a number' }).min(0, 'Charge amount must be 0 or greater'),
+    applicableUnder: z.number({ invalid_type_error: 'Applicable under must be a number' }).min(0, 'Applicable under must be 0 or greater'),
+    isEnabled: z.boolean(),
+    belowMessage: z.string().max(200, 'Message must be 200 characters or fewer'),
+    freeMessage: z.string().max(200, 'Message must be 200 characters or fewer'),
+    freeLabel: z.string().max(20, 'Free label must be 20 characters or fewer')
+});
+
 const feeSettingsUpsertSchema = z.object({
+    additionalCharges: z.array(additionalChargeSchema).optional(),
     deliveryFee: z.number().min(0).nullable().optional(),
     deliveryFeeRanges: z.array(rangeSchema).optional(),
     deliveryFeeComputationMode: z.enum(['distance_order_value']).optional(),
@@ -74,6 +86,18 @@ export const validateFeeSettingsUpsertDto = (body) => {
                     ? Number(body.deliveryPartnerIncentiveRule.incentivePercent)
                     : 0,
             }
+            : undefined,
+        additionalCharges: Array.isArray(body?.additionalCharges)
+            ? body.additionalCharges.map((c) => ({
+                _id: c?._id ? String(c._id) : undefined,
+                name: String(c?.name ?? '').trim(),
+                amount: Number(c?.amount),
+                applicableUnder: Number(c?.applicableUnder),
+                isEnabled: c?.isEnabled !== false,
+                belowMessage: String(c?.belowMessage ?? '').trim(),
+                freeMessage: String(c?.freeMessage ?? '').trim(),
+                freeLabel: String(c?.freeLabel ?? '').trim()
+            }))
             : undefined,
         freeDeliveryThreshold:
             body?.freeDeliveryThreshold === null

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, ChevronRight, Clock3, Info, MapPin, Users } from 'lucide-react';
 import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+import { getGstRateForService, useGstSettings } from '../../../../shared/hooks/useGstSettings';
 
 const resolveAssetUrl = (value = '') => {
   const raw = String(value || '').trim();
@@ -133,11 +134,13 @@ const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   cancellationFee: Number(vehicle.cancellationFee || 0),
 });
 
-const calculateFare = (vehicle, tripType, passengers = 1) => {
+const calculateFare = (vehicle, tripType, passengers = 1, gstRate = 0) => {
   const baseFare = Number(vehicle.baseFare || 0);
   const tripMultiplier = tripType === 'Round Trip' ? 1.8 : 1.0;
   const safePassengers = Math.max(1, Number(passengers || 1));
-  return Math.round(baseFare * tripMultiplier * safePassengers);
+  const subtotal = baseFare * tripMultiplier * safePassengers;
+  // GST rate is the admin-configured intercity rate (0 when GST is off for intercity).
+  return Math.round(subtotal + (subtotal * gstRate) / 100);
 };
 
 const calculateDefaultBidCeiling = (fare, stepAmount = DEFAULT_BID_STEP_AMOUNT, headroomPercent = DEFAULT_BID_HEADROOM_PERCENT) => {
@@ -177,6 +180,8 @@ const IntercityVehicle = () => {
       : getTomorrowLocalDateTime()
   );
   const [passengers, setPassengers] = useState(1);
+  const { gstSettings } = useGstSettings();
+  const intercityGst = getGstRateForService(gstSettings, 'intercity');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [scheduleError, setScheduleError] = useState('');
   const [passengerError, setPassengerError] = useState('');
@@ -266,7 +271,7 @@ const IntercityVehicle = () => {
     return null;
   }
 
-  const finalFare = selectedVehicle ? calculateFare(selectedVehicle, tripType, passengers) : 0;
+  const finalFare = selectedVehicle ? calculateFare(selectedVehicle, tripType, passengers, intercityGst.rate) : 0;
   const configuredBidStepAmount = toConfiguredPositiveInteger(
     settings?.bidRide?.bidding_amount_increase_or_decrease,
     DEFAULT_BID_STEP_AMOUNT,
@@ -554,7 +559,7 @@ const IntercityVehicle = () => {
             </div>
           ) : (
             vehicles.map((vehicle) => {
-              const vehicleFare = calculateFare(vehicle, tripType);
+              const vehicleFare = calculateFare(vehicle, tripType, 1, intercityGst.rate);
               const isActive = selectedVehicleId === vehicle.id;
 
               return (
@@ -605,6 +610,7 @@ const IntercityVehicle = () => {
           <div>
             <p className="text-xs font-medium text-slate-500">{tripType} · {getDisplayDate(rideMode, travelDate)}</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">Rs {finalFare.toLocaleString()}</p>
+            {intercityGst.enabled && <p className="text-[11px] font-medium text-slate-500">Incl. GST {intercityGst.rate}%</p>}
           </div>
           <motion.button
             type="button"

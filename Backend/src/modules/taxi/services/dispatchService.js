@@ -16,6 +16,7 @@ import { releasePromoForCancelledRide } from './promoService.js';
 import { Notification } from '../admin/promotions/models/Notification.js';
 import { RideBid } from '../user/models/RideBid.js';
 import { getIO } from '../../../config/socket.js';
+import { buildRideGstBreakdown } from './gstService.js';
 
 const activeDispatches = new Map();
 // A driver who explicitly rejects a ride is left alone this long. A driver who just let the request
@@ -240,6 +241,7 @@ const emitRideRequestToDrivers = async ({
       vehicleIconUrl: ride.vehicleIconUrl || '',
       fare: ride.fare,
       baseFare: Number(ride.baseFare || ride.fare || 0),
+      gst: buildRideGstBreakdown(ride),
       bookingMode: ride.bookingMode || 'normal',
       pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
       biddingStatus: ride.biddingStatus || 'none',
@@ -1109,6 +1111,7 @@ export const notifyRideAccepted = async (ride) => {
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     fare: populatedRide.fare,
+    gst: buildRideGstBreakdown(populatedRide),
     estimatedDistanceMeters: populatedRide.estimatedDistanceMeters || 0,
     estimatedDurationMinutes: populatedRide.estimatedDurationMinutes || 0,
     paymentMethod: populatedRide.paymentMethod,
@@ -1347,6 +1350,7 @@ export const getActivePendingDispatchForDriver = async (driverId, requestedRideI
         vehicleIconUrl: ride.vehicleIconUrl || '',
         fare: ride.fare,
         baseFare: Number(ride.baseFare || ride.fare || 0),
+        gst: buildRideGstBreakdown(ride),
         bookingMode: ride.bookingMode || 'normal',
         pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
         biddingStatus: ride.biddingStatus || 'none',

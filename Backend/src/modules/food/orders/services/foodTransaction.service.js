@@ -125,7 +125,8 @@ export async function createInitialTransaction(order) {
 
     let restaurantNet = subtotal + packagingFee - restaurantCommission;
     // Admin ONLY gets platform fee + restaurant commission (delivery fee, surge & tip go 100% directly to delivery partner)
-    let platformNetProfit = platformFee + restaurantCommission;
+    const additionalChargesTotal = Number(order.pricing?.additionalChargesTotal) || 0;
+    let platformNetProfit = platformFee + additionalChargesTotal + restaurantCommission;
 
     // Handle discount attribution
     const couponCode = order.pricing?.couponCode;

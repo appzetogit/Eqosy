@@ -172,6 +172,8 @@ export async function createOrder(userId, dto) {
     const normalizedPricing = {
       subtotal: Number(pricingResult.pricing.subtotal ?? computedSubtotal) || 0,
       tax: Number(pricingResult.pricing.tax ?? 0) || 0,
+      gstRate: Number(pricingResult.pricing.gstRate ?? 0) || 0,
+      gstBreakdown: pricingResult.pricing.gstBreakdown || null,
       packagingFee: Number(pricingResult.pricing.packagingFee ?? 0) || 0,
       deliveryFee: Number(pricingResult.pricing.deliveryFee ?? 0) || 0,
       distanceKm: Math.round(Number(pricingResult.pricing.distanceKm ?? pricingResult.pricing.deliveryFeeBreakdown?.distanceKm ?? 0) * 100) / 100,
@@ -186,6 +188,8 @@ export async function createOrder(userId, dto) {
       deliveryPartnerIncentiveEligible: Boolean(pricingResult.pricing.deliveryPartnerIncentiveEligible || false),
       platformFee: Number(pricingResult.pricing.platformFee ?? 0) || 0,
       surgeAmount: Number(pricingResult.pricing.surgeAmount ?? 0) || 0,
+      additionalCharges: Array.isArray(pricingResult.pricing.additionalCharges) ? pricingResult.pricing.additionalCharges : [],
+      additionalChargesTotal: Number(pricingResult.pricing.additionalChargesTotal ?? 0) || 0,
       discount: Number(pricingResult.pricing.discount ?? 0) || 0,
       deliveryPartnerTip: 0,
       total: Number(pricingResult.pricing.total ?? 0) || 0,
@@ -220,6 +224,7 @@ export async function createOrder(userId, dto) {
       (Number.isFinite(normalizedPricing.deliveryFee) ? normalizedPricing.deliveryFee : 0) +
       (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
       (Number.isFinite(normalizedPricing.surgeAmount) ? normalizedPricing.surgeAmount : 0) +
+      (Number.isFinite(normalizedPricing.additionalChargesTotal) ? normalizedPricing.additionalChargesTotal : 0) +
       (Number.isFinite(normalizedPricing.deliveryPartnerTip) ? normalizedPricing.deliveryPartnerTip : 0) -
       (Number.isFinite(normalizedPricing.discount) ? normalizedPricing.discount : 0),
     );
@@ -271,10 +276,11 @@ export async function createOrder(userId, dto) {
 
     normalizedPricing.restaurantCommission = restaurantCommission;
 
-    // Admin ONLY gets platform fee + restaurant commission (delivery fee, surge & tip go 100% directly to delivery partner)
+    // Admin gets platform fee + additional charges + restaurant commission (delivery fee, surge & tip go 100% directly to delivery partner)
     const platformProfit = Math.max(
       0,
       (Number.isFinite(normalizedPricing.platformFee) ? normalizedPricing.platformFee : 0) +
+      (Number.isFinite(normalizedPricing.additionalChargesTotal) ? normalizedPricing.additionalChargesTotal : 0) +
       restaurantCommission,
     );
 

@@ -188,7 +188,7 @@ export async function createCollectQr(
         riderSurgePay: Number(order.riderSurgePay || 0),
         riderTotalPayout: Number(order.riderTotalPayout || order.riderEarning || 0),
         restaurantCommission: Number(order.pricing?.restaurantCommission || 0),
-        platformNetProfit: Number(order.pricing?.platformFee || 0) + Number(order.pricing?.restaurantCommission || 0),
+        platformNetProfit: Number(order.pricing?.platformFee || 0) + Number(order.pricing?.additionalChargesTotal || 0) + Number(order.pricing?.restaurantCommission || 0),
         riderDeliveryFeeShare: Number(order.riderDeliveryFeeShare || order.pricing?.riderDeliveryEarningAfterAdminCommission || 0),
         adminDeliveryCommissionAmount: Number(order.pricing?.adminDeliveryCommissionAmount || 0),
         riderIncentivePay: Number(order.riderIncentivePay || order.pricing?.deliveryPartnerIncentiveAmount || 0),

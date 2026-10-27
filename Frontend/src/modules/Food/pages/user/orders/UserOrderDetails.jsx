@@ -327,6 +327,12 @@ export default function UserOrderDetails() {
         doc.text(`?${surgeAmount.toFixed(2)}`, 195, amountLineY, { align: 'right' })
         amountLineY += 8
       }
+      for (const charge of (Array.isArray(pricing.additionalCharges) ? pricing.additionalCharges : [])) {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`${charge.name}:`, 145, amountLineY, { align: 'right' })
+        doc.text(charge.isFree ? (charge.freeLabel || 'FREE') : `?${Number(charge.chargedAmount || 0).toFixed(2)}`, 195, amountLineY, { align: 'right' })
+        amountLineY += 8
+      }
       doc.setFont('helvetica', 'bold')
       doc.text('Total:', 145, amountLineY, { align: 'right' })
       doc.text(`?${Number(pricing.total || 0).toFixed(2)}`, 195, amountLineY, { align: 'right' })
@@ -580,6 +586,14 @@ export default function UserOrderDetails() {
                 </span>
               </div>
             )}
+            {(Array.isArray(pricing.additionalCharges) ? pricing.additionalCharges : []).map((charge) => (
+              <div key={charge.chargeId || charge.name} className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">{charge.name}</span>
+                <span className="text-gray-800 dark:text-gray-200 font-medium">
+                  {charge.isFree ? (charge.freeLabel || "FREE") : `₹${Number(charge.chargedAmount || 0).toFixed(2)}`}
+                </span>
+              </div>
+            ))}
             <div className="flex justify-between">
               <span className="text-gray-500 dark:text-gray-400">Subscription / other fees</span>
               <span className="text-gray-800 dark:text-gray-200">

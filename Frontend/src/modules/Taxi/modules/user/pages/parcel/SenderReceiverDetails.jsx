@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import GpsEnableModal from '@/shared/components/GpsEnableModal';
 import { analyzeGeolocationError } from '@/shared/utils/geolocationHelper';
 import carIcon from '../../../../assets/icons/car.png';
+import { getGstRateForService, useGstSettings } from '../../../../shared/hooks/useGstSettings';
 import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
 import deliveryIcon from '../../../../assets/icons/Delivery.png';
@@ -235,14 +236,16 @@ const normalizeDeliveryPricing = (vehicle = {}) => {
   };
 };
 
-const calculateVehicleFare = (vehicle, distanceKm) => {
+const calculateVehicleFare = (vehicle, distanceKm, gstRate = 0) => {
   const pricing = normalizeDeliveryPricing(vehicle);
   if (!pricing.enabled) {
     return null;
   }
 
   const extraDistanceKm = Math.max(Number(distanceKm || 0) - pricing.freeDistance, 0);
-  const total = pricing.basePrice + extraDistanceKm * pricing.distancePrice;
+  const subtotal = pricing.basePrice + extraDistanceKm * pricing.distancePrice;
+  // GST rate is the admin-configured parcel rate; 0 when admin has not enabled GST for parcel.
+  const total = subtotal + (subtotal * gstRate) / 100;
   return Math.max(0, Math.round(total));
 };
 
@@ -1366,13 +1369,15 @@ const SenderReceiverDetails = () => {
     }
     return calculateDistanceKm(pickupCoords, dropCoords);
   }, [googleRoadDistanceKm, dropCoords, pickupCoords]);
+  const { gstSettings } = useGstSettings();
+  const parcelGst = useMemo(() => getGstRateForService(gstSettings, 'parcel'), [gstSettings]);
   const estimatedFare = useMemo(() => {
     if (!drop.trim()) {
       return null;
     }
 
     const dynamicFares = selectedVehicles
-      .map((vehicle) => calculateVehicleFare(vehicle, estimatedDistanceKm))
+      .map((vehicle) => calculateVehicleFare(vehicle, estimatedDistanceKm, parcelGst.rate))
       .filter((value) => Number.isFinite(value));
 
     if (dynamicFares.length > 0) {
@@ -1387,7 +1392,7 @@ const SenderReceiverDetails = () => {
     }
 
     return null;
-  }, [drop, estimatedDistanceKm, selectedVehicles]);
+  }, [drop, estimatedDistanceKm, selectedVehicles, parcelGst.rate]);
 
   const validate = () => {
     const nextErrors = {};
@@ -2492,7 +2497,7 @@ const SenderReceiverDetails = () => {
               </p>
               <p className="mt-1 text-[11px] font-bold text-white/55">
                 {estimatedFare
-                  ? `Based on admin pricing for about ${estimatedDistanceKm.toFixed(1)} km`
+                  ? `Based on admin pricing for about ${estimatedDistanceKm.toFixed(1)} km${parcelGst.enabled ? ` • incl. GST ${parcelGst.rate}%` : ''}`
                   : 'Enter a drop address to see the live fare'}
               </p>
             </div>

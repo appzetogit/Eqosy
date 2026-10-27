@@ -64,6 +64,7 @@ import {
 } from '../../services/dispatchService.js';
 import { buildRentalTrackingSnapshot, listActiveRentalTrackingBookings } from '../../services/rentalTrackingService.js';
 import { sendEmail } from '../../services/mailService.js';
+import { normalizeGstSettings } from '../../services/gstService.js';
 import { getTransportRideSettings, invalidateTransportSettingsCache } from '../../services/transportSettingsService.js';
 import { createTaxiPayout } from '../../services/withdrawalPayout.service.js';
 import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
@@ -9994,6 +9995,7 @@ export const buildDriverDutyReport = async (query = {}) => {
   const appSettingsCategoryMap = {
     wallet: 'wallet_setting',
     tip: 'tip_setting',
+    gst: 'gst_setting',
   };
 
   const generalBusinessSettingsProjection = {
@@ -10082,6 +10084,13 @@ export const buildDriverDutyReport = async (query = {}) => {
 
     if (appSettingsCategoryMap[category]) {
       const key = appSettingsCategoryMap[category];
+      if (category === 'gst') {
+        const normalized = normalizeGstSettings({ ...(appSettings[key] || {}), ...newValues }, { strict: true });
+        appSettings[key] = normalized;
+        appSettings.markModified(key);
+        await appSettings.save();
+        return { settings: appSettings[key] };
+      }
       appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
       appSettings.markModified(key);
       await appSettings.save();

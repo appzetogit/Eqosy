@@ -72,6 +72,10 @@ export default function FeeSettings() {
     gstRate: "",
     codLimit: "",
   })
+  const [additionalCharges, setAdditionalCharges] = useState([])
+  const emptyChargeForm = { _id: "", name: "", amount: "", applicableUnder: "", belowMessage: "", freeMessage: "", freeLabel: "" }
+  const [chargeForm, setChargeForm] = useState(emptyChargeForm)
+  const [savingCharges, setSavingCharges] = useState(false)
   const [distanceRules, setDistanceRules] = useState([])
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
   const [savingFeeSettings, setSavingFeeSettings] = useState(false)
@@ -143,6 +147,7 @@ export default function FeeSettings() {
       setLoadingFeeSettings(true)
       const response = await adminAPI.getFeeSettings()
       const saved = response?.data?.data?.feeSettings
+      setAdditionalCharges(Array.isArray(saved?.additionalCharges) ? saved.additionalCharges : [])
       if (saved) {
         setFeeSettings({
           deliveryFeeComputationMode: "distance_order_value",
@@ -404,6 +409,76 @@ export default function FeeSettings() {
     } finally {
       setSavingFeeSettings(false)
     }
+  }
+
+  // Additional charges save immediately (independent of the "Save Settings" button).
+  const persistAdditionalCharges = async (next, successMessage) => {
+    try {
+      setSavingCharges(true)
+      const response = await adminAPI.createOrUpdateFeeSettings({
+        additionalCharges: next.map((c) => ({
+          ...(c._id ? { _id: c._id } : {}),
+          name: String(c.name || "").trim(),
+          amount: Number(c.amount),
+          applicableUnder: Number(c.applicableUnder),
+          isEnabled: c.isEnabled !== false,
+          belowMessage: String(c.belowMessage || "").trim(),
+          freeMessage: String(c.freeMessage || "").trim(),
+          freeLabel: String(c.freeLabel || "").trim(),
+        })),
+      })
+      if (!response?.data?.success) {
+        toast.error(response?.data?.message || "Failed to save additional charges")
+        return false
+      }
+      const saved = response?.data?.data?.feeSettings
+      setAdditionalCharges(Array.isArray(saved?.additionalCharges) ? saved.additionalCharges : next)
+      toast.success(successMessage)
+      return true
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to save additional charges")
+      return false
+    } finally {
+      setSavingCharges(false)
+    }
+  }
+
+  const resetChargeForm = () => setChargeForm(emptyChargeForm)
+
+  const handleSaveCharge = async () => {
+    const name = String(chargeForm.name || "").trim()
+    const amount = Number(chargeForm.amount)
+    const applicableUnder = Number(chargeForm.applicableUnder)
+    if (!name) return toast.error("Charge name is required")
+    if (chargeForm.amount === "" || !Number.isFinite(amount) || amount < 0) return toast.error("Charge amount must be 0 or greater")
+    if (chargeForm.applicableUnder === "" || !Number.isFinite(applicableUnder) || applicableUnder < 0) return toast.error("Applicable under must be 0 or greater")
+
+    const texts = {
+      belowMessage: String(chargeForm.belowMessage || "").trim(),
+      freeMessage: String(chargeForm.freeMessage || "").trim(),
+      freeLabel: String(chargeForm.freeLabel || "").trim(),
+    }
+    const isEditing = Boolean(chargeForm._id)
+    const next = isEditing
+      ? additionalCharges.map((c) => (String(c._id) === String(chargeForm._id) ? { ...c, name, amount, applicableUnder, ...texts } : c))
+      : [...additionalCharges, { name, amount, applicableUnder, isEnabled: true, ...texts }]
+    const ok = await persistAdditionalCharges(next, isEditing ? "Charge updated" : "Charge added")
+    if (ok) resetChargeForm()
+  }
+
+  const handleToggleCharge = (charge) =>
+    persistAdditionalCharges(
+      additionalCharges.map((c) => (String(c._id) === String(charge._id) ? { ...c, isEnabled: c.isEnabled === false } : c)),
+      charge.isEnabled === false ? "Charge enabled" : "Charge disabled",
+    )
+
+  const handleDeleteCharge = async (charge) => {
+    if (!window.confirm(`Delete charge "${charge.name}"?`)) return
+    const ok = await persistAdditionalCharges(
+      additionalCharges.filter((c) => String(c._id) !== String(charge._id)),
+      "Charge deleted",
+    )
+    if (ok && String(chargeForm._id) === String(charge._id)) resetChargeForm()
   }
 
   const updateZoneSurge = async (zoneId, next) => {
@@ -799,6 +874,169 @@ export default function FeeSettings() {
                   </div>
                 </div>
 
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">Additional Charges</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Create extra charges that apply when the item total is below a set amount (e.g. Small Cart Charge). The charge is waived once the item total reaches "Applicable Under".
+                </p>
+
+                <div className="mt-4 overflow-x-auto border border-slate-200 rounded-lg">
+                  <table className="w-full">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Charge Name</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Charge Amount (₹)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Applicable Under (₹)</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {additionalCharges.map((charge) => {
+                        const enabled = charge.isEnabled !== false
+                        return (
+                          <tr key={charge._id} className="border-t border-slate-200">
+                            <td className="px-4 py-3 text-slate-900">{charge.name}</td>
+                            <td className="px-4 py-3 text-slate-900">₹{toNum(charge.amount)}</td>
+                            <td className="px-4 py-3 text-slate-900">₹{toNum(charge.applicableUnder)}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                type="button"
+                                disabled={savingCharges}
+                                onClick={() => handleToggleCharge(charge)}
+                                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-60 ${enabled ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                              >
+                                {enabled ? "Enabled" : "Disabled"}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setChargeForm({
+                                    _id: charge._id,
+                                    name: charge.name,
+                                    amount: String(charge.amount ?? ""),
+                                    applicableUnder: String(charge.applicableUnder ?? ""),
+                                    belowMessage: charge.belowMessage || "",
+                                    freeMessage: charge.freeMessage || "",
+                                    freeLabel: charge.freeLabel || "",
+                                  })}
+                                  className="p-1.5 rounded text-blue-600 hover:bg-blue-50"
+                                  title="Edit"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button type="button" disabled={savingCharges} onClick={() => handleDeleteCharge(charge)} className="p-1.5 rounded text-red-600 hover:bg-red-50 disabled:opacity-60" title="Delete">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {additionalCharges.length === 0 && (
+                        <tr>
+                          <td className="px-4 py-5 text-sm text-slate-500" colSpan={5}>No additional charges configured.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                    <Plus className="w-4 h-4 text-emerald-600" />
+                    {chargeForm._id ? "Edit Charge" : "Add Charge"}
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">Charge Name</label>
+                      <input
+                        type="text"
+                        maxLength={60}
+                        value={chargeForm.name}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="e.g. Small Cart Charge"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">Charge Amount (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={chargeForm.amount}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, amount: e.target.value }))}
+                        placeholder="e.g. 5"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-700 mb-1">Applicable Under (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={chargeForm.applicableUnder}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, applicableUnder: e.target.value }))}
+                        placeholder="e.g. 100"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Item total at or above this amount avoids the charge.</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-1">
+                      <label className="block text-sm text-slate-700 mb-1">Free Label</label>
+                      <input
+                        type="text"
+                        maxLength={20}
+                        value={chargeForm.freeLabel}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, freeLabel: e.target.value }))}
+                        placeholder="FREE"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Shown in the bill instead of the amount when the charge is waived.</p>
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm text-slate-700 mb-1">Message when charge applies</label>
+                      <input
+                        type="text"
+                        maxLength={200}
+                        value={chargeForm.belowMessage}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, belowMessage: e.target.value }))}
+                        placeholder="Add items worth ₹{remaining} more to avoid the {name}."
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm text-slate-700 mb-1">Message when charge is waived</label>
+                      <input
+                        type="text"
+                        maxLength={200}
+                        value={chargeForm.freeMessage}
+                        onChange={(e) => setChargeForm((f) => ({ ...f, freeMessage: e.target.value }))}
+                        placeholder="No {name} above ₹{threshold}."
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Messages can use <code>{"{name}"}</code>, <code>{"{amount}"}</code>, <code>{"{threshold}"}</code> and <code>{"{remaining}"}</code> (filled in automatically per customer cart). Leave a field empty to use the default wording shown in grey.
+                  </p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    {chargeForm._id && (
+                      <Button type="button" variant="outline" onClick={resetChargeForm}>Cancel</Button>
+                    )}
+                    <Button type="button" onClick={handleSaveCharge} disabled={savingCharges} className="bg-green-600 hover:bg-green-700 text-white">
+                      {savingCharges ? "Saving..." : chargeForm._id ? "Update Charge" : "Add Charge"}
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 pt-6 mt-6">

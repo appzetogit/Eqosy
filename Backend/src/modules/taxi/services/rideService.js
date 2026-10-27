@@ -19,6 +19,7 @@ import { UserWallet } from '../user/models/UserWallet.js';
 import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '../user/services/subscriptionService.js';
 import { applyPromoToRideInTransaction, releasePromoForCancelledRide } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
+import { buildGstSnapshot, buildRideGstBreakdown, getGstSettings } from './gstService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
 import { emitToDriver, emitToRoom, getDriverRoom, getRideRoom, getUserRoom } from './dispatchService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
@@ -1141,6 +1142,7 @@ export const createRideRecord = async ({
     surge_zone_id: surgeZone?._id || null,
     surge_zone_name: surgeZone?.name || '',
     allowed_payment_methods: allowedPaymentMethods,
+    gst: buildGstSnapshot(await getGstSettings(), normalizedServiceType),
     resolvedAt: pricingRule ? new Date() : null,
   };
 
@@ -1462,6 +1464,7 @@ export const serializeRideRealtime = (ride) => ({
   commissionAmount: ride.commissionAmount,
   driverEarnings: ride.driverEarnings,
   promo: ride.promo?.code ? ride.promo : null,
+  gst: buildRideGstBreakdown(ride),
   pricingSnapshot: ride.pricingSnapshot
     ? {
       setPriceId: ride.pricingSnapshot.setPriceId || null,
@@ -1476,6 +1479,7 @@ export const serializeRideRealtime = (ride) => ({
       surge_zone_id: ride.pricingSnapshot.surge_zone_id ? String(ride.pricingSnapshot.surge_zone_id) : null,
       surge_zone_name: ride.pricingSnapshot.surge_zone_name || '',
       allowed_payment_methods: normalizeAllowedRidePaymentMethods(ride.pricingSnapshot.allowed_payment_methods),
+      gst: ride.pricingSnapshot.gst || null,
       resolvedAt: ride.pricingSnapshot.resolvedAt || null,
     }
     : null,
@@ -2142,6 +2146,10 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
       if (waitingChargeTotal > 0) {
         ride.fare = Number(ride.fare || 0) + waitingChargeTotal;
+        // Wallet earnings/commission are computed from baseRideFare, so it must include the waiting charge too.
+        if (Number(ride.baseRideFare || 0) > 0) {
+          ride.baseRideFare = Number(ride.baseRideFare) + waitingChargeTotal;
+        }
       }
     }
   }

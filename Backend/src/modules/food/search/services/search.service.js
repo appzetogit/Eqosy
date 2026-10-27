@@ -4,6 +4,7 @@ import { FoodCategory, categorySectionFilter } from '../../admin/models/category
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { isFoodItemAvailableNow } from '../../utils/foodAvailability.js';
 import mongoose from 'mongoose';
+import { getGoogleRoadDistance } from '../../orders/utils/googleMaps.js';
 
 /** Ray-casting point-in-polygon over zone coordinates ({ latitude, longitude } points). */
 function isPointInZone(lat, lng, polygon = []) {
@@ -305,6 +306,8 @@ export const searchUnified = async (query = {}, options = {}) => {
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 const distKm = 6371 * c; // Km
                 const roadDistKm = distKm * 1.08;
+                res._geoLat = rLat;
+                res._geoLng = rLng;
                 res.distanceScore = roadDistKm;
                 res.distanceKm = Math.round(roadDistKm * 10) / 10;
                 res.distance = res.distanceKm >= 1 ? `${res.distanceKm.toFixed(1)} km` : `${Math.round(roadDistKm * 1000)} m`;
@@ -353,6 +356,30 @@ export const searchUnified = async (query = {}, options = {}) => {
     // 5. Attach recommended images and active running coupon offers for the auto slider & cards
     const { attachRecommendedImagesToRestaurants, attachActiveOffersToRestaurants } = await import('../../restaurant/services/restaurant.service.js');
     let paginatedRestaurants = results.slice(skip, skip + limit);
+
+    // Replace the straight-line estimate with the actual Google road distance (same source as billing)
+    if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
+        await Promise.all(paginatedRestaurants.map(async (res) => {
+            if (!Number.isFinite(res._geoLat) || !Number.isFinite(res._geoLng)) return;
+            try {
+                const road = await getGoogleRoadDistance(
+                    { lat: userLat, lng: userLng },
+                    { lat: res._geoLat, lng: res._geoLng }
+                );
+                if (road?.distanceKm > 0) {
+                    res.distanceKm = road.distanceKm;
+                    res.distance = road.distanceKm >= 1 ? `${road.distanceKm.toFixed(1)} km` : `${Math.round(road.distanceMeters)} m`;
+                    const mins = Math.max(15, Math.min(60, 15 + Math.round(road.distanceKm * 3)));
+                    res.estimatedDeliveryTime = `${mins} mins`;
+                    res.estimatedDeliveryTimeMinutes = mins;
+                }
+            } catch {
+                // keep estimated distance
+            }
+        }));
+    }
+    paginatedRestaurants.forEach((res) => { delete res._geoLat; delete res._geoLng; });
+
     paginatedRestaurants = await attachRecommendedImagesToRestaurants(paginatedRestaurants);
     if (attachActiveOffersToRestaurants) {
         paginatedRestaurants = await attachActiveOffersToRestaurants(paginatedRestaurants);

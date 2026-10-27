@@ -305,6 +305,12 @@ export default function OrderInvoice() {
                     <span>${surgeAmount.toFixed(2)}</span>
                   </div>
                 )}
+                {(Array.isArray(pricing.additionalCharges) ? pricing.additionalCharges : []).map((charge) => (
+                  <div key={charge.chargeId || charge.name} className="total-row flex justify-between text-xs sm:text-sm sm:text-base py-1 sm:py-2">
+                    <span>{charge.name}:</span>
+                    <span>{charge.isFree ? (charge.freeLabel || "FREE") : `₹${Number(charge.chargedAmount || 0).toFixed(2)}`}</span>
+                  </div>
+                ))}
                 <div className="grand-total flex justify-between text-base sm:text-lg md:text-xl md:text-2xl pt-2 sm:pt-3 mt-2 sm:mt-3 border-t-2 border-[color:var(--app-primary,#EB590E)]">
                   <span>Total:</span>
                   <span>${order.total.toFixed(2)}</span>

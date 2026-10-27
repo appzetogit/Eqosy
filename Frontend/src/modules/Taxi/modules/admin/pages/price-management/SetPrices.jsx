@@ -683,8 +683,8 @@ const SetPrices = ({ mode }) => {
                         <input type="number" required className={inputClass} placeholder="Enter Admin Commission From Owner" value={formData.admin_commission_for_owner} onChange={e => setFormData(p=>({...p, admin_commission_for_owner: e.target.value}))} />
                      </div>
                      <div>
-                        <label className={labelClass}>Service Tax (%) <span className="text-rose-500">*</span></label>
-                        <input type="number" required className={inputClass} placeholder="Enter Service Tax (%)" value={formData.service_tax} onChange={e => setFormData(p=>({...p, service_tax: e.target.value}))} />
+                        <label className={labelClass}>Service Tax (%) <span className="text-slate-400 normal-case font-medium">— no longer applied; set GST in App Settings &gt; GST Settings</span></label>
+                        <input type="number" disabled className={inputClass} placeholder="Managed in GST Settings" value={formData.service_tax} onChange={e => setFormData(p=>({...p, service_tax: e.target.value}))} />
                      </div>
                      <div>
                         <label className={labelClass}>ETA Sequence <span className="text-rose-500">*</span></label>

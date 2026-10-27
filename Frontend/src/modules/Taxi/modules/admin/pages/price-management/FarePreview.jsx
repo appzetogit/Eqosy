@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calculator } from 'lucide-react';
+import { getGstRateForService, useGstSettings } from '../../../../shared/hooks/useGstSettings';
 
 const num = (value) => {
   const parsed = Number(value);
@@ -11,16 +12,16 @@ const rupee = (value) => `Rs ${(Math.round(Number(value || 0) * 100) / 100).toLo
 /**
  * Same maths the rider app and the ride lifecycle use:
  * - Within base distance: base price. Beyond it: base + extra km x price/km + ride minutes x time price.
- * - Service tax % on that subtotal, then the zone's ride surge (only where surge is switched on).
+ * - The zone's ride surge (only where surge is switched on) is added, then GST at the rate set in App Settings > GST Settings.
  * - Waiting at pickup: billable minutes = waiting minutes - free minutes before the ride; charged per minute.
  * - Driver commission is taken from the fare (percentage or fixed, never more than the fare).
  */
-export const computeFarePreview = (form, { distanceKm, rideMinutes, waitingMinutes, surgeOn }) => {
+export const computeFarePreview = (form, { distanceKm, rideMinutes, waitingMinutes, surgeOn, gstRate = 0 }) => {
   const basePrice = num(form.base_price);
   const baseDistance = num(form.base_distance);
   const perKm = num(form.price_per_distance);
   const perMinute = num(form.time_price);
-  const tax = num(form.service_tax);
+  const tax = num(gstRate);
   const surge = surgeOn ? num(form.ride_surge_amount) : 0;
 
   const withinBase = baseDistance > 0 && distanceKm <= baseDistance;
@@ -28,8 +29,8 @@ export const computeFarePreview = (form, { distanceKm, rideMinutes, waitingMinut
   const distanceCharge = withinBase ? 0 : extraKm * perKm;
   const timeCharge = withinBase ? 0 : rideMinutes * perMinute;
   const subtotal = basePrice + distanceCharge + timeCharge;
-  const taxAmount = (subtotal * tax) / 100;
-  const rideFare = Math.max(basePrice, Math.round(subtotal + taxAmount + surge));
+  const taxAmount = ((subtotal + surge) * tax) / 100;
+  const rideFare = Math.max(basePrice, Math.round(subtotal + surge + taxAmount));
 
   const freeBefore = num(form.free_waiting_before);
   const waitingRate = num(form.waiting_charge);
@@ -80,17 +81,21 @@ const FarePreview = ({ formData }) => {
   const [waiting, setWaiting] = React.useState('6');
   const [surgeOn, setSurgeOn] = React.useState(false);
 
+  const { gstSettings } = useGstSettings();
+  const gstRate = getGstRateForService(gstSettings, 'ride').rate;
+
   const result = computeFarePreview(formData, {
     distanceKm: num(distance),
     rideMinutes: num(rideMinutes),
     waitingMinutes: num(waiting),
     surgeOn,
+    gstRate,
   });
 
   const quickDistances = [2, 5, 10, 20, 40];
   const quick = quickDistances.map((km) => ({
     km,
-    fare: computeFarePreview(formData, { distanceKm: km, rideMinutes: km * 2.2, waitingMinutes: 0, surgeOn }).rideFare,
+    fare: computeFarePreview(formData, { distanceKm: km, rideMinutes: km * 2.2, waitingMinutes: 0, surgeOn, gstRate }).rideFare,
   }));
 
   return (
@@ -116,8 +121,8 @@ const FarePreview = ({ formData }) => {
           <Row label="Base price" hint={result.withinBase ? 'Trip is inside the base distance, so only this is charged' : undefined} value={rupee(result.basePrice)} />
           <Row label="Extra distance" hint={`${result.extraKm.toFixed(1)} km x ${rupee(formData.price_per_distance || 0)}`} value={rupee(result.distanceCharge)} muted={result.distanceCharge === 0} />
           <Row label="Time charge" hint={`${num(rideMinutes)} min x ${rupee(formData.time_price || 0)}`} value={rupee(result.timeCharge)} muted={result.timeCharge === 0} />
-          <Row label="Service tax" hint={`${num(formData.service_tax)}% of ${rupee(result.subtotal)}`} value={rupee(result.taxAmount)} muted={result.taxAmount === 0} />
           <Row label="Ride surge" hint={surgeOn ? undefined : 'Only where the zone has surge switched on'} value={rupee(result.surge)} muted={result.surge === 0} />
+          <Row label="GST (from GST Settings)" hint={`${gstRate}% of ${rupee(result.subtotal + result.surge)}`} value={rupee(result.taxAmount)} muted={result.taxAmount === 0} />
           <div className="my-1 border-t border-dashed border-slate-200" />
           <Row label="Ride fare" value={rupee(result.rideFare)} strong />
           <Row
