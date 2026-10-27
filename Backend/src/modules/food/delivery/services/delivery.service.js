@@ -373,7 +373,7 @@ export const updateDeliveryAvailability = async (userId, payload) => {
             if (upcomingInfo) {
                 const startTimeStr = upcomingInfo.startTime || 'scheduled time';
                 const err = new ValidationError(
-                    `Aapki shift ${startTimeStr} par start hogi. Aap shift start hone ke 30 minute pehle hi online ja sakte hain.`
+                    `Your shift starts at ${startTimeStr}. You can go online only 30 minutes before the shift starts.`
                 );
                 err.code = 'GIG_LOGIN_TOO_EARLY';
                 err.details = {
@@ -384,7 +384,7 @@ export const updateDeliveryAvailability = async (userId, payload) => {
                 };
                 throw err;
             }
-            const err = new ValidationError("Aapke paas abhi koi active gig nahi hai. Online aane ke liye pehle gig book karein.");
+            const err = new ValidationError("You have no active gig right now. Book a gig first to go online.");
             err.code = 'NO_ACTIVE_GIG';
             throw err;
         }

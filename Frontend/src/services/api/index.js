@@ -2224,8 +2224,8 @@ export const deliveryAPI = {
       params,
       contextModule: "delivery",
     }),
-  bookGig: (gigId) =>
-    apiClient.post("/food/gigs/partner/gigs/book", { gigId }, {
+  bookGig: (gigId, coords = {}) =>
+    apiClient.post("/food/gigs/partner/gigs/book", { gigId, latitude: coords.lat, longitude: coords.lng }, {
       contextModule: "delivery",
     }),
   cancelGig: (gigId) =>

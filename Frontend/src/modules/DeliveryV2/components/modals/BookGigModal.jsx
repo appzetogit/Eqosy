@@ -21,10 +21,23 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
 
   const [confirmCancelGig, setConfirmCancelGig] = useState(null); // { gig, type: 'confirm' | 'cutoff_passed', customMessage?: string }
 
+  // Asking for the position here also triggers the phone's location-permission prompt automatically.
+  // The server uses it to work out which zone's gigs this rider can see/book; null falls back to the last known location.
+  const getCurrentCoords = () =>
+    new Promise((resolve) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 },
+      );
+    });
+
   const fetchGigs = async (dateStr) => {
     setLoading(true);
     try {
-      const res = await deliveryAPI.getPartnerGigs({ date: dateStr });
+      const coords = await getCurrentCoords();
+      const res = await deliveryAPI.getPartnerGigs({ date: dateStr, ...(coords || {}) });
       if (res.data?.success && Array.isArray(res.data.data)) {
         setGigs(res.data.data);
       } else {
@@ -47,7 +60,8 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
   const handleBookGig = async (gig) => {
     setActionLoadingId(gig._id);
     try {
-      const res = await deliveryAPI.bookGig(gig._id);
+      const coords = await getCurrentCoords();
+      const res = await deliveryAPI.bookGig(gig._id, coords || {});
       if (res.data?.success) {
         toast.success(`Gig booked for ${gig.startTime} - ${gig.endTime}!`);
         fetchGigs(selectedDate);
@@ -316,22 +330,22 @@ export const BookGigModal = ({ isOpen, onClose, onGigBooked }) => {
                       Cancellation Closed
                     </h3>
                     <p className="text-xs font-bold text-slate-500 mb-3">
-                      Shift Cancel Nahi Kar Sakte
+                      Shift cannot be cancelled
                     </p>
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-600 text-left mb-5 space-y-2">
                       <p className="font-semibold">
                         {confirmCancelGig.customMessage ||
-                          `Aap shift start time (${confirmCancelGig.gig.startTime}) ke 60 minute pehle tak hi booking cancel kar sakte hain.`}
+                          `You can cancel a booking only until 60 minutes before the shift start time (${confirmCancelGig.gig.startTime}).`}
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        Kyunki yeh shift ab shuru hone wali hai ya chal rahi hai, ise cancel karna allowed nahi hai.
+                        This shift is about to start or already running, so it cannot be cancelled.
                       </p>
                     </div>
                     <button
                       onClick={() => setConfirmCancelGig(null)}
                       className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-wider hover:bg-slate-800 active:scale-95 transition-all shadow-md"
                     >
-                      Got It (Samajh Gaya)
+                      Got it
                     </button>
                   </>
                 ) : (

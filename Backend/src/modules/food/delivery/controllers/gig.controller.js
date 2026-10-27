@@ -52,8 +52,8 @@ export const listPartnerGigsHandler = asyncHandler(async (req, res) => {
 
 export const bookGigHandler = asyncHandler(async (req, res) => {
   const partnerId = req.user?.userId || req.user?.id;
-  const { gigId } = req.body;
-  const result = await gigService.bookGigForPartner(partnerId, gigId);
+  const { gigId, latitude, longitude } = req.body;
+  const result = await gigService.bookGigForPartner(partnerId, gigId, { latitude, longitude });
   res.status(200).json({ success: true, data: result });
 });
 
@@ -84,7 +84,7 @@ export const getActiveGigHandler = asyncHandler(async (req, res) => {
           availabilityStatus = 'offline';
 
           const notificationTitle = 'Shift Ended — You are now Offline ⏰';
-          const notificationBody = 'Aapki gig shift end ho gayi hai. Dubara online aane ke liye nayi gig book karein.';
+          const notificationBody = 'Your gig shift has ended. Book a new gig to go online again.';
 
           try {
             const { getIO, rooms } = await import('../../../../config/socket.js');

@@ -20,6 +20,8 @@ import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderS
 import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
 import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
+import LocationPermissionModal from '@/modules/DeliveryV2/components/modals/LocationPermissionModal';
+import { useGeoPermission } from '@/core/location/useGeoPermission';
 import FoodOrderChatScreen from '@food/pages/user/orders/FoodOrderChatScreen';
 import ActionSlider from '@/modules/DeliveryV2/components/ui/ActionSlider';
 
@@ -378,6 +380,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   const [zoom, setZoom] = useState(14);
   const [isSimMode, setIsSimMode] = useState(false);
+  // Reactive browser geolocation permission: drives the blocking popup below and re-registers the GPS
+  // watch as soon as the rider allows location (once allowed, the browser hands out location silently).
+  const { permission: geoPermission } = useGeoPermission();
+  // True while the rider asked to go online but location blocked it; granting location then finishes the job.
+  const pendingOnlineRef = useRef(false);
   const [simPath, setSimPath] = useState([]);
   const [simIndex, setSimIndex] = useState(0);
   const [simProgress, setSimProgress] = useState(0); // 0 to 1 between points
@@ -712,6 +719,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           setOnline(false);
           setIsTogglingDuty(false);
           if (isUserInitiated) {
+            pendingOnlineRef.current = true;
             let errorMsg = 'GPS Location is required to go online. Please turn ON location / GPS on your mobile.';
             if (geoError.code === 1) {
               errorMsg = 'Location permission is denied in phone/browser settings. Please grant location permission to go online.';
@@ -739,6 +747,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         setOnlineSelfie(data.onlineSelfie);
       }
       setOnline(true);
+      pendingOnlineRef.current = false;
       if (isUserInitiated) {
         setShowGpsModal(false);
         toast.success('You are now online');
@@ -751,13 +760,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       const message = data?.message || data?.error || error?.message || 'Failed to go online';
 
       if (isUserInitiated) {
-        if (errCode === 'GIG_LOGIN_TOO_EARLY' || String(message).includes('30 minute pehle') || String(message).includes('scheduled time')) {
+        if (errCode === 'GIG_LOGIN_TOO_EARLY' || String(message).includes('30 minutes before') || String(message).includes('scheduled time')) {
           setGigEarlyLoginInfo({
             isOpen: true,
             startTime: details?.startTime || 'upcoming shift',
             message,
           });
-        } else if (errCode === 'NO_ACTIVE_GIG' || String(message).includes('active gig nahi') || String(message).includes('gig book')) {
+        } else if (errCode === 'NO_ACTIVE_GIG' || String(message).includes('no active gig') || String(message).includes('gig book')) {
           setShowBookGigModal(true);
           toast.warning(message);
         } else {
@@ -1056,7 +1065,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     });
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation]);
+  }, [isOnline, setRiderLocation, isSimMode, publishLiveRiderLocation, geoPermission]);
 
   // 3.1 Auto-Recovery Effect: Automatically restore ONLINE status ONLY during an active delivery order!
   useEffect(() => {
@@ -1107,6 +1116,10 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             setShowGpsModal(false);
             setGpsErrorMessage('');
             toast.success('Location permission granted!');
+            if (pendingOnlineRef.current) {
+              pendingOnlineRef.current = false;
+              goOnline();
+            }
             navigator.geolocation.getCurrentPosition(
               (pos) => {
                 const { latitude: lat, longitude: lng } = pos.coords;
@@ -1125,7 +1138,44 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => {
       if (permResult) permResult.onchange = null;
     };
-  }, [setRiderLocation]);
+  }, [setRiderLocation, goOnline]);
+
+  // 3.3 While the "GPS is OFF" prompt is open, keep checking for a position. A web app cannot switch the
+  // phone's GPS on by itself, so as soon as the rider turns it on (or allows permission) we continue
+  // going online automatically instead of making them tap "retry".
+  useEffect(() => {
+    if (!showGpsModal || isOnline || typeof navigator === 'undefined' || !navigator.geolocation) return undefined;
+
+    let cancelled = false;
+    let busy = false;
+    const tryNow = () => {
+      if (busy || cancelled) return;
+      busy = true;
+      navigator.geolocation.getCurrentPosition(
+        async () => {
+          if (cancelled) return;
+          cancelled = true;
+          pendingOnlineRef.current = false;
+          setShowGpsModal(false);
+          setGpsErrorMessage('');
+          await goOnline();
+        },
+        () => { busy = false; },
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 0 },
+      );
+    };
+
+    const interval = setInterval(tryNow, 3000);
+    const onVisible = () => { if (document.visibilityState === 'visible') tryNow(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', tryNow);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', tryNow);
+    };
+  }, [showGpsModal, isOnline, goOnline]);
 
   // 1-Hour Periodic Selfie Security Guard: Force re-verification every 60 minutes
   useEffect(() => {
@@ -1505,7 +1555,17 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   return (
     <div className="relative h-screen w-full bg-white text-gray-900 overflow-hidden flex flex-col">
-      {/* â”€â”€â”€ 1. TOP HEADER (Premium Dark Gray) â”€â”€â”€ */}
+      {/* Blocking popup: online rider without usable browser location. Closes by itself once allowed. */}
+      <LocationPermissionModal
+        open={isOnline && !isSimMode && (geoPermission === 'denied' || (geoPermission === 'prompt' && !riderLocation))}
+        permission={geoPermission}
+        onEnabled={(pos) => {
+          const { latitude, longitude, heading } = pos.coords;
+          setRiderLocation({ lat: latitude, lng: longitude, heading: heading || 0 });
+          deliveryAPI.updateLocation(latitude, longitude, true, { heading: heading || 0 }).catch(() => {});
+        }}
+      />
+      {/*â”€â”€â”€ 1. TOP HEADER (Premium Dark Gray) â”€â”€â”€ */}
       {currentTab !== 'history' && (
         <div className="absolute top-0 inset-x-0 bg-[#121212]/95 backdrop-blur-2xl shadow-2xl z-[200] safe-top pb-2 border-b border-white/10">
           <div className="flex items-center justify-between px-4 py-2">
@@ -2051,13 +2111,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 </span>
                 <h3 className="text-xl font-black text-gray-900 mt-2.5 tracking-tight">Shift Starts at {gigEarlyLoginInfo.startTime}</h3>
                 <p className="text-xs font-semibold text-gray-600 leading-relaxed mt-2">
-                  Aapki booked gig shift <span className="font-bold text-gray-900">{gigEarlyLoginInfo.startTime}</span> baje start hogi. Aap shift start hone ke <span className="font-bold text-orange-600">30 minute pehle</span> hi online ja sakte hain.
+                  Your booked gig shift starts at <span className="font-bold text-gray-900">{gigEarlyLoginInfo.startTime}</span>. You can go online only <span className="font-bold text-orange-600">30 minutes before</span> the shift starts.
                 </p>
               </div>
 
               <div className="bg-orange-50/80 border border-orange-200 rounded-2xl p-3.5 text-xs text-orange-950 font-bold flex items-center justify-center gap-2">
                 <Clock className="w-4 h-4 text-orange-600 shrink-0" />
-                <span>Shift shuru hone ke 30 min pehle Online button dabayein</span>
+                <span>Tap the Online button 30 minutes before the shift starts</span>
               </div>
 
               <div className="pt-2 flex flex-col gap-2">
@@ -2086,7 +2146,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       <BookGigModal
         isOpen={showBookGigModal}
         onClose={() => setShowBookGigModal(false)}
-        onGigBooked={(bookedData) => {
+        onGigBooked={async (bookedData) => {
           setShowBookGigModal(false);
           const gig = bookedData?.gig || bookedData;
           const nowMs = Date.now();
@@ -2096,10 +2156,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           const isImminentOrActive = startMs && endMs && (nowMs >= startMs - THIRTY_MIN_MS) && (nowMs <= endMs);
 
           if (isImminentOrActive) {
-            setShowSelfieVerificationModal(true);
+            // Shift is open right now: go online automatically (this also asks for location permission).
+            // Selfie is the only step that still needs the rider, and only if today's is missing.
+            if (hasSelfieForToday(onlineSelfie)) {
+              await goOnline();
+            } else {
+              setShowSelfieVerificationModal(true);
+            }
           } else {
             const timeRangeStr = gig?.startTime ? ` (${gig.startTime} - ${gig.endTime})` : '';
-            toast.success(`Gig shift booked successfully${timeRangeStr}! Aap shift start hone ke 30 min pehle online aa sakte hain.`, { duration: 5000 });
+            toast.success(`Gig shift booked successfully${timeRangeStr}! You can go online 30 minutes before the shift starts.`, { duration: 5000 });
           }
         }}
       />
@@ -2469,6 +2535,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   <li>Tap to turn <strong>ON Location / GPS</strong>.</li>
                   <li>Grant location permission to Eqosy app if prompted.</li>
                 </ol>
+                <p className="text-[11px] font-bold text-emerald-700 pt-1">
+                  As soon as GPS is ON, the app will take you online automatically.
+                </p>
               </div>
 
               <div className="flex flex-col gap-2.5">

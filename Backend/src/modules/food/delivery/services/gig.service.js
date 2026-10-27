@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { FoodGig } from '../models/foodGig.model.js';
 import { FoodGigBooking } from '../models/foodGigBooking.model.js';
 import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
+import { FoodZone } from '../../admin/models/zone.model.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { logger } from '../../../../utils/logger.js';
@@ -33,7 +34,82 @@ const addDaysToStrDate = (dateStr, days) => {
   return `${year}-${month}-${day}`;
 };
 
-const escapeRegex = (str) => String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const toFiniteOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** "Indore Zone", " indore " and "INDORE" all compare equal. */
+const normalizeZoneName = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\bzone\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isAllZonesGig = (gig) => {
+  const raw = String(gig?.zoneName || '').trim().toLowerCase();
+  return !raw || raw === 'all zones' || raw === 'all';
+};
+
+const isPointInZonePolygon = (lat, lng, polygon = []) => {
+  if (!Array.isArray(polygon) || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = Number(polygon[i]?.longitude);
+    const yi = Number(polygon[i]?.latitude);
+    const xj = Number(polygon[j]?.longitude);
+    const yj = Number(polygon[j]?.latitude);
+    const intersects =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+};
+
+/**
+ * Which zone(s) the rider belongs to, for gig visibility and booking.
+ * Order dispatch decides a rider's zone from their GPS position inside the zone polygon, so gigs use the
+ * same rule: when a location is known the zone it falls in wins. The partner's profile zoneId points to a
+ * Taxi zone (not a Food zone), so only the profile zone name / city text is used as a fallback.
+ */
+const resolvePartnerZoneInfo = async (partner, coords = {}) => {
+  const zoneIds = new Set();
+  const names = new Set();
+  const addName = (value) => {
+    const n = normalizeZoneName(value);
+    if (n) names.add(n);
+  };
+
+  const lat = toFiniteOrNull(coords.latitude) ?? toFiniteOrNull(partner?.lastLat);
+  const lng = toFiniteOrNull(coords.longitude) ?? toFiniteOrNull(partner?.lastLng);
+
+  if (lat !== null && lng !== null) {
+    const zones = await FoodZone.find({ isActive: true }).select('_id name zoneName serviceLocation coordinates').lean();
+    const hit = zones.find((z) => isPointInZonePolygon(lat, lng, z.coordinates || []));
+    if (hit) {
+      zoneIds.add(String(hit._id));
+      addName(hit.name);
+      addName(hit.zoneName);
+      addName(hit.serviceLocation);
+      return { zoneIds, names };
+    }
+  }
+
+  addName(partner?.zoneName);
+  addName(partner?.city);
+  return { zoneIds, names };
+};
+
+const gigMatchesPartnerZone = (gig, zoneInfo) => {
+  if (isAllZonesGig(gig)) return true;
+  if (gig.zoneId && zoneInfo.zoneIds.has(String(gig.zoneId))) return true;
+  const gigName = normalizeZoneName(gig.zoneName);
+  return Boolean(gigName) && zoneInfo.names.has(gigName);
+};
 
 export const createGig = async (payload, adminId = null) => {
   const {
@@ -242,44 +318,17 @@ const resolvePartnerAndIds = async (deliveryPartnerId) => {
 export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {}) => {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
-  const { date = todayStr } = query;
+  const { date = todayStr, lat, lng } = query;
 
   // Fetch delivery partner to check assigned area/zone
   const { partner, partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
 
-  const match = {
-    status: 'active',
-    date: date
-  };
-
-  // STRICT ZONE FILTERING:
-  // Delivery partners can ONLY see gigs for their specific assigned zone/area OR 'All Zones'.
-  // Drivers from two different zones cannot see each other's area gigs!
+  // Riders see gigs of the zone they are actually in (same rule order dispatch uses) plus 'All Zones' gigs.
+  let gigs = await FoodGig.find({ status: 'active', date }).sort({ startDateTime: 1 }).lean();
   if (partner) {
-    const partnerZoneId = partner.zoneId ? String(partner.zoneId) : null;
-    const partnerZoneName = (partner.zoneName || '').trim();
-
-    const zoneConditions = [
-      { zoneName: 'All Zones' },
-      { zoneName: '' },
-      { zoneName: null }
-    ];
-
-    if (partnerZoneId && mongoose.Types.ObjectId.isValid(partnerZoneId)) {
-      zoneConditions.push({ zoneId: new mongoose.Types.ObjectId(partnerZoneId) });
-    }
-
-    if (partnerZoneName && partnerZoneName.toLowerCase() !== 'all zones') {
-      zoneConditions.push({ zoneName: { $regex: new RegExp(`^${escapeRegex(partnerZoneName)}$`, 'i') } });
-    } else if (partner.city && partner.city.toLowerCase() !== 'all zones') {
-      zoneConditions.push({ zoneName: { $regex: new RegExp(`^${escapeRegex(partner.city.trim())}$`, 'i') } });
-    }
-
-    match.$or = zoneConditions;
+    const zoneInfo = await resolvePartnerZoneInfo(partner, { latitude: lat, longitude: lng });
+    gigs = gigs.filter((gig) => gigMatchesPartnerZone(gig, zoneInfo));
   }
-
-  // Active gigs matching zone on or after selected date
-  const gigs = await FoodGig.find(match).sort({ startDateTime: 1 }).lean();
 
   const gigIds = gigs.map(g => g._id);
   const partnerBookings = await FoodGigBooking.find({
@@ -321,7 +370,7 @@ export const listAvailableGigsForPartner = async (deliveryPartnerId, query = {})
   return result;
 };
 
-export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
+export const bookGigForPartner = async (deliveryPartnerId, gigId, coords = {}) => {
   const { partner, partnerIds } = await resolvePartnerAndIds(deliveryPartnerId);
   if (!partner) throw new NotFoundError('Delivery partner not found');
   if (partner.status !== 'approved') {
@@ -338,23 +387,10 @@ export const bookGigForPartner = async (deliveryPartnerId, gigId) => {
     throw new ValidationError('This gig has already expired');
   }
 
-  // Strict Zone check: Partner can only book gigs for their assigned zone or 'All Zones'
-  if (gig.zoneName && gig.zoneName.toLowerCase() !== 'all zones') {
-    const partnerZoneIdStr = partner.zoneId ? String(partner.zoneId) : null;
-    const partnerZoneNameClean = (partner.zoneName || partner.city || '').trim().toLowerCase();
-    const gigZoneIdStr = gig.zoneId ? String(gig.zoneId) : null;
-    const gigZoneNameClean = (gig.zoneName || '').trim().toLowerCase();
-
-    let isZoneMatch = false;
-    if (gigZoneIdStr && partnerZoneIdStr && gigZoneIdStr === partnerZoneIdStr) {
-      isZoneMatch = true;
-    } else if (gigZoneNameClean && partnerZoneNameClean && gigZoneNameClean === partnerZoneNameClean) {
-      isZoneMatch = true;
-    }
-
-    if (!isZoneMatch) {
-      throw new ValidationError(`This gig is restricted to "${gig.zoneName}". You are listed in "${partner.zoneName || partner.city || 'a different zone'}".`);
-    }
+  // Zone check uses the same matcher as the gig list, so a gig the rider can see is a gig the rider can book.
+  const zoneInfo = await resolvePartnerZoneInfo(partner, coords);
+  if (!gigMatchesPartnerZone(gig, zoneInfo)) {
+    throw new ValidationError(`This gig is restricted to "${gig.zoneName}". Your current location is not in this zone.`);
   }
 
   // Check if already booked
@@ -691,7 +727,7 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
       logger.info(`[AutoOffline] Partner ${partner.name || partner._id} auto-offlined (gig expired, no active orders).`);
 
       const notificationTitle = 'Shift Ended — You are now Offline ⏰';
-      const notificationBody = 'Aapki gig shift end ho gayi hai. Dubara online aane ke liye nayi gig book karein.';
+      const notificationBody = 'Your gig shift has ended. Book a new gig to go online again.';
 
       // Create Inbox Notification
       try {
