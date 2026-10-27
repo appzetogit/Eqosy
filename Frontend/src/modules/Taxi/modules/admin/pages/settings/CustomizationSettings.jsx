@@ -180,7 +180,6 @@ const CustomizationSettings = () => {
               <ToggleField label="Enable Web Booking Feature" name="enable_web_booking_feature" value={settings.enable_web_booking_feature} onChange={handleChange} />
               <ToggleField label="Enable Sub Vehicle Feature" name="enable_sub_vehicle_feature" value={settings.enable_sub_vehicle_feature} onChange={handleChange} />
               <ToggleField label="Enable Landing Website" name="enable_landing_site" value={settings.enable_landing_site} onChange={handleChange} />
-              <ToggleField label="Enable Additional Charges Feature" name="enable_additional_charge_feature" value={settings.enable_additional_charge_feature} onChange={handleChange} />
               <ToggleField label="Enable Driver Disapprove When Updating Feature" name="enable_driver_disapprove_on_update" value={settings.enable_driver_disapprove_on_update} onChange={handleChange} />
               <ToggleField label="Enable Support Ticket Feature" name="enable_support_ticket_feature" value={settings.enable_support_ticket_feature} onChange={handleChange} />
               <ToggleField label="Enable Map Appearance Edit on Mobile App" name="enable_map_appearance_change_on_mobile_app" value={settings.enable_map_appearance_change_on_mobile_app} onChange={handleChange} />

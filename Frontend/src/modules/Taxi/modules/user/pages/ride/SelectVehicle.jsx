@@ -771,11 +771,12 @@ const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transpor
 
 const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes, gstRate = 0 }) => {
   const fallbackFare = getFallbackVehicleEstimate(vehicle?.raw || vehicle);
+  // Every price path adds GST on top, because the UI and the backend both treat the final fare as GST-inclusive.
+  const withGst = (amount) => Math.round(amount + (amount * gstRate) / 100);
 
   if (!pricingRule) {
     const rawPrice = Number(vehicle?.raw?.price || vehicle?.raw?.base_price || vehicle?.raw?.base_fare || 0);
-    if (rawPrice > 0) return rawPrice;
-    return fallbackFare;
+    return withGst(rawPrice > 0 ? rawPrice : fallbackFare);
   }
 
   const distanceKm = Math.max(0, Number(distanceMeters || 0) / 1000);
@@ -796,7 +797,7 @@ const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, duration
   const taxableFare = subtotal + rideSurgeAmount;
   const total = taxableFare + (taxableFare * gstRate) / 100;
 
-  return Math.max(basePrice > 0 ? basePrice : fallbackFare, Math.round(total));
+  return Math.max(withGst(basePrice > 0 ? basePrice : fallbackFare), Math.round(total));
 };
 
 const getDropTime = (minutesAway = 0) => {
