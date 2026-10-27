@@ -2078,7 +2078,7 @@ export default function Home() {
                 restaurant.estimatedDeliveryTime || "25-30 mins";
 
               // Calculate distance from user to restaurant
-              let distance = restaurant.distance || "1.2 km";
+              let distance = restaurant.distance || "--";
 
               // Get restaurant coordinates
               const restaurantLocation = restaurant.location;

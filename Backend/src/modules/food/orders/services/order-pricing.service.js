@@ -319,8 +319,9 @@ export async function calculateOrderPricing(userId, dto) {
     const [rLng, rLat] = restCoords;
     const [cLng, cLat] = customerCoords;
     const straightDistKm = haversineKm(rLat, rLng, cLat, cLng);
-    // Estimated road distance fallback (1.3x road factor) in case Google is unreachable
-    distanceKm = Math.round(straightDistKm * 1.3 * 10) / 10;
+    // Estimated road distance fallback in case Google is unreachable. Same 1.08 factor as the Home restaurant card
+    // (Frontend utils/common.js calculateDistance), so the card and the bill agree when Google is unavailable.
+    distanceKm = Math.round(straightDistKm * 1.08 * 10) / 10;
 
     // Prefer accurate Google Maps road driving distance (e.g. 5.9 km instead of straight-line 5.2 km)
     try {
@@ -332,7 +333,7 @@ export async function calculateOrderPricing(userId, dto) {
         distanceKm = roadData.distanceKm;
       }
     } catch {
-      // Fallback safely to estimated road distance (haversineKm * 1.3)
+      // Fallback safely to estimated road distance (haversineKm * 1.08)
     }
 
     // 1. Zone Validation: Ensure customer location is inside an active service zone
@@ -461,14 +462,6 @@ export async function calculateOrderPricing(userId, dto) {
   const { charges: additionalCharges, chargesTotal: additionalChargesTotal } =
     evaluateAdditionalCharges(feeSettings.additionalCharges, subtotal);
 
-  // GST uses the same admin-configured Food GST rate for every component, including these charges.
-  const itemGst = Math.round(subtotal * (configuredGstRate / 100));
-  const platformGst = Math.round(platformFee * (configuredGstRate / 100));
-  const deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
-  const additionalChargesGst = Math.round(additionalChargesTotal * (configuredGstRate / 100));
-  const tax = itemGst + platformGst + deliveryGst + additionalChargesGst;
-  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst };
-
   let discount = 0;
   let appliedCoupon = null;
   const codeRaw = dto.couponCode
@@ -546,6 +539,15 @@ export async function calculateOrderPricing(userId, dto) {
       }
     }
   }
+
+  // GST uses the same admin-configured Food GST rate for every component, including these charges.
+  // The item GST is charged on the value after the coupon discount, so the customer is not taxed on money they never pay.
+  const itemGst = Math.round(Math.max(0, subtotal - discount) * (configuredGstRate / 100));
+  const platformGst = Math.round(platformFee * (configuredGstRate / 100));
+  const deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
+  const additionalChargesGst = Math.round(additionalChargesTotal * (configuredGstRate / 100));
+  const tax = itemGst + platformGst + deliveryGst + additionalChargesGst;
+  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst };
 
   const zoneIdForSurge = await resolveOrderZoneId(dto, restaurant);
   let surgeAmount = 0;

@@ -536,7 +536,10 @@ function CartInner() {
       locFromStorage = null
     }
 
-    const loc = locFromStorage?.isManual
+    // Use the same stored location the Home list uses for restaurant distances. Preferring live GPS here made the
+    // bill price a different point (e.g. 3 km) than the 6.5 km shown on the restaurant card.
+    const storedHasCoords = Number.isFinite(Number(locFromStorage?.latitude)) && Number.isFinite(Number(locFromStorage?.longitude))
+    const loc = storedHasCoords
       ? locFromStorage
       : (currentLocation?.latitude && currentLocation?.longitude ? currentLocation : locFromStorage)
     if (!loc?.latitude || !loc?.longitude) return null

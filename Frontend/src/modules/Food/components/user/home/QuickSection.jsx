@@ -162,7 +162,7 @@ const transformStore = (restaurant) => {
     distance:
       restaurant?.distanceInKm != null
         ? `${Number(restaurant.distanceInKm).toFixed(1)} km`
-        : restaurant?.distance || '1.2 km',
+        : restaurant?.distance || '--',
     offer: restaurant?.offer || '',
     closesIn: getClosesIn(restaurant),
     image: pickStoreImage(restaurant),

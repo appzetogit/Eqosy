@@ -157,7 +157,7 @@ export default function Gourmet() {
                     return R * c; // Distance in kilometers
                   };
 
-                  let distanceStr = '1.2 km'
+                  let distanceStr = '--'
                   const restaurantLat = restaurant.location?.latitude || restaurant.location?.coordinates?.[1]
                   const restaurantLng = restaurant.location?.longitude || restaurant.location?.coordinates?.[0]
                   
