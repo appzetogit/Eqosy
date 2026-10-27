@@ -24,12 +24,30 @@ export const useImageUpload = (options = {}) => {
     try {
       setUploading(true);
 
-      const base64 = await new Promise((resolve, reject) => {
+      const readAsDataUrl = (blob) => new Promise((resolve, reject) => {
         const r = new FileReader();
         r.onerror = () => reject(new Error('Unable to read selected image'));
         r.onloadend = () => resolve(r.result);
-        r.readAsDataURL(file);
+        r.readAsDataURL(blob);
       });
+
+      // Camera photos are several MB; downscale so the JSON body stays under the server limit.
+      const compressImage = async (blob) => {
+        try {
+          const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+          const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(bitmap.width * scale);
+          canvas.height = Math.round(bitmap.height * scale);
+          canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          const out = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+          return out && out.size < blob.size ? out : blob;
+        } catch {
+          return blob;
+        }
+      };
+
+      const base64 = await readAsDataUrl(await compressImage(file));
 
       if (!String(base64 || '').startsWith('data:image/')) {
         toast.error('Please select a valid image file');

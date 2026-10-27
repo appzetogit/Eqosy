@@ -107,6 +107,12 @@ export const uploadBufferToCloudinary = async ({
   const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudinary.cloudName}/image/upload`, {
     method: 'POST',
     body: formData,
+    signal: AbortSignal.timeout(45000),
+  }).catch((error) => {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      throw new ApiError(504, 'Image upload timed out. Please try again.');
+    }
+    throw error;
   });
 
   const payload = await response.json().catch(() => null);

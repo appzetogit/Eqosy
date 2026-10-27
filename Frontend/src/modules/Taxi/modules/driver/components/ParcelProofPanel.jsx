@@ -6,6 +6,28 @@ import { uploadService } from '../../../shared/services/uploadService';
  * Parcel safety checklist for the captain: a mandatory photo and, when cash is
  * due at this step, a confirmation that the amount was collected.
  */
+const MAX_PHOTO_EDGE = 1280;
+const PHOTO_QUALITY = 0.8;
+
+// Phone camera photos are several MB; shrink them first so the upload does not crawl on mobile data.
+const compressImage = async (file) => {
+  try {
+    if (!file.type?.startsWith('image/') || file.size < 300 * 1024) return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], 'parcel-proof.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+};
+
 const ParcelProofPanel = ({
   title,
   photoLabel,
@@ -29,7 +51,7 @@ const ParcelProofPanel = ({
     try {
       setIsUploading(true);
       setError('');
-      const uploaded = await uploadService.uploadImageFile(file, 'parcel-proof');
+      const uploaded = await uploadService.uploadImageFile(await compressImage(file), 'parcel-proof');
       const url = uploaded?.url || uploaded?.data?.url;
       if (!url) throw new Error('Upload failed');
       await onPhotoUploaded(url);
