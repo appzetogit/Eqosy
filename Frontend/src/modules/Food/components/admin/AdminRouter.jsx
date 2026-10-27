@@ -147,7 +147,6 @@ const GCMSUser = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSUse
 const GCMSContact = lazy(() => import("../../../Taxi/modules/admin/pages/cms/CMSContact"));
 const GWallet = lazy(() => import("../../../Taxi/modules/admin/pages/settings/WalletSettings"));
 const GTip = lazy(() => import("../../../Taxi/modules/admin/pages/settings/TipSettings"));
-const GGst = lazy(() => import("../../../Taxi/modules/admin/pages/settings/GstSettings"));
 const GOnboard = lazy(() => import("../../../Taxi/modules/admin/pages/settings/OnboardingScreens"));
 const GPayment = lazy(() => import("../../../Taxi/modules/admin/pages/settings/PaymentGateways"));
 const GSms = lazy(() => import("../../../Taxi/modules/admin/pages/settings/SMSGateways"));
@@ -395,7 +394,7 @@ export default function AdminRouter() {
             <Route path="cms/contact" element={<GCMSContact />} />
             <Route path="app/wallet" element={<GWallet />} />
             <Route path="app/tip" element={<GTip />} />
-            <Route path="app/gst" element={<GGst />} />
+            <Route path="app/gst" element={<Navigate to="/taxi/admin/settings/app/gst" replace />} />
             <Route path="app/onboard" element={<GOnboard />} />
             <Route path="third-party/payment" element={<GPayment />} />
             <Route path="third-party/sms" element={<GSms />} />

@@ -182,6 +182,10 @@ export const adminService = {
     const query = new URLSearchParams(params).toString();
     return api.get(`/admin/reports/owner/download?${query}`, { responseType: 'blob' });
   },
+  getTaxReport: async (params) => {
+    const query = new URLSearchParams(params).toString();
+    return unwrap(await api.get(`/admin/reports/tax?${query}`));
+  },
   downloadFinanceReport: (params) => {
     const query = new URLSearchParams(params).toString();
     return api.get(`/admin/reports/finance/download?${query}`, { responseType: 'blob' });

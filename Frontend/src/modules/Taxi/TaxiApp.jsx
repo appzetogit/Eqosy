@@ -320,6 +320,8 @@ const AdminUserReport = lazy(() => import('./modules/admin/pages/reports/UserRep
 const AdminDriverReport = lazy(() => import('./modules/admin/pages/reports/DriverReport'));
 const AdminDriverDutyReport = lazy(() => import('./modules/admin/pages/reports/DriverDutyReport'));
 const AdminOwnerReport = lazy(() => import('./modules/admin/pages/reports/OwnerReport'));
+const AdminTaxReport = lazy(() => import('./modules/admin/pages/reports/TaxReport'));
+const AdminGstSettings = lazy(() => import('./modules/admin/pages/settings/GstSettings'));
 const AdminFinanceReport = lazy(() => import('./modules/admin/pages/reports/FinanceReport'));
 const AdminFleetFinanceReport = lazy(() => import('./modules/admin/pages/reports/FleetFinanceReport'));
 
@@ -1679,6 +1681,7 @@ function TaxiApp() {
                   path="reports/finance"
                   element={<AdminFinanceReport />}
                 />
+                <Route path="reports/tax" element={<AdminTaxReport />} />
                 <Route
                   path="reports/fleet-finance"
                   element={<AdminFleetFinanceReport />}
@@ -1720,7 +1723,7 @@ function TaxiApp() {
                   path="settings/app/wallet" element={<Navigate to="/admin/global/app/wallet" replace />}
                 />
                 <Route path="settings/app/tip" element={<Navigate to="/admin/global/app/tip" replace />} />
-                <Route path="settings/app/gst" element={<Navigate to="/admin/global/app/gst" replace />} />
+                <Route path="settings/app/gst" element={<AdminGstSettings />} />
                 <Route
                   path="settings/app/country"
                   element={<AdminCountryManagement />}

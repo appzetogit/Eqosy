@@ -938,6 +938,7 @@ const AdminLayout = () => {
               { label: 'Driver Duty Report', path: '/taxi/admin/reports/driver-duty', permission: 'reports.view' },
               { label: 'Owner Report', path: '/taxi/admin/reports/owner', permission: 'reports.view' },
               { label: 'Finance Report', path: '/taxi/admin/reports/finance', permission: 'reports.view' },
+              { label: 'Tax Report', path: '/taxi/admin/reports/tax', permission: 'reports.view' },
               { label: 'Fleet Finance Report', path: '/taxi/admin/reports/fleet-finance', permission: 'reports.view' },
             ],
           },
@@ -969,6 +970,7 @@ const AdminLayout = () => {
             subItems: [
               { label: 'Transport Ride Settings', path: '/taxi/admin/settings/business/transport-ride', permission: 'settings.view' },
               { label: 'Bid Ride Settings', path: '/taxi/admin/settings/business/bid-ride', permission: 'settings.view' },
+              { label: 'GST Settings', path: '/taxi/admin/settings/app/gst', permission: 'settings.view' },
             ],
           },
           // {

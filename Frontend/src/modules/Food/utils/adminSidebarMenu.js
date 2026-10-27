@@ -236,7 +236,6 @@ export const globalSidebarMenu = [
       { type: "link", label: "Customization", path: "/admin/global/customization", icon: "Settings" },
       { type: "link", label: "Wallet Settings", path: "/admin/global/app/wallet", icon: "Settings" },
       { type: "link", label: "Tip Settings", path: "/admin/global/app/tip", icon: "Settings" },
-      { type: "link", label: "GST Settings", path: "/admin/global/app/gst", icon: "Settings" },
       { type: "link", label: "App Onboarding Screens", path: "/admin/global/app/onboard", icon: "Image" },
     ],
   },
