@@ -6,7 +6,7 @@ import { BusService } from '../models/BusService.js';
 import { syncBusBookingOwnerEarning } from '../../services/ownerPayoutService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { Ride } from '../../user/models/Ride.js';
-import { buildTaxReport } from '../services/taxReportService.js';
+import { buildTaxReport, buildTaxReportDetail } from '../services/taxReportService.js';
 
 const ok = (res, data, extra = {}) =>
   res.json({ success: true, data, ...extra });
@@ -1574,6 +1574,10 @@ export const downloadOwnerReport = asyncHandler(async (req, res) => {
 
 export const getTaxReport = asyncHandler(async (req, res) =>
   ok(res, await buildTaxReport(req.query)),
+);
+
+export const getTaxReportDetail = asyncHandler(async (req, res) =>
+  ok(res, await buildTaxReportDetail(req.query)),
 );
 
 export const downloadFinanceReport = asyncHandler(async (req, res) => {
