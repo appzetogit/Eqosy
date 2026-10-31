@@ -182,7 +182,10 @@ export function ProfileProvider({ children }) {
               const currentMode = localStorage.getItem("deliveryAddressMode") || "saved"
               const rawLoc = localStorage.getItem("userLocation")
               const parsedLoc = rawLoc ? JSON.parse(rawLoc) : null
-              if (currentMode === "saved" || !parsedLoc?.isManual) {
+              // Never override a location the user explicitly picked (mode "current").
+              const hasStoredMode = localStorage.getItem("deliveryAddressMode") !== null
+              const userPickedOtherLocation = currentMode === "current" && hasStoredMode && !!parsedLoc
+              if (!userPickedOtherLocation && (currentMode === "saved" || !parsedLoc?.isManual)) {
                 const coords = defAddr.location?.coordinates
                 const lng = Array.isArray(coords) && coords.length >= 2 ? Number(coords[0]) : Number(defAddr.longitude || defAddr.lng)
                 const lat = Array.isArray(coords) && coords.length >= 2 ? Number(coords[1]) : Number(defAddr.latitude || defAddr.lat)

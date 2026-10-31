@@ -1009,7 +1009,7 @@ const getVehicleCategoryId = (vehicle) => {
 };
 
 const normalizeVehicleType = (type, index) => {
-  const id =String(type?._id || type?.id || type?.name || index);
+  const id = String(type?._id || type?.id || type?.name || index);
   const dispatchType = String(type?.dispatch_type || 'normal').trim().toLowerCase();
 
   return {
@@ -1166,14 +1166,14 @@ const SelectVehicle = () => {
     if (!val) return true;
     const parsedSchedule = new Date(val);
     if (Number.isNaN(parsedSchedule.getTime())) return true;
-    
+
     const nextMin = new Date(Date.now() + 15 * 60 * 1000);
     const minVal = formatDateTimeInputValue(nextMin);
-    
+
     const nextMax = new Date();
     nextMax.setDate(nextMax.getDate() + 7);
     const maxVal = formatDateTimeInputValue(nextMax);
-    
+
     return val < minVal || val > maxVal;
   }, [tempScheduledAt, scheduledAt]);
 
@@ -1183,20 +1183,20 @@ const SelectVehicle = () => {
       setLocalScheduleError('');
       return;
     }
-    
+
     const parsedSchedule = new Date(val);
     if (Number.isNaN(parsedSchedule.getTime())) {
       setLocalScheduleError('Choose a valid schedule date and time.');
       return;
     }
-    
+
     const nextMin = new Date(Date.now() + 15 * 60 * 1000);
     const minVal = formatDateTimeInputValue(nextMin);
-    
+
     const nextMax = new Date();
     nextMax.setDate(nextMax.getDate() + 7);
     const maxVal = formatDateTimeInputValue(nextMax);
-    
+
     if (val < minVal) {
       setLocalScheduleError('Schedule time cannot be earlier than now.');
     } else if (val > maxVal) {
@@ -1615,9 +1615,9 @@ const SelectVehicle = () => {
   const bidRideSettings = settings?.bidRide || {};
   const selectedBidStepAmount = shouldUseDriverBidding
     ? toConfiguredPositiveInteger(
-        bidRideSettings.bidding_amount_increase_or_decrease,
-        Number(selectedVehicle?.bidStepAmount || 10),
-      )
+      bidRideSettings.bidding_amount_increase_or_decrease,
+      Number(selectedVehicle?.bidStepAmount || 10),
+    )
     : Number(selectedVehicle?.bidStepAmount || 10);
   const bidLowPercentage = clampPercentage(bidRideSettings.user_bidding_low_percentage, 10);
   const bidHighPercentage = clampPercentage(bidRideSettings.user_bidding_high_percentage, 20);
@@ -1625,19 +1625,19 @@ const SelectVehicle = () => {
   const normalizedBidHighPercentage = Math.max(bidLowPercentage, bidHighPercentage);
   const selectedBidFloorFare = shouldUseDriverBidding
     ? alignBidAmountToStep({
-        baseFare: Number(selectedVehicle?.price || 0),
-        amount: Number(selectedVehicle?.price || 0) * (1 + (normalizedBidLowPercentage / 100)),
-        stepAmount: selectedBidStepAmount,
-        direction: 'up',
-      })
+      baseFare: Number(selectedVehicle?.price || 0),
+      amount: Number(selectedVehicle?.price || 0) * (1 + (normalizedBidLowPercentage / 100)),
+      stepAmount: selectedBidStepAmount,
+      direction: 'up',
+    })
     : Number(selectedVehicle?.price || 0);
   const selectedBidCeilingMaxFare = shouldUseDriverBidding
     ? alignBidAmountToStep({
-        baseFare: Number(selectedVehicle?.price || 0),
-        amount: Number(selectedVehicle?.price || 0) * (1 + (normalizedBidHighPercentage / 100)),
-        stepAmount: selectedBidStepAmount,
-        direction: 'up',
-      })
+      baseFare: Number(selectedVehicle?.price || 0),
+      amount: Number(selectedVehicle?.price || 0) * (1 + (normalizedBidHighPercentage / 100)),
+      stepAmount: selectedBidStepAmount,
+      direction: 'up',
+    })
     : Number(selectedVehicle?.price || 0);
   const selectedBidSteps = shouldUseDriverBidding
     ? Math.max(3, Math.round((selectedBidCeilingMaxFare - selectedBidFloorFare) / selectedBidStepAmount))
@@ -2140,11 +2140,10 @@ const SelectVehicle = () => {
             <button
               type="button"
               onClick={openSchedulePicker}
-              className={`flex w-[42px] shrink-0 flex-col items-center justify-center rounded-[12px] border px-1 py-2 text-[10px] font-medium ${
-                rideMode === 'schedule'
+              className={`flex w-[42px] shrink-0 flex-col items-center justify-center rounded-[12px] border px-1 py-2 text-[10px] font-medium ${rideMode === 'schedule'
                   ? 'border-slate-900 bg-slate-900 text-white'
                   : 'border-slate-200 bg-white text-slate-600'
-              }`}
+                }`}
             >
               <Clock3 size={14} strokeWidth={2.2} />
               <span className="mt-1">{rideMode === 'schedule' ? 'Later' : 'Now'}</span>
@@ -2239,11 +2238,10 @@ const SelectVehicle = () => {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: i * 0.04, ease: [0.23, 1, 0.32, 1] }}
-                  className={`overflow-hidden rounded-[18px] border-2 transition-all duration-200 ${
-                    isSelected
+                  className={`overflow-hidden rounded-[18px] border-2 transition-all duration-200 ${isSelected
                       ? 'border-slate-900 bg-slate-100/80 shadow-[0_6px_20px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/10'
                       : 'border-slate-200/60 bg-white hover:border-slate-300'
-                  } ${!canSelectVehicle ? 'blur-[1.5px] grayscale opacity-70 pointer-events-none' : ''}`}
+                    } ${!canSelectVehicle ? 'blur-[1.5px] grayscale opacity-70 pointer-events-none' : ''}`}
                 >
                   <div
                     role={canSelectVehicle ? 'button' : undefined}
@@ -2263,9 +2261,8 @@ const SelectVehicle = () => {
                         setSelected(v.id);
                       }
                     }}
-                    className={`flex items-center gap-3.5 px-3.5 py-3.5 text-left ${
-                      canSelectVehicle ? 'cursor-pointer' : 'cursor-default'
-                    }`}
+                    className={`flex items-center gap-3.5 px-3.5 py-3.5 text-left ${canSelectVehicle ? 'cursor-pointer' : 'cursor-default'
+                      }`}
                   >
                     <div className="flex w-[56px] shrink-0 flex-col items-center justify-center">
                       <div className="flex h-10 w-full items-center justify-center">
@@ -2420,9 +2417,8 @@ const SelectVehicle = () => {
             <button
               type="button"
               onClick={() => setShowCouponModal(true)}
-              className={`flex items-center justify-center gap-2 border-r border-slate-200 px-3 py-2.5 text-[12px] font-medium ${
-                appliedPromo ? 'text-emerald-700' : 'text-slate-700'
-              }`}
+              className={`flex items-center justify-center gap-2 border-r border-slate-200 px-3 py-2.5 text-[12px] font-medium ${appliedPromo ? 'text-emerald-700' : 'text-slate-700'
+                }`}
             >
               <TicketPercent size={14} strokeWidth={2.3} className={appliedPromo ? 'text-emerald-600' : 'text-slate-500'} />
               <span>{appliedPromo?.promo?.code || (availablePromos.length ? `Coupon ${availablePromos.length}` : 'Coupon')}</span>
@@ -2449,9 +2445,8 @@ const SelectVehicle = () => {
           </div>
 
           {(appliedPromo || promoError || promoFeedback) && (
-            <div className={`mt-2 rounded-[12px] border px-3 py-2 ${
-              promoError ? 'border-rose-100 bg-rose-50/70' : 'border-emerald-100 bg-emerald-50/70'
-            }`}>
+            <div className={`mt-2 rounded-[12px] border px-3 py-2 ${promoError ? 'border-rose-100 bg-rose-50/70' : 'border-emerald-100 bg-emerald-50/70'
+              }`}>
               {appliedPromo && !promoError ? (
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -2483,11 +2478,10 @@ const SelectVehicle = () => {
             whileTap={canProceed ? { scale: 0.98 } : undefined}
             disabled={!canProceed}
             onClick={handleBook}
-            className={`mt-3 flex w-full items-center justify-center rounded-[8px] px-4 py-3.5 text-[16px] font-medium transition ${
-              canProceed
+            className={`mt-3 flex w-full items-center justify-center rounded-[8px] px-4 py-3.5 text-[16px] font-medium transition ${canProceed
                 ? 'bg-[#1f1f1f] text-white'
                 : 'bg-slate-200 text-slate-400'
-            }`}
+              }`}
           >
             {selectedVehicle
               ? isFarePending
@@ -2701,260 +2695,256 @@ const SelectVehicle = () => {
         )}
 
         <AnimatePresence>
-        {showCouponModal && (
-          <React.Fragment key="coupon-modal">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowCouponModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[28px] px-5 pt-4 pb-8 z-[101]"
-            >
-              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 mb-1">Coupons</p>
-              <h3 className="text-[18px] font-bold text-slate-900">Apply for this zone</h3>
-              <p className="mt-1 text-[12px] font-bold text-slate-500">
-                Only coupons created for this service location show here.
-              </p>
-
-              <div className="mt-5 flex gap-2">
-                <input
-                  type="text"
-                  value={promoCodeInput}
-                  onChange={(event) => {
-                    setPromoCodeInput(event.target.value.toUpperCase());
-                    setPromoError('');
-                    setPromoFeedback('');
-                  }}
-                  placeholder="Enter coupon code"
-                  className="min-w-0 flex-1 rounded-[16px] border border-slate-200 px-4 py-3 text-[13px] font-semibold text-slate-900 outline-none transition focus:border-emerald-300"
-                />
-                <button
-                  type="button"
-                  disabled={Boolean(applyingPromoCode) || !selectedVehicle}
-                  onClick={async () => {
-                    const applied = await applyPromoCode(promoCodeInput);
-                    if (applied) {
-                      setShowCouponModal(false);
-                    }
-                  }}
-                  className="rounded-[16px] bg-slate-950 px-4 py-3 text-[12px] font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
-                >
-                  {applyingPromoCode ? 'Applying' : 'Apply'}
-                </button>
-              </div>
-
-              {(promoError || promoFeedback) && (
-                <p className={`mt-3 text-[11px] font-semibold ${promoError ? 'text-rose-500' : 'text-emerald-600'}`}>
-                  {promoError || promoFeedback}
+          {showCouponModal && (
+            <React.Fragment key="coupon-modal">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowCouponModal(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[28px] px-5 pt-4 pb-8 z-[101]"
+              >
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 mb-1">Coupons</p>
+                <h3 className="text-[18px] font-bold text-slate-900">Apply for this zone</h3>
+                <p className="mt-1 text-[12px] font-bold text-slate-500">
+                  Only coupons created for this service location show here.
                 </p>
-              )}
 
-              <div className="mt-5 max-h-[46vh] space-y-2 overflow-y-auto pr-1">
-                {isLoadingPromos ? (
-                  <div className="flex items-center gap-2 rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-4">
-                    <LoaderCircle size={16} className="animate-spin text-slate-500" />
-                    <span className="text-[12px] font-semibold text-slate-600">Loading available coupons</span>
-                  </div>
-                ) : availablePromos.length ? (
-                  availablePromos.map((promo) => {
-                    const isApplied = String(appliedPromo?.promo?.code || '').toUpperCase() === String(promo?.code || '').toUpperCase();
-
-                    return (
-                      <div
-                        key={promo?._id || promo?.code}
-                        className={`rounded-[18px] border px-4 py-4 ${
-                          isApplied ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-100 bg-slate-50/70'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-[14px] font-black text-slate-900">{promo?.code}</p>
-                              {isApplied && <CheckCircle2 size={14} className="text-emerald-600" strokeWidth={2.6} />}
-                            </div>
-                            <p className="mt-1 text-[11px] font-medium text-slate-600">{formatPromoSummary(promo)}</p>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={Boolean(applyingPromoCode)}
-                            onClick={async () => {
-                              const applied = await applyPromoCode(promo?.code);
-                              if (applied) {
-                                setShowCouponModal(false);
-                              }
-                            }}
-                            className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] ${
-                              isApplied ? 'bg-emerald-600 text-white' : 'bg-white text-slate-800 border border-slate-200'
-                            } disabled:opacity-60`}
-                          >
-                            {applyingPromoCode === String(promo?.code || '').toUpperCase() ? 'Applying' : isApplied ? 'Applied' : 'Use'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-4">
-                    <p className="text-[12px] font-semibold text-slate-600">
-                      No coupons are active for this zone right now.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </React.Fragment>
-        )}
-        {showPaymentModal && (
-          <React.Fragment key="payment-modal">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowPaymentModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[28px] px-5 pt-4 pb-10 z-[101]"
-            >
-              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Payment</p>
-              <h3 className="text-[18px] font-bold text-slate-900 mb-5">Select Method</h3>
-              <div className="space-y-2.5">
-                {paymentOptions.map(({ id, stateValue, label, sub, Icon, bg, color }) => (
-                  <motion.button
-                    key={stateValue}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setPaymentMethod(stateValue);
-                      setShowPaymentModal(false);
+                <div className="mt-5 flex gap-2">
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={(event) => {
+                      setPromoCodeInput(event.target.value.toUpperCase());
+                      setPromoError('');
+                      setPromoFeedback('');
                     }}
-                    className={`w-full flex items-center gap-3.5 p-4 rounded-[18px] border-2 transition-all ${
-                      paymentMethod === stateValue ? 'border-orange-200 bg-orange-50/40' : 'border-slate-100 bg-slate-50/50'
-                    }`}
+                    placeholder="Enter coupon code"
+                    className="min-w-0 flex-1 rounded-[16px] border border-slate-200 px-4 py-3 text-[13px] font-semibold text-slate-900 outline-none transition focus:border-emerald-300"
+                  />
+                  <button
+                    type="button"
+                    disabled={Boolean(applyingPromoCode) || !selectedVehicle}
+                    onClick={async () => {
+                      const applied = await applyPromoCode(promoCodeInput);
+                      if (applied) {
+                        setShowCouponModal(false);
+                      }
+                    }}
+                    className="rounded-[16px] bg-slate-950 px-4 py-3 text-[12px] font-black uppercase tracking-[0.14em] text-white disabled:opacity-60"
                   >
-                    <div className={`w-10 h-10 rounded-[12px] ${bg} flex items-center justify-center shrink-0`}>
-                      <Icon size={18} className={color} strokeWidth={2} />
+                    {applyingPromoCode ? 'Applying' : 'Apply'}
+                  </button>
+                </div>
+
+                {(promoError || promoFeedback) && (
+                  <p className={`mt-3 text-[11px] font-semibold ${promoError ? 'text-rose-500' : 'text-emerald-600'}`}>
+                    {promoError || promoFeedback}
+                  </p>
+                )}
+
+                <div className="mt-5 max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+                  {isLoadingPromos ? (
+                    <div className="flex items-center gap-2 rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-4">
+                      <LoaderCircle size={16} className="animate-spin text-slate-500" />
+                      <span className="text-[12px] font-semibold text-slate-600">Loading available coupons</span>
                     </div>
-                    <div className="flex-1 text-left">
-                      <p className="text-[14px] font-bold text-slate-900">{label}</p>
-                      <p className="text-[11px] font-bold text-slate-400">{sub}</p>
+                  ) : availablePromos.length ? (
+                    availablePromos.map((promo) => {
+                      const isApplied = String(appliedPromo?.promo?.code || '').toUpperCase() === String(promo?.code || '').toUpperCase();
+
+                      return (
+                        <div
+                          key={promo?._id || promo?.code}
+                          className={`rounded-[18px] border px-4 py-4 ${isApplied ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-100 bg-slate-50/70'
+                            }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-[14px] font-black text-slate-900">{promo?.code}</p>
+                                {isApplied && <CheckCircle2 size={14} className="text-emerald-600" strokeWidth={2.6} />}
+                              </div>
+                              <p className="mt-1 text-[11px] font-medium text-slate-600">{formatPromoSummary(promo)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={Boolean(applyingPromoCode)}
+                              onClick={async () => {
+                                const applied = await applyPromoCode(promo?.code);
+                                if (applied) {
+                                  setShowCouponModal(false);
+                                }
+                              }}
+                              className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] ${isApplied ? 'bg-emerald-600 text-white' : 'bg-white text-slate-800 border border-slate-200'
+                                } disabled:opacity-60`}
+                            >
+                              {applyingPromoCode === String(promo?.code || '').toUpperCase() ? 'Applying' : isApplied ? 'Applied' : 'Use'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-4">
+                      <p className="text-[12px] font-semibold text-slate-600">
+                        No coupons are active for this zone right now.
+                      </p>
                     </div>
-                    {paymentMethod === stateValue && (
-                      <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
-                        <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                          <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                  )}
+                </div>
+              </motion.div>
+            </React.Fragment>
+          )}
+          {showPaymentModal && (
+            <React.Fragment key="payment-modal">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowPaymentModal(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[28px] px-5 pt-4 pb-10 z-[101]"
+              >
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Payment</p>
+                <h3 className="text-[18px] font-bold text-slate-900 mb-5">Select Method</h3>
+                <div className="space-y-2.5">
+                  {paymentOptions.map(({ id, stateValue, label, sub, Icon, bg, color }) => (
+                    <motion.button
+                      key={stateValue}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setPaymentMethod(stateValue);
+                        setShowPaymentModal(false);
+                      }}
+                      className={`w-full flex items-center gap-3.5 p-4 rounded-[18px] border-2 transition-all ${paymentMethod === stateValue ? 'border-orange-200 bg-orange-50/40' : 'border-slate-100 bg-slate-50/50'
+                        }`}
+                    >
+                      <div className={`w-10 h-10 rounded-[12px] ${bg} flex items-center justify-center shrink-0`}>
+                        <Icon size={18} className={color} strokeWidth={2} />
                       </div>
-                    )}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          </React.Fragment>
-        )}
-        {showRideModeModal && (
-          <React.Fragment key="ride-mode-modal">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowRideModeModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-              className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[32px] px-6 pt-4 pb-8 z-[101] font-['Plus_Jakarta_Sans']"
-            >
-              {/* Drag indicator */}
-              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+                      <div className="flex-1 text-left">
+                        <p className="text-[14px] font-bold text-slate-900">{label}</p>
+                        <p className="text-[11px] font-bold text-slate-400">{sub}</p>
+                      </div>
+                      {paymentMethod === stateValue && (
+                        <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                          <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                            <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                      )}
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            </React.Fragment>
+          )}
+          {showRideModeModal && (
+            <React.Fragment key="ride-mode-modal">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowRideModeModal(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto"
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[32px] px-6 pt-4 pb-8 z-[101] font-['Plus_Jakarta_Sans']"
+              >
+                {/* Drag indicator */}
+                <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
 
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8C9BA5] mb-1">
-                SCHEDULE RIDE
-              </p>
-              <h3 className="text-[22px] font-black text-[#1A2B3D] tracking-tight mb-6">
-                When do you want to leave?
-              </h3>
-
-              <p className="text-[12px] font-bold text-[#8C9BA5] mb-2">
-                Select Date & Time
-              </p>
-
-              {/* Date & Time selection input box */}
-              <div className="relative flex items-center justify-between rounded-[16px] border-2 border-slate-100 bg-[#F4F6F8] px-4 py-4 mb-8">
-                <span className="text-[16px] font-extrabold text-[#1A2B3D]">
-                  {formatDateTimeDisplay(tempScheduledAt || scheduledAt) || 'Select date & time'}
-                </span>
-                <Calendar size={18} className="text-[#1A2B3D]" />
-                <input
-                  type="datetime-local"
-                  value={tempScheduledAt || scheduledAt || ''}
-                  min={minScheduledAt}
-                  max={maxScheduledAt}
-                  onChange={(e) => {
-                    setTempScheduledAt(e.target.value);
-                    setLocalScheduleError('');
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-              </div>
-
-              {localScheduleError && (
-                <p className="text-[12px] font-semibold text-rose-500 mb-4 -mt-4 px-1">
-                  {localScheduleError}
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8C9BA5] mb-1">
+                  SCHEDULE RIDE
                 </p>
-              )}
+                <h3 className="text-[22px] font-black text-[#1A2B3D] tracking-tight mb-6">
+                  When do you want to leave?
+                </h3>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRideMode('now');
-                    setScheduledAt('');
-                    setTempScheduledAt('');
-                    setLocalScheduleError('');
-                    setShowRideModeModal(false);
-                  }}
-                  className="w-full py-3.5 rounded-[16px] bg-[#F4F6F8] text-[#1A2B3D] font-extrabold text-[14px] hover:bg-slate-200 transition-colors"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  disabled={isConfirmDisabled}
-                  onClick={() => {
-                    const valueToConfirm = tempScheduledAt || scheduledAt;
-                    setScheduledAt(valueToConfirm);
-                    setRideMode('schedule');
-                    setShowRideModeModal(false);
-                  }}
-                  className={`w-full py-3.5 rounded-[16px] font-extrabold text-[14px] transition-colors ${
-                    isConfirmDisabled
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      : 'bg-[#00A86B] text-white hover:bg-[#00915c]'
-                  }`}
-                >
-                  Confirm Schedule
-                </button>
-              </div>
-            </motion.div>
-          </React.Fragment>
-        )}
+                <p className="text-[12px] font-bold text-[#8C9BA5] mb-2">
+                  Select Date & Time
+                </p>
+
+                {/* Date & Time selection input box */}
+                <div className="relative flex items-center justify-between rounded-[16px] border-2 border-slate-100 bg-[#F4F6F8] px-4 py-4 mb-8">
+                  <span className="text-[16px] font-extrabold text-[#1A2B3D]">
+                    {formatDateTimeDisplay(tempScheduledAt || scheduledAt) || 'Select date & time'}
+                  </span>
+                  <Calendar size={18} className="text-[#1A2B3D]" />
+                  <input
+                    type="datetime-local"
+                    value={tempScheduledAt || scheduledAt || ''}
+                    min={minScheduledAt}
+                    max={maxScheduledAt}
+                    onChange={(e) => {
+                      setTempScheduledAt(e.target.value);
+                      setLocalScheduleError('');
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+
+                {localScheduleError && (
+                  <p className="text-[12px] font-semibold text-rose-500 mb-4 -mt-4 px-1">
+                    {localScheduleError}
+                  </p>
+                )}
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-3.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRideMode('now');
+                      setScheduledAt('');
+                      setTempScheduledAt('');
+                      setLocalScheduleError('');
+                      setShowRideModeModal(false);
+                    }}
+                    className="w-full py-3.5 rounded-[16px] bg-[#F4F6F8] text-[#1A2B3D] font-extrabold text-[14px] hover:bg-slate-200 transition-colors"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isConfirmDisabled}
+                    onClick={() => {
+                      const valueToConfirm = tempScheduledAt || scheduledAt;
+                      setScheduledAt(valueToConfirm);
+                      setRideMode('schedule');
+                      setShowRideModeModal(false);
+                    }}
+                    className={`w-full py-3.5 rounded-[16px] font-extrabold text-[14px] transition-colors ${isConfirmDisabled
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#00A86B] text-white hover:bg-[#00915c]'
+                      }`}
+                  >
+                    Confirm Schedule
+                  </button>
+                </div>
+              </motion.div>
+            </React.Fragment>
+          )}
         </AnimatePresence>
       </AnimatePresence>
     </div>

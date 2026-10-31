@@ -219,6 +219,8 @@ const ParcelTracking = () => {
     [dropPosition, pickupPosition, tripStatus],
   );
 
+  const initialCenterRef = useRef(driverPosition);
+
   const driver = useMemo(() => mergeDriverSnapshot(state.driver || {}, rideRealtime?.driver || {}), [state.driver, rideRealtime?.driver]);
   const vehicleIcon = getTrackingVehicleIcon(state, driver);
   const displayDriverHeading = useMemo(() => {
@@ -680,29 +682,24 @@ const ParcelTracking = () => {
       return;
     }
 
-    if (routePath.length > 1) {
-      if (!hasAutoFramedMapRef.current) {
-        const bounds = new window.google.maps.LatLngBounds();
-        routePath.forEach((point) => bounds.extend(point));
-        bounds.extend(driverPosition);
-        bounds.extend(activeDestination);
-        map.fitBounds(bounds, { top: 120, right: 48, bottom: 320, left: 48 });
-        hasAutoFramedMapRef.current = true;
-        return;
-      }
+    // The bottom sheet covers roughly half of the screen, so keep the driver, the destination
+    // and the route inside the visible strip above it instead of centering under the sheet.
+    const sheetHeight = Math.min(400, Math.round(window.innerHeight * 0.55));
+    const padding = { top: 140, right: 48, bottom: sheetHeight + 24, left: 48 };
 
-      map.panTo(driverPosition);
+    if (!arePositionsNearlyEqual(driverPosition, activeDestination)) {
+      const bounds = new window.google.maps.LatLngBounds();
+      routePath.forEach((point) => bounds.extend(point));
+      bounds.extend(driverPosition);
+      bounds.extend(activeDestination);
+      map.fitBounds(bounds, padding);
       return;
     }
 
-    if (!hasAutoFramedMapRef.current) {
-      map.panTo(driverPosition);
-      map.setZoom(15);
-      hasAutoFramedMapRef.current = true;
-      return;
-    }
-
-    map.panTo(driverPosition);
+    // Driver is at the destination: center it in the visible area above the sheet.
+    map.setCenter(driverPosition);
+    map.setZoom(16);
+    map.panBy(0, Math.round((sheetHeight - 140) / 2));
   }, [activeDestination, driverPosition, map, routePath]);
 
   const handleCall = () => {
@@ -861,7 +858,7 @@ const ParcelTracking = () => {
         {isLoaded ? (
           <GoogleMap
             mapContainerStyle={MAP_CONTAINER_STYLE}
-            center={driverPosition}
+            center={initialCenterRef.current}
             zoom={15}
             onLoad={setMap}
             options={{

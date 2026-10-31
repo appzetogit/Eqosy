@@ -2555,44 +2555,7 @@ const ActiveTrip = () => {
                     </div>
                 )}
 
-                <div className="absolute top-44 left-4 z-40 w-36 sm:w-40 max-w-[calc(100vw-2rem)] rounded-xl border border-white/80 bg-white/94 px-2.5 py-2 shadow-md backdrop-blur-md">
-                    <div className="mb-1 flex items-center justify-between gap-1.5">
-                        <div className="min-w-0">
-                            <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-400">Simulation</p>
-                            <p className="mt-0.5 truncate text-[10px] font-black text-slate-900">
-                                {isSimulationRunning ? 'Following route' : isSimulationEnabled ? 'Paused' : 'Real GPS'}
-                            </p>
-                        </div>
-                        <span
-                            className={`h-2 w-2 shrink-0 rounded-full ${isSimulationRunning ? 'animate-pulse' : ''}`}
-                            style={{ backgroundColor: isSimulationEnabled ? routeStrokeColor : '#cbd5e1' }}
-                        />
-                    </div>
-                    <div className="mb-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                            className="h-full rounded-full transition-all"
-                            style={{ backgroundColor: routeStrokeColor, width: `${isSimulationEnabled ? simulationProgress : 0}%` }}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                            type="button"
-                            onClick={isSimulationRunning ? pauseSimulation : isSimulationEnabled ? resumeSimulation : startSimulation}
-                            className="h-7 rounded-lg px-1 text-[8px] font-black uppercase tracking-wide text-white active:scale-95"
-                            style={{ backgroundColor: routeStrokeColor }}
-                        >
-                            {isSimulationRunning ? 'Pause' : isSimulationEnabled ? 'Resume' : 'Start'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={resetSimulation}
-                            disabled={!isSimulationEnabled}
-                            className="h-7 rounded-lg border border-slate-100 bg-slate-50 px-1 text-[8px] font-black uppercase tracking-wide text-slate-500 active:scale-95 disabled:opacity-40"
-                        >
-                            Reset
-                        </button>
-                    </div>
-                </div>
+                
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 z-40 max-h-[50vh] overflow-y-auto">

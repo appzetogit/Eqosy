@@ -79,6 +79,7 @@ const SelectLocation = () => {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [gpsFix, setGpsFix] = useState(null);
   const [activeZones, setActiveZones] = useState([]);
   const [isLoadingZones, setIsLoadingZones] = useState(true);
   const zonePaths = useMemo(() => getZonePathsFromZones(activeZones), [activeZones]);
@@ -162,24 +163,13 @@ const SelectLocation = () => {
         const coords = [lng, lat];
         setPickupCoords(coords);
         setMapCenter({ lat, lng });
-
-        if (window.google?.maps?.Geocoder) {
-          const geocoder = new window.google.maps.Geocoder();
-          geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-            if (status === 'OK' && results?.[0]) {
-              const addr = results[0].formatted_address;
-              setPickup(addr);
-              saveLocation({ address: addr, lat, lon: lng, updatedAt: Date.now() });
-            } else {
-              const raw = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-              setPickup(raw);
-              saveLocation({ address: raw, lat, lon: lng, updatedAt: Date.now() });
-            }
-            setIsLocating(false);
-          });
-        } else {
-          setIsLocating(false);
-        }
+        // Always persist the fresh GPS fix so next app open starts from the latest location;
+        // the address is refined by the geocode effect once Google Maps is loaded.
+        const raw = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setPickup(raw);
+        saveLocation({ address: raw, lat, lon: lng, updatedAt: Date.now() });
+        setGpsFix({ lat, lng });
+        setIsLocating(false);
       };
 
       const onError = (err) => {
@@ -201,6 +191,23 @@ const SelectLocation = () => {
       );
     }
   }, []);
+
+  // Reverse-geocode the auto-fetched GPS fix as soon as Google Maps is ready.
+  useEffect(() => {
+    if (!gpsFix || !isLoaded || !window.google?.maps?.Geocoder) {
+      return;
+    }
+
+    const { lat, lng } = gpsFix;
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === 'OK' && results?.[0]) {
+        const addr = results[0].formatted_address;
+        setPickup(addr);
+        saveLocation({ address: addr, lat, lon: lng, updatedAt: Date.now() });
+      }
+    });
+  }, [gpsFix, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.places?.AutocompleteService) {

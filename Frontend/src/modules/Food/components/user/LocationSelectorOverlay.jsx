@@ -293,6 +293,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           lon: Number(longitude),
           updatedAt: Date.now(),
         }))
+        window.dispatchEvent(new Event("deliveryAddressModeChanged"))
         window.dispatchEvent(new Event("storage"))
         window.dispatchEvent(new Event("eqosy:location-updated"))
         window.dispatchEvent(new CustomEvent("userLocationUpdated", { detail: locationData }))

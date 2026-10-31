@@ -1698,9 +1698,10 @@ export function useLocation() {
                   return;
                 }
                 if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-                // Still do a quiet background fresh fetch if permission is granted
+                // Permission granted: always re-fetch real GPS on app open (forceFresh) so a stale
+                // cached/DB location never wins; cached value stays visible until this resolves.
                 if (permissionGranted) {
-                  getLocation(true, false, false).then((freshLoc) => {
+                  getLocation(true, true, false).then((freshLoc) => {
                     if (freshLoc?.latitude && freshLoc?.longitude) setLocation(freshLoc);
                   }).catch(() => {});
                 }
