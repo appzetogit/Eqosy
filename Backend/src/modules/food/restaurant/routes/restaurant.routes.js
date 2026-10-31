@@ -8,6 +8,7 @@ import {
     registerRestaurantController,
     listApprovedRestaurantsController,
     getApprovedRestaurantController,
+    getRestaurantRoadDistanceController,
     listPublicOffersController,
     getCurrentRestaurantController,
     updateRestaurantProfileController,
@@ -97,6 +98,7 @@ router.post('/upload-attachment', upload.single('file'), uploadRestaurantAttachm
 // Public: approved restaurants list (for user app)
 
 router.get('/restaurants', cacheResponse(300, 'restaurants'), listApprovedRestaurantsController);
+router.get('/restaurants/:id/road-distance', getRestaurantRoadDistanceController);
 router.get('/restaurants/:id', cacheResponse(600, 'restaurant_detail'), getApprovedRestaurantController);
 router.get('/restaurants/:id/menu', cacheResponse(600, 'restaurant_menu'), getPublicRestaurantMenuController);
 router.get('/restaurants/:id/outlet-timings', cacheResponse(600, 'restaurant_timings'), getOutletTimingsByRestaurantIdController);

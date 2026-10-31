@@ -2,6 +2,7 @@ import {
     registerRestaurant,
     listApprovedRestaurants,
     getApprovedRestaurantByIdOrSlug,
+    getRestaurantRoadDistance,
     getCurrentRestaurantProfile,
     updateRestaurantProfile,
     updateRestaurantAcceptingOrders,
@@ -55,6 +56,18 @@ export const getApprovedRestaurantController = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Restaurant not found' });
         }
         return sendResponse(res, 200, 'Restaurant fetched successfully', { restaurant });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRestaurantRoadDistanceController = async (req, res, next) => {
+    try {
+        const result = await getRestaurantRoadDistance(req.params.id, req.query.lat, req.query.lng);
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Distance not available' });
+        }
+        return sendResponse(res, 200, 'Distance fetched successfully', result);
     } catch (error) {
         next(error);
     }

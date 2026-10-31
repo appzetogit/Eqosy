@@ -1519,6 +1519,12 @@ export const restaurantAPI = {
   /** Public: get single approved restaurant by id or slug */
   getRestaurantById: (id, config = {}) =>
     apiClient.get(`/food/restaurant/restaurants/${String(id)}`, { ...config }),
+  /** Public: Google road distance (restaurant -> user), same as billing */
+  getRoadDistance: (id, lat, lng, config = {}) =>
+    apiClient.get(`/food/restaurant/restaurants/${String(id)}/road-distance`, {
+      ...config,
+      params: { lat, lng },
+    }),
   /** Public: get approved menu by restaurant id or slug */
   getMenuByRestaurantId: (id, config = {}) =>
     getPublicRestaurantMenuOnce(id, config),

@@ -580,9 +580,32 @@ function CartInner() {
   ])
 
   const defaultAddress = useMemo(() => {
-    return deliveryAddressMode === "current"
-      ? currentLocationAddress || selectedAddress || savedAddress || null
-      : selectedAddress || savedAddress || currentLocationAddress || null
+    const savedChoice = selectedAddress || savedAddress || null
+    let preferCurrent = deliveryAddressMode === "current"
+
+    // The location the user picked (stored userLocation) is the source of truth. If it points somewhere other
+    // than the saved address Cart would otherwise use (> ~150 m apart), the user changed location after that
+    // address was chosen, so deliver to the changed location instead of silently billing a stale saved address.
+    if (!preferCurrent && currentLocationAddress && savedChoice) {
+      const savedCoords = extractCoords(savedChoice)
+      const pickedCoords = extractCoords(currentLocationAddress)
+      if (
+        savedCoords &&
+        pickedCoords &&
+        calculateDistanceInKm(
+          savedCoords.latitude,
+          savedCoords.longitude,
+          pickedCoords.latitude,
+          pickedCoords.longitude
+        ) > 0.15
+      ) {
+        preferCurrent = true
+      }
+    }
+
+    return preferCurrent
+      ? currentLocationAddress || savedChoice
+      : savedChoice || currentLocationAddress || null
   }, [deliveryAddressMode, currentLocationAddress, selectedAddress, savedAddress])
 
   const hasSavedAddress = Boolean(defaultAddress && formatFullAddress(defaultAddress))

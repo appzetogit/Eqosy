@@ -1131,38 +1131,24 @@ function RestaurantDetailsContent() {
         })
       }
 
-      // Check if Google Maps DirectionsService is available for accurate road driving distance
-      if (window.google?.maps?.DirectionsService) {
-        try {
-          const directionsService = new window.google.maps.DirectionsService();
-          directionsService.route(
-            {
-              origin: { lat: restaurantLat, lng: restaurantLng },
-              destination: { lat: userLat, lng: userLng },
-              travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (result, status) => {
-              if (status === 'OK' && result?.routes?.[0]?.legs?.[0]) {
-                const leg = result.routes[0].legs[0];
-                const roadDistMeters = leg.distance?.value || 0;
-                const roadDistKm = roadDistMeters / 1000;
-                let roadFormatted = null;
-                if (roadDistKm >= 1) {
-                  roadFormatted = `${roadDistKm.toFixed(1)} km`;
-                } else {
-                  roadFormatted = `${Math.round(roadDistMeters)} m`;
-                }
-                if (roadFormatted && roadFormatted !== prevDistanceRef.current) {
-                  prevDistanceRef.current = roadFormatted;
-                  setRestaurant(prev => {
-                    if (prev?.distance === roadFormatted) return prev;
-                    return { ...prev, distance: roadFormatted };
-                  });
-                }
-              }
-            }
-          );
-        } catch {}
+      // Replace the estimate with the backend's Google road distance - the exact value billing uses,
+      // so the restaurant page and the bill show the same km for the same location.
+      if (slug) {
+        restaurantAPI
+          .getRoadDistance(encodeURIComponent(slug), userLat, userLng)
+          .then((res) => {
+            const roadFormatted = res?.data?.data?.distance
+            if (!roadFormatted) return
+            // Ignore a stale answer if the user location changed meanwhile.
+            const latest = prevCoordsRef.current
+            if (latest.userLat !== userLat || latest.userLng !== userLng) return
+            prevDistanceRef.current = roadFormatted
+            setRestaurant((prev) => {
+              if (!prev || prev.distance === roadFormatted) return prev
+              return { ...prev, distance: roadFormatted }
+            })
+          })
+          .catch(() => {})
       }
     }
   }, [activeUserLocation?.latitude, activeUserLocation?.longitude, restaurantLat, restaurantLng])

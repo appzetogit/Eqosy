@@ -1918,6 +1918,36 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug) => {
     return withOffers[0];
 };
 
+/**
+ * Road distance (restaurant -> user) for the restaurant page. Uses the same Google road distance, direction and
+ * 1.08 straight-line fallback as billing (order-pricing.service.js) so the page and the bill show the same km.
+ */
+export const getRestaurantRoadDistance = async (idOrSlug, lat, lng) => {
+    const uLat = Number(lat);
+    const uLng = Number(lng);
+    if (!Number.isFinite(uLat) || !Number.isFinite(uLng)) return null;
+
+    const restaurant = await getApprovedRestaurantByIdOrSlug(idOrSlug);
+    if (!restaurant) return null;
+
+    const c = restaurant.location?.coordinates;
+    const rLng = Array.isArray(c) && c.length >= 2 ? Number(c[0]) : Number(restaurant.location?.longitude ?? restaurant.longitude);
+    const rLat = Array.isArray(c) && c.length >= 2 ? Number(c[1]) : Number(restaurant.location?.latitude ?? restaurant.latitude);
+    if (!Number.isFinite(rLat) || !Number.isFinite(rLng)) return null;
+
+    let distanceKm = Math.round(haversineKm(rLat, rLng, uLat, uLng) * 1.08 * 10) / 10;
+    try {
+        const road = await getGoogleRoadDistance({ lat: rLat, lng: rLng }, { lat: uLat, lng: uLng });
+        if (road?.distanceKm > 0) distanceKm = road.distanceKm;
+    } catch {
+        // keep estimate
+    }
+    return {
+        distanceKm,
+        distance: distanceKm >= 1 ? `${distanceKm.toFixed(1)} km` : `${Math.round(distanceKm * 1000)} m`,
+    };
+};
+
 export const listPublicOffers = async () => {
     const now = new Date();
     const filter = {
