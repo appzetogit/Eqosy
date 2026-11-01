@@ -4,6 +4,7 @@ import AppColorSync from './AppColorSync'
 import LanguageSwitcher from '../shared/language/LanguageSwitcher'
 import ErrorBoundary from '../shared/components/ErrorBoundary'
 import OfflineBanner from '../shared/components/OfflineBanner'
+import UserLocationGate from '../shared/components/UserLocationGate'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <AppColorSync />
       <LanguageSwitcher />
       <AppRoutes />
+      <UserLocationGate />
     </ErrorBoundary>
   )
 }
