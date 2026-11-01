@@ -91,20 +91,60 @@ export default function UserLocationGate() {
   const [, forceTick] = useState(0)
   const busyRef = useRef(false)
 
-  const probe = useCallback(() => {
+  const timeoutsRef = useRef(0)
+  const busyTimerRef = useRef(null)
+
+  const releaseBusy = () => {
+    busyRef.current = false
+    if (busyTimerRef.current) {
+      clearTimeout(busyTimerRef.current)
+      busyTimerRef.current = null
+    }
+  }
+
+  const probe = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return
     if (busyRef.current || document.visibilityState === "hidden") return
     busyRef.current = true
+    // Some browsers never call back (e.g. permission prompt dismissed, GPS hung).
+    // Without this watchdog busyRef stays true forever and the popup never returns.
+    busyTimerRef.current = setTimeout(() => {
+      busyRef.current = false
+      busyTimerRef.current = null
+    }, 12000)
+
+    // Permission API tells us "denied" instantly, without waiting for a GPS fix.
+    try {
+      const perm = await navigator.permissions?.query?.({ name: "geolocation" })
+      if (perm?.state === "denied") {
+        releaseBusy()
+        setStatus("denied")
+        return
+      }
+    } catch {
+      /* Permissions API unsupported — fall through to getCurrentPosition */
+    }
+
     navigator.geolocation.getCurrentPosition(
       () => {
-        busyRef.current = false
+        releaseBusy()
+        timeoutsRef.current = 0
         setStatus("ok")
       },
       (err) => {
-        busyRef.current = false
-        if (err?.code === 1) setStatus("denied")
-        else if (err?.code === 2) setStatus("off")
-        // code 3 (timeout) is inconclusive: keep the previous state
+        releaseBusy()
+        if (err?.code === 1) {
+          timeoutsRef.current = 0
+          setStatus("denied")
+        } else if (err?.code === 2) {
+          timeoutsRef.current = 0
+          setStatus("off")
+        } else {
+          // Timeout: with GPS switched off many Android browsers time out instead of
+          // returning POSITION_UNAVAILABLE. Two timeouts in a row => treat as off.
+          timeoutsRef.current += 1
+          if (timeoutsRef.current >= 2) setStatus("off")
+        }
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
     )
@@ -120,6 +160,7 @@ export default function UserLocationGate() {
       if (document.visibilityState === "visible") probe()
     }
     window.addEventListener("focus", probe)
+    window.addEventListener("pageshow", probe)
     document.addEventListener("visibilitychange", onVisible)
 
     let permStatus = null
@@ -137,6 +178,7 @@ export default function UserLocationGate() {
       cancelled = true
       clearInterval(interval)
       window.removeEventListener("focus", probe)
+      window.removeEventListener("pageshow", probe)
       document.removeEventListener("visibilitychange", onVisible)
       if (permStatus) permStatus.onchange = null
     }
@@ -163,7 +205,7 @@ export default function UserLocationGate() {
       (err) => {
         setRequesting(false)
         if (err?.code === 1) setStatus("denied")
-        else if (err?.code === 2) setStatus("off")
+        else setStatus("off")
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     )

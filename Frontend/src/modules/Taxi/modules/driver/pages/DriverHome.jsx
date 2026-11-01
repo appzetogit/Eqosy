@@ -2480,9 +2480,11 @@ const DriverHome = () => {
                                                             {formatFareLabel(ride.fare || ride.baseFare)}
                                                         </span>
                                                     </div>
-                                                    <p className="mt-3 text-[11px] font-bold text-slate-500 line-clamp-1">
-                                                        {ride.user?.name || 'Customer'}{ride.user?.phone ? ` • ${ride.user.phone}` : ''}
-                                                    </p>
+                                                    {ride.isAssignedToCurrentDriver ? (
+                                                        <p className="mt-3 text-[11px] font-bold text-slate-500 line-clamp-1">
+                                                            {ride.user?.name || 'Customer'}{ride.user?.phone ? ` • ${ride.user.phone}` : ''}
+                                                        </p>
+                                                    ) : null}
                                                     <p className="mt-2 text-[11px] font-bold text-slate-700 line-clamp-1">
                                                         Pickup: {ride.pickupAddress || 'Pickup point'}
                                                     </p>

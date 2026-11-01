@@ -200,6 +200,16 @@ const closeDriverRequestWindow = (rideId, driverIds = []) => {
   }
 };
 
+// Parcel sender/receiver contact details stay hidden until the driver accepts the delivery.
+const hideParcelContacts = (parcel) => {
+  if (!parcel) {
+    return null;
+  }
+  const source = typeof parcel.toObject === 'function' ? parcel.toObject() : parcel;
+  const { senderName, senderMobile, receiverName, receiverMobile, ...safeParcel } = source;
+  return safeParcel;
+};
+
 const emitRideRequestToDrivers = async ({
   ride,
   targetDrivers = [],
@@ -222,11 +232,9 @@ const emitRideRequestToDrivers = async ({
       type: ride.serviceType || 'ride',
       serviceType: ride.serviceType || 'ride',
       userId: String(ride.userId),
+      // Rider name/phone are hidden until the driver accepts the ride.
       user: {
         id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
-        name: ride.userId?.name || 'Customer',
-        phone: ride.userId?.phone || '',
-        countryCode: ride.userId?.countryCode || '',
       },
       pickupLocation: ride.pickupLocation,
       pickupAddress: ride.pickupAddress || '',
@@ -260,7 +268,7 @@ const emitRideRequestToDrivers = async ({
       fareIncreaseWaitMinutes: Number(ride.fareIncreaseWaitMinutes || 0),
       nextFareIncreaseAt: ride.nextFareIncreaseAt || null,
       paymentMethod: ride.paymentMethod,
-      parcel: ride.parcel || null,
+      parcel: hideParcelContacts(ride.parcel),
       intercity: ride.intercity || null,
       radius: effectiveRadius,
       attempt: attemptIndex + 1,
@@ -1331,11 +1339,9 @@ export const getActivePendingDispatchForDriver = async (driverId, requestedRideI
         type: ride.serviceType || 'ride',
         serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId?._id || ride.userId || ''),
+        // Rider name/phone are hidden until the driver accepts the ride.
         user: {
           id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
-          name: ride.userId?.name || 'Customer',
-          phone: ride.userId?.phone || '',
-          countryCode: ride.userId?.countryCode || '',
         },
         pickupLocation: ride.pickupLocation,
         pickupAddress: ride.pickupAddress || '',
@@ -1369,7 +1375,7 @@ export const getActivePendingDispatchForDriver = async (driverId, requestedRideI
         fareIncreaseWaitMinutes: Number(ride.fareIncreaseWaitMinutes || 0),
         nextFareIncreaseAt: ride.nextFareIncreaseAt || null,
         paymentMethod: ride.paymentMethod || 'cash',
-        parcel: ride.parcel || null,
+        parcel: hideParcelContacts(ride.parcel),
         intercity: ride.intercity || null,
         attempt: attemptIndex + 1,
         maxAttempts: dispatchConfig.maxAttempts || 5,

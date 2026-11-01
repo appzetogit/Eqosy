@@ -8,10 +8,8 @@ import {
   CreditCard,
   MapPin,
   Navigation,
-  Phone,
   Package,
   Route,
-  User,
   X,
 } from 'lucide-react';
 import { getScheduledRideCountdown } from '../utils/scheduledRideTime';
@@ -169,11 +167,6 @@ const IncomingRideRequest = ({
   const maxAttempts = Number(data.maxAttempts || data.raw?.maxAttempts || 1);
   const searchRadiusMeters = Number(data.raw?.radius || data.radius || 0);
   const searchRadiusLabel = searchRadiusMeters > 0 ? `${(searchRadiusMeters / 1000).toFixed(1)} km` : 'nearby';
-  const customerName = data.customer?.name || data.raw?.user?.name || 'Customer';
-  const customerPhone = [data.customer?.countryCode, data.customer?.phone]
-    .filter(Boolean)
-    .join(' ')
-    .trim() || data.raw?.user?.phone || '';
   const incomingGst = resolveRideGst(data.raw);
   const pricingNegotiationMode = String(data.raw?.pricingNegotiationMode || 'none').toLowerCase();
   const isBidding = pricingNegotiationMode === 'driver_bid' && (Boolean(data.raw?.bidding?.enabled) || String(data.raw?.bookingMode || '').toLowerCase() === 'bidding');
@@ -343,22 +336,6 @@ const IncomingRideRequest = ({
                 </div>
               </div>
             )}
-
-            <div className="mb-4 rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-white border border-slate-100 text-slate-700 shadow-sm">
-                  <User size={18} strokeWidth={2.3} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-400">Customer</p>
-                  <p className="mt-1 truncate text-[14px] font-black text-slate-950">{customerName}</p>
-                  <div className="mt-1 flex items-center gap-1.5 text-slate-500">
-                    <Phone size={11} strokeWidth={2.5} />
-                    <p className="truncate text-[11px] font-bold">{customerPhone || 'Phone not available'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             <div className="mb-5 rounded-[20px] border border-slate-100 bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
               <div className="relative">
