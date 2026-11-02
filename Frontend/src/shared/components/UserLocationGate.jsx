@@ -6,7 +6,7 @@ import { MapPin, Crosshair } from "lucide-react"
  * UserLocationGate — global popup for the USER side of the app.
  *
  * Whenever the user's device location is unavailable (GPS switched off, or the
- * browser permission is not granted / blocked) a "Turn on" popup is shown.
+ * browser permission is not granted / blocked, or accuracy is only coarse IP) a "Turn on" popup is shown.
  * On "Turn on" we request the real position (this triggers the browser's
  * permission dialog when possible) and, on success, store it and notify the
  * rest of the app. It re-appears every time location goes off again:
@@ -41,7 +41,6 @@ const EXCLUDED_PREFIXES = [
 
 function isUserSurface(pathname) {
   const p = (pathname || "/").toLowerCase()
-  if (p === "/" || p === "") return false
   if (/\/(login|otp|verify|signup|register)(\/|$)/.test(p)) return false
   return !EXCLUDED_PREFIXES.some((prefix) => p === prefix || p.startsWith(`${prefix}/`))
 }
@@ -103,17 +102,19 @@ export default function UserLocationGate() {
   }
 
   const probe = useCallback(async () => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setStatus("off")
+      return
+    }
     if (busyRef.current || document.visibilityState === "hidden") return
     busyRef.current = true
-    // Some browsers never call back (e.g. permission prompt dismissed, GPS hung).
-    // Without this watchdog busyRef stays true forever and the popup never returns.
+
     busyTimerRef.current = setTimeout(() => {
       busyRef.current = false
       busyTimerRef.current = null
     }, 12000)
 
-    // Permission API tells us "denied" instantly, without waiting for a GPS fix.
+    // Permission API tells us "denied" or "prompt" instantly
     try {
       const perm = await navigator.permissions?.query?.({ name: "geolocation" })
       if (perm?.state === "denied") {
@@ -121,32 +122,40 @@ export default function UserLocationGate() {
         setStatus("denied")
         return
       }
+      if (perm?.state === "prompt") {
+        releaseBusy()
+        setStatus("off")
+        return
+      }
     } catch {
       /* Permissions API unsupported — fall through to getCurrentPosition */
     }
 
     navigator.geolocation.getCurrentPosition(
-      () => {
+      (pos) => {
         releaseBusy()
         timeoutsRef.current = 0
-        setStatus("ok")
+        const accuracy = pos?.coords?.accuracy
+        // Real GPS on phones is typically 5-50 meters. IP/cell tower is > 1000m.
+        // If accuracy is worse than 1000m, phone GPS is OFF!
+        if (accuracy && accuracy > 1000) {
+          setStatus("off")
+        } else {
+          setStatus("ok")
+          persistPosition(pos)
+        }
       },
       (err) => {
         releaseBusy()
         if (err?.code === 1) {
           timeoutsRef.current = 0
           setStatus("denied")
-        } else if (err?.code === 2) {
+        } else {
           timeoutsRef.current = 0
           setStatus("off")
-        } else {
-          // Timeout: with GPS switched off many Android browsers time out instead of
-          // returning POSITION_UNAVAILABLE. Two timeouts in a row => treat as off.
-          timeoutsRef.current += 1
-          if (timeoutsRef.current >= 2) setStatus("off")
         }
       },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     )
   }, [])
 
@@ -199,6 +208,12 @@ export default function UserLocationGate() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setRequesting(false)
+        const accuracy = pos?.coords?.accuracy
+        if (accuracy && accuracy > 1000) {
+          // Device GPS is still off (only coarse IP/network available)
+          setStatus("off")
+          return
+        }
         setStatus("ok")
         persistPosition(pos)
       },

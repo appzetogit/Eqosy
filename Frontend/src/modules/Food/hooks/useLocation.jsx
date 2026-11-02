@@ -124,12 +124,22 @@ export function useLocation() {
       const stored = localStorage.getItem("userLocation");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed?.latitude && parsed?.longitude) return parsed;
+        // Clear coarse IP estimates (e.g. West Bengal from ISP) if not manually chosen
+        if (
+          (parsed?.accuracy && parsed.accuracy > 1000 && !parsed.isManual) ||
+          (parsed?.state === "West Bengal" && !parsed?.isManual && (!parsed?.accuracy || parsed?.accuracy > 1000))
+        ) {
+          localStorage.removeItem("userLocation");
+        } else if (parsed?.latitude && parsed?.longitude) {
+          return parsed;
+        }
       }
       const taxiStored = localStorage.getItem("eqosy:lastLocation");
       if (taxiStored) {
         const parsed = JSON.parse(taxiStored);
-        if (parsed?.lat && parsed?.lon) {
+        if (parsed?.accuracy && parsed.accuracy > 1000) {
+          localStorage.removeItem("eqosy:lastLocation");
+        } else if (parsed?.lat && parsed?.lon) {
           return {
             latitude: Number(parsed.lat),
             longitude: Number(parsed.lon),
@@ -177,16 +187,30 @@ export function useLocation() {
       } catch {}
     };
 
+    const handleDeviceLocationEnabled = (e) => {
+      const { latitude, longitude, accuracy } = e?.detail || {};
+      if (latitude && longitude && (!accuracy || accuracy <= 1000)) {
+        getLocation(true, true, false).then((freshLoc) => {
+          if (freshLoc?.latitude && freshLoc?.longitude) {
+            setLocation(freshLoc);
+            setPermissionGranted(true);
+          }
+        }).catch(() => {});
+      }
+    };
+
     window.addEventListener('storage', handleLocationSync);
     window.addEventListener('eqosy:location-updated', handleLocationSync);
     window.addEventListener('userLocationUpdated', handleLocationSync);
     window.addEventListener('locationChanged', handleLocationSync);
+    window.addEventListener('eqosy:device-location-enabled', handleDeviceLocationEnabled);
 
     return () => {
       window.removeEventListener('storage', handleLocationSync);
       window.removeEventListener('eqosy:location-updated', handleLocationSync);
       window.removeEventListener('userLocationUpdated', handleLocationSync);
       window.removeEventListener('locationChanged', handleLocationSync);
+      window.removeEventListener('eqosy:device-location-enabled', handleDeviceLocationEnabled);
     };
   }, []);
 
@@ -868,6 +892,19 @@ export function useLocation() {
               const { latitude, longitude, accuracy } = pos.coords
               const timestamp = pos.timestamp || Date.now()
 
+              // Real phone GPS location check:
+              // If accuracy is worse than 1000m, this is a coarse IP or cell-tower estimate, NOT real phone GPS!
+              if (accuracy && accuracy > 1000) {
+                debugWarn("?? Accuracy is too coarse (> 1000m). Rejecting IP/network estimate:", accuracy)
+                const customErr = new Error("Device location (GPS) is turned off or accuracy is too low.")
+                customErr.code = 2
+                setError(customErr.message)
+                setPermissionGranted(false)
+                if (showLoading) setLoading(false)
+                reject(customErr)
+                return
+              }
+
               debugLog(`? Got location${isRetry ? ' (lower accuracy)' : ' (high accuracy)'}:`, {
                 latitude,
                 longitude,
@@ -1073,17 +1110,7 @@ export function useLocation() {
             }
           },
           async (err) => {
-            // If timeout and we haven't retried yet, try with lower accuracy
-            if (err.code === 3 && retryCount === 0 && options.enableHighAccuracy) {
-              debugWarn("?? High accuracy timeout, retrying with lower accuracy...")
-              // Retry with lower accuracy - faster response (uses network-based location)
-              getPositionWithRetry({
-                enableHighAccuracy: false,
-                timeout: 5000,  // 5 seconds for lower accuracy (network-based is faster)
-                maximumAge: 300000 // Allow 5 minute old cached location for instant response
-              }, 1).then(resolve).catch(reject)
-              return
-            }
+// High accuracy required: do not silently downgrade to coarse IP network location
 
             // Don't log timeout errors as errors - they're expected in some cases
             if (err.code === 3) {
@@ -1573,12 +1600,22 @@ export function useLocation() {
         const hasLatLng = Number.isFinite(lat) && Number.isFinite(lng)
 
         if (parsedLocation && hasLatLng) {
-          setLocation(parsedLocation)
-          setPermissionGranted(true)
-          setLoading(false) // Set loading to false immediately
-          hasInitialLocation = true
-          shouldForceRefresh = false
-          debugLog("?? Loaded stored location instantly (no auto-refresh):", parsedLocation)
+          if (
+            (parsedLocation?.accuracy && parsedLocation.accuracy > 1000 && !parsedLocation.isManual) ||
+            (parsedLocation?.state === "West Bengal" && !parsedLocation.isManual && (!parsedLocation?.accuracy || parsedLocation?.accuracy > 1000))
+          ) {
+            localStorage.removeItem("userLocation");
+            setLocation(null);
+            hasInitialLocation = false;
+            shouldForceRefresh = true;
+          } else {
+            setLocation(parsedLocation)
+            setPermissionGranted(true)
+            setLoading(false) // Set loading to false immediately
+            hasInitialLocation = true
+            shouldForceRefresh = false
+            debugLog("?? Loaded stored location instantly (no auto-refresh):", parsedLocation)
+          }
         } else {
           // If we don't have usable coordinates, we must fetch once on first open.
           debugLog("?? Stored location missing coordinates; will fetch once")
@@ -1681,6 +1718,12 @@ export function useLocation() {
           if (storedRaw) {
             try {
               const parsedStored = JSON.parse(storedRaw)
+              if (
+                (parsedStored?.accuracy && parsedStored.accuracy > 1000 && !parsedStored.isManual) ||
+                (parsedStored?.state === "West Bengal" && !parsedStored.isManual && (!parsedStored?.accuracy || parsedStored?.accuracy > 1000))
+              ) {
+                localStorage.removeItem("userLocation");
+              }
               const isUsable = parsedStored?.latitude &&
                 parsedStored?.longitude &&
                 parsedStored.address !== "Select location" &&
