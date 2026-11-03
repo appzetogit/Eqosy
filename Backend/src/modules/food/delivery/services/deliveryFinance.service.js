@@ -32,7 +32,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
         getDeliveryCashLimitSettings(),
         // 1. Total Earnings from Delivered Orders
         FoodOrder.aggregate([
-            { $match: { 'dispatch.deliveryPartnerId': partnerId, orderStatus: 'delivered' } },
+            { $match: { 'dispatch.deliveryPartnerId': partnerId, orderStatus: { $in: ['delivered', 'returned_to_restaurant'] } } },
             { $group: { _id: null, totalEarned: { $sum: { $ifNull: ['$riderEarning', 0] } } } }
         ]),
         // 2. Gross cash collected (COD orders)
@@ -100,7 +100,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
 
     // Fetch transactions for UI (Orders, Bonuses, Withdrawals)
     const [ordersTx] = await Promise.all([
-        FoodOrder.find({ 'dispatch.deliveryPartnerId': partnerId, orderStatus: 'delivered' })
+        FoodOrder.find({ 'dispatch.deliveryPartnerId': partnerId, orderStatus: { $in: ['delivered', 'returned_to_restaurant'] } })
             .sort({ createdAt: -1 })
             .select('orderId riderEarning riderBasePay riderDeliveryFeeShare riderSurgePay riderIncentivePay riderTotalPayout pricing payment orderStatus createdAt')
             .limit(20)
@@ -127,7 +127,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
                 riderTotalPayout,
                 status: 'Completed',
                 date: o.createdAt,
-                description: o.payment?.method === 'cash' ? 'COD delivery earning' : 'Online delivery earning',
+                description: o.orderStatus === 'returned_to_restaurant' ? 'Earning for order returned to restaurant' : (o.payment?.method === 'cash' ? 'COD delivery earning' : 'Online delivery earning'),
                 orderId: o.orderId
             };
         }),

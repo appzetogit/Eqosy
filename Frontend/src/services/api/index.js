@@ -314,6 +314,22 @@ export const adminAPI = {
       { reason },
       { contextModule: "admin" },
     ),
+  getPendingUndeliveredReturns: () =>
+    apiClient.get("/food/admin/orders/undelivered-requests/pending", {
+      contextModule: "admin",
+    }),
+  approveUndeliveredReturn: (orderId, body = {}) =>
+    apiClient.post(
+      `/food/admin/orders/${orderId}/undelivered/approve`,
+      body,
+      { contextModule: "admin" },
+    ),
+  rejectUndeliveredReturn: (orderId, reason) =>
+    apiClient.post(
+      `/food/admin/orders/${orderId}/undelivered/reject`,
+      { reason },
+      { contextModule: "admin" },
+    ),
   getContactMessages: (params = {}) =>
     apiClient.get("/food/admin/contact-messages", {
       params,
@@ -2042,6 +2058,20 @@ export const deliveryAPI = {
       {
         contextModule: "delivery",
       },
+    ),
+  /** Customer is not answering: ask admin to approve returning the food to the restaurant. */
+  requestCustomerUnreachable: (orderId, body = {}) =>
+    apiClient.post(
+      `/food/delivery/orders/${String(orderId)}/customer-unreachable`,
+      body ?? {},
+      { contextModule: "delivery" },
+    ),
+  /** Food handed back: enter the OTP shown in the restaurant panel. */
+  verifyReturnOtp: (orderId, otp) =>
+    apiClient.post(
+      `/food/delivery/orders/${String(orderId)}/return/verify-otp`,
+      { otp: String(otp) },
+      { contextModule: "delivery" },
     ),
   /**
    * PATCH /food/delivery/orders/:orderId/reached-pickup

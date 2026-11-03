@@ -417,6 +417,7 @@ export const STATUS_PRIORITY = {
   picked_up: 60,
   reached_drop: 70,
   delivered: 80,
+  returned_to_restaurant: 100,
   cancelled_by_user: 100,
   cancelled_by_restaurant: 100,
   cancelled_by_admin: 100,

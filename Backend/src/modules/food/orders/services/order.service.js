@@ -16,6 +16,8 @@ import { FoodOfferUsage } from '../../admin/models/offerUsage.model.js';
 import { FoodDeliverySurgeZone } from '../../admin/models/deliverySurgeZone.model.js';
 import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
 import { FoodTransaction } from '../models/foodTransaction.model.js';
+import { FoodUserPenalty } from '../models/userPenalty.model.js';
+import { releasePenaltiesForCancelledOrder, withReturnOtpForRestaurant } from './order-return.service.js';
 import { FoodSupportTicket } from '../../user/models/supportTicket.model.js';
 import { config } from '../../../../config/env.js';
 import {
@@ -344,6 +346,18 @@ export async function createOrder(userId, dto) {
     }
 
     await order.save();
+
+    // The customer's pending penalty is now part of this order's bill.
+    if (Array.isArray(pricingResult.penaltyIds) && pricingResult.penaltyIds.length > 0) {
+      try {
+        await FoodUserPenalty.updateMany(
+          { _id: { $in: pricingResult.penaltyIds }, status: 'pending' },
+          { $set: { status: 'applied', appliedOrderId: order._id, appliedAt: new Date() } },
+        );
+      } catch (penaltyErr) {
+        logger.error(`Failed to mark penalties applied for order ${order._id}: ${penaltyErr.message}`);
+      }
+    }
 
     // Automatic Inventory Control: Deduct ordered stock and notify if out of stock or low stock
     try {
@@ -738,7 +752,7 @@ export async function recoverStuckOrders() {
       'dispatch.status': 'assigned',
       'dispatch.acceptedAt': { $exists: false },
       'dispatch.assignedAt': { $lt: new Date(now - TWO_MIN) },
-      orderStatus: { $nin: ['delivered', 'cancelled_by_user', 'cancelled_by_restaurant'] }
+      orderStatus: { $nin: ['delivered', 'returned_to_restaurant', 'cancelled_by_user', 'cancelled_by_restaurant'] }
     });
 
     if (stuckAssigned.length > 0) {
@@ -806,6 +820,7 @@ export async function resyncState(userId, role) {
       orderStatus: {
         $nin: [
           "delivered",
+          "returned_to_restaurant",
           "cancelled_by_user",
           "cancelled_by_restaurant",
           "cancelled_by_admin",
@@ -836,7 +851,7 @@ export async function resyncState(userId, role) {
       "dispatch.deliveryPartnerId": new mongoose.Types.ObjectId(userId),
       "dispatch.status": { $in: ["assigned", "accepted"] },
       orderStatus: {
-        $nin: ["delivered", "cancelled_by_user", "cancelled_by_restaurant"],
+        $nin: ["delivered", "returned_to_restaurant", "cancelled_by_user", "cancelled_by_restaurant"],
       },
     })
       .populate("restaurantId")
@@ -871,6 +886,7 @@ export async function cancelOrder(orderId, userId, payload = {}) {
   order.cancellationComment = cancellationComment;
   order.cancelledAt = new Date();
   order.cancelledBy = "USER";
+  void releasePenaltiesForCancelledOrder(order._id);
 
   pushStatusHistory(order, {
     byRole: "USER",
@@ -1272,13 +1288,14 @@ export async function listOrdersRestaurant(restaurantId, query) {
     FoodOrder.find(filter)
       .populate("userId", "name phone email profileImage")
       .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber")
+      .select("+returnOtp")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean(),
     FoodOrder.countDocuments(filter),
   ]);
-  return buildPaginatedResult({ docs: docs.map(d => normalizeOrderForClient(d)), total, page, limit });
+  return buildPaginatedResult({ docs: docs.map(d => normalizeOrderForClient(withReturnOtpForRestaurant(d))), total, page, limit });
 }
 
 export async function updateOrderStatusRestaurant(
@@ -1537,6 +1554,10 @@ export async function updateOrderStatusRestaurant(
     from,
     to: orderStatus
   });
+
+  if (String(orderStatus).includes("cancel")) {
+    void releasePenaltiesForCancelledOrder(order._id);
+  }
 
   // ✅ NEW: Automated Razorpay Refund on Restaurant Cancel
   // Triggers if the restaurant sets status to a cancelled state (e.g., cancelled_by_restaurant)
@@ -2616,6 +2637,7 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
   order.cancellationReason = reason;
   order.cancelledAt = new Date();
   order.cancelledBy = "ADMIN";
+  void releasePenaltiesForCancelledOrder(order._id);
   if (order.dispatch) {
     order.dispatch.status = "cancelled";
     order.dispatch.deliveryPartnerId = null;
@@ -2743,3 +2765,12 @@ export async function refundOrderAdmin(orderId, adminId, refundAmount = null, ad
 
   return normalizeOrderForClient(order);
 }
+
+// ----- Customer unreachable -> return to restaurant (see order-return.service.js) -----
+export {
+  requestUndeliveredReturn,
+  listPendingReturnRequestsAdmin,
+  approveUndeliveredReturnAdmin,
+  rejectUndeliveredReturnAdmin,
+  verifyReturnOtpDelivery,
+} from './order-return.service.js';

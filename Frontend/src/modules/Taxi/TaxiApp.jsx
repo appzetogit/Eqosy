@@ -248,7 +248,6 @@ const AdminPoolingManager = lazy(() => import('./modules/admin/pages/pooling/Poo
 const AdminPoolingVehicles = lazy(() => import('./modules/admin/pages/pooling/PoolingVehicles'));
 const AdminPoolingVehicleForm = lazy(() => import('./modules/admin/pages/pooling/PoolingVehicleForm'));
 const AdminPoolingBookings = lazy(() => import('./modules/admin/pages/pooling/PoolingBookings'));
-const AdminPoolingCommissionManager = lazy(() => import('./modules/admin/pages/pooling/PoolingCommissionManager'));
 const AdminBusServiceManager = lazy(() => import('./modules/admin/pages/bus-service/BusServiceManager'));
 const AdminBusServiceDetails = lazy(() => import('./modules/admin/pages/bus-service/BusServiceDetails'));
 const AdminBusBookingManager = lazy(() => import('./modules/admin/pages/bus-service/BusBookingManager'));
@@ -1229,7 +1228,6 @@ function TaxiApp() {
                       element={<AdminPoolingManager mode="edit" />}
                     />
                     <Route path="pooling/vehicles" element={<AdminPoolingVehicles />} />
-                    <Route path="pooling/commission" element={<AdminPoolingCommissionManager />} />
                     <Route
                       path="pooling/vehicles/create"
                       element={<AdminPoolingVehicleForm />}

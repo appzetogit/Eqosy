@@ -287,10 +287,13 @@ router.get('/orders', requireFoodResourceAccess('orders', 'orders'), orderContro
 router.get('/orders/dispatch-settings', orderController.getDispatchSettingsController);
 router.patch('/orders/dispatch-settings', orderController.updateDispatchSettingsController);
 router.get('/orders/handover-requests/pending',orderController.listPendingHandoverRequestsAdminController);
+router.get('/orders/undelivered-requests/pending', orderController.listPendingReturnRequestsAdminController);
 router.get('/orders/:orderId', requireFoodResourceAccess('orders', 'orders'), orderController.getOrderByIdAdminController);
 router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orders'), orderController.assignDeliveryPartnerController);
 router.post('/orders/:orderId/handover/approve', orderController.approveOrderHandoverAdminController);
 router.post('/orders/:orderId/handover/reject', orderController.rejectOrderHandoverAdminController);
+router.post('/orders/:orderId/undelivered/approve', orderController.approveUndeliveredReturnAdminController);
+router.post('/orders/:orderId/undelivered/reject', orderController.rejectUndeliveredReturnAdminController);
 router.get('/orders/:orderId/available-partners', requireFoodResourceAccess('orders', 'orders'), orderController.listAvailableDeliveryPartnersForOrderController);
 router.post('/orders/:orderId/cancel', requireFoodResourceAccess('orders', 'orders'), orderController.cancelOrderAdminController);
 router.post('/orders/:orderId/refund', requireFoodResourceAccess('orders', 'orders'), orderController.refundOrderAdminController);

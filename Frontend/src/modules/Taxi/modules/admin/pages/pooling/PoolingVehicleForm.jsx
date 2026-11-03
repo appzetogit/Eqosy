@@ -308,20 +308,6 @@ const PoolingVehicleForm = ({ mode: propMode }) => {
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className={labelClass}>Admin Commission %</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={formData.adminCommissionPercentage}
-                      onChange={(e) => setFormData({ ...formData, adminCommissionPercentage: e.target.value })}
-                      placeholder="e.g. 12.5"
-                      className={inputClass}
-                      readOnly={isViewMode}
-                    />
-                  </div>
-                  <div>
                     <label className={labelClass}>Service Tax %</label>
                     <input
                       type="number"

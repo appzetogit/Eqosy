@@ -5,6 +5,7 @@ import AnimatedPage from "@food/components/user/AnimatedPage"
 import { motion } from "framer-motion"
 import confetti from "canvas-confetti"
 import { useEffect } from "react"
+import { toast } from "sonner"
 
 export default function TableBookingSuccess() {
     const location = useLocation()
@@ -34,12 +35,13 @@ export default function TableBookingSuccess() {
         return () => clearInterval(interval)
     }, [])
 
-    if (!booking) {
-        navigate("/food/user/dining")
-        return null
-    }
+    useEffect(() => {
+        if (!booking) navigate("/food/user/dining", { replace: true })
+    }, [booking, navigate])
 
-    const formattedDate = new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    if (!booking) return null
+
+    const formattedDate = (Number.isNaN(new Date(booking.date).getTime()) ? "" : new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
 
     const handleShare = async () => {
         const shareText = `🎉 Table booked at ${booking.restaurant?.name || 'Restaurant'}!\n📅 Date: ${formattedDate} at ${booking.timeSlot}\n👥 Guests: ${booking.guests}\n🎫 Booking ID: ${booking.bookingId}`
@@ -195,14 +197,14 @@ export default function TableBookingSuccess() {
                 className="mt-12 w-full max-w-sm space-y-3"
             >
                 <Button
-                    onClick={() => navigate("/food/user/bookings")}
+                    onClick={() => navigate("/food/user/bookings", { replace: true })}
                     className="w-full h-14 bg-red-500 hover:bg-red-600 text-white font-bold text-lg rounded-2xl shadow-xl shadow-red-100 flex items-center justify-center gap-2"
                 >
                     <List className="w-5 h-5" />
                     View My Bookings
                 </Button>
                 <Button
-                    onClick={() => navigate("/food/user")}
+                    onClick={() => navigate("/food/user", { replace: true })}
                     variant="outline"
                     className="w-full h-14 bg-white border-2 border-slate-100 text-slate-600 font-bold text-lg rounded-2xl hover:bg-slate-50 flex items-center justify-center gap-2"
                 >

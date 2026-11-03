@@ -18,6 +18,7 @@ import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/Pickup
 import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modals/DeliveryVerificationModal';
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
 import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
+import { CustomerUnreachablePanel } from '@/modules/DeliveryV2/components/CustomerUnreachablePanel';
 import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
 import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
 import LocationPermissionModal from '@/modules/DeliveryV2/components/modals/LocationPermissionModal';
@@ -262,6 +263,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   }, [tab]);
 
   const [showVerification, setShowVerification] = useState(false);
+  // 'none' | 'requested' | 'approved' | 'rejected' | 'returned' - customer unreachable / return to restaurant
+  const [returnStatus, setReturnStatus] = useState('none');
   const [showEmergencyPopup, setShowEmergencyPopup] = useState(false);
   const [showBookGigModal, setShowBookGigModal] = useState(false);
   const [showSelfieVerificationModal, setShowSelfieVerificationModal] = useState(false);
@@ -1928,12 +1931,22 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     ) : (
                       <div className="w-full bg-white p-8 pb-12 border-t border-gray-100 flex flex-col gap-4 pointer-events-auto">
                         <PaymentBadge order={activeOrder} />
-                        <button
-                          onClick={() => setShowVerification(true)}
-                          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/30 rounded-3xl py-6 font-black text-[13px] tracking-[0.2em] transform transition-all active:scale-95 flex items-center justify-center gap-4"
-                        >
-                          <CheckCircle2 className="w-6 h-6" /> VERIFY & COMPLETE
-                        </button>
+                        {returnStatus !== 'approved' && returnStatus !== 'returned' && (
+                          <button
+                            onClick={() => setShowVerification(true)}
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/30 rounded-3xl py-6 font-black text-[13px] tracking-[0.2em] transform transition-all active:scale-95 flex items-center justify-center gap-4"
+                          >
+                            <CheckCircle2 className="w-6 h-6" /> VERIFY & COMPLETE
+                          </button>
+                        )}
+                        <CustomerUnreachablePanel
+                          order={activeOrder}
+                          onStatusChange={setReturnStatus}
+                          onReturned={() => {
+                            setReturnStatus('none');
+                            resetTrip();
+                          }}
+                        />
                       </div>
                     )}
                   </div>

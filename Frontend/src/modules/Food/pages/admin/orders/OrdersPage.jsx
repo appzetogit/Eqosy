@@ -497,6 +497,8 @@ export default function OrdersPage({ statusKey = "all" }) {
         displayStatus = "Cancelled by User"
       } else if (backendStatus === "cancelled_by_admin") {
         displayStatus = "Canceled"
+      } else if (backendStatus === "returned_to_restaurant") {
+        displayStatus = "Returned to Restaurant"
       }
 
       const dp = order.dispatch?.deliveryPartnerId

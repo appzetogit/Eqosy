@@ -76,14 +76,14 @@ export default function AdminNavbar({ onMenuClick }) {
   const { items: adminNotifications, dismissOne, dismissMultiple, clearAll, approveHandover, rejectHandover, approveEmergencyOffline } = useAdminNotifications();
 
   const handoverCount = useMemo(() => adminNotifications.filter(i => i.category === "handover_approval" || i.isEmergencyOffline).length, [adminNotifications]);
-  const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline).length, [adminNotifications]);
+  const approvalCount = useMemo(() => adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval", "undelivered_approval"].includes(i.category) || i.isEmergencyOffline).length, [adminNotifications]);
   const withdrawalCount = useMemo(() => adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category)).length, [adminNotifications]);
   const supportCount = useMemo(() => adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category)).length, [adminNotifications]);
   const complianceCount = useMemo(() => adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired").length, [adminNotifications]);
 
   const filteredNotifications = useMemo(() => {
     if (activeNotifTab === "handovers") return adminNotifications.filter(i => i.category === "handover_approval" || i.isEmergencyOffline);
-    if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval"].includes(i.category) || i.isEmergencyOffline);
+    if (activeNotifTab === "approvals") return adminNotifications.filter(i => ["restaurant_approval", "delivery_approval", "food_approval", "handover_approval", "undelivered_approval"].includes(i.category) || i.isEmergencyOffline);
     if (activeNotifTab === "withdrawals") return adminNotifications.filter(i => ["withdrawals", "delivery_withdrawals"].includes(i.category));
     if (activeNotifTab === "support") return adminNotifications.filter(i => ["support", "delivery_support"].includes(i.category));
     if (activeNotifTab === "compliance") return adminNotifications.filter(i => i.type === "compliance" || i.category === "fssai_expired");

@@ -14,8 +14,8 @@ import { MapPin, Crosshair } from "lucide-react"
  *   - "No, thanks" only snoozes it for SNOOZE_MS, then it comes back if still off.
  */
 
-const POLL_MS = 10000
-const SNOOZE_MS = 60000
+const POLL_MS = 30000
+const SNOOZE_MS = 5 * 60000
 
 // Non-user surfaces (admin / driver / owner / restaurant / delivery partner / auth / landing).
 const EXCLUDED_PREFIXES = [
@@ -127,6 +127,9 @@ export default function UserLocationGate() {
         setStatus("off")
         return
       }
+      if (perm?.state === "granted") {
+        // fall through to fetch the position; a granted permission must not show the popup
+      }
     } catch {
       /* Permissions API unsupported — fall through to getCurrentPosition */
     }
@@ -135,27 +138,23 @@ export default function UserLocationGate() {
       (pos) => {
         releaseBusy()
         timeoutsRef.current = 0
-        const accuracy = pos?.coords?.accuracy
-        // Real GPS on phones is typically 5-50 meters. IP/cell tower is > 1000m.
-        // If accuracy is worse than 1000m, phone GPS is OFF!
-        if (accuracy && accuracy > 1000) {
-          setStatus("off")
-        } else {
-          setStatus("ok")
-          persistPosition(pos)
-        }
+        // Any successful fix means location is ON (coarse accuracy is still valid).
+        setStatus("ok")
+        persistPosition(pos)
       },
       (err) => {
         releaseBusy()
         if (err?.code === 1) {
           timeoutsRef.current = 0
           setStatus("denied")
-        } else {
-          timeoutsRef.current = 0
-          setStatus("off")
+        } else if (err?.code === 2) {
+          // Position unavailable (GPS really off) — only flag after 2 consecutive failures
+          timeoutsRef.current += 1
+          if (timeoutsRef.current >= 2) setStatus("off")
         }
+        // code 3 (timeout) is transient — keep the current status, don't nag the user.
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     )
   }, [])
 
@@ -208,21 +207,17 @@ export default function UserLocationGate() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setRequesting(false)
-        const accuracy = pos?.coords?.accuracy
-        if (accuracy && accuracy > 1000) {
-          // Device GPS is still off (only coarse IP/network available)
-          setStatus("off")
-          return
-        }
+        timeoutsRef.current = 0
         setStatus("ok")
         persistPosition(pos)
       },
       (err) => {
         setRequesting(false)
         if (err?.code === 1) setStatus("denied")
-        else setStatus("off")
+        else if (err?.code === 2) setStatus("off")
+        // timeout: stay as-is, user can tap Turn on again
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 }
     )
   }
 

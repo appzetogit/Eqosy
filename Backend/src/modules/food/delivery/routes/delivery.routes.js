@@ -48,6 +48,8 @@ router.get('/orders/:orderId', authMiddleware, requireRoles('DELIVERY_PARTNER'),
 router.patch('/orders/:orderId/accept', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.acceptOrderDeliveryController);
 router.patch('/orders/:orderId/reject', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.rejectOrderDeliveryController);
 router.post('/orders/:orderId/handover', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.handoverDeliveryOrderController);
+router.post('/orders/:orderId/customer-unreachable', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.requestUndeliveredReturnController);
+router.post('/orders/:orderId/return/verify-otp', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.verifyReturnOtpDeliveryController);
 router.patch('/orders/:orderId/reached-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmReachedPickupDeliveryController);
 router.patch('/orders/:orderId/confirm-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmPickupDeliveryController);
 router.patch('/orders/:orderId/reached-drop', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmReachedDropDeliveryController);

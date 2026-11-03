@@ -3515,6 +3515,28 @@ function OrderCard({
         </div>
       </div>
 
+      {/* ── Customer unreachable: food is coming back, rider needs this OTP ── */}
+      {fullOrder?.undeliveredReturn?.status === "approved" && fullOrder?.returnOtp ? (
+        <div className="mx-3 mb-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+          <p className="text-[11px] font-bold text-blue-800">
+            Customer was not reachable. The delivery partner is returning this order.
+          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-3">
+            <p className="text-[10px] font-semibold text-blue-700">
+              Check the food, then tell the delivery partner this OTP:
+            </p>
+            <span className="rounded-lg bg-white px-3 py-1 text-lg font-black tracking-[0.3em] text-blue-900 border border-blue-200">
+              {fullOrder.returnOtp}
+            </span>
+          </div>
+        </div>
+      ) : null}
+      {fullOrder?.orderStatus === "returned_to_restaurant" ? (
+        <div className="mx-3 mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-800">
+          Order returned to your restaurant (customer unreachable).
+        </div>
+      ) : null}
+
       {/* ── Body: photo + items ── */}
       <div
         onClick={() => onSelect?.({ fullOrder, orderId, mongoId, status, customerName, type, tableOrToken, timePlaced, eta, itemsSummary, paymentMethod })}

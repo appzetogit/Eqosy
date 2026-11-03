@@ -23,7 +23,7 @@ import { resolveRideGst } from '../../../shared/utils/gst';
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
-const ACTIVE_RIDE_VALIDATE_MS = 15000;
+const ACTIVE_RIDE_VALIDATE_MS = 5000;
 const ROUTE_REFETCH_MIN_MS = 20000;
 const COMPLETED_TRACKING_STATUSES = new Set(['completed', 'delivered']);
 const POST_RIDE_REDIRECT_STATUSES = new Set(['arrived', 'completed', 'delivered']);
@@ -490,6 +490,11 @@ const RideTracking = () => {
     latestStateRef.current = state;
   }, [state]);
 
+  const tripStatusRef = useRef(tripStatus);
+  useEffect(() => {
+    tripStatusRef.current = tripStatus;
+  }, [tripStatus]);
+
   useEffect(() => {
     latestFallbackDriverRef.current = fallbackDriver;
   }, [fallbackDriver]);
@@ -770,6 +775,11 @@ const RideTracking = () => {
           return false;
         }
 
+        // If a socket event was missed (e.g. OTP verified / trip started), sync the status from the server.
+        if (activeStatus && activeStatus !== tripStatusRef.current) {
+          await hydrateRideState().catch(() => {});
+        }
+
         return true;
       } catch (err) {
         console.error('Active ride validation failed:', err);
@@ -937,7 +947,12 @@ const RideTracking = () => {
     socketService.on('ride:status:updated', onStatusUpdated);
     socketService.emit('ride:join', { rideId });
 
+    // After a network drop the socket reconnects without the ride room; join again to get the latest state.
+    const onReconnect = () => socketService.emit('ride:join', { rideId });
+    socketService.on('connect', onReconnect);
+
     return () => {
+      socketService.off('connect', onReconnect);
       socketService.off('ride:state', onRideState);
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
@@ -1455,6 +1470,17 @@ const RideTracking = () => {
               </div>
             </div>
           ) : null}
+
+          {(tripStatus === 'started' || tripStatus === 'ongoing') && (
+            <div className="rounded-[24px] border border-emerald-100 bg-emerald-50/70 px-4 py-4 shadow-sm">
+              <p className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-700">
+                {serviceType === 'parcel' ? 'Delivery started' : 'Ride started'}
+              </p>
+              <p className="mt-1 text-[15px] font-black text-slate-950">
+                {serviceType === 'parcel' ? 'Your parcel is on the way' : 'Your trip is in progress. Have a safe ride!'}
+              </p>
+            </div>
+          )}
 
           {isWaitingForOtp && (
             <div className="rounded-[24px] border border-amber-100 bg-amber-50/70 px-4 py-4 shadow-sm">

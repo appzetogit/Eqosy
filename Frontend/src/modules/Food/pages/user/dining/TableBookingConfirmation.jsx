@@ -96,7 +96,7 @@ export default function TableBookingConfirmation() {
 
     useEffect(() => {
         if (!restaurant) {
-            navigate("/food/user/dining")
+            navigate("/food/user/dining", { replace: true })
             return
         }
 
@@ -183,7 +183,7 @@ export default function TableBookingConfirmation() {
                     sessionStorage.removeItem(BOOKING_DRAFT_KEY)
                 } catch {}
                 // Navigate to success page with booking details
-                navigate("/food/user/dining/book-success", { state: { booking: response.data.data } })
+                navigate("/food/user/dining/book-success", { replace: true, state: { booking: response.data.data } })
             } else {
                 toast.error(response.data.message || "Failed to confirm booking")
             }

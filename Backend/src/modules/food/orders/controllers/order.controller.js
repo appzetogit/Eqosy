@@ -487,3 +487,49 @@ export async function listPendingHandoverRequestsAdminController(req, res, next)
         next(err);
     }
 }
+
+// ----- Customer unreachable -> return to restaurant -----
+export async function requestUndeliveredReturnController(req, res, next) {
+    try {
+        const result = await orderService.requestUndeliveredReturn(req.params.orderId, req.user?.userId, req.body || {});
+        return sendResponse(res, 200, 'Request sent to Admin. Please wait for approval.', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function verifyReturnOtpDeliveryController(req, res, next) {
+    try {
+        const result = await orderService.verifyReturnOtpDelivery(req.params.orderId, req.user?.userId, req.body?.otp);
+        return sendResponse(res, 200, 'Order returned to restaurant. Your earning has been credited.', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function listPendingReturnRequestsAdminController(req, res, next) {
+    try {
+        const orders = await orderService.listPendingReturnRequestsAdmin(req.adminContext);
+        return sendResponse(res, 200, 'Pending return requests retrieved', { orders });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function approveUndeliveredReturnAdminController(req, res, next) {
+    try {
+        const order = await orderService.approveUndeliveredReturnAdmin(req.params.orderId, req.user?.userId, req.body || {}, req.adminContext);
+        return sendResponse(res, 200, 'Return to restaurant approved', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function rejectUndeliveredReturnAdminController(req, res, next) {
+    try {
+        const order = await orderService.rejectUndeliveredReturnAdmin(req.params.orderId, req.user?.userId, req.body?.reason, req.adminContext);
+        return sendResponse(res, 200, 'Return request rejected', { order });
+    } catch (err) {
+        next(err);
+    }
+}

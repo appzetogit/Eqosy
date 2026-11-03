@@ -867,6 +867,15 @@ export const useRestaurantNotifications = () => {
       }
     });
 
+    // Customer unreachable: the delivery partner is bringing the food back, OTP is shown on the order card.
+    socketRef.current.on('order_return_incoming', (data) => {
+      debugLog('Order returning to restaurant:', data);
+      toast.info(data?.message || `Order #${data?.orderId || ''} is coming back. Open it to see the return OTP.`, { duration: 10000 });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('restaurant_order_updated', { detail: data }));
+      }
+    });
+
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('?? Admin broadcast received:', payload);
       dispatchNotificationInboxRefresh();

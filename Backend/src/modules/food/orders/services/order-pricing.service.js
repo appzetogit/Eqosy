@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { FoodOrder } from '../models/order.model.js';
+import { FoodUserPenalty } from '../models/userPenalty.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
@@ -459,8 +460,32 @@ export async function calculateOrderPricing(userId, dto) {
     : 0;
 
   // Admin-defined additional charges (threshold uses the item total only, before fees/taxes/these charges).
-  const { charges: additionalCharges, chargesTotal: additionalChargesTotal } =
+  const { charges: configuredAdditionalCharges, chargesTotal: configuredAdditionalChargesTotal } =
     evaluateAdditionalCharges(feeSettings.additionalCharges, subtotal);
+
+  // Penalty from an earlier order the customer could not be reached for (put by admin). Charged once, no GST.
+  const penaltyRows = userId && mongoose.isValidObjectId(String(userId))
+    ? await FoodUserPenalty.find({ userId, status: 'pending' }).select('amount').sort({ createdAt: 1 }).lean()
+    : [];
+  const penaltyAmount = Math.round(penaltyRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0) * 100) / 100;
+  const penaltyIds = penaltyRows.map((row) => row._id);
+  const additionalCharges = penaltyAmount > 0
+    ? [
+        ...configuredAdditionalCharges,
+        {
+          chargeId: 'previous-order-penalty',
+          name: 'Previous order penalty',
+          amount: penaltyAmount,
+          applicableUnder: 0,
+          isFree: false,
+          chargedAmount: penaltyAmount,
+          amountToAvoid: 0,
+          freeLabel: '',
+          message: 'Penalty for an earlier order that could not be delivered because we could not reach you.',
+        },
+      ]
+    : configuredAdditionalCharges;
+  const additionalChargesTotal = Math.round((configuredAdditionalChargesTotal + penaltyAmount) * 100) / 100;
 
   let discount = 0;
   let appliedCoupon = null;
@@ -545,7 +570,7 @@ export async function calculateOrderPricing(userId, dto) {
   const itemGst = Math.round(Math.max(0, subtotal - discount) * (configuredGstRate / 100));
   const platformGst = Math.round(platformFee * (configuredGstRate / 100));
   const deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
-  const additionalChargesGst = Math.round(additionalChargesTotal * (configuredGstRate / 100));
+  const additionalChargesGst = Math.round(configuredAdditionalChargesTotal * (configuredGstRate / 100));
   const tax = itemGst + platformGst + deliveryGst + additionalChargesGst;
   const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst };
 
@@ -574,6 +599,8 @@ export async function calculateOrderPricing(userId, dto) {
   return {
     // Server-priced cart lines; createOrder stores these instead of the client's items.
     items,
+    // Pending customer penalties included in this price; createOrder marks them as applied.
+    penaltyIds,
     pricing: {
       subtotal,
       tax,
@@ -596,6 +623,7 @@ export async function calculateOrderPricing(userId, dto) {
       surgeTitle,
       additionalCharges,
       additionalChargesTotal,
+      penaltyAmount,
       discount,
       savings,
       roundOff,

@@ -859,7 +859,6 @@ const AdminLayout = () => {
                   label: 'Car Pooling',
                   subItems: [
                     { label: 'Pooling Vehicles', path: '/taxi/admin/pooling/vehicles', permission: 'pooling.view' },
-                    { label: 'Pooling Commission', path: '/taxi/admin/pooling/commission', permission: 'pooling.view' },
                     { label: 'Routes & Stops', path: '/taxi/admin/pooling/routes', permission: 'pooling.view' },
                     { label: 'Pooling Bookings', path: '/taxi/admin/pooling/bookings', permission: 'pooling.view' },
                   ],

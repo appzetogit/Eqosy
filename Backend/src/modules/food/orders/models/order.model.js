@@ -235,6 +235,30 @@ const deliveryVerificationSchema = new mongoose.Schema(
     { _id: false }
 );
 
+/**
+ * Customer unreachable flow: the delivery partner reached the drop point but the customer did not answer.
+ * requested -> (admin) approved | rejected -> (restaurant OTP verified by rider) returned
+ */
+const undeliveredReturnSchema = new mongoose.Schema(
+    {
+        status: { type: String, enum: ['none', 'requested', 'approved', 'rejected', 'returned'], default: 'none' },
+        reason: { type: String, default: '' },
+        note: { type: String, default: '' },
+        callAttempts: { type: Number, default: 0, min: 0 },
+        requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        requestedAt: { type: Date, default: null },
+        decidedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+        decidedAt: { type: Date, default: null },
+        adminNote: { type: String, default: '' },
+        rejectionReason: { type: String, default: '' },
+        penaltyAmount: { type: Number, default: 0, min: 0 },
+        returnedAt: { type: Date, default: null },
+        /** Earning that was credited to the delivery partner when the food reached the restaurant */
+        riderPayoutAmount: { type: Number, default: 0, min: 0 }
+    },
+    { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
     {
         order_id: {
@@ -314,7 +338,8 @@ const orderSchema = new mongoose.Schema(
                 'cancelled_by_user',
                 'cancelled_by_restaurant',
                 'cancelled_by_admin',
-                'handover_requested'
+                'handover_requested',
+                'returned_to_restaurant'
             ],
             default: 'created'
         },
@@ -352,6 +377,10 @@ const orderSchema = new mongoose.Schema(
         platformProfit: { type: Number, default: 0, min: 0 },
         /** Plain 4-digit OTP for handover; cleared after successful verify (never expose to partner in API responses). */
         deliveryOtp: { type: String, default: '', select: false },
+        /** Customer-unreachable return to restaurant (see undeliveredReturnSchema) */
+        undeliveredReturn: { type: undeliveredReturnSchema, default: () => ({}) },
+        /** 4-digit OTP shown in the restaurant panel; the rider enters it to confirm the food was handed back. */
+        returnOtp: { type: String, default: '', select: false },
         deliveryVerification: {
             type: deliveryVerificationSchema,
             default: () => ({})

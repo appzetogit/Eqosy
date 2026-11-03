@@ -1067,6 +1067,8 @@ const SenderReceiverDetails = () => {
   const [activeMapPicker, setActiveMapPicker] = useState(null);
   const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // 'route' = pickup/drop + fare, 'details' = payer, payment, sender/receiver address
+  const [step, setStep] = useState('route');
   const [parcelPayer, setParcelPayer] = useState(() => (
     String(parcelState.parcel?.payer || parcelState.payer || 'sender').toLowerCase() === 'receiver' ? 'receiver' : 'sender'
   ));
@@ -1148,6 +1150,10 @@ const SenderReceiverDetails = () => {
     }
     if (isContactSheetOpen) {
       setIsContactSheetOpen(false);
+      return;
+    }
+    if (step === 'details') {
+      setStep('route');
       return;
     }
     if (window.history.length > 1 && window.history.state?.idx > 0) {
@@ -1838,6 +1844,21 @@ const SenderReceiverDetails = () => {
     clearError('drop');
   };
 
+  const handleContinueToDetails = () => {
+    const nextErrors = {};
+    if (!pickup.trim()) nextErrors.pickup = 'Pickup location is required';
+    if (!drop.trim()) nextErrors.drop = 'Drop location is required';
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...nextErrors }));
+      return;
+    }
+
+    setActiveSearchField(null);
+    setStep('details');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleProceed = async ({ fromContactSheet = false } = {}) => {
     const { isValid, nextErrors } = validate();
 
@@ -1983,7 +2004,14 @@ const SenderReceiverDetails = () => {
       <ContactDetailsSheet
         open={isContactSheetOpen}
         onClose={() => setIsContactSheetOpen(false)}
-        onSave={() => handleProceed({ fromContactSheet: true })}
+        onSave={() => {
+          // On step 1 the sheet only saves contact details; the request is sent from step 2.
+          if (step === 'route') {
+            setIsContactSheetOpen(false);
+            return;
+          }
+          handleProceed({ fromContactSheet: true });
+        }}
         senderName={senderName}
         setSenderName={setSenderName}
         senderMobile={senderMobile}
@@ -2032,11 +2060,15 @@ const SenderReceiverDetails = () => {
           <ArrowLeft size={18} className="text-slate-800" />
           <span className="text-xs font-bold text-slate-800">Go Back</span>
         </button>
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Select Locations</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+          {step === 'route' ? 'Select Locations' : 'Payment & Details'}
+        </p>
       </header>
 
       <main className="flex-1 px-4 pt-2 pb-28 z-10">
-        <motion.div 
+        {step === 'route' && (
+        <>
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-[24px] bg-white p-3.5 sm:p-5 shadow-[0_12px_40px_rgba(0,0,0,0.06)] border border-slate-100 relative"
@@ -2348,7 +2380,11 @@ const SenderReceiverDetails = () => {
             </>
           )}
         </div>
+        </>
+        )}
 
+        {step === 'details' && (
+        <>
         {/* Item details: shown to the captain before they accept the request */}
         <div ref={itemRef} className={`mt-5 rounded-[24px] border bg-white p-4 shadow-sm ${errors.itemName ? 'border-red-300' : 'border-slate-200'}`}>
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">What are you sending?</p>
@@ -2441,6 +2477,39 @@ const SenderReceiverDetails = () => {
           )}
         </div>
 
+        {/* Sender & receiver addresses */}
+        <div className="mt-5 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Pickup &amp; delivery address</p>
+          <button
+            type="button"
+            onClick={() => setIsContactSheetOpen(true)}
+            className={`mt-3 flex w-full items-start justify-between gap-3 rounded-2xl border px-3 py-3 text-left ${errors.senderName || errors.senderMobile ? 'border-red-300 bg-red-50/60' : 'border-slate-200 bg-slate-50/60'}`}
+          >
+            <span className="min-w-0">
+              <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Sender address</span>
+              <span className="mt-1 block text-sm font-black text-slate-900">
+                {senderName.trim() || 'Add sender name'}{senderMobile ? ` • +91 ${senderMobile}` : ''}
+              </span>
+              <span className="mt-0.5 block text-[12px] font-semibold text-slate-500">{pickup}</span>
+            </span>
+            <ChevronRight size={18} className="mt-1 shrink-0 text-slate-400" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsContactSheetOpen(true)}
+            className={`mt-3 flex w-full items-start justify-between gap-3 rounded-2xl border px-3 py-3 text-left ${errors.receiverName || errors.receiverMobile ? 'border-red-300 bg-red-50/60' : 'border-slate-200 bg-slate-50/60'}`}
+          >
+            <span className="min-w-0">
+              <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">Receiver address</span>
+              <span className="mt-1 block text-sm font-black text-slate-900">
+                {receiverName.trim() || 'Add receiver name'}{receiverMobile ? ` • +91 ${receiverMobile}` : ''}
+              </span>
+              <span className="mt-0.5 block text-[12px] font-semibold text-slate-500">{drop}</span>
+            </span>
+            <ChevronRight size={18} className="mt-1 shrink-0 text-slate-400" />
+          </button>
+        </div>
+
         {/* Prohibited Items & Terms Checkbox on Main Page */}
         <div ref={termsRef} className="mt-5 space-y-2">
           <label className={`flex cursor-pointer items-start gap-3 rounded-[24px] bg-white p-4 shadow-sm border transition-all ${errors.acceptedTerms ? 'border-red-300 bg-red-50/50' : acceptedTerms ? 'border-blue-200 bg-blue-50/20' : 'border-slate-200'}`}>
@@ -2481,9 +2550,11 @@ const SenderReceiverDetails = () => {
             </p>
           )}
         </div>
+        </>
+        )}
 
-        <motion.section 
-          initial={{ opacity: 0 }} 
+        <motion.section
+          initial={{ opacity: 0 }}
           animate={{ opacity: 1 }} 
           transition={{ delay: 0.12 }} 
           className="mt-8 rounded-[28px] bg-slate-900 px-6 py-5 text-white shadow-xl relative overflow-hidden"
@@ -2514,12 +2585,12 @@ const SenderReceiverDetails = () => {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={handleProceed}
+            onClick={step === 'route' ? handleContinueToDetails : () => handleProceed()}
             className="relative flex h-16 w-full items-center justify-center gap-3 rounded-[24px] bg-slate-900 text-[15px] font-black text-white shadow-[0_20px_40px_rgba(15,23,42,0.2)] group overflow-hidden"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
             <span className="relative z-10">
-               {drop ? 'Confirm Receiver Details' : 'Select Drop Location'}
+               {step === 'route' ? (drop ? 'Continue' : 'Select Drop Location') : 'Confirm & Request Driver'}
             </span>
             <ChevronRight size={20} className="relative z-10 group-hover:translate-x-1 transition-transform" />
           </motion.button>

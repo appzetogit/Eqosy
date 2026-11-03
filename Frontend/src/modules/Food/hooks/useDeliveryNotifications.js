@@ -1261,6 +1261,17 @@ export const useDeliveryNotifications = (options = {}) => {
       window.dispatchEvent(new CustomEvent('delivery_handover_rejected', { detail: data }));
     });
 
+    // Customer unreachable -> return to restaurant: admin decisions
+    socketRef.current.on('order_return_approved', (data) => {
+      toast.success(data?.message || 'Admin approved. Take the food back to the restaurant.');
+      window.dispatchEvent(new CustomEvent('delivery_order_return_update', { detail: data }));
+    });
+
+    socketRef.current.on('order_return_rejected', (data) => {
+      toast.error(data?.message || 'Admin rejected the return request. Please keep trying to reach the customer.');
+      window.dispatchEvent(new CustomEvent('delivery_order_return_update', { detail: data }));
+    });
+
     socketRef.current.on('order_cancelled', (data) => {
       debugLog('❌ Order cancelled event received in delivery partner app:', data);
       stopAlertLoop();

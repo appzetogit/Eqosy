@@ -207,6 +207,7 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
     orderStatus: {
       $nin: [
         'delivered',
+        'returned_to_restaurant',
         'cancelled_by_user',
         'cancelled_by_restaurant',
         'cancelled_by_admin',
@@ -278,6 +279,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
             orderStatus: {
               $nin: [
                 'delivered',
+                'returned_to_restaurant',
                 'cancelled_by_user',
                 'cancelled_by_restaurant',
                 'cancelled_by_admin',
@@ -291,6 +293,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
             orderStatus: {
               $nin: [
                 'delivered',
+                'returned_to_restaurant',
                 'cancelled_by_user',
                 'cancelled_by_restaurant',
                 'cancelled_by_admin',
@@ -306,6 +309,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
             orderStatus: {
               $nin: [
                 'delivered',
+                'returned_to_restaurant',
                 'cancelled_by_user',
                 'cancelled_by_restaurant',
                 'cancelled_by_admin',
@@ -997,6 +1001,10 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     order.dispatch?.deliveryPartnerId?.toString() !== deliveryPartnerId.toString()
   ) {
     throw new ForbiddenError('Not your order');
+  }
+
+  if (order.undeliveredReturn?.status === 'approved' || order.orderStatus === 'returned_to_restaurant') {
+    throw new ValidationError('This order is being returned to the restaurant, so it cannot be marked as delivered.');
   }
 
   const { otp, ratings, handoverImageUrl, handoverPhoto } = body;

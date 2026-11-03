@@ -17,6 +17,7 @@ const AdminSettings = lazy(() => import("@food/pages/admin/AdminSettings"));
 const NewRefundRequests = lazy(() => import("@food/pages/admin/refunds/NewRefundRequests"));
 const FoodApproval = lazy(() => import("@food/pages/admin/restaurant/FoodApproval"));
 const OrdersPage = lazy(() => import("@food/pages/admin/orders/OrdersPage"));
+const UnreachableRequests = lazy(() => import("@food/pages/admin/orders/UnreachableRequests"));
 const OrderDetectDelivery = lazy(() => import("@food/pages/admin/OrderDetectDelivery"));
 const Category = lazy(() => import("@food/pages/admin/categories/Category"));
 const FeeSettings = lazy(() => import("@food/pages/admin/fee-settings/FeeSettings"));
@@ -225,6 +226,7 @@ export default function AdminRouter() {
             <Route path="orders/delivered" element={<OrdersPage statusKey="delivered" />} />
             <Route path="orders/canceled" element={<OrdersPage statusKey="canceled" />} />
             <Route path="orders/restaurant-cancelled" element={<OrdersPage statusKey="restaurant-cancelled" />} />
+            <Route path="orders/unreachable-requests" element={<UnreachableRequests />} />
             <Route path="orders/payment-failed" element={<OrdersPage statusKey="payment-failed" />} />
             <Route path="orders/refunded" element={<OrdersPage statusKey="refunded" />} />
             <Route path="orders/offline-payments" element={<OrdersPage statusKey="offline-payments" />} />

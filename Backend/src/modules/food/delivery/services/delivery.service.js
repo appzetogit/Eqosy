@@ -502,7 +502,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
             {
                 $match: {
                     'dispatch.deliveryPartnerId': partnerId,
-                    orderStatus: 'delivered',
+                    orderStatus: { $in: ['delivered', 'returned_to_restaurant'] },
                 }
             },
             {
@@ -559,7 +559,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
     const [paymentTxList, bonusTxList] = await Promise.all([
         FoodOrder.find({
             'dispatch.deliveryPartnerId': partnerId,
-            orderStatus: 'delivered',
+            orderStatus: { $in: ['delivered', 'returned_to_restaurant'] },
         })
             .sort({ 'deliveryState.deliveredAt': -1, createdAt: -1 })
             .select('orderId riderEarning payment orderStatus deliveryState createdAt deliveryState.deliveredAt')
@@ -584,7 +584,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
             orderId: o.orderId || String(o._id),
             paymentMethod: o?.payment?.method || '',
             metadata: { orderId: o.orderId || String(o._id) },
-            description: o?.payment?.method === 'cash' ? 'COD delivery earning' : 'Online delivery earning'
+            description: o?.orderStatus === 'returned_to_restaurant' ? 'Earning for order returned to restaurant' : (o?.payment?.method === 'cash' ? 'COD delivery earning' : 'Online delivery earning')
         };
     });
 
@@ -651,7 +651,7 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
 
     const match = {
         'dispatch.deliveryPartnerId': partnerId,
-        orderStatus: 'delivered',
+        orderStatus: { $in: ['delivered', 'returned_to_restaurant'] },
     };
     if (range) {
         match['deliveryState.deliveredAt'] = { $gte: range.start, $lte: range.end };
@@ -887,7 +887,7 @@ export const getDeliveryPocketDetails = async (deliveryPartnerId, query = {}) =>
 
     const orders = await FoodOrder.find({
         'dispatch.deliveryPartnerId': partnerId,
-        orderStatus: 'delivered',
+        orderStatus: { $in: ['delivered', 'returned_to_restaurant'] },
         $or: [
             { 'deliveryState.deliveredAt': { $gte: start, $lte: end } },
             {

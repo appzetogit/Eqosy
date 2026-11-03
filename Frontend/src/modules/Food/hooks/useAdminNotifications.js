@@ -594,6 +594,43 @@ export default function useAdminNotifications(options = {}) {
       socket.on("new_registration_alert", handleRegistrationAlert);
       socket.on("new_driver_registration", handleRegistrationAlert);
 
+      // Delivery partner could not reach the customer and wants to return the food to the restaurant.
+      socket.on("admin_undelivered_request", (payload) => {
+        const orderDisplayId = payload?.orderId || payload?.orderMongoId || "Order";
+        const orderMongoId = String(payload?.orderMongoId || payload?.orderId || "");
+        const targetId = `approval-undelivered-${orderMongoId || Date.now()}`;
+
+        const realTimeItem = {
+          id: targetId,
+          orderMongoId,
+          orderId: orderDisplayId,
+          title: "📵 Customer Unreachable",
+          message: payload?.message || `Order #${orderDisplayId}: delivery partner cannot reach the customer. Approval needed to return it to the restaurant.`,
+          type: "approval",
+          category: "undelivered_approval",
+          resource: "orders",
+          path: "/admin/food/orders/unreachable-requests",
+          createdAt: new Date().toISOString(),
+          timeLabel: "Just now",
+          metaLabel: joinMeta(`Order #${orderDisplayId}`, payload?.partnerName, payload?.restaurantName, payload?.reason),
+          rawOrder: payload,
+        };
+
+        const currentAdmin = getCurrentUser("admin");
+        if (!checkAdminNotifAccess(realTimeItem, currentAdmin)) return;
+
+        toast.error("📵 Customer unreachable - approval needed", {
+          description: payload?.message || `Order #${orderDisplayId}: delivery partner wants to return the order.`,
+        });
+
+        saveDismissedIds(getDismissedIds().filter((id) => id !== targetId));
+        saveStoredRealtimeNotifs([realTimeItem, ...getStoredRealtimeNotifs()]);
+
+        setItems((prev) => uniqueById([realTimeItem, ...(Array.isArray(prev) ? prev : [])]));
+        dispatchAdminNotificationsUpdated();
+        window.dispatchEvent(new CustomEvent("admin_undelivered_request", { detail: payload }));
+      });
+
       socket.on("admin_handover_request", (payload) => {
         const orderDisplayId = payload?.orderId || payload?.orderMongoId || "Order";
         const orderMongoId = String(payload?.orderMongoId || payload?.orderId || "");
@@ -814,6 +851,7 @@ export default function useAdminNotifications(options = {}) {
         socket.off("new_registration_alert", handleRegistrationAlert);
         socket.off("new_driver_registration", handleRegistrationAlert);
         socket.off("admin_handover_request");
+        socket.off("admin_undelivered_request");
         socket.off("admin_notification");
         socket.off("support_ticket_created");
         socket.off("withdrawal_request_created");

@@ -1892,7 +1892,9 @@ export default function OrderTracking({ isSharedView = false }) {
                 {currentStatus.title}
               </span>
               <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
-                {isDeliveredOrder
+                {order?.status === 'returned_to_restaurant'
+                  ? "Order returned to restaurant"
+                  : isDeliveredOrder
                   ? "Delivered!"
                   : (isCancelledOrder && order?.status === 'cancelled_by_restaurant')
                     ? `Cancelled by ${storeWord}`
@@ -1902,6 +1904,14 @@ export default function OrderTracking({ isSharedView = false }) {
                       ? "Order Cancelled"
                       : currentStatus.subtitle}
               </h2>
+              {(order?.status === 'returned_to_restaurant' || ['approved', 'returned'].includes(order?.undeliveredReturn?.status)) && (
+                <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">
+                  We could not reach you, so the delivery partner is returning this order to the restaurant.
+                  {Number(order?.undeliveredReturn?.penaltyAmount) > 0
+                    ? ` A penalty of ₹${order.undeliveredReturn.penaltyAmount} will be added to your next order.`
+                    : ''}
+                </p>
+              )}
               {isCancelledOrder && order?.status === 'cancelled_by_admin' && (
                 <div className="mt-2 space-y-1">
                   {order?.cancellationReason && (
