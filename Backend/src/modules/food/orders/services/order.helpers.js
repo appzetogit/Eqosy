@@ -31,6 +31,8 @@ export function haversineKm(lat1, lon1, lat2, lon2) {
 
 /** Cycle and electric scooter riders never get an order whose trip is longer than this (admin can only lower it). */
 export const LIGHT_VEHICLE_MAX_TRIP_KM = 7;
+/** Electric scooters can take slightly longer trips than cycles. */
+export const ELECTRIC_SCOOTER_MAX_TRIP_KM = 8;
 // Straight-line distance is always shorter than the road; this brings it close to what the customer sees.
 const ROAD_DISTANCE_FACTOR = 1.3;
 
@@ -45,7 +47,7 @@ export function getVehicleTripLimitKm(vehicleType, { maxDistanceCycle, maxDistan
     return Math.min(pick(maxDistanceCycle, 5), LIGHT_VEHICLE_MAX_TRIP_KM);
   }
   if (vehicle.includes('scooter') || vehicle === 'ev' || vehicle.startsWith('electric')) {
-    return Math.min(pick(maxDistanceElectricScooter, LIGHT_VEHICLE_MAX_TRIP_KM), LIGHT_VEHICLE_MAX_TRIP_KM);
+    return Math.min(pick(maxDistanceElectricScooter, ELECTRIC_SCOOTER_MAX_TRIP_KM), ELECTRIC_SCOOTER_MAX_TRIP_KM);
   }
   return null;
 }

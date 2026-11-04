@@ -842,34 +842,27 @@ const ParcelSearchingDriver = () => {
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                 >
                   <div className="flex items-center justify-center -translate-y-[22px]">
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="relative flex items-center justify-center pointer-events-none"
-                    >
+                    <div className="relative flex items-center justify-center pointer-events-none">
+                      <style>{`
+                        @keyframes parcelRadarSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                        @keyframes parcelRadarPulse { 0% { transform: scale(0.5); opacity: 0.5; } 100% { transform: scale(4.5); opacity: 0; } }
+                      `}</style>
                       {[1, 2, 3, 4].map((i) => (
-                        <motion.div
+                        <div
                           key={i}
-                          animate={{ scale: [0.5, 4.5], opacity: [0.5, 0] }}
-                          transition={{
-                            repeat: Infinity,
-                            duration: 3,
-                            delay: i * 0.75,
-                            ease: 'easeOut',
-                          }}
                           className="absolute w-20 h-20 rounded-full border-2 border-orange-400/40 bg-orange-400/5 shadow-[0_0_20px_rgba(249,115,22,0.2)]"
+                          style={{ animation: `parcelRadarPulse 3s ease-out ${i * 0.75}s infinite both` }}
                         />
                       ))}
 
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
+                      <div
                         className="absolute w-[320px] h-[320px] rounded-full overflow-hidden"
                         style={{
                           background: 'conic-gradient(from 0deg, rgba(249, 115, 22, 0.5) 0deg, transparent 60deg, transparent 360deg)',
+                          animation: 'parcelRadarSweep 4s linear infinite',
                         }}
                       />
-                    </motion.div>
+                    </div>
                   </div>
                 </OverlayView>
               </>

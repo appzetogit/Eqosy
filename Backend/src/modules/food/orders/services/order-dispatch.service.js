@@ -359,7 +359,7 @@ export async function getDispatchSettings() {
   return { 
     dispatchMode: settings?.dispatchMode || "auto",
     maxDistanceCycle: settings?.maxDistanceCycle ?? 5,
-    maxDistanceElectricScooter: settings?.maxDistanceElectricScooter ?? 7
+    maxDistanceElectricScooter: settings?.maxDistanceElectricScooter ?? 8
   };
 }
 

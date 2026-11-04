@@ -108,12 +108,30 @@ class ErrorBoundary extends React.Component {
     } catch {
       // ignore
     }
-    const homeRoute = resolveCurrentAppHomeRoute()
-    if (window.location?.hash?.startsWith('#/')) {
-      window.location.hash = `#${homeRoute}`
-      window.location.reload()
-    } else {
-      window.location.href = homeRoute
+    let homeRoute = '/'
+    try {
+      homeRoute = resolveCurrentAppHomeRoute() || '/'
+    } catch {
+      // fall back to root
+    }
+    try {
+      if (window.location?.hash?.startsWith('#/')) {
+        window.location.hash = `#${homeRoute}`
+        window.location.reload()
+        return
+      }
+      const target = new URL(homeRoute, window.location.origin).href
+      const alreadyThere = target === window.location.href
+      // replace() always navigates; if we are already on the home URL some WebViews ignore it, so reload.
+      if (alreadyThere) {
+        window.location.reload()
+      } else {
+        window.location.replace(target)
+        // Safety net: if the navigation was swallowed, force a reload.
+        setTimeout(() => window.location.reload(), 800)
+      }
+    } catch {
+      window.location.href = '/'
     }
   }
 
