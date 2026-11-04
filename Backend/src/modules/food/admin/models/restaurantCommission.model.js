@@ -17,6 +17,10 @@ const restaurantCommissionSchema = new mongoose.Schema(
             },
             value: { type: Number, default: 0 }
         },
+        /**
+         * An active row (status !== false) is a CUSTOM ADMIN commission: the automatic league rules are skipped for
+         * this restaurant. Disabling the row (status=false) hands the restaurant back to the league system.
+         */
         notes: { type: String, trim: true, default: '' },
         status: { type: Boolean, default: true, index: true }
     },

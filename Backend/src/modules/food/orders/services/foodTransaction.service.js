@@ -1,30 +1,9 @@
 import { FoodTransaction } from '../models/foodTransaction.model.js';
-import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
+import { resolveOrderCommission } from '../../admin/services/commissionLeague.service.js';
 import { recordTransaction } from '../../../../core/payments/transaction.service.js';
 import { Transaction } from '../../../../core/payments/models/transaction.model.js';
 import { logger } from '../../../../utils/logger.js';
 import mongoose from 'mongoose';
-
-const RESTAURANT_COMMISSION_CACHE_MS = 60 * 1000;
-let restaurantCommissionRulesCache = null;
-let restaurantCommissionRulesLoadedAt = 0;
-
-async function getActiveRestaurantCommissionRules() {
-    const now = Date.now();
-    if (
-        restaurantCommissionRulesCache &&
-        now - restaurantCommissionRulesLoadedAt < RESTAURANT_COMMISSION_CACHE_MS
-    ) {
-        return restaurantCommissionRulesCache;
-    }
-
-    const list = await FoodRestaurantCommission.find({
-        status: { $ne: false },
-    }).lean();
-    restaurantCommissionRulesCache = list || [];
-    restaurantCommissionRulesLoadedAt = now;
-    return restaurantCommissionRulesCache;
-}
 
 export function computeRestaurantCommissionAmount(baseAmount, rule) {
     const safeBase = Math.max(0, Number(baseAmount) || 0);
@@ -50,33 +29,26 @@ export function computeRestaurantCommissionAmount(baseAmount, rule) {
     return { commissionAmount, commissionType, commissionValue, baseAmount: safeBase };
 }
 
+/**
+ * Commission for a NEW order, decided server-side from the food subtotal only (no delivery / platform fee / tax).
+ * Custom admin commission wins; otherwise the restaurant's current calendar-month league slab applies.
+ * Besides the amount it returns how it was derived so the caller can freeze it on the order.
+ */
 export async function getRestaurantCommissionSnapshot(orderDoc) {
     const baseAmount = Number(orderDoc?.pricing?.subtotal ?? 0) || 0;
-    const restaurantIdRaw =
-        orderDoc?.restaurantId?._id ?? orderDoc?.restaurantId ?? null;
+    const restaurantIdRaw = orderDoc?.restaurantId?._id ?? orderDoc?.restaurantId ?? null;
 
-    if (!restaurantIdRaw) {
-        return {
-            commissionAmount: 0,
-            commissionType: 'percentage',
-            commissionValue: 0,
-            baseAmount,
-        };
-    }
-
-    const rules = await getActiveRestaurantCommissionRules();
-    const rule =
-        rules.find((r) => String(r.restaurantId) === String(restaurantIdRaw)) ||
-        // Fallback: accept legacy docs where restaurantId may be stored under `restaurant` / `restaurant_id`
-        rules.find((r) => String(r.restaurant || r.restaurant_id || '') === String(restaurantIdRaw)) ||
-        null;
-
-    // Fallback default commission rule (10% percentage) if no explicit custom rule is configured for this restaurant
-    const effectiveRule = rule || {
-        defaultCommission: { type: 'percentage', value: 10 }
+    const result = await resolveOrderCommission({ restaurantId: restaurantIdRaw, baseAmount });
+    return {
+        commissionAmount: result.commissionAmount,
+        commissionType: result.commissionType,
+        commissionValue: result.commissionValue,
+        commissionRate: result.commissionRate,
+        source: result.source,
+        leagueKey: result.leagueKey,
+        monthKey: result.monthKey,
+        baseAmount: result.baseAmount,
     };
-
-    return computeRestaurantCommissionAmount(baseAmount, effectiveRule);
 }
 
 /**
@@ -85,7 +57,10 @@ export async function getRestaurantCommissionSnapshot(orderDoc) {
 export async function createInitialTransaction(order) {
     if (!order) return null;
 
-    const { commissionAmount = 0 } = await getRestaurantCommissionSnapshot(order).catch(() => ({ commissionAmount: 0 }));
+    // Only recompute for legacy orders that have no commission frozen on them.
+    const { commissionAmount = 0 } = order.pricing?.restaurantCommissionSource
+        ? { commissionAmount: Number(order.pricing.restaurantCommission) || 0 }
+        : await getRestaurantCommissionSnapshot(order).catch(() => ({ commissionAmount: 0 }));
 
     // Split logic - Ensure all values are finite numbers
     const totalCustomerPaid = Number(order.pricing?.total) || 0;
@@ -94,8 +69,9 @@ export async function createInitialTransaction(order) {
     // Prefer commission already computed & stored on the order (source of truth for this order),
     // fallback to rule snapshot for older orders.
     const restaurantCommissionFromOrder = Number(order.pricing?.restaurantCommission);
+    const commissionFrozenOnOrder = Boolean(order.pricing?.restaurantCommissionSource);
     const restaurantCommission =
-        Number.isFinite(restaurantCommissionFromOrder) && restaurantCommissionFromOrder > 0
+        Number.isFinite(restaurantCommissionFromOrder) && (restaurantCommissionFromOrder > 0 || commissionFrozenOnOrder)
             ? restaurantCommissionFromOrder
             : (Number(commissionAmount) || 0);
 

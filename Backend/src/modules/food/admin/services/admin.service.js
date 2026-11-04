@@ -14,6 +14,7 @@ import { DeliveryBonusTransaction } from '../models/deliveryBonusTransaction.mod
 import { FoodEarningAddon } from '../models/earningAddon.model.js';
 import { FoodEarningAddonHistory } from '../models/earningAddonHistory.model.js';
 import { FoodRestaurantCommission } from '../models/restaurantCommission.model.js';
+import { auditLegacyCommissionChange } from './commissionLeague.service.js';
 import { FoodDeliveryCommissionRule } from '../models/deliveryCommissionRule.model.js';
 import { FoodDeliverySurgeZone } from '../models/deliverySurgeZone.model.js';
 import { FoodFeeSettings } from '../models/feeSettings.model.js';
@@ -2023,7 +2024,7 @@ export async function getRestaurantCommissionById(id) {
     };
 }
 
-export async function createRestaurantCommission(body) {
+export async function createRestaurantCommission(body, actor = {}) {
     const exists = await FoodRestaurantCommission.findOne({ restaurantId: body.restaurantId }).lean();
     if (exists) {
         throw new ValidationError('Commission already exists for this restaurant');
@@ -2034,31 +2035,69 @@ export async function createRestaurantCommission(body) {
         notes: body.notes || '',
         status: true
     });
+    await auditLegacyCommissionChange({
+        action: 'restaurant_custom_set',
+        restaurantId: body.restaurantId,
+        before: { mode: 'league' },
+        after: { mode: 'custom_admin', ...(body.defaultCommission || {}) },
+        note: body.notes || '',
+        actor
+    });
     return created.toObject();
 }
 
-export async function updateRestaurantCommission(id, body) {
+export async function updateRestaurantCommission(id, body, actor = {}) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const prev = await FoodRestaurantCommission.findById(id).lean();
     const updated = await FoodRestaurantCommission.findByIdAndUpdate(
         id,
         { $set: { defaultCommission: body.defaultCommission, notes: body.notes || '' } },
         { new: true }
     ).lean();
+    if (updated) {
+        await auditLegacyCommissionChange({
+            action: 'restaurant_custom_updated',
+            restaurantId: updated.restaurantId,
+            before: prev ? { mode: prev.status !== false ? 'custom_admin' : 'league', ...(prev.defaultCommission || {}) } : null,
+            after: { mode: updated.status !== false ? 'custom_admin' : 'league', ...(updated.defaultCommission || {}) },
+            note: body.notes || '',
+            actor
+        });
+    }
     return updated;
 }
 
-export async function deleteRestaurantCommission(id) {
+export async function deleteRestaurantCommission(id, actor = {}) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const deleted = await FoodRestaurantCommission.findByIdAndDelete(id).lean();
+    if (deleted) {
+        await auditLegacyCommissionChange({
+            action: 'restaurant_league_enabled',
+            restaurantId: deleted.restaurantId,
+            before: { mode: deleted.status !== false ? 'custom_admin' : 'league', ...(deleted.defaultCommission || {}) },
+            after: { mode: 'league' },
+            note: 'Custom commission removed',
+            actor
+        });
+    }
     return deleted ? { id } : null;
 }
 
-export async function toggleRestaurantCommissionStatus(id) {
+export async function toggleRestaurantCommissionStatus(id, actor = {}) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const doc = await FoodRestaurantCommission.findById(id);
     if (!doc) return null;
-    doc.status = !Boolean(doc.status);
+    const wasActive = doc.status !== false;
+    doc.status = !wasActive;
     await doc.save();
+    await auditLegacyCommissionChange({
+        action: doc.status ? 'restaurant_custom_set' : 'restaurant_league_enabled',
+        restaurantId: doc.restaurantId,
+        before: { mode: wasActive ? 'custom_admin' : 'league', ...(doc.defaultCommission || {}) },
+        after: { mode: doc.status ? 'custom_admin' : 'league', ...(doc.defaultCommission || {}) },
+        note: doc.status ? 'Custom commission enabled' : 'Custom commission disabled - league rules apply',
+        actor
+    });
     return doc.toObject();
 }
 

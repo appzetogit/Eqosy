@@ -4,7 +4,7 @@ import { FoodTransaction } from '../../orders/models/foodTransaction.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { FoodRestaurantWithdrawal } from '../models/foodRestaurantWithdrawal.model.js';
 import { getRestaurantWithdrawalSettings } from '../../admin/services/admin.service.js';
-import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
+import { getCurrentCommissionDisplay } from '../../admin/services/commissionLeague.service.js';
 
 function toTwoDigitYearString(dateObj) {
     const y = String(dateObj.getFullYear());
@@ -216,17 +216,13 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
     const withdrawalSettings = await getRestaurantWithdrawalSettings();
     const minimumWithdrawalAmount = Number(withdrawalSettings?.minimumWithdrawalAmount) || 0;
 
-    let commRuleDoc = null;
+    let commDisplay = { type: 'percentage', value: 10, formattedRate: '10%' };
     try {
-        commRuleDoc = await FoodRestaurantCommission.findOne({
-            $or: [{ restaurantId: rid }, { restaurant: rid }],
-            status: { $ne: false }
-        }).lean();
+        commDisplay = await getCurrentCommissionDisplay(rid);
     } catch (err) {}
-    const defaultComm = commRuleDoc?.defaultCommission || { type: 'percentage', value: 10 };
-    const commVal = Math.max(0, Number(defaultComm.value ?? 10) || 0);
-    const commType = defaultComm.type || 'percentage';
-    const commissionRateFormatted = commType === 'amount' ? `₹${commVal}` : `${commVal}%`;
+    const commVal = Math.max(0, Number(commDisplay.value) || 0);
+    const commType = commDisplay.type || 'percentage';
+    const commissionRateFormatted = commDisplay.formattedRate || (commType === 'amount' ? `₹${commVal}` : `${commVal}%`);
 
     const currentCycle = {
         start: { ...nowWindow.startMeta },

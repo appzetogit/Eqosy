@@ -30,7 +30,7 @@ import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { emitToAdmins } from '../../../taxi/services/dispatchService.js';
-import { FoodRestaurantCommission } from '../../admin/models/restaurantCommission.model.js';
+import { getCurrentCommissionDisplay } from '../../admin/services/commissionLeague.service.js';
 import { getDemoBypass } from '../../admin/services/demoMode.service.js';
 import { verifyPayoutAccount } from '../../../../core/payments/payoutAccount.service.js';
 
@@ -681,14 +681,7 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
     const profile = toRestaurantProfile(doc);
 
     try {
-        const commissionDoc = await FoodRestaurantCommission.findOne({
-            $or: [{ restaurantId: doc._id }, { restaurant: doc._id }],
-            status: { $ne: false }
-        }).lean();
-        const defaultComm = commissionDoc?.defaultCommission || { type: 'percentage', value: 10 };
-        const value = Math.max(0, Number(defaultComm.value ?? 10) || 0);
-        const type = defaultComm.type || 'percentage';
-        const formattedRate = type === 'amount' ? `₹${value}` : `${value}%`;
+        const { type, value, formattedRate } = await getCurrentCommissionDisplay(doc._id);
 
         profile.adminCommission = {
             type,

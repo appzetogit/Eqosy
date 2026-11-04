@@ -272,6 +272,12 @@ export async function createOrder(userId, dto) {
         restaurantId: restaurantId
       });
       restaurantCommission = Number(snapshot?.commissionAmount) || 0;
+      // Freeze how the commission was derived so later league changes never rewrite this order.
+      normalizedPricing.restaurantCommissionRate = Number(snapshot?.commissionRate) || 0;
+      normalizedPricing.restaurantCommissionType = snapshot?.commissionType || 'percentage';
+      normalizedPricing.restaurantCommissionSource = snapshot?.source || 'default';
+      normalizedPricing.restaurantCommissionLeague = snapshot?.leagueKey || '';
+      normalizedPricing.restaurantCommissionMonth = snapshot?.monthKey || '';
     } catch (err) {
       logger.error(`Commission calculation failed for order: ${err.message}`);
     }

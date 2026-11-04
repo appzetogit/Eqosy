@@ -72,6 +72,7 @@ import * as orderController from '../../orders/controllers/order.controller.js';
 import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { sendError } from '../../../../utils/response.js';
 import { getRestaurantFinanceController } from '../controllers/restaurantFinance.controller.js';
+import { getMyLeagueDashboard } from '../../admin/controllers/commissionLeague.controller.js';
 
 import { cacheResponse, invalidateCache } from '../../../../middleware/cache.js';
 
@@ -125,6 +126,7 @@ router.patch('/dining-settings', authMiddleware, requireRestaurant, updateCurren
 router.get('/outlet-timings', authMiddleware, requireRestaurant, getCurrentRestaurantOutletTimingsController);
 router.put('/outlet-timings', authMiddleware, requireRestaurant, upsertCurrentRestaurantOutletTimingsController);
 router.get('/finance', authMiddleware, requireRestaurant, getRestaurantFinanceController);
+router.get('/commission-league', authMiddleware, requireRestaurant, getMyLeagueDashboard);
 router.get('/reviews', authMiddleware, requireRestaurant, getRestaurantReviewsController);
 router.post('/withdraw', authMiddleware, requireRestaurant, createWithdrawalRequestController);
 router.get('/withdrawals', authMiddleware, requireRestaurant, listMyWithdrawalsController);

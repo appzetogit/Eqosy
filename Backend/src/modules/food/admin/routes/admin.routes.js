@@ -13,6 +13,7 @@ import { upload } from '../../../../middleware/upload.js';
 import { invalidateCache } from '../../../../middleware/cache.js';
 import { attachFoodAdminContext, requireFoodResourceAccess } from '../middlewares/foodAdmin.middleware.js';
 import * as foodAdminManagementController from '../controllers/foodAdminManagement.controller.js';
+import * as leagueController from '../controllers/commissionLeague.controller.js';
 import * as demoModeController from '../controllers/demoMode.controller.js';
 import { assertAdminCanManageRestaurant, assertAdminCanManageFood } from '../services/admin.service.js';
 
@@ -104,6 +105,15 @@ router.get('/restaurant-commissions/:id', requireFoodResourceAccess('fee_setting
 router.patch('/restaurant-commissions/:id', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.updateRestaurantCommission);
 router.delete('/restaurant-commissions/:id', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.deleteRestaurantCommission);
 router.patch('/restaurant-commissions/:id/toggle', requireFoodResourceAccess('fee_settings', 'fee_settings'), adminController.toggleRestaurantCommissionStatus);
+
+// ----- Commission & Performance League -----
+router.get('/commission-league/settings', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.getLeagueSettings);
+router.put('/commission-league/settings', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.updateLeagueSettings);
+router.get('/commission-league/restaurants', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.listLeagueRestaurants);
+router.put('/commission-league/restaurants/:id/commission', requireFoodResourceAccess('fee_settings', 'fee_settings'), guardRestaurantZone, leagueController.setRestaurantCommissionMode);
+router.get('/commission-league/restaurants/:id/performance', requireFoodResourceAccess('fee_settings', 'fee_settings'), guardRestaurantZone, leagueController.getRestaurantPerformance);
+router.get('/commission-league/zones', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.getZoneComparison);
+router.get('/commission-league/audit', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.listAudit);
 
 // ----- Dev Mode (demo data, location bypass) & checkout payment methods -----
 router.get('/demo-mode', demoModeController.getDemoMode);

@@ -10,6 +10,7 @@ import { connectRedis, closeRedis } from './src/config/redis.js';
 import { initSocket, initSocketEmitter } from './src/config/socket.js';
 import { initializeQueues, closeBullMQConnection } from './src/queues/index.js';
 import { expireExpiredOffers } from './src/modules/food/admin/services/admin.service.js';
+import { finalizeCompletedMonths } from './src/modules/food/admin/services/commissionLeague.service.js';
 import { syncExpiredFssaiNotifications } from './src/modules/food/restaurant/services/fssaiExpiry.service.js';
 import { checkAndSendGigReminders } from './src/modules/food/delivery/services/gigReminder.service.js';
 import { processNoShows } from './src/modules/food/delivery/services/gig.service.js';
@@ -21,6 +22,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
 let server = null;
 let expireOffersInterval = null;
 let fssaiExpiryInterval = null;
+let leagueFinalizeInterval = null;
 let gigReminderInterval = null;
 let scheduledOrdersInterval = null;
 
@@ -37,6 +39,7 @@ const gracefulShutdown = async (signal) => {
             await closeBullMQConnection();
             if (expireOffersInterval) clearInterval(expireOffersInterval);
             if (fssaiExpiryInterval) clearInterval(fssaiExpiryInterval);
+            if (leagueFinalizeInterval) clearInterval(leagueFinalizeInterval);
             if (gigReminderInterval) clearInterval(gigReminderInterval);
             if (scheduledOrdersInterval) clearInterval(scheduledOrdersInterval);
             logger.info('Graceful shutdown complete');
@@ -150,6 +153,18 @@ const startServer = async () => {
         };
         runFssaiExpirySync();
         fssaiExpiryInterval = setInterval(runFssaiExpirySync, 60 * 60 * 1000);
+
+        // Monthly commission league: the live month resets itself (calendar-month queries); this only freezes
+        // finished months so their league label survives later slab edits. Idempotent, safe to run hourly.
+        const runLeagueFinalize = async () => {
+            try {
+                await finalizeCompletedMonths();
+            } catch (err) {
+                logger.error(`Commission league finalize error: ${err.message}`);
+            }
+        };
+        runLeagueFinalize();
+        leagueFinalizeInterval = setInterval(runLeagueFinalize, 60 * 60 * 1000);
 
         const runGigReminderCheck = async () => {
             try {

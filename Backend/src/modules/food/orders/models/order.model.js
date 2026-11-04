@@ -77,6 +77,12 @@ const pricingSchema = new mongoose.Schema(
         },
         additionalChargesTotal: { type: Number, default: 0, min: 0 },
         restaurantCommission: { type: Number, default: 0, min: 0 },
+        // Snapshot of how restaurantCommission was derived; never recomputed after the order is placed.
+        restaurantCommissionRate: { type: Number, default: 0, min: 0 },
+        restaurantCommissionType: { type: String, enum: ['percentage', 'amount', ''], default: '' },
+        restaurantCommissionSource: { type: String, enum: ['league', 'custom_admin', 'default', ''], default: '' },
+        restaurantCommissionLeague: { type: String, default: '' },
+        restaurantCommissionMonth: { type: String, default: '' },
         discount: { type: Number, default: 0, min: 0 },
         deliveryPartnerTip: { type: Number, default: 0, min: 0 },
         total: { type: Number, required: true, min: 0 },

@@ -521,6 +521,18 @@ function mapOrderToTrackingUiStatus(orderLike) {
   // Live Ride / Phase-based mapping (Highest priority for precision)
   const isRiderAccepted = orderLike.dispatch?.status === "accepted" || orderLike.assignmentInfo?.status === "accepted" || orderLike.deliveryPartner?.status === "accepted";
 
+  // Restaurant has marked the food ready (canonical orderStatus, or the ready flags) while the rider is
+  // still on the way to / waiting at the restaurant: show "ready, partner will pick it up", not "preparing".
+  const canonicalStatus = String(orderLike.orderStatus || "").toLowerCase()
+  const foodMarkedReady =
+    canonicalStatus === "ready_for_pickup" ||
+    canonicalStatus === "ready" ||
+    orderLike.deliveryState?.isFoodReady === true ||
+    orderLike.isFoodReady === true
+  const beforePickup = !["picked_up", "out_for_delivery", "reached_drop", "at_drop", "delivered", "completed"].includes(canonicalStatus) &&
+    !["en_route_to_delivery", "reached_drop", "at_drop", "delivered", "completed"].includes(String(phase || ""))
+  if (foodMarkedReady && beforePickup && phase !== "at_pickup") return "ready"
+
   if (phase === "reached_drop" || phase === "at_drop" || statusRaw === "at_drop") return "at_drop"
   if (phase === "en_route_to_delivery" || statusRaw === "picked_up" || statusRaw === "out_for_delivery") return "on_way"
   if (phase === "at_pickup" && orderLike.deliveryPartnerId && isRiderAccepted) return "at_pickup"
@@ -1405,6 +1417,7 @@ export default function OrderTracking({ isSharedView = false }) {
         const next = mapOrderToTrackingUiStatus({
           status,
           orderStatus: payload.orderStatus || status,
+          isFoodReady: payload.isFoodReady,
           deliveryState: payload.deliveryState,
           dispatch: payload.dispatch,
           assignmentInfo: payload.assignmentInfo,
@@ -1740,14 +1753,14 @@ export default function OrderTracking({ isSharedView = false }) {
         ? (isGrocery ? "Order is ready for pickup 🟢" : "Food is ready for pickup 🟢")
         : (isGrocery ? "Order packing in progress 🟠" : "Food preparation in progress 🟠"),
       subtitle: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready')
-        ? "Your order is ready and your delivery partner is collecting it."
+        ? "Your order is ready and your delivery partner is picking it up now."
         : `Your delivery partner has arrived at the ${storeWord.toLowerCase()} and is waiting for your order to be ready.`,
       color: (order?.orderStatus === 'ready_for_pickup' || order?.orderStatus === 'ready') ? "bg-emerald-600" : "bg-amber-600",
       iconType: 'rider'
     },
     ready: {
-      title: "Food is ready for pickup 🟢",
-      subtitle: "Your order is ready and your delivery partner is collecting it.",
+      title: isGrocery ? "Your order is ready 🟢" : "Your food is ready 🟢",
+      subtitle: "Your order is ready. Our delivery partner will pick it up from the " + storeWord.toLowerCase() + " shortly.",
       color: "bg-emerald-600",
       iconType: 'rider'
     },

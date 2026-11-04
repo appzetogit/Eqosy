@@ -852,6 +852,29 @@ export const adminAPI = {
       contextModule: "admin",
     }),
 
+  /** Commission & Performance League (admin) */
+  getCommissionLeagueSettings: () =>
+    apiClient.get("/food/admin/commission-league/settings", { contextModule: "admin" }),
+  updateCommissionLeagueSettings: (body) =>
+    apiClient.put("/food/admin/commission-league/settings", body ?? {}, { contextModule: "admin" }),
+  getCommissionLeagueRestaurants: (params = {}) =>
+    apiClient.get("/food/admin/commission-league/restaurants", { params, contextModule: "admin" }),
+  setRestaurantCommissionMode: (restaurantId, body) =>
+    apiClient.put(
+      `/food/admin/commission-league/restaurants/${String(restaurantId)}/commission`,
+      body ?? {},
+      { contextModule: "admin" },
+    ),
+  getRestaurantPerformance: (restaurantId, params = {}) =>
+    apiClient.get(
+      `/food/admin/commission-league/restaurants/${String(restaurantId)}/performance`,
+      { params, contextModule: "admin" },
+    ),
+  getCommissionLeagueZones: (params = {}) =>
+    apiClient.get("/food/admin/commission-league/zones", { params, contextModule: "admin" }),
+  getCommissionLeagueAudit: (params = {}) =>
+    apiClient.get("/food/admin/commission-league/audit", { params, contextModule: "admin" }),
+
   /** Restaurant Commission (admin) */
   getRestaurantCommissionBootstrap: () =>
     apiClient.get("/food/admin/restaurant-commissions/bootstrap", {
@@ -1077,6 +1100,12 @@ export const restaurantAPI = {
   getMe: () => authService.getMe("restaurant"),
   /** Restaurant dashboard: fetch current restaurant profile (deduped + short-cached). */
   getCurrentRestaurant: () => getRestaurantCurrentOnce(),
+  /** Commission & performance league dashboard. */
+  getCommissionLeague: (params = {}) =>
+    apiClient.get("/food/restaurant/commission-league", {
+      contextModule: "restaurant",
+      params: params || {},
+    }),
   /** Finance dashboard for `hub-finance`. */
   getFinance: (params = {}) =>
     apiClient.get("/food/restaurant/finance", {

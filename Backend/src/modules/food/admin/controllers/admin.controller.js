@@ -807,6 +807,11 @@ export async function checkEarningAddonCompletions(req, res, next) {
 }
 
 // ----- Restaurant Commission (admin) -----
+const commissionActor = (req) => ({
+    adminId: req.user?.userId || req.user?.id || req.user?._id || null,
+    name: req.adminContext?.name || req.adminContext?.email || req.user?.email || 'Admin'
+});
+
 export async function getRestaurantCommissions(req, res, next) {
     try {
         const data = await adminService.getRestaurantCommissions();
@@ -844,7 +849,7 @@ export async function getRestaurantCommissionById(req, res, next) {
 export async function createRestaurantCommission(req, res, next) {
     try {
         const body = validateRestaurantCommissionUpsertDto(req.body || {});
-        const created = await adminService.createRestaurantCommission(body);
+        const created = await adminService.createRestaurantCommission(body, commissionActor(req));
         res.status(201).json({ success: true, message: 'Commission created successfully', data: { commission: created } });
     } catch (error) {
         next(error);
@@ -858,7 +863,7 @@ export async function updateRestaurantCommission(req, res, next) {
             return res.status(400).json({ success: false, message: 'Invalid commission id' });
         }
         const body = validateRestaurantCommissionUpsertDto(req.body || {});
-        const updated = await adminService.updateRestaurantCommission(id, body);
+        const updated = await adminService.updateRestaurantCommission(id, body, commissionActor(req));
         if (!updated) {
             return res.status(404).json({ success: false, message: 'Commission not found' });
         }
@@ -874,7 +879,7 @@ export async function deleteRestaurantCommission(req, res, next) {
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({ success: false, message: 'Invalid commission id' });
         }
-        const result = await adminService.deleteRestaurantCommission(id);
+        const result = await adminService.deleteRestaurantCommission(id, commissionActor(req));
         if (!result) {
             return res.status(404).json({ success: false, message: 'Commission not found' });
         }
@@ -890,7 +895,7 @@ export async function toggleRestaurantCommissionStatus(req, res, next) {
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({ success: false, message: 'Invalid commission id' });
         }
-        const updated = await adminService.toggleRestaurantCommissionStatus(id);
+        const updated = await adminService.toggleRestaurantCommissionStatus(id, commissionActor(req));
         if (!updated) {
             return res.status(404).json({ success: false, message: 'Commission not found' });
         }

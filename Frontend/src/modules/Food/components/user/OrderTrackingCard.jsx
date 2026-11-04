@@ -393,6 +393,9 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     const s = String(orderStatus).toLowerCase();
     const p = String(orderPhase).toLowerCase();
 
+    if (activeOrder?.deliveryState?.isFoodReady === true && !["picked_up", "reached_drop", "delivered", "completed"].includes(s) && p !== "en_route_to_delivery" && p !== "at_drop") {
+      return "Food ready – delivery partner will pick it up 🟢";
+    }
     if (s === "confirmed") return "Order confirmed";
     if (s === "preparing" || s === "created" || s === "pending") {
       if (p === "at_pickup" || s === "reached_pickup") {
@@ -400,7 +403,7 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
       }
       return "Preparing your order";
     }
-    if (s === "ready_for_pickup" || s === "ready") return "Food ready for pickup 🟢";
+    if (s === "ready_for_pickup" || s === "ready") return "Food ready – delivery partner will pick it up 🟢";
 
     if (s === "reached_pickup" || p === "at_pickup") return "Partner reached restaurant";
     if (s === "picked_up" || p === "en_route_to_delivery") return "On the way";
