@@ -254,6 +254,12 @@ export default function SignupStep2() {
       return
     }
 
+    if (String(details.phone || "").replace(/\D/g, "").length < 8) {
+      toast.error("Phone number missing. Please verify your phone again to continue.")
+      navigate("/food/delivery/signup", { replace: true })
+      return
+    }
+
     const formData = new FormData()
     formData.append("name", details.name || "")
     formData.append("phone", String(details.phone || "").replace(/\D/g, "").slice(0, 15))

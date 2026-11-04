@@ -390,7 +390,16 @@ export default function DeliveryOTP() {
                 <div className="pt-6 flex flex-col gap-4">
                    {isRejected && (
                       <Button
-                        onClick={() => navigate("/food/delivery/signup/details")}
+                        onClick={() => {
+                          // Keep the verified phone so documents step can register with it
+                          const digits = String(authData?.phone || "").replace(/\D/g, "").slice(-10)
+                          if (digits.length >= 8) {
+                            let prev = {}
+                            try { prev = JSON.parse(sessionStorage.getItem("deliverySignupDetails") || "{}") } catch {}
+                            sessionStorage.setItem("deliverySignupDetails", JSON.stringify({ countryCode: "+91", ...prev, phone: digits }))
+                          }
+                          navigate("/food/delivery/signup/details")
+                        }}
                         className="w-full h-14 rounded-xl font-bold bg-red-600 hover:bg-red-700 text-white shadow-lg"
                       >
                         RE-APPLY NOW

@@ -841,6 +841,18 @@ export function useLocation() {
   }
 
   /* ===================== MAIN LOCATION ===================== */
+  // Returns the user's manually chosen location from storage (or null). Read fresh each time, never from state.
+  const getStoredManualLocation = () => {
+    try {
+      const raw = localStorage.getItem("userLocation")
+      const parsed = raw ? JSON.parse(raw) : null
+      if (parsed?.isManual === true && Number.isFinite(Number(parsed.latitude)) && Number.isFinite(Number(parsed.longitude))) {
+        return parsed
+      }
+    } catch {}
+    return null
+  }
+
   const getLocation = async (updateDB = true, forceFresh = false, showLoading = false) => {
     // If not forcing fresh, check if user has manually set location
     if (!forceFresh) {
@@ -1027,6 +1039,18 @@ export function useLocation() {
                 return
               }
 
+              // RACE GUARD: this GPS fetch + reverse-geocode takes several seconds. If the user picked a
+              // location/address in the meantime (isManual), never overwrite it with the live GPS fix.
+              // (Explicit "use current location" clears userLocation first via requestLocation, so it still works.)
+              const manualNow = getStoredManualLocation()
+              if (manualNow) {
+                debugLog("User picked a location while GPS was resolving; discarding GPS result")
+                setLocation(manualNow)
+                if (showLoading) setLoading(false)
+                resolve(manualNow)
+                return
+              }
+
               debugLog("?? Saving location:", finalLoc)
               localStorage.setItem("userLocation", JSON.stringify(finalLoc))
               try {
@@ -1074,6 +1098,13 @@ export function useLocation() {
                     accuracy: pos.coords.accuracy || null
                   }
                   debugLog("? Last resort geocoding succeeded:", lastResortLoc)
+                  const manualNow = getStoredManualLocation()
+                  if (manualNow) {
+                    setLocation(manualNow)
+                    if (showLoading) setLoading(false)
+                    resolve(manualNow)
+                    return
+                  }
                   localStorage.setItem("userLocation", JSON.stringify(lastResortLoc))
                   setLocation(lastResortLoc)
                   setPermissionGranted(true)
