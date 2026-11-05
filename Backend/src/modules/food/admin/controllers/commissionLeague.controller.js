@@ -45,6 +45,10 @@ export const getZoneComparison = wrap(async (req, res) => {
     ok(res, 'Zone comparison fetched', await league.getZoneComparison(req.query || {}, scopeOf(req)));
 });
 
+export const getRestaurantLeaderboard = wrap(async (req, res) => {
+    ok(res, 'Restaurant leaderboard fetched', await league.getRestaurantLeaderboard(req.query || {}, scopeOf(req)));
+});
+
 export const listAudit = wrap(async (req, res) => {
     ok(res, 'Audit log fetched', await league.listCommissionAudit(req.query || {}));
 });

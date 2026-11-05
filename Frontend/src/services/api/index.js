@@ -872,6 +872,8 @@ export const adminAPI = {
     ),
   getCommissionLeagueZones: (params = {}) =>
     apiClient.get("/food/admin/commission-league/zones", { params, contextModule: "admin" }),
+  getRestaurantLeaderboard: (params = {}) =>
+    apiClient.get("/food/admin/commission-league/leaderboard", { params, contextModule: "admin" }),
   getCommissionLeagueAudit: (params = {}) =>
     apiClient.get("/food/admin/commission-league/audit", { params, contextModule: "admin" }),
 

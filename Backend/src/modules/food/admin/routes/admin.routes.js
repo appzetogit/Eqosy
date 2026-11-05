@@ -113,6 +113,7 @@ router.get('/commission-league/restaurants', requireFoodResourceAccess('fee_sett
 router.put('/commission-league/restaurants/:id/commission', requireFoodResourceAccess('fee_settings', 'fee_settings'), guardRestaurantZone, leagueController.setRestaurantCommissionMode);
 router.get('/commission-league/restaurants/:id/performance', requireFoodResourceAccess('fee_settings', 'fee_settings'), guardRestaurantZone, leagueController.getRestaurantPerformance);
 router.get('/commission-league/zones', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.getZoneComparison);
+router.get('/commission-league/leaderboard', requireFoodResourceAccess('reports', 'reports'), leagueController.getRestaurantLeaderboard);
 router.get('/commission-league/audit', requireFoodResourceAccess('fee_settings', 'fee_settings'), leagueController.listAudit);
 
 // ----- Dev Mode (demo data, location bypass) & checkout payment methods -----

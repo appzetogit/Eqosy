@@ -797,6 +797,20 @@ export function resolveDateFilter(q = {}) {
             if (b.start < a.start) throw new ValidationError('"To" date cannot be before "From" date');
             return { start: a.start, end: b.end, label: `${q.from} to ${q.to}`, range };
         }
+        case 'today':
+        case 'this_week':
+        case 'last_week': {
+            const ist = new Date(Date.now() + IST_OFFSET_MS);
+            const dayStartUtc = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - IST_OFFSET_MS;
+            const DAY = 24 * 3600 * 1000;
+            if (range === 'today') {
+                return { start: new Date(dayStartUtc), end: new Date(dayStartUtc + DAY), label: 'Today', range };
+            }
+            const sinceMonday = (ist.getUTCDay() + 6) % 7; // Monday-based week
+            const weekStart = dayStartUtc - sinceMonday * DAY;
+            const start = range === 'this_week' ? weekStart : weekStart - 7 * DAY;
+            return { start: new Date(start), end: new Date(start + 7 * DAY), label: range === 'this_week' ? 'This week' : 'Last week', range };
+        }
         case 'previous_month': {
             const k = prevMonthKey(today);
             return { ...monthRange(k), label: monthLabel(k), range };
@@ -923,6 +937,87 @@ export async function getRestaurantPerformance(restaurantId, q = {}) {
             sales: round2(r.sales),
             commission: round2(r.commission)
         }))
+    };
+}
+
+/** Weights of the overall performance score (sum = 100). Shown to the admin in the UI. */
+export const PERFORMANCE_SCORE_WEIGHTS = { sales: 40, orders: 25, completionRate: 20, rating: 15 };
+
+/**
+ * Restaurant leaderboard for a day / week / month / custom range.
+ * Score (0-100) = sales (relative to best) + completed orders (relative to best)
+ *               + completion rate + customer rating, using PERFORMANCE_SCORE_WEIGHTS.
+ */
+export async function getRestaurantLeaderboard(q = {}, scope = {}) {
+    const df = resolveDateFilter(q);
+    const dm = effDateMatch(df);
+    const match = { ...NOT_ABANDONED };
+    if (scope.zoneIds) match.zoneId = { $in: scope.zoneIds };
+    if (isOid(q.zoneId)) match.zoneId = toOid(q.zoneId);
+
+    const rows = await FoodOrder.aggregate([
+        { $match: match },
+        EFF_DATE_STAGE,
+        ...(dm ? [{ $match: dm }] : []),
+        summaryGroupStage('$restaurantId')
+    ]);
+
+    const restaurants = await FoodRestaurant.find({ _id: { $in: rows.map((r) => r._id).filter(Boolean) } })
+        .select('restaurantName profileImage rating totalRatings zoneId')
+        .populate('zoneId', 'name zoneName')
+        .lean();
+    const byId = new Map(restaurants.map((r) => [String(r._id), r]));
+
+    const list = rows
+        .filter((r) => r._id && byId.has(String(r._id)))
+        .map((r) => {
+            const rest = byId.get(String(r._id));
+            const sm = finishSummary(r);
+            const decided = sm.completedOrders + sm.cancelledOrders;
+            return {
+                restaurantId: String(r._id),
+                name: rest.restaurantName || 'Unknown',
+                image: rest.profileImage || '',
+                zoneName: rest.zoneId?.zoneName || rest.zoneId?.name || '',
+                rating: round2(rest.rating || 0),
+                reviews: Number(rest.totalRatings || 0),
+                completionRate: decided > 0 ? round2((sm.completedOrders / decided) * 100) : 0,
+                ...sm
+            };
+        });
+
+    const maxSales = Math.max(0, ...list.map((r) => r.totalSales));
+    const maxOrders = Math.max(0, ...list.map((r) => r.completedOrders));
+    const W = PERFORMANCE_SCORE_WEIGHTS;
+    for (const r of list) {
+        r.score = round2(
+            (maxSales > 0 ? (r.totalSales / maxSales) * W.sales : 0) +
+                (maxOrders > 0 ? (r.completedOrders / maxOrders) * W.orders : 0) +
+                (r.completionRate / 100) * W.completionRate +
+                (Math.min(r.rating, 5) / 5) * W.rating
+        );
+    }
+    list.sort((a, b) => b.score - a.score || b.totalSales - a.totalSales);
+    list.forEach((r, i) => {
+        r.rank = i + 1;
+    });
+
+    const totals = list.reduce(
+        (t, r) => ({
+            totalOrders: t.totalOrders + r.totalOrders,
+            completedOrders: t.completedOrders + r.completedOrders,
+            cancelledOrders: t.cancelledOrders + r.cancelledOrders,
+            totalSales: t.totalSales + r.totalSales,
+            totalCommission: t.totalCommission + r.totalCommission
+        }),
+        { totalOrders: 0, completedOrders: 0, cancelledOrders: 0, totalSales: 0, totalCommission: 0 }
+    );
+
+    return {
+        filter: { range: df.range, label: df.label, start: df.start, end: df.end },
+        weights: W,
+        totals: { ...totals, totalSales: round2(totals.totalSales), totalCommission: round2(totals.totalCommission), restaurants: list.length },
+        restaurants: list
     };
 }
 
