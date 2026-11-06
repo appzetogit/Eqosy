@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Banknote, Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import { uploadService } from '../../../shared/services/uploadService';
+import { openCamera } from '@food/utils/imageUploadUtils';
 
 /**
  * Parcel safety checklist for the captain: a mandatory photo and, when cash is
@@ -43,9 +44,7 @@ const ParcelProofPanel = ({
   const [error, setError] = useState('');
   const [isSavingCash, setIsSavingCash] = useState(false);
 
-  const handleFile = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const processFile = async (file) => {
     if (!file) return;
 
     try {
@@ -60,6 +59,18 @@ const ParcelProofPanel = ({
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Inside the Flutter app a hidden <input> often never opens the camera, so use the native bridge first.
+  const takePhoto = () => {
+    if (isUploading) return;
+    openCamera({ onSelectFile: processFile, fileNamePrefix: 'parcel-proof' }).catch(() => inputRef.current?.click());
+  };
+
+  const handleFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    processFile(file);
   };
 
   const handleCash = async () => {
@@ -81,7 +92,7 @@ const ParcelProofPanel = ({
       <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={takePhoto}
           disabled={isUploading}
           className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-white text-slate-500"
         >
@@ -100,7 +111,7 @@ const ParcelProofPanel = ({
           </p>
         </div>
         {photoUrl ? <CheckCircle2 size={20} className="shrink-0 text-emerald-500" /> : null}
-        <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+        <input ref={inputRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={handleFile} />
       </div>
 
       {cashAmountLabel ? (

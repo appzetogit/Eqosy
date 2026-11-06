@@ -15,6 +15,8 @@ import { attachFoodAdminContext, requireFoodResourceAccess } from '../middleware
 import * as foodAdminManagementController from '../controllers/foodAdminManagement.controller.js';
 import * as leagueController from '../controllers/commissionLeague.controller.js';
 import * as demoModeController from '../controllers/demoMode.controller.js';
+import { adminPerformanceRouter } from '../../performance/routes/performance.routes.js';
+import { adminCancellationRouter } from '../../cancellation/routes/cancellation.routes.js';
 import { assertAdminCanManageRestaurant, assertAdminCanManageFood } from '../services/admin.service.js';
 
 const router = express.Router();
@@ -41,6 +43,10 @@ const requireAdmin = (req, _res, next) => {
 
 router.use(requireAdmin);
 router.use(attachFoodAdminContext);
+
+// ----- Performance, Penalties & Appeals -----
+router.use('/performance', adminPerformanceRouter);
+router.use('/cancellation', adminCancellationRouter);
 
 // ----- Admin Management (Subadmins) -----
 router.get('/admin-management/permissions', requireFoodResourceAccess('subadmins', 'subadmins'), foodAdminManagementController.getFoodAdminPermissions);

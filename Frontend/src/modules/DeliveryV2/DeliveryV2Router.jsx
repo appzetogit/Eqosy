@@ -6,6 +6,7 @@ import Loader from "@food/components/Loader";
 // Auth Pages (Lazy loaded)
 const Welcome = lazy(() => import("./pages/auth/Welcome"))
 const SignIn = lazy(() => import("./pages/auth/SignIn"))
+const PerformanceV2 = lazy(() => import("./pages/PerformanceV2"))
 const OTP = lazy(() => import("./pages/auth/OTP"))
 const SignupStep1 = lazy(() => import("./pages/auth/SignupStep1"))
 const SignupStep2 = lazy(() => import("./pages/auth/SignupStep2"))
@@ -59,6 +60,7 @@ const DeliveryV2Router = () => {
       <Route path="/profile" element={<ProtectedRoute><DeliveryHomeV2 tab="profile" /></ProtectedRoute>} />
       <Route path="orders/:orderId/chat" element={<ProtectedRoute><FoodOrderChatScreen /></ProtectedRoute>} />
       <Route path="/orders/:orderId/chat" element={<ProtectedRoute><FoodOrderChatScreen /></ProtectedRoute>} />
+      <Route path="performance" element={<ProtectedRoute><PerformanceV2 /></ProtectedRoute>} />
       <Route path="notifications" element={<ProtectedRoute><NotificationsV2 /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><NotificationsV2 /></ProtectedRoute>} />
       <Route path="profile/details" element={<ProtectedRoute><ProfileDetailsV2 /></ProtectedRoute>} />

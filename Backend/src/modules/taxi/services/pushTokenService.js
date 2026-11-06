@@ -57,11 +57,15 @@ const toTokenArray = (value) => {
   return [String(value || '').trim()].filter(Boolean);
 };
 
+// Drivers store their browser token in `fcmTokenWeb` (users use the `fcmTokens` array). Reading the wrong
+// field meant web/PWA drivers never received ride-request pushes.
+export const getWebTokenFieldForRole = (role) => (role === 'driver' ? 'fcmTokenWeb' : 'fcmTokens');
+
 export const listEntityPushTokens = (entity = {}, role = 'unknown') =>
   [
-    ...toTokenArray(entity.fcmTokens).map((token) => ({
+    ...toTokenArray(entity[getWebTokenFieldForRole(role)]).map((token) => ({
       role,
-      field: 'fcmTokens',
+      field: getWebTokenFieldForRole(role),
       platform: 'web',
       token,
     })),

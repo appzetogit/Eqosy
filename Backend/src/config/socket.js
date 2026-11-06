@@ -290,6 +290,11 @@ export const initSocket = async (server) => {
                 status: data.status || 'on_the_way',
             });
 
+            // GPS odometer for cancellation compensation (counts only realistic movement before pickup).
+            import('../modules/food/cancellation/services/cancellation.service.js')
+                .then((m) => m.trackRiderDistance(data.orderId, lat, lng, accuracy))
+                .catch(() => {});
+
             // Broadcast to tracking room (all users + driver watching this order)
             const trackingRoom = roomNames.tracking(data.orderId);
             io.to(trackingRoom).emit('location-update', payload);

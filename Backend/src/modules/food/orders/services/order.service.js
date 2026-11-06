@@ -35,6 +35,8 @@ import * as userWalletService from '../../user/services/userWallet.service.js';
 import { calculateOrderPricing, resolveOrderZoneId } from './order-pricing.service.js';
 import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import * as dispatchService from './order-dispatch.service.js';
+import * as performanceService from '../../performance/services/performance.service.js';
+import * as cancellationService from '../../cancellation/services/cancellation.service.js';
 import * as deliveryService from './order-delivery.service.js';
 import * as paymentService from './order-payment.service.js';
 import {
@@ -357,9 +359,13 @@ export async function createOrder(userId, dto) {
     if (Array.isArray(pricingResult.penaltyIds) && pricingResult.penaltyIds.length > 0) {
       try {
         await FoodUserPenalty.updateMany(
-          { _id: { $in: pricingResult.penaltyIds }, status: 'pending' },
+          { _id: { $in: pricingResult.penaltyIds }, paidAt: null, $or: [{ status: 'pending' }, { source: 'cancellation_policy', status: 'applied' }] },
           { $set: { status: 'applied', appliedOrderId: order._id, appliedAt: new Date() } },
         );
+        // Wallet orders are paid immediately; online orders are marked paid only after payment verification.
+        if (String(order.payment?.status || '').toLowerCase() === 'paid') {
+          await cancellationService.markPenaltiesPaidForOrder(order._id, 'wallet');
+        }
       } catch (penaltyErr) {
         logger.error(`Failed to mark penalties applied for order ${order._id}: ${penaltyErr.message}`);
       }
@@ -551,6 +557,9 @@ export async function verifyPayment(userId, dto) {
     recordedByRole: "USER",
     recordedById: new mongoose.Types.ObjectId(userId)
   });
+
+  // The money for any cancellation charge on this order has now really arrived: clear it (re-enables COD).
+  void cancellationService.markPenaltiesPaidForOrder(order._id, 'online');
 
   // After online payment is verified, now notify restaurant about the new order.
   await notifyRestaurantNewOrder(order);
@@ -878,6 +887,17 @@ export async function cancelOrder(orderId, userId, payload = {}) {
   });
   if (!order) throw new NotFoundError("Order not found");
 
+  // Stage-based cancellation policy (after the restaurant accepted): charges + Food Rescue. Returns early.
+  const policy = await cancellationService.evaluateForOrder(order);
+  if (policy.applies && policy.stage >= 2) {
+    const reasonCode = typeof payload === 'object' ? (payload.reasonCode || '') : '';
+    const comment = typeof payload === 'object' ? (payload.cancellationComment || payload.cancellationReason || '') : String(payload || '');
+    await cancellationService.cancelWithPolicy(order._id, userId, {
+      reasonCode, comment, acknowledgePenalty: typeof payload === 'object' && payload.acknowledgePenalty === true,
+    });
+    return normalizeOrderForClient(await FoodOrder.findById(order._id));
+  }
+
   const allowed = ["created", "placed", "pending", "pending_payment"];
   if (!allowed.includes(order.orderStatus))
     throw new ValidationError("Order cannot be cancelled because the restaurant has already accepted or processed it.");
@@ -1000,8 +1020,16 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     notificationTargets.push({ ownerType: "DELIVERY_PARTNER", ownerId: order.deliveryPartnerId });
   }
 
+  // Stage 1 (restaurant has not accepted): free cancellation with the admin-configured messages.
+  let stage1Handled = false;
+  if (policy.applies && policy.stage === 1) {
+    stage1Handled = await cancellationService
+      .recordFreeCancellation(order, userId, { reasonCode: cancellationReason, reasonLabel: displayReason })
+      .catch((err) => { logger.warn(`stage-1 cancellation record failed: ${err?.message || err}`); return false; });
+  }
+
   await notifyOwnersSafely(
-    notificationTargets,
+    stage1Handled ? [] : notificationTargets,
     {
       title: "Order Cancelled ❌",
       body: `Order #${order.order_id || order._id} has been cancelled by customer.${refundDetail}`,
@@ -1309,6 +1337,8 @@ export async function updateOrderStatusRestaurant(
   restaurantId,
   orderStatus,
   note = "",
+  reasonCode = "",
+  prepMinutes = undefined,
 ) {
   const identity = buildOrderIdentityFilter(orderId);
   let order = await FoodOrder.findOne({
@@ -1333,6 +1363,18 @@ export async function updateOrderStatusRestaurant(
     throw new ValidationError('Cannot update status to out for delivery without an assigned delivery partner.');
   }
 
+  // Rejecting (cancelling before acceptance) requires a reason so the performance system can judge it.
+  const isPreAcceptRejection = orderStatus === 'cancelled_by_restaurant' && String(from) === 'created' && !order.prep?.acceptedAt;
+  if (isPreAcceptRejection && !String(note || '').trim() && !reasonCode) {
+    throw new ValidationError('A reason is required to reject an order.');
+  }
+
+  // Optional suspension enforcement (admin-controlled, off by default): a suspended restaurant cannot accept new orders.
+  if (['confirmed', 'preparing'].includes(orderStatus) && !['confirmed', 'preparing'].includes(String(from))) {
+    await performanceService.assertNotSuspended('RESTAURANT', restaurantId);
+  }
+  const isPostAcceptCancel = orderStatus === 'cancelled_by_restaurant' && !isPreAcceptRejection && Boolean(order.prep?.acceptedAt);
+
   order.orderStatus = orderStatus;
   if (note && String(note).trim()) {
     order.note = String(note).trim();
@@ -1356,6 +1398,17 @@ export async function updateOrderStatusRestaurant(
     note: note || "",
   });
   await order.save();
+
+  // Performance system hooks (non-blocking; never alter order flow, refunds or payments).
+  if (['confirmed', 'preparing'].includes(orderStatus) && !['confirmed', 'preparing'].includes(String(from))) {
+    await performanceService.onRestaurantAccept(order, { prepMinutes }); // swallows its own errors
+  } else if (orderStatus === 'ready_for_pickup' || orderStatus === 'ready') {
+    void performanceService.onFoodReady(order);
+  } else if (isPreAcceptRejection) {
+    void performanceService.onRestaurantReject(order, restaurantId, note, reasonCode);
+  } else if (isPostAcceptCancel) {
+    void performanceService.onRestaurantCancelAfterAccept(order, restaurantId, note, reasonCode);
+  }
 
   // Custom messages / titles for status updates
   let title = `Order ${order._id.toString()} updated`;
@@ -1647,8 +1700,8 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   return deliveryService.acceptOrderDelivery(orderId, deliveryPartnerId);
 }
 
-export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
-  return deliveryService.rejectOrderDelivery(orderId, deliveryPartnerId);
+export async function rejectOrderDelivery(orderId, deliveryPartnerId, details = {}) {
+  return deliveryService.rejectOrderDelivery(orderId, deliveryPartnerId, details);
 }
 
 export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {

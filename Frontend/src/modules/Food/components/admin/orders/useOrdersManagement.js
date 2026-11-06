@@ -112,6 +112,8 @@ export function useOrdersManagement(orders, statusKey, title) {
     customer: true,
     restaurant: true,
     foodItems: true,
+    restaurantTime: true,
+    deliveryTime: true,
     totalAmount: true,
     paymentType: true,
     paymentCollectionStatus: true,
@@ -628,11 +630,13 @@ export function useOrdersManagement(orders, statusKey, title) {
       customer: true,
       restaurant: true,
       foodItems: true,
+      restaurantTime: true,
+      deliveryTime: true,
       totalAmount: true,
       paymentType: true,
       paymentCollectionStatus: true,
       orderStatus: true,
-      actions: true,
+    actions: true,
     })
   }
 

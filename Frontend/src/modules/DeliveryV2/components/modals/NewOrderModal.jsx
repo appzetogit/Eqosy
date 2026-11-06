@@ -5,23 +5,36 @@ import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { getHaversineDistance, calculateETA } from '@/modules/DeliveryV2/utils/geo';
+import PenaltyWarning from '@food/components/performance/PenaltyWarning';
+import { deliveryPerformanceAPI } from '@food/api/performanceAPI';
 
 /**
  * NewOrderModal - Ported to Original 1:1 Theme with Slider Accept.
  * Matches the Eqosy Partner style Green Header + White Card.
  */
-export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
+const PASS_REASONS = [
+  { label: 'Outside my service area', reasonCode: 'outside_service_area' },
+  { label: 'Unsafe conditions', reasonCode: 'unsafe_conditions' },
+  { label: 'Technical problem', reasonCode: 'technical_issue' },
+  { label: 'Not available right now', reasonCode: '' },
+];
+
+export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize }) => {
   const { riderLocation } = useDeliveryStore();
   const [timeLeft, setTimeLeft] = useState(30);
+  const [showPass, setShowPass] = useState(false);
+  const [passReason, setPassReason] = useState(null);
+  const isClosedOnly = Boolean(order?.isClaimedByOther || order?.isAcceptedByOther || order?.status === 'accepted_by_other');
 
   useEffect(() => {
     if (timeLeft <= 0) {
-      onReject();
+      onReject(); // timeout: local dismiss only, never counted as a rejection
       return;
     }
+    if (showPass) return undefined; // pause the countdown while the rider is choosing a reason
     const timer = setInterval(() => setTimeLeft((t) => t - 1), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, onReject]);
+  }, [timeLeft, onReject, showPass]);
 
   const { distanceKm, etaMins } = useMemo(() => {
     if (!order) return { distanceKm: '--', etaMins: 15 };
@@ -346,12 +359,40 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
           )}
 
           <button
-            onClick={onReject}
+            onClick={() => (isClosedOnly || !onPass ? onReject() : setShowPass(true))}
             className="w-full text-gray-400 font-black text-[11px] uppercase tracking-[0.2em] hover:text-red-500 transition-colors active:scale-95 py-2"
           >
             {order.isClaimedByOther || order.isAcceptedByOther || order.status === 'accepted_by_other' ? 'Close' : 'Pass this task'}
           </button>
         </div>
+        {showPass && (
+          <div className="fixed inset-0 z-[400] flex items-end bg-black/50">
+            <div className="w-full rounded-t-3xl bg-white p-5">
+              <h4 className="text-sm font-black uppercase tracking-widest text-gray-900">Why are you passing?</h4>
+              <p className="mt-1 text-xs text-gray-500">Valid reasons are not penalised. Passing without one counts toward your monthly limit.</p>
+              <div className="mt-3 space-y-2">
+                {PASS_REASONS.map((r) => (
+                  <button
+                    key={r.label}
+                    onClick={() => setPassReason(r)}
+                    className={`w-full rounded-xl border p-3 text-left text-sm font-bold active:bg-gray-50 ${passReason?.label === r.label ? 'border-black bg-gray-50' : 'border-gray-200'}`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <PenaltyWarning api={deliveryPerformanceAPI} violationType="ASSIGNMENT_REJECTION" reasonCode={passReason?.reasonCode || ''} reason={passReason?.label || 'none'} className="mt-3" />
+              <button
+                disabled={!passReason}
+                onClick={() => onPass(order, { reasonCode: passReason.reasonCode, reason: passReason.label })}
+                className="mt-3 w-full rounded-xl bg-black py-3 text-xs font-black uppercase tracking-widest text-white disabled:opacity-40"
+              >
+                Confirm pass
+              </button>
+              <button onClick={() => setShowPass(false)} className="mt-3 w-full py-2 text-xs font-black uppercase tracking-widest text-gray-400">Go back</button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>
 

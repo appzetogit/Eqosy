@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { FoodOrder } from '../models/order.model.js';
 import { FoodUserPenalty } from '../models/userPenalty.model.js';
+import { isCodBlocked } from '../../cancellation/services/cancellation.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
@@ -465,24 +466,46 @@ export async function calculateOrderPricing(userId, dto) {
 
   // Penalty from an earlier order the customer could not be reached for (put by admin). Charged once, no GST.
   const penaltyRows = userId && mongoose.isValidObjectId(String(userId))
-    ? await FoodUserPenalty.find({ userId, status: 'pending' }).select('amount').sort({ createdAt: 1 }).lean()
+    ? await FoodUserPenalty.find({
+        userId,
+        // Cancellation-policy charges stay billable until the money is actually received (an unpaid earlier
+        // checkout must not hide them); older "customer unreachable" penalties keep the original behaviour.
+        $or: [{ status: 'pending' }, { source: 'cancellation_policy', status: 'applied', paidAt: null }],
+      }).select('amount source').sort({ createdAt: 1 }).lean()
     : [];
-  const penaltyAmount = Math.round(penaltyRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0) * 100) / 100;
+  const sumRows = (rows) => Math.round(rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0) * 100) / 100;
+  const cancelRows = penaltyRows.filter((row) => row.source === 'cancellation_policy');
+  const otherRows = penaltyRows.filter((row) => row.source !== 'cancellation_policy');
+  const cancellationPenaltyAmount = sumRows(cancelRows);
+  const otherPenaltyAmount = sumRows(otherRows);
+  const penaltyAmount = Math.round((cancellationPenaltyAmount + otherPenaltyAmount) * 100) / 100;
   const penaltyIds = penaltyRows.map((row) => row._id);
+  const codStatus = await isCodBlocked(userId).catch(() => ({ blocked: false, amount: 0 }));
   const additionalCharges = penaltyAmount > 0
     ? [
         ...configuredAdditionalCharges,
-        {
+        ...(otherPenaltyAmount > 0 ? [{
           chargeId: 'previous-order-penalty',
           name: 'Previous order penalty',
-          amount: penaltyAmount,
+          amount: otherPenaltyAmount,
           applicableUnder: 0,
           isFree: false,
-          chargedAmount: penaltyAmount,
+          chargedAmount: otherPenaltyAmount,
           amountToAvoid: 0,
           freeLabel: '',
           message: 'Penalty for an earlier order that could not be delivered because we could not reach you.',
-        },
+        }] : []),
+        ...(cancellationPenaltyAmount > 0 ? [{
+          chargeId: 'cancellation-penalty',
+          name: 'Outstanding cancellation charges',
+          amount: cancellationPenaltyAmount,
+          applicableUnder: 0,
+          isFree: false,
+          chargedAmount: cancellationPenaltyAmount,
+          amountToAvoid: 0,
+          freeLabel: '',
+          message: 'Charges from an earlier order you cancelled after the restaurant had started preparing it.',
+        }] : []),
       ]
     : configuredAdditionalCharges;
   const additionalChargesTotal = Math.round((configuredAdditionalChargesTotal + penaltyAmount) * 100) / 100;
@@ -624,6 +647,9 @@ export async function calculateOrderPricing(userId, dto) {
       additionalCharges,
       additionalChargesTotal,
       penaltyAmount,
+      cancellationPenaltyAmount,
+      codBlocked: Boolean(codStatus.blocked),
+      codBlockedAmount: codStatus.amount || 0,
       discount,
       savings,
       roundOff,
@@ -634,7 +660,8 @@ export async function calculateOrderPricing(userId, dto) {
       codLimit: feeSettings?.codLimit ?? null,
       // Checkout options the admin has left open (online also needs working Razorpay keys).
       paymentMethods: {
-        cash: feeSettings?.paymentMethods?.cash !== false,
+        // Cash on Delivery stays off while any cancellation charge is unpaid; it returns the moment it is paid.
+        cash: feeSettings?.paymentMethods?.cash !== false && !codStatus.blocked,
         razorpay: feeSettings?.paymentMethods?.online !== false && isRazorpayConfigured(),
         wallet: feeSettings?.paymentMethods?.wallet !== false,
       },

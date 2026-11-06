@@ -168,7 +168,9 @@ export function validateOrderStatusDto(body) {
             'delivered',
             'cancelled_by_restaurant'
         ]),
-        note: z.string().optional()
+        note: z.string().optional(),
+        reasonCode: z.string().optional(),
+        prepMinutes: z.coerce.number().int().min(1).max(600).optional()
     });
     const result = schema.safeParse(body);
     if (!result.success) {

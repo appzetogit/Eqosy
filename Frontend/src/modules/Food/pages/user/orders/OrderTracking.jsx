@@ -41,6 +41,8 @@ import { useProfile } from "@food/context/ProfileContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import DeliveryTrackingMap from "@food/components/user/DeliveryTrackingMap"
 import api, { orderAPI, restaurantAPI } from "@food/api"
+import { cancellationAPI } from "@food/api/cancellationAPI"
+import CancellationChargeCard from "@food/components/user/CancellationChargeCard"
 import { API_BASE_URL, API_ENDPOINTS } from "@food/api/config"
 import {
   resolveSharerDisplayName,
@@ -390,6 +392,7 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     mongoId: apiOrder?._id || null,
     orderId: apiOrder?.orderId || apiOrder?._id,
     shareTrackingId: apiOrder?.shareTrackingId || previousOrder?.shareTrackingId || null,
+    cancellationPolicy: apiOrder?.cancellationPolicy || previousOrder?.cancellationPolicy || null,
     restaurant: apiOrder?.restaurantName || previousOrder?.restaurant || 'Restaurant',
     restaurantPhone:
       apiOrder?.restaurantPhone ||
@@ -662,6 +665,11 @@ export default function OrderTracking({ isSharedView = false }) {
   const [estimatedTime, setEstimatedTime] = useState(29)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
+  // Stage-based cancellation policy (after the restaurant accepted): admin-configured reasons + charge preview.
+  const [policyPreview, setPolicyPreview] = useState(null)
+  const [policyReasons, setPolicyReasons] = useState([])
+  const [cancellationReasonCode, setCancellationReasonCode] = useState("")
+  const [chargesAccepted, setChargesAccepted] = useState(false)
   const [showSupportModal, setShowSupportModal] = useState(false)
   const [supportCategory, setSupportCategory] = useState("Food item missing or damaged")
   const [supportDescription, setSupportDescription] = useState("")
@@ -1502,11 +1510,6 @@ export default function OrderTracking({ isSharedView = false }) {
     // Check if order can be cancelled (only Razorpay orders that aren't delivered/cancelled)
     if (!order) return;
 
-    if (isAdminAccepted && !isEditWindowOpen) {
-      toast.error('Cancellation window ended. You can no longer cancel this order.');
-      return;
-    }
-
     if (order.status === 'cancelled') {
       toast.error('Order is already cancelled');
       return;
@@ -1520,7 +1523,39 @@ export default function OrderTracking({ isSharedView = false }) {
     // Allow cancellation for all payment methods (Razorpay, COD, Wallet)
     // Only restrict if order is already cancelled or delivered (checked above)
 
+    openCancelFlow();
+  };
+
+  const openCancelFlow = async () => {
+    setChargesAccepted(false);
+    setCancellationReasonCode("");
+    setCancellationReason("");
+    let preview = null;
+    try {
+      const lookup = lookupIdsRef.current[0] || normalizeLookupId(orderId);
+      const res = await cancellationAPI.preview(lookup, "");
+      preview = res?.data?.data || null;
+      if (preview?.applies && preview.stage >= 2) {
+        const cfgRes = await cancellationAPI.config();
+        setPolicyReasons(cfgRes?.data?.data?.cancelReasons || []);
+      }
+    } catch (_) { /* fall back to the standard flow */ }
+    setPolicyPreview(preview);
+    // Standard orders keep the old rule: no cancelling once the restaurant has accepted.
+    if (!(preview?.applies && preview.stage >= 2) && isAdminAccepted && !isEditWindowOpen) {
+      toast.error('Cancellation window ended. You can no longer cancel this order.');
+      return;
+    }
     setShowCancelDialog(true);
+  };
+
+  const refreshPolicyPreview = async (code) => {
+    try {
+      const lookup = lookupIdsRef.current[0] || normalizeLookupId(orderId);
+      const res = await cancellationAPI.preview(lookup, code);
+      setPolicyPreview(res?.data?.data || null);
+      setChargesAccepted(false);
+    } catch (_) { /* keep the previous preview */ }
   };
 
   const handleConfirmCancel = async () => {
@@ -1540,10 +1575,17 @@ export default function OrderTracking({ isSharedView = false }) {
       const response = await orderAPI.cancelOrder(cancelLookupId, {
         cancellationReason,
         cancellationComment: customCancellationComment.trim(),
-        reason: cancellationReason === 'Other' ? customCancellationComment.trim() : cancellationReason
+        reason: cancellationReason === 'Other' ? customCancellationComment.trim() : cancellationReason,
+        ...(policyPreview?.applies && policyPreview.stage >= 2
+          ? { reasonCode: cancellationReasonCode, acknowledgePenalty: chargesAccepted }
+          : {}),
       });
       if (response.data?.success) {
-        toast.success("Your order has been cancelled successfully.");
+        toast.success(
+          policyPreview?.applies && policyPreview.stage >= 2 && policyPreview.charge > 0
+            ? "Order cancelled. The charges were added to your outstanding balance."
+            : "Your order has been cancelled successfully."
+        );
         setShowCancelDialog(false);
         setCancellationReason("");
         setCustomCancellationComment("");
@@ -1917,6 +1959,19 @@ export default function OrderTracking({ isSharedView = false }) {
                       ? "Order Cancelled"
                       : currentStatus.subtitle}
               </h2>
+              {isCancelledOrder && order?.cancellationPolicy?.statusLabel && order.cancellationPolicy.stage >= 2 && (
+                <p className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black tracking-wide text-amber-800">
+                  {order.cancellationPolicy.statusLabel}
+                </p>
+              )}
+              {isCancelledOrder && Number(order?.cancellationPolicy?.penaltyTotal) > 0 && (
+                <p className="mt-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                  {order.cancellationPolicy.payMode === 'refund_deduction'
+                    ? `Cancellation charges of ₹${order.cancellationPolicy.deducted} were kept from your payment. ₹${order.cancellationPolicy.refundAmount} is being refunded to your original payment method.`
+                    : `Cancellation charges of ₹${order.cancellationPolicy.penaltyTotal} were added to your outstanding balance.`}
+                  <a href="/user/penalties" className="ml-1 font-bold text-orange-600 underline">View breakdown</a>
+                </p>
+              )}
               {(order?.status === 'returned_to_restaurant' || ['approved', 'returned'].includes(order?.undeliveredReturn?.status)) && (
                 <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">
                   We could not reach you, so the delivery partner is returning this order to the restaurant.
@@ -1954,7 +2009,7 @@ export default function OrderTracking({ isSharedView = false }) {
         </div>
 
         {/* Cancel Button - Only show if placed and waiting for restaurant confirmation */}
-        {!isShared && orderStatus === "placed" && (
+        {!isShared && (orderStatus === "placed" || (!["delivered", "cancelled"].includes(orderStatus) && !isCancelledOrder)) && (
           <div className="px-2">
             <button onClick={handleCancelOrder} className="w-full py-4 text-sm font-bold text-red-500 bg-red-50 dark:bg-red-950/20 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2">
               <X className="w-4 h-4" />
@@ -2301,15 +2356,31 @@ export default function OrderTracking({ isSharedView = false }) {
                 </div>
               )}
 
+              {policyPreview?.applies && policyPreview.stage >= 2 && (
+                <CancellationChargeCard
+                  preview={policyPreview}
+                  accepted={chargesAccepted}
+                  onAcceptedChange={setChargesAccepted}
+                  disabled={isCancelling}
+                />
+              )}
+
               {/* Predefined Reasons Radio Pills */}
               <div className="space-y-2 pb-2">
-                {CANCELLATION_REASONS.map((reason) => {
+                {(policyPreview?.applies && policyPreview.stage >= 2
+                  ? policyReasons.map((r) => ({ key: r.code, label: r.label, code: r.code }))
+                  : CANCELLATION_REASONS.map((r) => ({ key: r, label: r, code: '' }))
+                ).map(({ key, label: reason, code }) => {
                   const isSelected = cancellationReason === reason;
                   return (
                     <button
-                      key={reason}
+                      key={key}
                       type="button"
-                      onClick={() => setCancellationReason(reason)}
+                      onClick={() => {
+                        setCancellationReason(reason);
+                        setCancellationReasonCode(code);
+                        if (code && policyPreview?.applies && policyPreview.stage >= 2) refreshPolicyPreview(code);
+                      }}
                       className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-semibold border transition-all flex items-center justify-between ${isSelected
                           ? 'bg-red-50 dark:bg-red-950/30 border-red-500 text-red-600 dark:text-red-400 shadow-sm'
                           : 'bg-gray-50 dark:bg-zinc-800/60 border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800'
@@ -2359,7 +2430,8 @@ export default function OrderTracking({ isSharedView = false }) {
                   disabled={
                     isCancelling ||
                     !cancellationReason ||
-                    (cancellationReason === 'Other' && !customCancellationComment.trim())
+                    (cancellationReason === 'Other' && !customCancellationComment.trim()) ||
+                    (policyPreview?.applies && policyPreview.stage >= 2 && policyPreview.charge > 0 && !chargesAccepted)
                   }
                   className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white border-none rounded-2xl h-12 font-bold shadow-md"
                 >

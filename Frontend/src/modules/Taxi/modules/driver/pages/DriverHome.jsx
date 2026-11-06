@@ -2615,7 +2615,7 @@ const DriverHome = () => {
             </div>
 
             {/* --- BOTTOM FLOATING UI --- */}
-            <div className="fixed bottom-20 left-0 right-0 p-6 pb-4 z-[60] flex flex-col max-w-md mx-auto">
+            <div className="fixed bottom-[calc(88px+max(env(safe-area-inset-bottom),8px))] left-0 right-0 p-6 pb-2 z-[60] flex flex-col max-w-md mx-auto pointer-events-none [&>*]:pointer-events-auto">
                 <AnimatePresence>
                     {statusMessage ? (
                         <motion.div

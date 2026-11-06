@@ -515,6 +515,22 @@ export default function Profile() {
 
         {/* Account Options */}
         <div className="space-y-2 mb-3 mt-3">
+          <Link to="/user/penalties" className="block">
+            <Card className="bg-white dark:bg-[#1a1a1a] py-0 rounded-xl shadow-sm border-0 dark:border-gray-800 cursor-pointer">
+              <CardContent className="p-4 flex items-center justify-between">
+                <span className="text-base font-medium text-gray-900 dark:text-white">Outstanding charges</span>
+                <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+              </CardContent>
+            </Card>
+          </Link>
+          <Link to="/user/food-rescue" className="block">
+            <Card className="bg-white dark:bg-[#1a1a1a] py-0 rounded-xl shadow-sm border-0 dark:border-gray-800 cursor-pointer">
+              <CardContent className="p-4 flex items-center justify-between">
+                <span className="text-base font-medium text-gray-900 dark:text-white">Food Rescue (discounted food nearby)</span>
+                <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+              </CardContent>
+            </Card>
+          </Link>
           <Link to="/user/wallet" className="block">
             <motion.div
               whileHover={{ x: 4, scale: 1.01 }}

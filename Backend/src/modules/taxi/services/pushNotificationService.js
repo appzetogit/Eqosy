@@ -7,8 +7,27 @@ import { listEntityPushTokens } from './pushTokenService.js';
 const INVALID_TOKEN_CODES = new Set([
   'messaging/invalid-registration-token',
   'messaging/registration-token-not-registered',
-  'messaging/invalid-argument',
 ]);
+
+// FCM rejects web-push links that are not absolute https URLs, which failed every send. Build one from FRONTEND_URL.
+const toAbsoluteLink = (link) => {
+  const value = String(link || '').trim();
+  if (!value) return '';
+  if (/^https:\/\//i.test(value)) return value;
+  const origin = String(process.env.FRONTEND_URL || '').split(',')[0].trim().replace(/\/+$/, '');
+  if (!/^https:\/\//i.test(origin)) return '';
+  return `${origin}${value.startsWith('/') ? '' : '/'}${value}`;
+};
+
+// getFirebaseMessaging() throws when Firebase is not initialised; report it as a clear, non-fatal result instead.
+const safeGetMessaging = () => {
+  try {
+    return getFirebaseMessaging();
+  } catch (error) {
+    console.error(`[taxi-push] ${error.message}`);
+    return null;
+  }
+};
 
 const chunk = (items, size) => {
   const groups = [];
@@ -114,7 +133,7 @@ const removeInvalidTokens = async (invalidTargets = []) => {
     if (ids.size > 0) {
       operations.push(
         Driver.updateMany(
-          { _id: { $in: Array.from(ids) } },
+          { _id: { $in: Array.from(ids) }, [field]: { $in: invalidTargets.filter((t) => t.role === 'driver' && t.field === field).map((t) => t.token) } },
           { $set: { [field]: '' } },
         ),
       );
@@ -132,7 +151,7 @@ const sendPushToTargets = async ({
   image = '',
   data = {},
 }) => {
-  const messaging = getFirebaseMessaging();
+  const messaging = safeGetMessaging();
 
   if (!messaging) {
     return {
@@ -168,13 +187,14 @@ const sendPushToTargets = async ({
   );
 
   const dataType = String(safeData.type || '').toLowerCase();
-  const isRing = safeData.ring === 'true' || dataType === 'ride_request' || dataType === 'new_ride' || Boolean(safeData.rideId);
   const isChat = dataType.includes('chat') || safeData.openChat === 'true';
+  // Chat pushes also carry a rideId; they must not ring like a new ride request.
+  const isRing = !isChat && (safeData.ring === 'true' || dataType === 'ride_request' || dataType === 'new_ride' || Boolean(safeData.rideId));
   const ringChannelId = process.env.FCM_TAXI_RING_CHANNEL_ID || process.env.FCM_RING_CHANNEL_ID || 'ride_requests';
   const ringSound = process.env.FCM_TAXI_RING_SOUND || process.env.FCM_RING_SOUND || 'ride_request_alert';
   const channelId = isRing ? ringChannelId : (isChat ? 'chat_messages' : 'default');
   const soundName = isRing ? ringSound : 'default';
-  const targetLink = safeData.targetUrl || safeData.link || safeData.click_action || '/taxi/driver/home';
+  const targetLink = toAbsoluteLink(safeData.targetUrl || safeData.link || safeData.click_action || '/taxi/driver/home');
 
   for (const batch of chunk(dedupedTargets, 500)) {
     const response = await messaging.sendEachForMulticast({
@@ -246,6 +266,7 @@ const sendPushToTargets = async ({
       }
 
       failedCount += 1;
+      console.warn(`[taxi-push] send failed role=${batch[index]?.role} platform=${batch[index]?.platform} code=${item.error?.code} message=${item.error?.message}`);
       if (INVALID_TOKEN_CODES.has(item.error?.code)) {
         invalidTargets.push(batch[index]);
       }
@@ -310,7 +331,7 @@ export const sendPushNotificationToAudience = async ({
   body,
   image,
 }) => {
-  const messaging = getFirebaseMessaging();
+  const messaging = safeGetMessaging();
 
   if (!messaging) {
     return {

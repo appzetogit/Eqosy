@@ -35,6 +35,8 @@ const RestaurantsList = lazy(() => import("@food/pages/admin/restaurant/Restaura
 const AddRestaurant = lazy(() => import("@food/pages/admin/restaurant/AddRestaurant"));
 const JoiningRequest = lazy(() => import("@food/pages/admin/restaurant/JoiningRequest"));
 const CommissionLeague = lazy(() => import("@food/pages/admin/restaurant/CommissionLeague"));
+const PerformanceCenter = lazy(() => import("@food/pages/admin/performance/PerformanceCenter"));
+const CancellationCenter = lazy(() => import("@food/pages/admin/performance/CancellationCenter"));
 const RestaurantLeaderboard = lazy(() => import("@food/pages/admin/restaurant/RestaurantLeaderboard"));
 const RestaurantPerformance = lazy(() => import("@food/pages/admin/restaurant/RestaurantPerformance"));
 const RestaurantCommission = lazy(() => import("@food/pages/admin/restaurant/RestaurantCommission"));
@@ -254,6 +256,8 @@ export default function AdminRouter() {
             <Route path="restaurants/joining-request" element={<JoiningRequest />} />
             <Route path="restaurants/commission" element={<RestaurantCommission />} />
             <Route path="restaurants/performance" element={<RestaurantLeaderboard />} />
+            <Route path="performance-center" element={<PerformanceCenter />} />
+            <Route path="cancellation-center" element={<CancellationCenter />} />
             <Route path="restaurants/commission-league" element={<CommissionLeague />} />
             <Route path="restaurants/commission-league/:id" element={<RestaurantPerformance />} />
             <Route path="restaurants/complaints" element={<RestaurantComplaints />} />

@@ -209,6 +209,18 @@ export const ProfileV2 = () => {
             </button>
           </div>
 
+          {/* Performance */}
+          <div
+            onClick={() => navigate("/food/delivery/performance")}
+            className="bg-white rounded-xl p-4 flex items-center justify-between cursor-pointer active:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Ticket className="w-5 h-5 text-gray-700" />
+              <span className="text-sm font-bold text-gray-900">Performance &amp; penalties</span>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-300" />
+          </div>
+
           {/* Support Section */}
           <div>
             <h3 className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-3 px-1">Support</h3>

@@ -32,6 +32,7 @@ const Hyperpure = lazy(() => import("@food/pages/restaurant/Hyperpure"))
 const ItemDetailsPage = lazy(() => import("@food/pages/restaurant/ItemDetailsPage"))
 const HubFinance = lazy(() => import("@food/pages/restaurant/HubFinance"))
 const CommissionLeaguePage = lazy(() => import("@food/pages/restaurant/CommissionLeaguePage"))
+const PerformancePage = lazy(() => import("@food/pages/restaurant/PerformancePage"))
 const FinanceDetailsPage = lazy(() => import("@food/pages/restaurant/FinanceDetailsPage"))
 const WithdrawalHistoryPage = lazy(() => import("@food/pages/restaurant/WithdrawalHistoryPage"))
 const PhoneNumbersPage = lazy(() => import("@food/pages/restaurant/PhoneNumbersPage"))
@@ -98,6 +99,7 @@ export default function RestaurantRouter() {
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><WithdrawalHistoryPage /></ProtectedRoute>} path="withdrawal-history" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><FinanceDetailsPage /></ProtectedRoute>} path="finance-details" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><CommissionLeaguePage /></ProtectedRoute>} path="commission-league" />
+        <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><PerformancePage /></ProtectedRoute>} path="performance" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><PhoneNumbersPage /></ProtectedRoute>} path="phone" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><DownloadReport /></ProtectedRoute>} path="download-report" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><ManageOutlets /></ProtectedRoute>} path="manage-outlets" />

@@ -192,7 +192,7 @@ export async function updateOrderStatusRestaurantController(req, res, next) {
         const restaurantId = req.user?.userId;
         const orderId = req.params.orderId;
         const dto = validateOrderStatusDto(req.body);
-        const order = await orderService.updateOrderStatusRestaurant(orderId, restaurantId, dto.orderStatus, dto.note);
+        const order = await orderService.updateOrderStatusRestaurant(orderId, restaurantId, dto.orderStatus, dto.note, dto.reasonCode, dto.prepMinutes);
         return sendResponse(res, 200, 'Order status updated', { order });
     } catch (err) {
         next(err);
@@ -224,7 +224,10 @@ export async function rejectOrderDeliveryController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;
         const orderId = req.params.orderId;
-        const order = await orderService.rejectOrderDelivery(orderId, deliveryPartnerId);
+        const order = await orderService.rejectOrderDelivery(orderId, deliveryPartnerId, {
+            reason: String(req.body?.reason || req.body?.note || '').slice(0, 300),
+            reasonCode: String(req.body?.reasonCode || '').slice(0, 60)
+        });
         return sendResponse(res, 200, 'Order rejected', { order });
     } catch (err) {
         next(err);

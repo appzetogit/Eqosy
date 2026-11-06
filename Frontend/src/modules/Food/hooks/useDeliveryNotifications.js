@@ -210,8 +210,8 @@ const triggerWebViewNativeNotification = async (orderData = {}) => {
   if (typeof window === 'undefined') return false;
 
   const bridgePayload = {
-    title: 'New delivery order',
-    body: `Order #${orderData?.orderId || orderData?.orderMongoId || orderData?.id || ''}`.trim(),
+    title: orderData?.alertTitle || 'New delivery order',
+    body: orderData?.alertBody || `Order #${orderData?.orderId || orderData?.orderMongoId || orderData?.id || ''}`.trim(),
     orderId: orderData?.orderId || orderData?.order_id || '',
     orderMongoId: orderData?.orderMongoId || orderData?.order_mongo_id || '',
     targetUrl: '/delivery',
@@ -1271,6 +1271,29 @@ export const useDeliveryNotifications = (options = {}) => {
       toast.error(data?.message || 'Admin rejected the return request. Please keep trying to reach the customer.');
       window.dispatchEvent(new CustomEvent('delivery_order_return_update', { detail: data }));
     });
+
+
+    // Cancellation, penalty, warning and "due soon" alerts ring like a new order (the server marks them ring: true).
+    const handlePenaltyAlert = (data) => {
+      const text = data?.message || data?.title || 'You have a new alert';
+      const ringing = Boolean(data?.ring);
+      toast(data?.title ? `${data.title}: ${text}` : text, {
+        duration: ringing ? 20000 : 10000,
+        ...(ringing ? { action: { label: 'Stop ring', onClick: () => { stopAlertLoop(); activeOrderRef.current = null; } } } : {}),
+      });
+      if (ringing) {
+        // Exactly the new-order ring: same tone, vibration, native bridge and repeat-while-hidden loop.
+        activeOrderRef.current = { id: `alert-${Date.now()}`, ...data };
+        const withText = { ...data, alertTitle: data?.title, alertBody: text };
+        try {
+          playNotificationSound(withText);
+          startAlertLoop(playNotificationSound);
+        } catch (e) { /* sound is best-effort */ }
+      }
+      window.dispatchEvent(new CustomEvent('performance_alert', { detail: data }));
+    };
+    socketRef.current.on('cancellation_update', handlePenaltyAlert);
+    socketRef.current.on('performance_update', handlePenaltyAlert);
 
     socketRef.current.on('order_cancelled', (data) => {
       debugLog('❌ Order cancelled event received in delivery partner app:', data);

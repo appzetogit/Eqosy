@@ -1484,17 +1484,33 @@ export const restaurantAPI = {
    * UI expects this to move order into "preparing" bucket.
    * Backend supports PATCH /food/restaurant/orders/:orderId/status with { orderStatus }.
    */
-  acceptOrder: (orderId, _prepTimeMins = null) =>
-    restaurantAPI.updateOrderStatus(orderId, { orderStatus: "preparing" }),
+  acceptOrder: (orderId, prepTimeMins = null) => {
+    // The accepted prep time becomes the official preparation deadline on the server.
+    const mins = Math.round(Number(prepTimeMins));
+    return restaurantAPI.updateOrderStatus(orderId, {
+      orderStatus: "preparing",
+      ...(mins >= 1 ? { prepMinutes: mins } : {}),
+    });
+  },
   /**
    * Reject/cancel order by restaurant.
    * Backend orderStatus enum: cancelled_by_restaurant.
    */
-  rejectOrder: (orderId, reason = "") =>
-    restaurantAPI.updateOrderStatus(orderId, {
+  rejectOrder: (orderId, reason = "", reasonCode = "") => {
+    // Map the reason picked in the UI to the admin-configured reason codes so valid reasons can be waived.
+    const REASON_CODES = {
+      "item not available": "out_of_stock",
+      "outside delivery area": "outside_service_area",
+      "kitchen closing soon": "restaurant_closed",
+      "technical issue": "technical_issue",
+    };
+    const code = reasonCode || REASON_CODES[String(reason || "").trim().toLowerCase()] || "";
+    return restaurantAPI.updateOrderStatus(orderId, {
       orderStatus: "cancelled_by_restaurant",
       note: reason,
-    }),
+      ...(code ? { reasonCode: code } : {}),
+    });
+  },
   /** Mark order ready (restaurant handoff). */
   markOrderReady: (orderId) =>
     restaurantAPI.updateOrderStatus(orderId, {

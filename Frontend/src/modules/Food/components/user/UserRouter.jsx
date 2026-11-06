@@ -94,6 +94,8 @@ const Notifications = lazy(() => import("@food/pages/user/Notifications"))
 
 // Wallet
 const Wallet = lazy(() => import("@food/pages/user/Wallet"))
+const Penalties = lazy(() => import("@food/pages/user/Penalties"))
+const FoodRescue = lazy(() => import("@food/pages/user/FoodRescue"))
 
 // Complaints
 const SubmitComplaint = lazy(() => import("@food/pages/user/complaints/SubmitComplaint"))
@@ -341,6 +343,24 @@ export default function UserRouter() {
             element={
               <ProtectedRoute requiredRole="user" loginPath="/login">
                 <Notifications />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Outstanding cancellation charges + Food Rescue - Protected (user auth) */}
+          <Route
+            path="penalties"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/login">
+                <Penalties />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="food-rescue"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/login">
+                <FoodRescue />
               </ProtectedRoute>
             }
           />

@@ -25,6 +25,8 @@ let fssaiExpiryInterval = null;
 let leagueFinalizeInterval = null;
 let gigReminderInterval = null;
 let scheduledOrdersInterval = null;
+let performanceSweepInterval = null;
+let cancellationSweepInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -42,6 +44,8 @@ const gracefulShutdown = async (signal) => {
             if (leagueFinalizeInterval) clearInterval(leagueFinalizeInterval);
             if (gigReminderInterval) clearInterval(gigReminderInterval);
             if (scheduledOrdersInterval) clearInterval(scheduledOrdersInterval);
+            if (performanceSweepInterval) clearInterval(performanceSweepInterval);
+            if (cancellationSweepInterval) clearInterval(cancellationSweepInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -187,6 +191,28 @@ const startServer = async () => {
         };
         runScheduledOrdersCheck();
         scheduledOrdersInterval = setInterval(runScheduledOrdersCheck, 60 * 1000);
+
+        const runPerformanceSweep = async () => {
+            try {
+                const { runPerformanceSweep: sweep } = await import('./src/modules/food/performance/services/performance.service.js');
+                await sweep();
+            } catch (err) {
+                logger.error(`Performance sweep error: ${err.message}`);
+            }
+        };
+        performanceSweepInterval = setInterval(runPerformanceSweep, 60 * 1000);
+
+        // Food Rescue windows, penalty-payment reconciliation and settlement retries run on the server clock,
+        // so they keep working when the rider or customer app is closed.
+        const runCancellationSweep = async () => {
+            try {
+                const { runCancellationSweep: sweep } = await import('./src/modules/food/cancellation/services/cancellation.service.js');
+                await sweep();
+            } catch (err) {
+                logger.error(`Cancellation sweep error: ${err.message}`);
+            }
+        };
+        cancellationSweepInterval = setInterval(runCancellationSweep, 30 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

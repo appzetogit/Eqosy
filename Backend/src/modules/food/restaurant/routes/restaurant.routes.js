@@ -69,6 +69,7 @@ import {
     uploadBulkMenuController
 } from '../controllers/bulkUpload.controller.js';
 import * as orderController from '../../orders/controllers/order.controller.js';
+import { restaurantPerformanceRouter } from '../../performance/routes/performance.routes.js';
 import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { sendError } from '../../../../utils/response.js';
 import { getRestaurantFinanceController } from '../controllers/restaurantFinance.controller.js';
@@ -226,6 +227,9 @@ router.get('/addons', authMiddleware, requireRestaurant, listAddonsController);
 router.post('/addons', authMiddleware, requireRestaurant, createAddonController);
 router.patch('/addons/:id', authMiddleware, requireRestaurant, updateAddonController);
 router.delete('/addons/:id', authMiddleware, requireRestaurant, deleteAddonController);
+
+// Performance, penalties, appeals & prep-time extensions (restaurant)
+router.use('/performance', authMiddleware, requireRestaurant, restaurantPerformanceRouter);
 
 // Orders (restaurant dashboard)
 router.get('/orders', authMiddleware, requireRestaurant, orderController.listOrdersRestaurantController);

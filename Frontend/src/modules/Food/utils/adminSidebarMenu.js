@@ -71,6 +71,8 @@ export const adminSidebarMenu = [
           { label: "Restaurant Commission", path: "/admin/food/restaurants/commission" },
           { label: "Restaurant Performance", path: "/admin/food/restaurants/performance" },
           { label: "Commission League", path: "/admin/food/restaurants/commission-league" },
+          { label: "Penalties & Performance", path: "/admin/food/performance-center" },
+          { label: "Cancellation & Food Rescue", path: "/admin/food/cancellation-center" },
           { label: "Restaurant Reviews", path: "/admin/food/restaurants/reviews" },
           { label: "Restaurant Complaints", path: "/admin/food/restaurants/complaints" },
         ],

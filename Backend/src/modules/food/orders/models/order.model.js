@@ -357,6 +357,102 @@ const orderSchema = new mongoose.Schema(
             type: deliveryStateSchema,
             default: () => ({})
         },
+        /** GPS distance the assigned rider travelled towards the restaurant (used for cancellation compensation). */
+        cancelTracking: {
+            type: new mongoose.Schema(
+                {
+                    trackedKm: { type: Number, default: 0 },
+                    lastLat: { type: Number, default: null },
+                    lastLng: { type: Number, default: null },
+                    lastAt: { type: Date, default: null }
+                },
+                { _id: false }
+            ),
+            default: () => ({})
+        },
+        /** Customer-cancellation policy result (stage, penalty, rescue state), synced to all apps. */
+        cancellationPolicy: {
+            type: new mongoose.Schema(
+                {
+                    caseId: { type: mongoose.Schema.Types.ObjectId, default: null },
+                    stage: { type: Number, default: 0 },
+                    penaltyTotal: { type: Number, default: 0 },
+                    payMode: { type: String, default: '' },
+                    deducted: { type: Number, default: 0 },
+                    refundAmount: { type: Number, default: 0 },
+                    rescueStatus: { type: String, default: '' }, // active | claimed | expired
+                    rescueExpiresAt: { type: Date, default: null },
+                    statusLabel: { type: String, default: '' }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
+        /** Set on an order that was created by claiming rescued food. */
+        rescueInfo: {
+            type: new mongoose.Schema(
+                {
+                    listingId: { type: mongoose.Schema.Types.ObjectId, default: null },
+                    originalOrderId: { type: mongoose.Schema.Types.ObjectId, default: null },
+                    originalFoodValue: { type: Number, default: 0 },
+                    discountPercent: { type: Number, default: 0 }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
+        /** Preparation deadline tracking (performance/penalty system). Server timestamps only. */
+        prep: {
+            type: new mongoose.Schema(
+                {
+                    acceptedAt: { type: Date, default: null },
+                    originalEta: { type: Date, default: null },
+                    approvedEta: { type: Date, default: null },
+                    tierKey: { type: String, default: '' },
+                    itemCount: { type: Number, default: 0 },
+                    extended: { type: Boolean, default: false },
+                    penaltyEvaluated: { type: Boolean, default: false },
+                    prepMinutes: { type: Number, default: 0 },
+                    preWarned: { type: Boolean, default: false },
+                    delayNotified: { type: Boolean, default: false }
+                },
+                { _id: false }
+            ),
+            default: () => ({})
+        },
+        /** Delivery-partner deadline tracking. The timer starts at the real pickup time. */
+        deliveryEval: {
+            type: new mongoose.Schema(
+                {
+                    partnerId: { type: mongoose.Schema.Types.ObjectId, default: null },
+                    pickedUpAt: { type: Date, default: null },
+                    estimatedMinutes: { type: Number, default: 0 },
+                    originalEta: { type: Date, default: null },
+                    adjustedEta: { type: Date, default: null },
+                    adjustments: {
+                        type: [
+                            new mongoose.Schema(
+                                {
+                                    minutes: { type: Number, required: true },
+                                    reasonCode: { type: String, default: '' },
+                                    note: { type: String, default: '' },
+                                    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+                                    requestedBy: { type: String, default: '' },
+                                    at: { type: Date, default: Date.now }
+                                },
+                                { _id: true }
+                            )
+                        ],
+                        default: []
+                    },
+                    penaltyEvaluated: { type: Boolean, default: false },
+                    preWarned: { type: Boolean, default: false },
+                    delayNotified: { type: Boolean, default: false }
+                },
+                { _id: false }
+            ),
+            default: () => ({})
+        },
         statusHistory: {
             type: [statusHistorySchema],
             default: []

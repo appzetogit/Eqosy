@@ -196,6 +196,11 @@ const isRingEvent = (payload = {}) => {
         return false;
     }
 
+    // Explicit ring request from the sender (penalty / cancellation / warning alerts to restaurants and riders).
+    if (String(data.ring || payload.ring || '').toLowerCase() === 'true') {
+        return true;
+    }
+
     // 2. Status updates, rider arrival, pickup, drop, delivery events are SILENT status notifications (NO RING)
     if (
         type.includes('rider_arrived') ||

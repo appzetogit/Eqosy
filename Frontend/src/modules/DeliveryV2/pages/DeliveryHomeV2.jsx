@@ -14,6 +14,8 @@ import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 // Components
 import LiveMap from '@/modules/DeliveryV2/components/map/LiveMap';
 import { NewOrderModal } from '@/modules/DeliveryV2/components/modals/NewOrderModal';
+import ReportDelaySheet from '@/modules/DeliveryV2/components/ReportDelaySheet';
+import { deliveryPerformanceAPI } from '@food/api/performanceAPI';
 import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/PickupActionModal';
 import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modals/DeliveryVerificationModal';
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
@@ -1732,6 +1734,18 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         clearNewOrder();
                       }
                     }}
+                    onPass={async (o, details) => {
+                      const oId = String(o?.orderId || o?._id || o?.id || '');
+                      try {
+                        if (oId) await deliveryAPI.rejectOrder(oId, details || {});
+                      } catch (err) {
+                        // Offer may already have moved on; never block the rider from dismissing it.
+                      } finally {
+                        if (oId) ignoredOrderIdsRef.current.add(oId);
+                        setIncomingOrder(null);
+                        clearNewOrder();
+                      }
+                    }}
                     onReject={(o) => {
                       const oId = String(o?.orderId || o?._id || o?.id || '');
                       if (oId) ignoredOrderIdsRef.current.add(oId);
@@ -1766,8 +1780,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     onCancel={async () => {
                       const orderId = activeOrder?.orderId || activeOrder?._id;
                       if (!orderId) { resetTrip(); return; }
+                      // Tell the partner exactly what this costs BEFORE it is done; declining keeps the trip running.
                       try {
-                        await deliveryAPI.rejectOrder(orderId, { reason: 'driver_cancelled' });
+                        const pv = await deliveryPerformanceAPI.preview('POST_ACCEPT_CANCELLATION', '');
+                        const warn = pv?.data?.data?.message;
+                        if (warn && !window.confirm(`Cancel this order?\n\n${warn}`)) return;
+                      } catch (_) { /* preview is advisory */ }
+                      try {
+                        await deliveryAPI.rejectOrder(orderId, { reason: 'Cancelled by delivery partner after accepting' });
                         toast('Order cancelled');
                       } catch (err) {
                         const msg = err?.response?.data?.message || err?.message || 'Failed to cancel';
@@ -1777,6 +1797,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       }
                     }}
                   />
+                )}
+                {(tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && activeOrder && (
+                  <div className="absolute right-3 top-24 z-[130] pointer-events-auto">
+                    <ReportDelaySheet orderId={activeOrder.orderId || activeOrder._id} />
+                  </div>
                 )}
                 {(tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && (
                   <div className="absolute inset-0 z-[120] flex items-end justify-center pointer-events-none">

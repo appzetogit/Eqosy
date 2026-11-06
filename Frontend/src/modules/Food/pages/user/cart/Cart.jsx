@@ -1442,8 +1442,7 @@ function CartInner() {
   useEffect(() => {
     if (
       selectedPaymentMethod === "cash" &&
-      pricing?.codLimit != null &&
-      total >= pricing.codLimit
+      ((pricing?.codLimit != null && total >= pricing.codLimit) || pricing?.codBlocked)
     ) {
       setSelectedPaymentMethod("razorpay");
     }
@@ -3856,7 +3855,9 @@ function CartInner() {
                     {
                       id: 'cash',
                       name: 'Cash on Delivery',
-                      description: 'Pay when order arrives',
+                      description: pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
+                      disabled: Boolean(pricing?.codBlocked),
+                      disabledText: 'Pay charges first',
                       icon: <Banknote className="w-5 h-5" />,
                       color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
                       selectedColor: 'bg-orange-500 text-white'

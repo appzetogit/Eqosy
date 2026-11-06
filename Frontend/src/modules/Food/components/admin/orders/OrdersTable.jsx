@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { Eye, Printer, ArrowUpDown, Loader2, Check, X, Trash2, Ban } from "lucide-react"
+import { getOrderTimes, TIME_TONE } from "./orderTimes"
 
 const getStatusColor = (orderStatus) => {
   const colors = {
@@ -139,6 +140,12 @@ export default function OrdersTable({
                   </div>
                 </th>
               )}
+              {(visibleColumns.restaurantTime !== false) && (
+                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Restaurant Time</th>
+              )}
+              {(visibleColumns.deliveryTime !== false) && (
+                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap">Delivery Partner Time</th>
+              )}
               {visibleColumns.totalAmount && (
                 <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center justify-end gap-2">
@@ -244,6 +251,24 @@ export default function OrdersTable({
                     </div>
                   </td>
                 )}
+                {(visibleColumns.restaurantTime !== false) && (() => {
+                  const t = getOrderTimes(order).restaurant
+                  return (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm font-semibold ${TIME_TONE[t.tone]}`}>{t.text}</div>
+                      {t.sub ? <div className="mt-0.5 text-xs text-slate-500">{t.sub}</div> : null}
+                    </td>
+                  )
+                })()}
+                {(visibleColumns.deliveryTime !== false) && (() => {
+                  const t = getOrderTimes(order).delivery
+                  return (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm font-semibold ${TIME_TONE[t.tone]}`}>{t.text}</div>
+                      {t.sub ? <div className="mt-0.5 text-xs text-slate-500">{t.sub}</div> : null}
+                    </td>
+                  )
+                })()}
                 {visibleColumns.totalAmount && (
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm font-medium text-slate-900">

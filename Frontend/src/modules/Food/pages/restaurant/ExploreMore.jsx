@@ -777,6 +777,7 @@ export default function ExploreMore() {
     { id: 2, label: "Invoices", icon: Receipt, route: "/food/restaurant/hub-finance?tab=invoices" },
     { id: 3, label: "Bank details", icon: Building2, route: "/food/restaurant/update-bank-details" },
     { id: 4, label: "Commission & Performance", icon: Percent, route: "/food/restaurant/commission-league" },
+    { id: 5, label: "Penalties & Strikes", icon: Percent, route: "/food/restaurant/performance" },
   ]
 
   // All sections with their items

@@ -16,6 +16,7 @@ import { fetchPolyline } from '../utils/googleMaps.js';
 
 import * as foodTransactionService from './foodTransaction.service.js';
 import * as dispatchService from './order-dispatch.service.js';
+import * as performanceService from '../../performance/services/performance.service.js';
 import { isPartnerInActiveZoneSync, isPartnerInZoneStrict, resolveRestaurantZoneId } from './order-dispatch.service.js';
 import * as paymentService from './order-payment.service.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
@@ -389,6 +390,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
 export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
+  await performanceService.assertNotSuspended('DELIVERY_PARTNER', deliveryPartnerId);
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
@@ -666,7 +668,7 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   return responseOrder;
 }
 
-export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
+export async function rejectOrderDelivery(orderId, deliveryPartnerId, details = {}) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
 
@@ -676,6 +678,7 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
     throw new ForbiddenError('Not your order');
   }
 
+  const wasAccepted = order.dispatch.status === 'accepted';
   if (!Array.isArray(order.dispatch.offeredTo)) {
     order.dispatch.offeredTo = [];
   }
@@ -705,6 +708,8 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
     note: 'Rejected',
   });
   await order.save();
+
+  void performanceService.onAssignmentRejected(order._id, deliveryPartnerId, { ...details, wasAccepted });
 
   enqueueOrderEvent('delivery_rejected', {
     orderMongoId: order._id?.toString?.(),
@@ -860,6 +865,8 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
     note: 'Order picked up',
   });
   await order.save();
+
+  void performanceService.onOrderPickedUp(order, deliveryPartnerId);
 
   emitOrderUpdate(order, deliveryPartnerId);
   enqueueOrderEvent('picked_up', {
@@ -1102,6 +1109,8 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     recordedById: deliveryPartnerId,
     note: `Delivery completed. Prev status: ${prevPayStatus}`,
   });
+
+  void performanceService.onOrderDelivered(order);
 
   emitOrderUpdate(order, deliveryPartnerId);
   enqueueOrderEvent('delivery_completed', {

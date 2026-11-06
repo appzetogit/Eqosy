@@ -32,6 +32,9 @@ import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotificatio
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ResendNotificationButton from "@food/components/restaurant/ResendNotificationButton";
+import RequestMoreTime from "@food/components/performance/RequestMoreTime";
+import PenaltyWarning from "@food/components/performance/PenaltyWarning";
+import { restaurantPerformanceAPI } from "@food/api/performanceAPI";
 const debugLog = (...args) => { };
 const debugWarn = (...args) => { };
 const debugError = (...args) => { };
@@ -3131,6 +3134,8 @@ export default function OrdersMain() {
                   </div>
                 </div>
 
+                <PenaltyWarning api={restaurantPerformanceAPI} violationType="ORDER_REJECTION" reason={rejectReason} />
+
                 {/* Footer */}
                 <div className="px-4 py-4 bg-gray-50 border-t border-gray-200 flex gap-3">
                   <button
@@ -3226,6 +3231,8 @@ export default function OrdersMain() {
                     ))}
                   </div>
                 </div>
+
+                <PenaltyWarning api={restaurantPerformanceAPI} violationType="POST_ACCEPT_CANCELLATION" reason={cancelReason} />
 
                 {/* Footer */}
                 <div className="px-4 py-4 bg-gray-50 border-t border-gray-200 flex gap-3">
@@ -3595,6 +3602,7 @@ function OrderCard({
               {isAccepting ? "Accepting…" : "Accept"}
             </button>
           )}
+          {isPreparing && <RequestMoreTime orderId={mongoId || orderId} />}
           {isPreparing && onMarkReady && (
             <button
               type="button"

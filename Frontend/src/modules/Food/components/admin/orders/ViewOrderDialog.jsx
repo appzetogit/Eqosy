@@ -2,6 +2,7 @@ import { useState } from "react"
 import { createPortal } from "react-dom"
 import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, CheckCircle2, Search, Loader2, Check, Printer } from "lucide-react"
 import { adminAPI } from "@food/api"
+import OrderTimeline from "@food/components/admin/orders/OrderTimeline"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -191,6 +192,9 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, onPrintOr
           )}
         </DialogHeader>
         <div className="px-6 py-6 space-y-6">
+          {/* Restaurant time, delivery partner time and full timeline (food orders only) */}
+          {!order.subscriptionId && targetOrderId ? <OrderTimeline orderId={targetOrderId} /> : null}
+
           {/* Basic Order Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
