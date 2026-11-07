@@ -1569,6 +1569,9 @@ export const restaurantAPI = {
     }
     return apiClient.post("/food/restaurant/register", formData);
   },
+  /** Public: onboarding help request (goes to admin support tickets) */
+  sendOnboardingSupportRequest: (payload) =>
+    apiClient.post("/food/restaurant/support/onboarding", payload),
   /** Upload a single attachment for background onboarding uploads */
   uploadAttachment: (formData) => {
     if (!formData || !(formData instanceof FormData)) {

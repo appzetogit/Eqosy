@@ -32,6 +32,7 @@ import {
 } from '../controllers/restaurantOffer.controller.js';
 import {
     createRestaurantSupportTicketController,
+    createOnboardingSupportRequestController,
     listRestaurantSupportTicketsController
 } from '../controllers/supportTicket.controller.js';
 import {
@@ -96,6 +97,8 @@ const uploadFields = upload.fields([
 
 router.post('/register', uploadFields, registerRestaurantController);
 router.post('/upload-attachment', upload.single('file'), uploadRestaurantAttachmentController);
+// Public: onboarding help request -> shows up in admin Support Tickets
+router.post('/support/onboarding', createOnboardingSupportRequestController);
 
 // Public: approved restaurants list (for user app)
 

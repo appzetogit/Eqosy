@@ -1764,7 +1764,7 @@ export async function getSupportTickets(query = {}) {
     if (query.type && ['order', 'restaurant', 'other'].includes(String(query.type))) {
         userFilter.type = String(query.type);
     }
-    if (query.category && ['orders', 'payments', 'menu', 'restaurant', 'technical', 'other'].includes(String(query.category))) {
+    if (query.category && ['orders', 'payments', 'menu', 'restaurant', 'technical', 'other', 'onboarding'].includes(String(query.category))) {
         restaurantFilter.category = String(query.category);
     }
 
@@ -1778,6 +1778,8 @@ export async function getSupportTickets(query = {}) {
         );
         restaurantSearchOr.push(
             { issueType: searchRegex },
+            { contactName: searchRegex },
+            { contactPhone: searchRegex },
             { subject: searchRegex },
             { description: searchRegex },
             { orderRef: searchRegex }
@@ -1924,9 +1926,18 @@ export async function getSupportTickets(query = {}) {
             adminResponse: t.adminResponse,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,
-            user: null,
+            user: !restaurant && (t.contactName || t.contactPhone)
+                ? { _id: null, name: t.contactName || '', phone: t.contactPhone || '', email: t.contactEmail || '' }
+                : null,
+            contactName: t.contactName || '',
+            contactPhone: t.contactPhone || '',
+            contactEmail: t.contactEmail || '',
             restaurant,
-            restaurantName: restaurant ? restaurant.name : ''
+            restaurantName: restaurant
+                ? restaurant.name
+                : t.contactName
+                    ? `${t.contactName} (New applicant) ${t.contactPhone || ''}`.trim()
+                    : ''
         };
     });
 

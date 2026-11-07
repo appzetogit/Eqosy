@@ -23,6 +23,7 @@ import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
 import { clearModuleAuth, clearAuthData, getModuleToken } from "@food/utils/auth"
 import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
+import OnboardingSupportButton from "@food/components/restaurant/OnboardingSupportButton"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -151,6 +152,33 @@ const persistMenuImagesToDB = async (menuImages = []) => {
     } else {
       await deleteFileFromDB(`menuImage_${i}`)
     }
+  }
+}
+
+// Shrink phone-camera photos before upload so requests stay under proxy body limits (HTTP 413).
+const compressImageForUpload = async (file, maxSide = 1600, quality = 0.8) => {
+  try {
+    if (!file || typeof file.type !== "string" || !file.type.startsWith("image/")) return file
+    if (file.type === "image/gif" || file.type === "image/svg+xml") return file
+    if (file.size <= 400 * 1024) return file
+
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement("canvas")
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext("2d")
+    ctx.fillStyle = "#fff"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close?.()
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality))
+    if (!blob || blob.size >= file.size) return file
+    const baseName = (file.name || "image").replace(/\.[^.]+$/, "")
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() })
+  } catch {
+    return file
   }
 }
 
@@ -658,8 +686,9 @@ export default function RestaurantOnboarding() {
     setSourcePicker((prev) => ({ ...prev, isOpen: false }))
   }
 
-  const handleMenuImagesSelected = (files = []) => {
-    if (!files.length) return
+  const handleMenuImagesSelected = async (rawFiles = []) => {
+    if (!rawFiles.length) return
+    const files = await Promise.all(rawFiles.map((f) => compressImageForUpload(f)))
     const currentCount = (step2.menuImages || []).length
     const nextMenuImages = [...(step2.menuImages || []), ...files]
     setStep2((prev) => ({
@@ -674,8 +703,9 @@ export default function RestaurantOnboarding() {
     })
   }
 
-  const handleProfileImageSelected = (file) => {
-    if (!file) return
+  const handleProfileImageSelected = async (rawFile) => {
+    if (!rawFile) return
+    const file = await compressImageForUpload(rawFile)
     setStep2((prev) => ({
       ...prev,
       profileImage: file,
@@ -684,20 +714,23 @@ export default function RestaurantOnboarding() {
     void triggerBackgroundUpload(file, 'profile', 'profileImage')
   }
 
-  const handlePanImageSelected = (file) => {
-    if (!file) return
+  const handlePanImageSelected = async (rawFile) => {
+    if (!rawFile) return
+    const file = await compressImageForUpload(rawFile)
     setStep3((prev) => ({ ...prev, panImage: file }))
     void triggerBackgroundUpload(file, 'pan', 'panImage')
   }
 
-  const handleGstImageSelected = (file) => {
-    if (!file) return
+  const handleGstImageSelected = async (rawFile) => {
+    if (!rawFile) return
+    const file = await compressImageForUpload(rawFile)
     setStep3((prev) => ({ ...prev, gstImage: file }))
     void triggerBackgroundUpload(file, 'gst', 'gstImage')
   }
 
-  const handleFssaiImageSelected = (file) => {
-    if (!file) return
+  const handleFssaiImageSelected = async (rawFile) => {
+    if (!rawFile) return
+    const file = await compressImageForUpload(rawFile)
     setStep3((prev) => ({ ...prev, fssaiImage: file }))
     void triggerBackgroundUpload(file, 'fssai', 'fssaiImage')
   }
@@ -2931,6 +2964,11 @@ export default function RestaurantOnboarding() {
             <div className="text-sm font-semibold text-black">Restaurant onboarding</div>
           </div>
           <div className="flex items-center gap-3">
+            <OnboardingSupportButton
+              defaultName={step1.ownerName || ""}
+              defaultPhone={step1.ownerPhone || step1.primaryContactNumber || verifiedPhoneNumber || ""}
+              defaultEmail={step1.ownerEmail || ""}
+            />
             {!loading && !isEditing && (
               <Button
                 onClick={() => setIsEditing(true)}

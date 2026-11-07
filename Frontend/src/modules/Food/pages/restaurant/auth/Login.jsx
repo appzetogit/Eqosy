@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { Store } from "lucide-react"
 import { restaurantAPI } from "@food/api"
+import OnboardingSupportButton from "@food/components/restaurant/OnboardingSupportButton"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import logoImg from "@food/assets/eqosy-logo.png"
 import FloatingAuthLayout, { AUTH_THEMES, AuthButton, AuthError, AuthPhoneField } from "@/shared/components/auth/FloatingAuthLayout"
@@ -121,6 +122,12 @@ export default function RestaurantLogin() {
       bottomInset={keyboardInset}
       footer={
         <div className="space-y-1.5">
+          <div className="flex justify-center pb-1">
+            <OnboardingSupportButton
+              defaultPhone={formData.phone || ""}
+              label="Need help? Contact Support"
+            />
+          </div>
           <p className="text-xs font-medium text-zinc-500">
             By continuing, you accept our{" "}
             <Link to="/food/restaurant/terms" state={{ returnTo: "/food/restaurant/login" }} className="font-black text-[#9D174D]">Terms</Link>

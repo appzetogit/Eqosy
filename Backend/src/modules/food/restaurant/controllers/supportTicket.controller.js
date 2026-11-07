@@ -49,6 +49,53 @@ export const createRestaurantSupportTicketController = async (req, res, next) =>
     }
 };
 
+/**
+ * Public: a restaurant that is onboarding (or wants to onboard) contacts support.
+ * POST /food/restaurant/support/onboarding  (no auth: applicants have no restaurant record yet)
+ */
+export const createOnboardingSupportRequestController = async (req, res, next) => {
+    try {
+        const body = req.body || {};
+        const contactName = String(body.name || '').trim().slice(0, 100);
+        const contactPhone = String(body.phone || '').replace(/\D/g, '').slice(-10);
+        const contactEmail = String(body.email || '').trim().slice(0, 150);
+        const subject = String(body.subject || '').trim().slice(0, 150);
+        const description = String(body.message || '').trim().slice(0, 2000);
+
+        if (!contactName) return sendError(res, 400, 'Name is required');
+        if (contactPhone.length !== 10) return sendError(res, 400, 'Enter a valid 10 digit phone number');
+        if (!description) return sendError(res, 400, 'Please describe your problem');
+        if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+            return sendError(res, 400, 'Enter a valid email address');
+        }
+
+        // Simple spam guard: max 5 open requests per phone number.
+        const openCount = await FoodRestaurantSupportTicket.countDocuments({
+            contactPhone,
+            category: 'onboarding',
+            status: { $ne: 'resolved' }
+        });
+        if (openCount >= 5) {
+            return sendError(res, 429, 'We already have your requests. Our team will contact you soon.');
+        }
+
+        await FoodRestaurantSupportTicket.create({
+            category: 'onboarding',
+            issueType: String(body.issueType || 'Onboarding help').trim().slice(0, 100),
+            subject: subject || 'Restaurant onboarding help',
+            description,
+            priority: 'high',
+            contactName,
+            contactPhone,
+            contactEmail
+        });
+
+        return sendResponse(res, 201, 'Your request has been sent to our support team. We will contact you soon.', {});
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const listRestaurantSupportTicketsController = async (req, res, next) => {
     try {
         const restaurantId = req.user?.userId;

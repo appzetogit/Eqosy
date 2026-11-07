@@ -5,14 +5,17 @@ const restaurantSupportTicketSchema = new mongoose.Schema(
         restaurantId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'FoodRestaurant',
-            required: true,
+            required: false, // empty for onboarding applicants who have no restaurant record yet
             index: true
         },
         category: {
             type: String,
-            enum: ['orders', 'payments', 'menu', 'restaurant', 'technical', 'other'],
+            enum: ['orders', 'payments', 'menu', 'restaurant', 'technical', 'other', 'onboarding'],
             required: true
         },
+        contactName: { type: String, default: '', trim: true },
+        contactPhone: { type: String, default: '', trim: true },
+        contactEmail: { type: String, default: '', trim: true },
         issueType: { type: String, required: true, trim: true },
         subject: { type: String, default: '', trim: true },
         description: { type: String, default: '', trim: true },
