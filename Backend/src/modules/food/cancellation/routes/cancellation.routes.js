@@ -26,6 +26,7 @@ adminCancellationRouter.post('/cases/:id/retry-settlements', access, c.retrySett
 adminCancellationRouter.get('/rescues', access, c.listRescues);
 adminCancellationRouter.post('/rescues/:id/close', access, c.closeRescue);
 adminCancellationRouter.get('/penalties', access, c.listPenalties);
+adminCancellationRouter.post('/penalties', access, c.createPenalty);
 adminCancellationRouter.post('/penalties/:id/decision', access, c.decidePenalty);
 adminCancellationRouter.get('/customers/:userId', access, c.customerSummary);
 adminCancellationRouter.get('/audit', access, c.listAudit);

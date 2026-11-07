@@ -105,6 +105,8 @@ const configSchema = new Schema(
 
         rescue: {
             enabled: { type: Boolean, default: true },
+            /** Prepaid order where the customer never comes to the door: admin may send the food to Food Rescue. */
+            noShowEnabled: { type: Boolean, default: true },
             radiusKm: { type: Number, default: 3, min: 0.1 },
             windowMinutes: { type: Number, default: 15, min: 1 },
             discountPercent: { type: Number, default: 50, min: 0, max: 100 },

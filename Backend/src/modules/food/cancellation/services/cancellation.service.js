@@ -110,7 +110,7 @@ export async function updateConfig(body = {}, adminId = null) {
         throw new ValidationError('Rider compensation minimum cannot exceed the maximum');
     }
     group('rescue', {
-        enabled: 'bool', radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
+        enabled: 'bool', noShowEnabled: 'bool', radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
         restaurantSharePercent: { max: 100 }, failedRestaurantCompPercent: { max: 100 }, riderKeepsFoodOnExpiry: 'bool',
         claimHoldMinutes: { min: 1, max: 30 }, deliveryFee: {}, platformFee: {}, gstPercentOnFood: { max: 100 }, maxNotifyUsers: { max: 2000 },
     });
@@ -397,7 +397,16 @@ export async function cancelWithPolicy(orderId, userId, { reasonCode = '', comme
         throw new ValidationError(`Cancelling now will add Rs ${breakdown.total} to your outstanding balance. Please review and accept the charges to continue.`);
     }
 
-    const reasonLabel = fault.reason?.label || reasonCode || comment || 'Cancelled by customer';
+    return runPolicyCancellation(order, cfg, stage, fault, breakdown, { reasonCode, comment, actor: { role: 'USER', id: userId }, cancelledBy: 'USER' });
+}
+
+/**
+ * Shared by the customer's own cancel and by the admin-approved "customer not receiving a prepaid order" rescue.
+ * Applies the stage charge, settles it (refund deduction / outstanding), starts Food Rescue for stage 3 and notifies everyone.
+ */
+async function runPolicyCancellation(order, cfg, stage, fault, breakdown, { reasonCode = '', comment = '', actor, cancelledBy = 'USER', reasonLabel: labelIn = '', rescueFoodPrice = null, mutateOrder = null } = {}) {
+    const userId = actor?.id || order.userId;
+    const reasonLabel = labelIn || fault.reason?.label || reasonCode || comment || 'Cancelled by customer';
     const from = order.orderStatus;
     // Atomic gate: only the request that still sees the original status may cancel.
     const gate = await FoodOrder.updateOne({ _id: order._id, orderStatus: from }, { $set: { orderStatus: 'cancelled_by_user' } });
@@ -468,17 +477,18 @@ export async function cancelWithPolicy(orderId, userId, { reasonCode = '', comme
     order.cancellationReason = reasonCode;
     order.cancellationComment = comment;
     order.cancelledAt = new Date();
-    order.cancelledBy = 'USER';
+    order.cancelledBy = cancelledBy;
     order.cancellationPolicy = {
         caseId: caseDoc._id, stage, penaltyTotal: breakdown.total, payMode: caseDoc.payMode, deducted: st.deducted, refundAmount: st.refundAmount, rescueStatus: stage === 3 && cfg.rescue.enabled ? 'active' : '',
         statusLabel: stage === 3 && cfg.rescue.enabled ? 'CANCELLED – FOOD RESCUE ACTIVATED' : 'CANCELLED',
     };
-    pushStatusHistory(order, { byRole: 'USER', byId: userId, from, to: 'cancelled_by_user', note: `Stage ${stage} cancellation. ${reasonLabel}` });
+    pushStatusHistory(order, { byRole: actor?.role || 'USER', byId: userId, from, to: 'cancelled_by_user', note: `Stage ${stage} cancellation. ${reasonLabel}` });
+    if (typeof mutateOrder === 'function') mutateOrder(order);
     await order.save();
 
     // Rescue first (it needs the rider's live position), settlements next, then messages.
     let listing = null;
-    if (stage === 3 && cfg.rescue.enabled) listing = await activateRescue(order, caseDoc, cfg);
+    if (stage === 3 && cfg.rescue.enabled) listing = await activateRescue(order, caseDoc, cfg, { rescueFoodPrice });
 
     if (caseDoc.riderId && breakdown.riderPayable > 0 && (breakdown.riderCompensation > 0 || cfg.riderCompensation.payWhenWaived !== false) && (stage === 2 || cfg.riderCompensation.paidInStage3)) {
         await creditParty({
@@ -501,6 +511,55 @@ export async function cancelWithPolicy(orderId, userId, { reasonCode = '', comme
     await notifyCancellation(caseDoc, order, cfg, { stage, breakdown, fault, listing });
     await audit(userId, 'CASE_CREATED', 'case', caseDoc._id, null, { stage, total: breakdown.total });
     return { caseId: caseDoc._id, stage, breakdown, payMode: caseDoc.payMode, refundAmount: st.refundAmount, statusLabel: order.cancellationPolicy.statusLabel, rescueExpiresAt: listing?.expiresAt || null };
+}
+
+/* ------------------------------ Prepaid no-show -> Food Rescue (admin approved) ------------------------------ */
+export const isNoShowRescueEnabled = (cfg) => Boolean(cfg?.enabled && cfg?.rescue?.enabled && cfg?.rescue?.noShowEnabled !== false);
+
+/** Can this order (rider waiting at the door, customer not receiving) be sent to Food Rescue? Used by the admin list. */
+export async function noShowRescueEligibility(order, cfgIn = null) {
+    const cfg = cfgIn || (await getConfig());
+    const foodValue = r2(order?.pricing?.subtotal);
+    const base = { eligible: false, foodValue, defaultPrice: r2((foodValue * (100 - (cfg.rescue?.discountPercent || 0))) / 100), discountPercent: cfg.rescue?.discountPercent || 0 };
+    if (!isNoShowRescueEnabled(cfg) || !isPaidOnline(order)) return base;
+    const { applies, stage } = await evaluateForOrder(order, cfg);
+    return { ...base, eligible: Boolean(applies && stage === 3) };
+}
+
+/**
+ * Admin approved: the customer of a PREPAID order is not collecting it, so the food goes to Food Rescue instead of
+ * back to the restaurant. The customer gets the normal stage-3 charge (cut from the payment, rest refunded) and the
+ * same rider, who is still holding the food, delivers it to whoever buys it.
+ */
+export async function rescueNoShowOrder(order, adminId, { rescuePrice, note = '' } = {}) {
+    const cfg = await getConfig({ fresh: true });
+    if (!isNoShowRescueEnabled(cfg)) throw new ValidationError('Food Rescue for undelivered prepaid orders is switched off.');
+    if (!isPaidOnline(order)) throw new ValidationError('Only prepaid orders can be sent to Food Rescue.');
+    const { applies, stage } = await evaluateForOrder(order, cfg);
+    if (!applies || stage !== 3) throw new ValidationError('This order is not in a state where Food Rescue can start.');
+
+    const foodValue = r2(order.pricing?.subtotal);
+    const hasPrice = rescuePrice !== undefined && rescuePrice !== null && String(rescuePrice).trim() !== '';
+    const price = hasPrice ? num(rescuePrice, 'Rescue price', { min: 0.01, max: foodValue }) : r2((foodValue * (100 - cfg.rescue.discountPercent)) / 100);
+
+    const fault = { waived: false, party: 'customer', note: '', reason: null };
+    const breakdown = computeBreakdown(order, 3, cfg, false);
+    const adminNote = String(note || '').trim();
+    return runPolicyCancellation(order, cfg, 3, fault, breakdown, {
+        reasonCode: 'customer_not_receiving',
+        reasonLabel: 'Customer did not collect the order at the door',
+        comment: adminNote,
+        actor: { role: 'ADMIN', id: adminId },
+        cancelledBy: 'ADMIN',
+        rescueFoodPrice: price,
+        mutateOrder: (o) => {
+            o.undeliveredReturn.status = 'rescued';
+            o.undeliveredReturn.decidedBy = adminId || null;
+            o.undeliveredReturn.decidedAt = new Date();
+            o.undeliveredReturn.adminNote = adminNote;
+            o.undeliveredReturn.rescueFoodPrice = price;
+        },
+    });
 }
 
 async function notifyCancellation(caseDoc, order, cfg, { stage, breakdown, fault }) {
@@ -596,7 +655,7 @@ export async function processRefund(caseId) {
 }
 
 /* ------------------------------ Food Rescue ------------------------------ */
-async function activateRescue(order, caseDoc, cfg) {
+async function activateRescue(order, caseDoc, cfg, { rescueFoodPrice = null } = {}) {
     const existing = await FoodRescueListing.findOne({ caseId: caseDoc._id });
     if (existing) return existing;
     let lat = null;
@@ -617,17 +676,20 @@ async function activateRescue(order, caseDoc, cfg) {
         await expireListingEffects(caseDoc._id, { noListing: true });
         return null;
     }
-    const factor = (100 - cfg.rescue.discountPercent) / 100;
+    const foodValue = r2(order.pricing?.subtotal);
+    // Admin may fix the selling price for a no-show order; otherwise the configured discount applies.
+    const customPrice = rescueFoodPrice != null && foodValue > 0 ? r2(rescueFoodPrice) : null;
+    const factor = customPrice != null ? customPrice / foodValue : (100 - cfg.rescue.discountPercent) / 100;
+    const discountPercent = customPrice != null ? Math.max(0, Math.round((1 - factor) * 100)) : cfg.rescue.discountPercent;
     const items = (order.items || []).map((i) => {
         const it = i.toObject ? i.toObject() : { ...i };
         return { ...it, originalPrice: it.price, price: r2(it.price * factor) };
     });
-    const foodValue = r2(order.pricing?.subtotal);
     const expiresAt = new Date(Date.now() + cfg.rescue.windowMinutes * MIN);
     const listing = await FoodRescueListing.create({
         caseId: caseDoc._id, originalOrderId: order._id, restaurantId: order.restaurantId,
         restaurantName: restaurant?.restaurantName || restaurant?.name || '', riderId: caseDoc.riderId, items,
-        originalFoodValue: foodValue, rescueFoodPrice: r2(foodValue * factor), discountPercent: cfg.rescue.discountPercent,
+        originalFoodValue: foodValue, rescueFoodPrice: customPrice != null ? customPrice : r2(foodValue * factor), discountPercent,
         location: { type: 'Point', coordinates: [lng, lat] }, expiresAt,
     });
     await FoodCancellationCase.updateOne({ _id: caseDoc._id }, { $set: { listingId: listing._id }, $push: { timeline: { at: new Date(), event: 'rescue_started', note: `Window until ${expiresAt.toISOString()} within ${cfg.rescue.radiusKm} km` } } });
@@ -1120,6 +1182,23 @@ export async function listPenaltiesAdmin({ userId, status, page = 1, limit = 30 
         FoodUserPenalty.countDocuments(q),
     ]);
     return { items, total };
+}
+
+/** Admin: put a manual penalty on a customer. It shows in the same ledger and is charged on their next order / blocks COD until paid. */
+export async function adminCreateUserPenalty(adminId, { userId, amount, reason, orderId = null }) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(String(userId))) throw new ValidationError('A valid customer ID is required');
+    const amt = r2(Number(amount));
+    if (!Number.isFinite(amt) || amt <= 0) throw new ValidationError('Penalty amount must be greater than 0');
+    if (!String(reason || '').trim()) throw new ValidationError('A reason is required');
+    if (orderId && !mongoose.Types.ObjectId.isValid(String(orderId))) throw new ValidationError('Invalid order id');
+    if (!(await FoodUser.exists({ _id: oid(userId) }))) throw new NotFoundError('Customer not found');
+    const p = await FoodUserPenalty.create({
+        userId: oid(userId), orderId: orderId ? oid(orderId) : null, amount: amt, reason: String(reason).trim(),
+        status: 'pending', source: CANCEL_POLICY_SOURCE, createdByAdminId: adminId,
+    });
+    await audit(adminId, 'PENALTY_CREATE', 'penalty', p._id, null, p.toObject(), reason);
+    await notifyOwnersSafely([{ ownerType: 'USER', ownerId: p.userId }], { title: 'Penalty added', body: `A penalty of Rs ${amt} was added to your account: ${String(reason).trim()}`, data: { type: 'penalty_added' } });
+    return p.toObject();
 }
 
 /** Admin override: waive, change the amount, or mark paid (e.g. cash collected offline). Always with a reason. */

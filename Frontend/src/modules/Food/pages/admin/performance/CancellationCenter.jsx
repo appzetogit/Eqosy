@@ -136,11 +136,21 @@ function Penalties() {
     if (action === "adjust") { const a = window.prompt("New amount in ₹ (0 = waive):", String(p.amount)); if (a == null) return; amount = Number(a) }
     try { await api.decidePenalty(p._id, { action, note, amount }); toast.success("Updated and audited"); reload() } catch (e) { toast.error(msg(e, "Failed")) }
   }
+  const create = async () => {
+    const uid = (userId || window.prompt("Customer ID (full):") || "").trim()
+    if (!uid) return
+    const a = window.prompt("Penalty amount in ₹:")
+    if (a == null) return
+    const note = ask("Reason (required, shown to the customer):")
+    if (!note) return
+    try { await api.createPenalty({ userId: uid, amount: Number(a), reason: note }); toast.success("Penalty created"); reload() } catch (e) { toast.error(msg(e, "Failed")) }
+  }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-gray-300 p-2 text-sm"><option value="outstanding">Outstanding (COD blocked)</option><option value="">All</option>{["paid", "waived"].map((s) => <option key={s} value={s}>{s}</option>)}</select>
         <input placeholder="Customer ID (full)" value={userId} onChange={(e) => setUserId(e.target.value.trim())} className="rounded-lg border border-gray-300 p-2 text-sm" />
+        <button onClick={create} className="ml-auto rounded-lg bg-black px-3 text-sm font-semibold text-white">+ Create penalty</button>
       </div>
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <Table head={["When", "Customer", "Order", "Amount", "Reason", "Status", "Actions"]} empty={!(data?.items || []).length ? "No penalties" : null}>
@@ -270,6 +280,7 @@ function Rules() {
         <div className={box}>
           <h4 className="text-sm font-bold">Food Rescue</h4>
           <Tog label="Food Rescue enabled" value={c.rescue.enabled} onChange={(v) => setIn("rescue", "enabled", v)} />
+          <Tog label="Prepaid no-show: admin can send undelivered food to Food Rescue" value={c.rescue.noShowEnabled !== false} onChange={(v) => setIn("rescue", "noShowEnabled", v)} />
           <Num label="Radius" value={c.rescue.radiusKm} onChange={(v) => setIn("rescue", "radiusKm", v)} suffix="km" step={0.5} />
           <Num label="Timer" value={c.rescue.windowMinutes} onChange={(v) => setIn("rescue", "windowMinutes", v)} suffix="min" />
           <Num label="Discount on food price" value={c.rescue.discountPercent} onChange={(v) => setIn("rescue", "discountPercent", v)} suffix="%" />

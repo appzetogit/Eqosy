@@ -125,12 +125,12 @@ const performanceConfigSchema = new Schema(
 /* ---------- Penalty ledger ---------- */
 const penaltyLedgerSchema = new Schema(
     {
-        orderId: { type: Schema.Types.ObjectId, ref: 'FoodOrder', required: true, index: true },
+        orderId: { type: Schema.Types.ObjectId, ref: 'FoodOrder', required: false, default: null, index: true }, // empty for manual admin entries
         partyType: { type: String, enum: ['RESTAURANT', 'DELIVERY_PARTNER'], required: true },
         partyId: { type: Schema.Types.ObjectId, required: true },
         violationType: {
             type: String,
-            enum: ['PREP_DELAY', 'DELIVERY_DELAY', 'ORDER_REJECTION', 'ASSIGNMENT_REJECTION', 'POST_ACCEPT_CANCELLATION'],
+            enum: ['PREP_DELAY', 'DELIVERY_DELAY', 'ORDER_REJECTION', 'ASSIGNMENT_REJECTION', 'POST_ACCEPT_CANCELLATION', 'MANUAL'],
             required: true
         },
         reason: { type: String, default: '' },
@@ -157,11 +157,34 @@ const penaltyLedgerSchema = new Schema(
         reviewHold: { type: Boolean, default: false }, // valid reason claimed / pending adjustment: waiting for admin
         adminReview: { type: Boolean, default: false },
         settled: { type: Boolean, default: false },
-        settledAt: { type: Date, default: null }
+        settledAt: { type: Date, default: null },
+        /** Wallet integration: the penalty is debited from the party wallet once, and refunded once on waive/reverse. */
+        walletDebited: { type: Boolean, default: false },
+        walletDebitedAmount: { type: Number, default: 0 },
+        walletDebitedAt: { type: Date, default: null },
+        walletRefunded: { type: Boolean, default: false },
+        createdByAdminId: { type: Schema.Types.ObjectId, default: null }
     },
     { collection: 'food_penalty_ledger', timestamps: true }
 );
 penaltyLedgerSchema.index({ partyType: 1, partyId: 1, month: 1, violationType: 1 });
+
+/* ---------- Restaurant / delivery wallet movements caused by penalties and admin adjustments ---------- */
+const partyWalletTxnSchema = new Schema(
+    {
+        partyType: { type: String, enum: ['RESTAURANT', 'DELIVERY_PARTNER'], required: true },
+        partyId: { type: Schema.Types.ObjectId, required: true },
+        type: { type: String, enum: ['penalty_debit', 'penalty_refund', 'penalty_adjust', 'admin_credit', 'admin_debit'], required: true },
+        amount: { type: Number, required: true }, // signed: negative = money taken from the wallet
+        balanceAfter: { type: Number, default: 0 },
+        ledgerId: { type: Schema.Types.ObjectId, default: null },
+        orderId: { type: Schema.Types.ObjectId, default: null },
+        note: { type: String, default: '' },
+        actorId: { type: Schema.Types.ObjectId, default: null }
+    },
+    { collection: 'food_party_wallet_txns', timestamps: true }
+);
+partyWalletTxnSchema.index({ partyType: 1, partyId: 1, createdAt: -1 });
 
 /* ---------- Strikes ---------- */
 const strikeSchema = new Schema(
@@ -237,6 +260,7 @@ const auditSchema = new Schema(
 
 export const FoodPerformanceConfig = mongoose.model('FoodPerformanceConfig', performanceConfigSchema);
 export const FoodPenaltyLedger = mongoose.model('FoodPenaltyLedger', penaltyLedgerSchema);
+export const FoodPartyWalletTxn = mongoose.model('FoodPartyWalletTxn', partyWalletTxnSchema);
 export const FoodStrike = mongoose.model('FoodStrike', strikeSchema);
 export const FoodPrepExtension = mongoose.model('FoodPrepExtension', prepExtensionSchema);
 export const FoodPenaltyAppeal = mongoose.model('FoodPenaltyAppeal', appealSchema);

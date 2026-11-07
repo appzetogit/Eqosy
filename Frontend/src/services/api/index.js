@@ -324,6 +324,12 @@ export const adminAPI = {
       body,
       { contextModule: "admin" },
     ),
+  rescueUndeliveredOrder: (orderId, body = {}) =>
+    apiClient.post(
+      `/food/admin/orders/${orderId}/undelivered/rescue`,
+      body,
+      { contextModule: "admin" },
+    ),
   rejectUndeliveredReturn: (orderId, reason) =>
     apiClient.post(
       `/food/admin/orders/${orderId}/undelivered/reject`,

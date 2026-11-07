@@ -30,6 +30,7 @@ export const retrySettlements = wrap((req) => svc.retrySettlements(req.params.id
 export const listRescues = wrap((req) => svc.listRescues(req.query));
 export const closeRescue = wrap((req) => svc.adminCloseRescue(req.params.id, req.user?.userId, req.body?.note));
 export const listPenalties = wrap((req) => svc.listPenaltiesAdmin(req.query));
+export const createPenalty = wrap((req) => svc.adminCreateUserPenalty(req.user?.userId, req.body || {}));
 export const decidePenalty = wrap((req) => svc.adminDecidePenalty(req.params.id, req.user?.userId, req.body || {}));
 export const customerSummary = wrap((req) => svc.customerSummaryAdmin(req.params.userId));
 export const listAudit = wrap((req) => svc.listAudit(req.query));

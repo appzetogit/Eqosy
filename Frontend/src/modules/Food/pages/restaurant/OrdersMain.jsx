@@ -34,6 +34,7 @@ import autoTable from "jspdf-autotable";
 import ResendNotificationButton from "@food/components/restaurant/ResendNotificationButton";
 import RequestMoreTime from "@food/components/performance/RequestMoreTime";
 import PenaltyWarning from "@food/components/performance/PenaltyWarning";
+import PenaltySupportButton from "@food/components/performance/PenaltySupportButton";
 import { restaurantPerformanceAPI } from "@food/api/performanceAPI";
 const debugLog = (...args) => { };
 const debugWarn = (...args) => { };
@@ -2460,6 +2461,11 @@ export default function OrdersMain() {
       {/* Restaurant Navbar - Sticky at top */}
       <div className="sticky top-0 z-50 bg-white">
         <RestaurantNavbar showNotifications={true} />
+      </div>
+
+      {/* Support: always reachable from the orders screen */}
+      <div className="fixed bottom-24 right-3 z-40 shadow-lg rounded-lg">
+        <PenaltySupportButton role="restaurant" variant="solid" label="Support" />
       </div>
 
       {/* Top Filter Bar - Sticky below navbar */}

@@ -14,6 +14,13 @@ export const adminPerformanceAPI = {
   detail: (kind, id, month) =>
     apiClient.get(`/food/admin/performance/${kind === "delivery" ? "delivery-partners" : "restaurants"}/${id}`, { params: { month }, ...admin }),
   ledger: (params = {}) => apiClient.get("/food/admin/performance/ledger", { params, ...admin }),
+  /** Manual warning / penalty. body: { partyType, partyId, stage, amount, strikeCount, reason, orderId? } */
+  createLedger: (body) => apiClient.post("/food/admin/performance/ledger", body, admin),
+  /** body: { amount?, reason?, note } (note is required) */
+  editLedger: (id, body) => apiClient.patch(`/food/admin/performance/ledger/${id}`, body, admin),
+  /** partyType: USER | RESTAURANT | DELIVERY_PARTNER */
+  wallet: (partyType, partyId) => apiClient.get(`/food/admin/performance/wallet/${partyType}/${partyId}`, admin),
+  adjustWallet: (partyType, partyId, body) => apiClient.post(`/food/admin/performance/wallet/${partyType}/${partyId}/adjust`, body, admin),
   decideLedger: (id, action, note = "") => apiClient.post(`/food/admin/performance/ledger/${id}/decision`, { action, note }, admin),
   appeals: (params = {}) => apiClient.get("/food/admin/performance/appeals", { params, ...admin }),
   decideAppeal: (id, approve, note = "") => apiClient.post(`/food/admin/performance/appeals/${id}/decision`, { approve, note }, admin),
@@ -36,6 +43,7 @@ const make = (base, contextModule) => {
     /** What this action would cost right now (warning / penalty / strike). Shown BEFORE the user confirms. */
     preview: (violationType, reasonCode = "") => apiClient.get(`${base}/preview`, { params: { violationType, reasonCode }, ...ctx }),
     ledger: (params = {}) => apiClient.get(`${base}/ledger`, { params, ...ctx }),
+    wallet: () => apiClient.get(`${base}/wallet`, ctx),
     appeals: () => apiClient.get(`${base}/appeals`, ctx),
     createAppeal: (body) => apiClient.post(`${base}/appeals`, body, ctx),
   };

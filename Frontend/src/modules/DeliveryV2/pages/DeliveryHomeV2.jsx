@@ -45,6 +45,7 @@ import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import { useNavigate } from 'react-router-dom';
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
+import PenaltySupportButton from "@food/components/performance/PenaltySupportButton";
 
 /** Minimal bottom-sheet popup (Restored from legacy FeedNavbar) */
 function BottomPopup({ isOpen, onClose, title, children, maxHeight = "85vh" }) {
@@ -1502,6 +1503,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   return (
     <div className="relative h-screen w-full bg-white text-gray-900 overflow-hidden flex flex-col">
+      {/* Support: reachable while on an order; the active order is attached to the ticket */}
+      <div className="absolute right-3 top-20 z-30 shadow-lg rounded-lg">
+        <PenaltySupportButton
+          role="delivery"
+          variant="solid"
+          label="Support"
+          context={{ orderId: activeOrder?.order_id || activeOrder?.orderId || activeOrder?._id || '' }}
+        />
+      </div>
       {/* Blocking popup: online rider without usable browser location. Closes by itself once allowed. */}
       <LocationPermissionModal
         open={isOnline && (geoPermission === 'denied' || (geoPermission === 'prompt' && !riderLocation))}

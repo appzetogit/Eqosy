@@ -30,6 +30,7 @@ export const adminCancellationAPI = {
   rescues: (params = {}) => apiClient.get("/food/admin/cancellation/rescues", { params, ...admin }),
   closeRescue: (id, note) => apiClient.post(`/food/admin/cancellation/rescues/${id}/close`, { note }, admin),
   penalties: (params = {}) => apiClient.get("/food/admin/cancellation/penalties", { params, ...admin }),
+  createPenalty: (body) => apiClient.post("/food/admin/cancellation/penalties", body, admin),
   decidePenalty: (id, body) => apiClient.post(`/food/admin/cancellation/penalties/${id}/decision`, body, admin),
   customer: (userId) => apiClient.get(`/food/admin/cancellation/customers/${userId}`, admin),
   audit: (params = {}) => apiClient.get("/food/admin/cancellation/audit", { params, ...admin }),

@@ -381,7 +381,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize })
                   </button>
                 ))}
               </div>
-              <PenaltyWarning api={deliveryPerformanceAPI} violationType="ASSIGNMENT_REJECTION" reasonCode={passReason?.reasonCode || ''} reason={passReason?.label || 'none'} className="mt-3" />
+              <PenaltyWarning api={deliveryPerformanceAPI} role="delivery" violationType="ASSIGNMENT_REJECTION" reasonCode={passReason?.reasonCode || ''} reason={passReason?.label || 'none'} className="mt-3" />
               <button
                 disabled={!passReason}
                 onClick={() => onPass(order, { reasonCode: passReason.reasonCode, reason: passReason.label })}

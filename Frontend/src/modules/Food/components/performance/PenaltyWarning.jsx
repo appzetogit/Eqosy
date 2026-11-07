@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react"
 import { AlertTriangle, Info, ShieldAlert } from "lucide-react"
 import { reasonCodeFromLabel } from "@food/api/performanceAPI"
+import PenaltySupportButton from "@food/components/performance/PenaltySupportButton"
 
 /**
  * Shown BEFORE a restaurant rejects/cancels an order or a delivery partner passes/cancels a delivery:
  * says whether this will be a warning, a penalty or a strike, using the same rules the server applies.
  * Advisory only; it never blocks the action.
  */
-export default function PenaltyWarning({ api, violationType, reason = "", reasonCode = "", className = "" }) {
+export default function PenaltyWarning({ api, violationType, reason = "", reasonCode = "", className = "", role = "restaurant", orderId = "" }) {
   const [pv, setPv] = useState(null)
   const code = reasonCode || reasonCodeFromLabel(reason)
 
@@ -35,6 +36,13 @@ export default function PenaltyWarning({ api, violationType, reason = "", reason
         </p>
         <p className="mt-0.5 font-medium leading-relaxed">{pv.message}</p>
         {pv.adminReview && <p className="mt-0.5 font-bold">Repeated rejections go to admin review and can lead to suspension.</p>}
+        <div className="mt-2">
+          <PenaltySupportButton
+            role={role}
+            label="Need help? Contact support"
+            context={{ orderId, summary: `Before ${String(violationType).replace(/_/g, " ").toLowerCase()}: ${pv.message || ""}` }}
+          />
+        </div>
       </div>
     </div>
   )

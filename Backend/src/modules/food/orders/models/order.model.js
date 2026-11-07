@@ -247,7 +247,9 @@ const deliveryVerificationSchema = new mongoose.Schema(
  */
 const undeliveredReturnSchema = new mongoose.Schema(
     {
-        status: { type: String, enum: ['none', 'requested', 'approved', 'rejected', 'returned'], default: 'none' },
+        status: { type: String, enum: ['none', 'requested', 'approved', 'rejected', 'returned', 'rescued'], default: 'none' },
+        /** Set when admin sent a prepaid no-show order to Food Rescue instead of returning it. */
+        rescueFoodPrice: { type: Number, default: 0, min: 0 },
         reason: { type: String, default: '' },
         note: { type: String, default: '' },
         callAttempts: { type: Number, default: 0, min: 0 },

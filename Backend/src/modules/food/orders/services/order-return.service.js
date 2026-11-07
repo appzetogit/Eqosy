@@ -136,6 +136,8 @@ export async function requestUndeliveredReturn(orderId, partnerId, payload = {})
       order.userId ? FoodUser.findById(order.userId).select('name fullName phone').lean() : null,
     ]);
     const partnerName = partner?.name || partner?.fullName || 'Delivery Partner';
+    const prepaid = ['razorpay', 'razorpay_qr', 'wallet'].includes(String(order.payment?.method || '').toLowerCase())
+      && String(order.payment?.status || '').toLowerCase() === 'paid';
     const adminPayload = {
       orderMongoId: String(order._id),
       orderId: orderLabel(order),
@@ -148,7 +150,8 @@ export async function requestUndeliveredReturn(orderId, partnerId, payload = {})
       reason,
       note,
       callAttempts,
-      message: `${partnerName} could not reach the customer for Order #${orderLabel(order)} and wants to return it to the restaurant. Reason: ${reason}.`,
+      message: `${partnerName} waited ${RETURN_MIN_WAIT_MINUTES} min but the customer is not receiving Order #${orderLabel(order)}${prepaid ? ' (PREPAID - can go to Food Rescue)' : ''}. Reason: ${reason}.`,
+      isPrepaid: prepaid,
     };
     emitSafe((io) => {
       io.to('admin_room').emit('admin_undelivered_request', adminPayload);
@@ -157,7 +160,9 @@ export async function requestUndeliveredReturn(orderId, partnerId, payload = {})
     });
     await notifyAdminsSafely({
       title: '📵 Customer Unreachable - Approval Needed',
-      body: `Order #${orderLabel(order)}: ${partnerName} cannot reach the customer. Approve return to restaurant?`,
+      body: prepaid
+        ? `Order #${orderLabel(order)} (prepaid): customer is not picking up the food after ${RETURN_MIN_WAIT_MINUTES} min. Send it to Food Rescue or return it?`
+        : `Order #${orderLabel(order)}: ${partnerName} cannot reach the customer. Approve return to restaurant?`,
       data: { type: 'undelivered_return_request', orderId: String(order._id), orderMongoId: String(order._id) },
     });
   } catch (err) {
@@ -186,7 +191,44 @@ export async function listPendingReturnRequestsAdmin(adminContext = null) {
     .sort({ 'undeliveredReturn.requestedAt': -1 })
     .lean();
 
-  return orders.map((o) => normalizeOrderForClient(o));
+  // Tell the admin screen which requests can go to Food Rescue (prepaid + switch on) and the suggested price.
+  const { noShowRescueEligibility, getConfig } = await import('../../cancellation/services/cancellation.service.js');
+  const cfg = await getConfig();
+  return Promise.all(orders.map(async (o) => ({
+    ...normalizeOrderForClient(o),
+    rescueOption: await noShowRescueEligibility(o, cfg).catch(() => ({ eligible: false })),
+  })));
+}
+
+/**
+ * Admin: the customer of a PREPAID order is not collecting it. Instead of returning the food, put it on Food Rescue
+ * at a price the admin sets. Same stage-3 charge for the customer; nearby customers are notified.
+ */
+export async function approveNoShowRescueAdmin(orderId, adminId, body = {}, adminContext = null) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError('Order id required');
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError('Order not found');
+  await assertAdminZoneAccess(order, adminContext);
+
+  if (order.undeliveredReturn?.status !== 'requested') {
+    throw new ValidationError('There is no pending request for this order.');
+  }
+  const partnerId = order.undeliveredReturn.requestedBy || order.dispatch?.deliveryPartnerId;
+  const { rescueNoShowOrder } = await import('../../cancellation/services/cancellation.service.js');
+  const result = await rescueNoShowOrder(order, adminId, { rescuePrice: body.rescuePrice, note: body.note });
+
+  if (partnerId) {
+    emitSafe((io) => {
+      io.to(rooms.delivery(partnerId)).emit('order_return_rescued', {
+        orderMongoId: String(order._id),
+        orderId: orderLabel(order),
+        message: 'Admin approved Food Rescue. Keep the food safe at this location. You will get the new delivery as soon as someone buys it.',
+      });
+    });
+  }
+  return result;
 }
 
 export async function approveUndeliveredReturnAdmin(orderId, adminId, body = {}, adminContext = null) {

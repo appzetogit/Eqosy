@@ -8,6 +8,7 @@ const TABS = [
   ["restaurants", "Restaurants"],
   ["delivery", "Delivery partners"],
   ["ledger", "Penalty ledger"],
+  ["wallets", "Wallets"],
   ["appeals", "Appeals"],
   ["extensions", "Prep extensions"],
   ["eta", "Delivery ETA"],
@@ -58,7 +59,7 @@ const askNote = (msg) => {
 }
 
 /* ----------------------------- Overview ----------------------------- */
-function Overview({ kind }) {
+function Overview({ kind, onWallet, onCreate }) {
   const [month, setMonth] = useState(thisMonth())
   const [open, setOpen] = useState(null)
   const { data, loading } = useLoad(() => api.overview(kind, month), [kind, month])
@@ -81,7 +82,13 @@ function Overview({ kind }) {
               <td className="px-3 py-2">{inr(r.penalties)}</td>
               <td className="px-3 py-2">{inr(r.outstanding)}</td>
               <td className="px-3 py-2">{r.suspendedUntil ? <span className="text-xs font-semibold text-red-600">Suspended till {fmtDate(r.suspendedUntil)}</span> : "OK"}</td>
-              <td className="px-3 py-2"><button className="text-xs font-semibold text-blue-600" onClick={() => setOpen(r.partyId)}>Dashboard</button></td>
+              <td className="px-3 py-2">
+                <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                  <button className="text-blue-600" onClick={() => setOpen(r.partyId)}>Dashboard</button>
+                  <button className="text-green-700" onClick={() => onWallet(isR ? "RESTAURANT" : "DELIVERY_PARTNER", r.partyId)}>Wallet</button>
+                  <button className="text-red-700" onClick={() => onCreate(isR ? "RESTAURANT" : "DELIVERY_PARTNER", r.partyId)}>Add penalty</button>
+                </div>
+              </td>
             </tr>
           ))}
         </Table>
@@ -104,6 +111,7 @@ function Overview({ kind }) {
               <StatCard label="Total strikes" value={detail.data.totalStrikes} tone={detail.data.totalStrikes ? "bad" : "default"} />
               <StatCard label="Total penalties" value={inr(detail.data.totalPenalties)} />
               <StatCard label="Outstanding" value={inr(detail.data.outstandingPenalties)} />
+              <StatCard label="Wallet balance" value={inr(detail.data.walletBalance)} tone={detail.data.walletBalance < 0 ? "bad" : "default"} />
             </div>
           )}
         </div>
@@ -113,8 +121,105 @@ function Overview({ kind }) {
 }
 
 /* ----------------------------- Ledger ----------------------------- */
-function Ledger() {
-  const [filters, setFilters] = useState({ status: "", partyType: "", violationType: "", partyId: "", orderId: "" })
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-md space-y-3 rounded-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold">{title}</h3>
+          <button onClick={onClose} className="text-sm text-gray-500">Close</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+const inputCls = "w-full rounded-lg border border-gray-300 p-2 text-sm"
+
+function CreatePenaltyModal({ prefill, onClose, onDone }) {
+  const [f, setF] = useState({ partyType: prefill?.partyType || "RESTAURANT", partyId: prefill?.partyId || "", stage: "penalty", amount: "", strikeCount: 0, reason: "", orderId: "" })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
+  const submit = async () => {
+    if (!f.partyId.trim()) return toast.error("Enter the restaurant / delivery partner ID")
+    if (!f.reason.trim()) return toast.error("A reason is required")
+    if (f.stage === "penalty" && !(Number(f.amount) > 0)) return toast.error("Enter a penalty amount")
+    setBusy(true)
+    try {
+      await api.createLedger({ ...f, partyId: f.partyId.trim(), orderId: f.orderId.trim() || undefined, amount: Number(f.amount) || 0, strikeCount: Number(f.strikeCount) || 0 })
+      toast.success(f.stage === "warning" ? "Warning added" : "Penalty added and deducted from wallet")
+      onDone()
+    } catch (e) {
+      toast.error(apiMsg(e, "Failed"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal title="Create warning / penalty" onClose={onClose}>
+      <select value={f.partyType} onChange={(e) => set("partyType", e.target.value)} className={inputCls}>
+        <option value="RESTAURANT">Restaurant</option><option value="DELIVERY_PARTNER">Delivery partner</option>
+      </select>
+      <input value={f.partyId} onChange={(e) => set("partyId", e.target.value)} placeholder="Restaurant / delivery partner ID (full)" className={inputCls} />
+      <select value={f.stage} onChange={(e) => set("stage", e.target.value)} className={inputCls}>
+        <option value="penalty">Penalty (deducted from wallet)</option><option value="warning">Warning only</option>
+      </select>
+      {f.stage === "penalty" && (
+        <div className="flex gap-2">
+          <input type="number" min="1" value={f.amount} onChange={(e) => set("amount", e.target.value)} placeholder="Amount ₹" className={inputCls} />
+          <input type="number" min="0" value={f.strikeCount} onChange={(e) => set("strikeCount", e.target.value)} placeholder="Strikes" className={inputCls} />
+        </div>
+      )}
+      <input value={f.orderId} onChange={(e) => set("orderId", e.target.value)} placeholder="Order ID (optional)" className={inputCls} />
+      <textarea value={f.reason} onChange={(e) => set("reason", e.target.value)} rows={3} placeholder="Reason (shown to the party)" className={inputCls} />
+      <button onClick={submit} disabled={busy} className="w-full rounded-lg bg-black py-2.5 text-sm font-semibold text-white disabled:opacity-60">{busy ? "Saving..." : "Create"}</button>
+    </Modal>
+  )
+}
+
+function EditPenaltyModal({ row, onClose, onDone }) {
+  const [amount, setAmount] = useState(row.stage === "penalty" ? String(row.amount) : "")
+  const [reason, setReason] = useState(row.reason || "")
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!note.trim()) return toast.error("Add a note explaining the edit")
+    setBusy(true)
+    try {
+      const body = { reason, note }
+      if (row.stage === "penalty") body.amount = Number(amount)
+      await api.editLedger(row._id, body)
+      toast.success(row.walletDebited ? "Updated, wallet adjusted" : "Updated")
+      onDone()
+    } catch (e) {
+      toast.error(apiMsg(e, "Failed"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal title="Edit penalty" onClose={onClose}>
+      {row.stage === "penalty" && (
+        <label className="block text-xs text-gray-600">Amount ₹
+          <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputCls} />
+          {row.walletDebited && <span className="text-[11px] text-amber-700">Already deducted ({inr(row.walletDebitedAmount)}). The wallet will be adjusted by the difference.</span>}
+        </label>
+      )}
+      <label className="block text-xs text-gray-600">Reason
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={inputCls} />
+      </label>
+      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you editing? (required, goes to audit log)" className={inputCls} />
+      <button onClick={submit} disabled={busy} className="w-full rounded-lg bg-black py-2.5 text-sm font-semibold text-white disabled:opacity-60">{busy ? "Saving..." : "Save changes"}</button>
+    </Modal>
+  )
+}
+
+function Ledger({ onWallet, prefill, clearPrefill }) {
+  const [filters, setFilters] = useState({ status: "", partyType: "", violationType: "", partyId: "", orderId: "", month: "", from: "", to: "" })
+  const [createOpen, setCreateOpen] = useState(!!prefill)
+  const [editRow, setEditRow] = useState(null)
+  useEffect(() => { if (prefill) setCreateOpen(true) }, [prefill])
   const { data, loading, reload } = useLoad(() => api.ledger(Object.fromEntries(Object.entries(filters).filter(([, v]) => v))), [filters])
   const act = async (row, action) => {
     let note = ""
@@ -144,24 +249,32 @@ function Ledger() {
         {sel("violationType", Object.entries(VIOLATION_LABELS))}
         <input placeholder="Party ID (full)" value={filters.partyId} onChange={(e) => setFilters({ ...filters, partyId: e.target.value.trim() })} className="rounded-lg border border-gray-300 p-2 text-sm" />
         <input placeholder="Order ID (full)" value={filters.orderId} onChange={(e) => setFilters({ ...filters, orderId: e.target.value.trim() })} className="rounded-lg border border-gray-300 p-2 text-sm" />
+        <input type="month" title="Month" value={filters.month} onChange={(e) => setFilters({ ...filters, month: e.target.value })} className="rounded-lg border border-gray-300 p-2 text-sm" />
+        <input type="date" title="From" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="rounded-lg border border-gray-300 p-2 text-sm" />
+        <input type="date" title="To" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value ? `${e.target.value}T23:59:59` : "" })} className="rounded-lg border border-gray-300 p-2 text-sm" />
+        <button onClick={() => setFilters({ status: "", partyType: "", violationType: "", partyId: "", orderId: "", month: "", from: "", to: "" })} className="rounded-lg border border-gray-300 px-3 text-sm font-semibold">Clear</button>
+        <button onClick={() => setCreateOpen(true)} className="ml-auto flex items-center gap-1 rounded-lg bg-black px-3 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Create penalty</button>
       </div>
-      {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+      {createOpen && <CreatePenaltyModal prefill={prefill} onClose={() => { setCreateOpen(false); clearPrefill?.() }} onDone={() => { setCreateOpen(false); clearPrefill?.(); reload() }} />}
+      {editRow && <EditPenaltyModal row={editRow} onClose={() => setEditRow(null)} onDone={() => { setEditRow(null); reload() }} />}      {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <Table head={["When", "Order", "Party", "Violation", "Original ETA", "Approved ETA", "Actual", "Delay", "Amount", "Strike", "Status", "Actions"]} empty={!(data?.items || []).length ? "No entries" : null}>
           {(data?.items || []).map((r) => (
             <tr key={r._id} className="align-top">
               <td className="px-3 py-2 text-xs">{fmtDate(r.createdAt)}</td>
-              <td className="px-3 py-2 font-mono text-xs">{String(r.orderId).slice(-8)}</td>
+              <td className="px-3 py-2 font-mono text-xs">{r.orderId ? String(r.orderId).slice(-8) : "-"}</td>
               <td className="px-3 py-2 text-xs">{r.partyType === "RESTAURANT" ? "Rest." : "Rider"} {String(r.partyId).slice(-6)}</td>
               <td className="px-3 py-2 text-xs">{VIOLATION_LABELS[r.violationType]}{r.occurrenceInMonth ? ` #${r.occurrenceInMonth}` : ""}{r.reason ? <div className="text-gray-500">{r.reason}</div> : null}</td>
               <td className="px-3 py-2 text-xs">{fmtDate(r.originalEta)}</td>
               <td className="px-3 py-2 text-xs">{fmtDate(r.approvedEta)}</td>
               <td className="px-3 py-2 text-xs">{fmtDate(r.actualAt)}</td>
               <td className="px-3 py-2">{r.delayMinutes ? `${r.delayMinutes}m` : "-"}</td>
-              <td className="px-3 py-2">{inr(r.amount)}{r.settled ? <div className="text-[10px] text-green-700">settled</div> : null}</td>
+              <td className="px-3 py-2">{inr(r.amount)}{r.walletDebited ? <div className="text-[10px] text-red-700">deducted from wallet</div> : r.walletRefunded ? <div className="text-[10px] text-green-700">refunded to wallet</div> : r.settled ? <div className="text-[10px] text-green-700">settled</div> : null}</td>
               <td className="px-3 py-2">{r.strikeCount || "-"}</td>
               <td className="px-3 py-2"><StatusPill status={r.status} />{r.reviewHold ? <div className="text-[10px] text-blue-700">needs review</div> : null}{r.adminReview ? <div className="text-[10px] text-red-700">admin review</div> : null}</td>
               <td className="px-3 py-2">
                 <div className="flex flex-wrap gap-1 text-xs font-semibold">
+                  {["warning", "pending", "applied"].includes(r.status) && <button className="text-gray-900" onClick={() => setEditRow(r)}>Edit</button>}
+                  <button className="text-indigo-700" onClick={() => onWallet(r.partyType, r.partyId)}>Wallet</button>
                   {r.status === "pending" && <button className="text-green-700" onClick={() => act(r, "approve")}>Approve</button>}
                   {["pending", "applied", "disputed", "warning"].includes(r.status) && <button className="text-amber-700" onClick={() => act(r, "waive")}>Waive</button>}
                   {["applied", "disputed"].includes(r.status) && <button className="text-red-700" onClick={() => act(r, "reverse")}>Reverse</button>}
@@ -172,7 +285,85 @@ function Ledger() {
           ))}
         </Table>
       )}
-      <p className="text-xs text-gray-500">Settling only records that finance deducted the amount from the payout; this module never moves wallet money by itself. A disputed penalty cannot be settled.</p>
+      <p className="text-xs text-gray-500">An applied penalty is deducted from the restaurant / delivery wallet automatically. Waiving or reversing it returns the money, and editing the amount adjusts the wallet by the difference. "Mark settled" is only for older penalties that were never deducted.</p>
+    </div>
+  )
+}
+
+/* ----------------------------- Wallets (user / restaurant / delivery) ----------------------------- */
+const PARTY_LABELS = { USER: "User", RESTAURANT: "Restaurant", DELIVERY_PARTNER: "Delivery partner" }
+
+function Wallets({ target }) {
+  const [partyType, setPartyType] = useState(target?.partyType || "RESTAURANT")
+  const [partyId, setPartyId] = useState(target?.partyId || "")
+  const [query, setQuery] = useState(target ? { partyType: target.partyType, partyId: target.partyId } : null)
+  const [adj, setAdj] = useState({ type: "credit", amount: "", note: "" })
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (target) { setPartyType(target.partyType); setPartyId(target.partyId); setQuery({ partyType: target.partyType, partyId: target.partyId }) }
+  }, [target])
+  const { data, loading, reload } = useLoad(() => (query ? api.wallet(query.partyType, query.partyId) : Promise.resolve(null)), [query])
+
+  const submit = async () => {
+    if (!(Number(adj.amount) > 0)) return toast.error("Enter an amount")
+    if (!adj.note.trim()) return toast.error("A note is required")
+    setBusy(true)
+    try {
+      await api.adjustWallet(query.partyType, query.partyId, { type: adj.type, amount: Number(adj.amount), note: adj.note.trim() })
+      toast.success(adj.type === "credit" ? "Wallet credited" : "Wallet debited")
+      setAdj({ type: adj.type, amount: "", note: "" })
+      reload()
+    } catch (e) {
+      toast.error(apiMsg(e, "Failed"))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const txns = data?.transactions || []
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <select value={partyType} onChange={(e) => setPartyType(e.target.value)} className="rounded-lg border border-gray-300 p-2 text-sm">
+          {Object.entries(PARTY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <input value={partyId} onChange={(e) => setPartyId(e.target.value.trim())} placeholder={`${PARTY_LABELS[partyType]} ID (full)`} className="w-full max-w-sm rounded-lg border border-gray-300 p-2 text-sm" />
+        <button onClick={() => partyId ? setQuery({ partyType, partyId }) : toast.error("Enter an ID")} className="rounded-lg bg-black px-4 text-sm font-semibold text-white">Open wallet</button>
+      </div>
+      {query && (loading || !data ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <StatCard label={`${PARTY_LABELS[query.partyType]} wallet`} value={inr(data.balance)} tone={data.balance < 0 ? "bad" : "default"} />
+            <StatCard label="Penalty dues (pending)" value={inr(data.outstandingPenalties)} tone={data.outstandingPenalties ? "bad" : "default"} />
+          </div>
+          <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+            <h4 className="text-sm font-bold">Credit / debit wallet</h4>
+            <div className="flex flex-wrap gap-2">
+              <select value={adj.type} onChange={(e) => setAdj({ ...adj, type: e.target.value })} className="rounded-lg border border-gray-300 p-2 text-sm">
+                <option value="credit">Credit (add money)</option><option value="debit">Debit (take money)</option>
+              </select>
+              <input type="number" min="1" value={adj.amount} onChange={(e) => setAdj({ ...adj, amount: e.target.value })} placeholder="Amount ₹" className="w-32 rounded-lg border border-gray-300 p-2 text-sm" />
+              <input value={adj.note} onChange={(e) => setAdj({ ...adj, note: e.target.value })} placeholder="Note (required)" className="min-w-[200px] flex-1 rounded-lg border border-gray-300 p-2 text-sm" />
+              <button onClick={submit} disabled={busy} className="rounded-lg bg-black px-4 text-sm font-semibold text-white disabled:opacity-60">{busy ? "Saving..." : "Apply"}</button>
+            </div>
+            {query.partyType === "USER" && <p className="text-xs text-gray-500">A user wallet cannot be debited below zero.</p>}
+          </div>
+          <Table head={["When", "Type", "Amount", "Balance after", "Note"]} empty={!txns.length ? "No wallet activity" : null}>
+            {txns.map((t, i) => (
+              <tr key={t._id || i}>
+                <td className="px-3 py-2 text-xs">{fmtDate(t.createdAt)}</td>
+                <td className="px-3 py-2 text-xs capitalize">{String(t.type || "").replace(/_/g, " ")}</td>
+                <td className={`px-3 py-2 font-semibold ${(t.type === "deduction" || t.amount < 0) && t.type !== "refund" ? "text-red-600" : "text-green-700"}`}>
+                  {query.partyType === "USER"
+                    ? `${t.type === "deduction" ? "-" : "+"}${inr(Math.abs(t.amount))}`
+                    : `${t.amount < 0 ? "-" : "+"}${inr(Math.abs(t.amount))}`}
+                </td>
+                <td className="px-3 py-2 text-xs">{t.balanceAfter !== undefined ? inr(t.balanceAfter) : "-"}</td>
+                <td className="px-3 py-2 text-xs">{t.note || t.description || ""}</td>
+              </tr>
+            ))}
+          </Table>
+        </>
+      ))}
     </div>
   )
 }
@@ -513,6 +704,10 @@ function Audit() {
 
 export default function PerformanceCenter() {
   const [tab, setTab] = useState("restaurants")
+  const [walletTarget, setWalletTarget] = useState(null)
+  const [createPrefill, setCreatePrefill] = useState(null)
+  const openWallet = (partyType, partyId) => { setWalletTarget({ partyType, partyId: String(partyId) }); setTab("wallets") }
+  const openCreate = (partyType, partyId) => { setCreatePrefill({ partyType, partyId: String(partyId) }); setTab("ledger") }
   return (
     <div className="space-y-4 p-4">
       <h1 className="text-xl font-bold">Penalties & Performance</h1>
@@ -521,9 +716,10 @@ export default function PerformanceCenter() {
           <button key={id} onClick={() => setTab(id)} className={`px-3 py-2 text-sm font-semibold ${tab === id ? "border-b-2 border-black text-black" : "text-gray-500"}`}>{label}</button>
         ))}
       </div>
-      {tab === "restaurants" && <Overview kind="restaurants" />}
-      {tab === "delivery" && <Overview kind="delivery" />}
-      {tab === "ledger" && <Ledger />}
+      {tab === "restaurants" && <Overview kind="restaurants" onWallet={openWallet} onCreate={openCreate} />}
+      {tab === "delivery" && <Overview kind="delivery" onWallet={openWallet} onCreate={openCreate} />}
+      {tab === "ledger" && <Ledger onWallet={openWallet} prefill={createPrefill} clearPrefill={() => setCreatePrefill(null)} />}
+      {tab === "wallets" && <Wallets target={walletTarget} />}
       {tab === "appeals" && <Appeals />}
       {tab === "extensions" && <Extensions />}
       {tab === "eta" && <EtaTool />}

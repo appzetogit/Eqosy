@@ -7,8 +7,14 @@ import {
     FoodStrike,
     FoodPrepExtension,
     FoodPenaltyAppeal,
-    FoodPerformanceAudit
+    FoodPerformanceAudit,
+    FoodPartyWalletTxn
 } from '../models/performance.models.js';
+import { FoodRestaurantWallet } from '../../restaurant/models/restaurantWallet.model.js';
+import { FoodDeliveryWallet } from '../../delivery/models/deliveryWallet.model.js';
+import { FoodUserWallet } from '../../user/models/userWallet.model.js';
+import { FoodUserPenalty } from '../../orders/models/userPenalty.model.js';
+import * as userWalletService from '../../user/services/userWallet.service.js';
 import { ValidationError, NotFoundError, ForbiddenError } from '../../../../core/auth/errors.js';
 import { logger } from '../../../../utils/logger.js';
 import { getIO, rooms } from '../../../../config/socket.js';
@@ -254,10 +260,81 @@ export async function assertNotSuspended(partyType, partyId) {
     }
 }
 
+/* ------------------------------ Party wallet (restaurant / delivery partner) ------------------------------ */
+const walletModelFor = (partyType) => (partyType === 'RESTAURANT'
+    ? { Model: FoodRestaurantWallet, key: 'restaurantId' }
+    : { Model: FoodDeliveryWallet, key: 'deliveryPartnerId' });
+
+/** One atomic balance change + one transaction row. Balance may go negative (dues are recovered from future earnings). */
+async function movePartyWallet(partyType, partyId, delta, { type, ledgerId = null, orderId = null, note = '', actorId = null }) {
+    const { Model, key } = walletModelFor(partyType);
+    const wallet = await Model.findOneAndUpdate(
+        { [key]: oid(partyId) },
+        { $inc: { balance: delta } },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    await FoodPartyWalletTxn.create({
+        partyType, partyId: oid(partyId), type, amount: delta, balanceAfter: wallet.balance,
+        ledgerId, orderId, note, actorId
+    });
+    return wallet;
+}
+
+/**
+ * Keeps the wallet in step with the ledger row. Idempotent and safe to call after any status change:
+ *  - applied penalty   -> debited once from the wallet (and marked settled)
+ *  - waived / reversed -> the debit is refunded once
+ */
+export async function syncPenaltyWallet(ledgerId, actorId = null) {
+    const row = await FoodPenaltyLedger.findById(ledgerId).lean();
+    if (!row) return null;
+    const shouldDebit = row.stage === 'penalty' && row.status === 'applied' && row.amount > 0;
+    const shouldRefund = ['waived', 'reversed'].includes(row.status);
+    const label = row.violationType.replace(/_/g, ' ').toLowerCase();
+
+    if (shouldDebit && !row.walletDebited) {
+        const claim = await FoodPenaltyLedger.updateOne(
+            { _id: row._id, walletDebited: { $ne: true } },
+            { $set: { walletDebited: true, walletRefunded: false, walletDebitedAmount: row.amount, walletDebitedAt: new Date(), settled: true, settledAt: new Date() } }
+        );
+        if (!claim.modifiedCount) return null;
+        try {
+            await movePartyWallet(row.partyType, row.partyId, -row.amount, {
+                type: 'penalty_debit', ledgerId: row._id, orderId: row.orderId, actorId,
+                note: `Penalty for ${label}${row.orderId ? ` (order ${row.orderId})` : ''}`
+            });
+        } catch (e) {
+            await FoodPenaltyLedger.updateOne({ _id: row._id }, { $set: { walletDebited: false, walletDebitedAmount: 0, walletDebitedAt: null, settled: false, settledAt: null } });
+            logger.error(`Penalty wallet debit failed for ${row._id}: ${e.message}`);
+            throw e;
+        }
+        await notify(row.partyType, row.partyId, 'Penalty deducted from wallet', `Rs ${row.amount} was deducted from your wallet for ${label}.`, 'performance_wallet_debit', { ledgerId: String(row._id) });
+    } else if (shouldRefund && row.walletDebited && !row.walletRefunded) {
+        const refundAmount = row.walletDebitedAmount || row.amount;
+        const claim = await FoodPenaltyLedger.updateOne(
+            { _id: row._id, walletDebited: true, walletRefunded: { $ne: true } },
+            { $set: { walletDebited: false, walletRefunded: true, settled: false, settledAt: null } }
+        );
+        if (!claim.modifiedCount) return null;
+        try {
+            await movePartyWallet(row.partyType, row.partyId, refundAmount, {
+                type: 'penalty_refund', ledgerId: row._id, orderId: row.orderId, actorId,
+                note: `Penalty ${row.status}: refund for ${label}`
+            });
+        } catch (e) {
+            await FoodPenaltyLedger.updateOne({ _id: row._id }, { $set: { walletDebited: true, walletRefunded: false } });
+            logger.error(`Penalty wallet refund failed for ${row._id}: ${e.message}`);
+            throw e;
+        }
+        await notify(row.partyType, row.partyId, 'Penalty refunded', `Rs ${refundAmount} was returned to your wallet.`, 'performance_wallet_credit', { ledgerId: String(row._id) });
+    }
+    return null;
+}
+
 /* ------------------------------ Core violation engine ------------------------------ */
 /**
  * Records a violation exactly once (unique dedupeKey) and walks warning -> penalty -> strike -> suspension.
- * Strikes are created only once a penalty is confirmed (status "applied"). Never touches wallet / refund / payment code.
+ * Strikes are created only once a penalty is confirmed (status "applied"). Confirmed penalties are debited from the party wallet (see syncPenaltyWallet).
  */
 export async function recordViolation({
     partyType, partyId, orderId, violationType, delayMinutes = 0, reason = '', reasonCode = '',
@@ -341,6 +418,9 @@ export async function recordViolation({
         await notifyAdmins('Penalty needs review', `${partyType} ${label} on order ${row.orderId}.`, 'performance_review_needed', ids);
     } else {
         await notify(partyType, partyId, 'Penalty applied', `Rs ${amount} penalty for ${label}${delayMinutes ? ` (${delayMinutes} min late)` : ''}. You can appeal it from the performance page.`, 'performance_penalty', ids);
+    }
+    if (status === 'applied' && stage === 'penalty') {
+        try { await syncPenaltyWallet(row._id); } catch { /* already logged; admin can fix via wallet adjust */ }
     }
     if (status === 'applied' && stage === 'penalty' && strikeCount > 0) await addStrike(row, cfg);
     if (adminReview) {
@@ -776,6 +856,7 @@ export async function adminDecideDeliveryAdjustment(orderId, adminId, { adjustme
         judged.decidedBy = adminId;
         await judged.save();
         await FoodStrike.updateOne({ ledgerId: judged._id }, { $set: { revoked: true } });
+        await syncPenaltyWallet(judged._id, adminId);
         await audit(adminId, 'LEDGER_AUTO_WAIVE', 'ledger', judged._id, prev, judged.toObject(), 'ETA adjustment approved after delivery');
         await notify('DELIVERY_PARTNER', judged.partyId, 'Penalty waived', `Your delay on order ${order._id} is now covered by an approved adjustment.`, 'performance_penalty_update', { ledgerId: String(judged._id) });
     }
@@ -1037,6 +1118,7 @@ export async function decideLedger(ledgerId, adminId, action, note = '') {
             await open.save();
         }
     }
+    if (['approve', 'waive', 'reverse'].includes(action)) await syncPenaltyWallet(row._id, adminId);
     if (action === 'approve' && row.stage === 'penalty' && row.strikeCount > 0) await addStrike(row, cfg);
     await audit(adminId, `LEDGER_${action.toUpperCase()}`, 'ledger', row._id, before, row.toObject(), note);
     if (action !== 'settle') {
@@ -1045,12 +1127,138 @@ export async function decideLedger(ledgerId, adminId, action, note = '') {
     return row.toObject();
 }
 
+/** Admin: put a manual warning / penalty on a restaurant or delivery partner. */
+export async function createManualLedger(adminId, { partyType, partyId, stage = 'penalty', amount = 0, strikeCount = 0, reason, orderId = null }) {
+    if (!['RESTAURANT', 'DELIVERY_PARTNER'].includes(partyType)) throw new ValidationError('partyType must be RESTAURANT or DELIVERY_PARTNER');
+    if (!partyId || !mongoose.Types.ObjectId.isValid(String(partyId))) throw new ValidationError('A valid party is required');
+    if (!['warning', 'penalty'].includes(stage)) throw new ValidationError('stage must be warning or penalty');
+    if (!String(reason || '').trim()) throw new ValidationError('A reason is required');
+    const amt = stage === 'penalty' ? Number(amount) : 0;
+    if (stage === 'penalty' && (!Number.isFinite(amt) || amt <= 0)) throw new ValidationError('Penalty amount must be greater than 0');
+    if (orderId && !mongoose.Types.ObjectId.isValid(String(orderId))) throw new ValidationError('Invalid order id');
+
+    const exists = partyType === 'RESTAURANT'
+        ? await FoodRestaurant.exists({ _id: oid(partyId) })
+        : await mongoose.model('FoodDeliveryPartner').exists({ _id: oid(partyId) });
+    if (!exists) throw new NotFoundError('Party not found');
+
+    const cfg = await getConfig();
+    const strikes = stage === 'penalty' ? Math.max(0, Math.floor(Number(strikeCount) || 0)) : 0;
+    const _id = new mongoose.Types.ObjectId();
+    const row = await FoodPenaltyLedger.create({
+        _id, orderId: orderId ? oid(orderId) : null, partyType, partyId: oid(partyId), violationType: 'MANUAL',
+        reason: String(reason).trim(), stage, amount: amt, strikeCount: strikes,
+        status: stage === 'warning' ? 'warning' : 'applied',
+        month: monthKey(new Date(), cfg.timezoneOffsetMin), dedupeKey: `MANUAL:${_id}`,
+        statusReason: 'Created by admin', decidedBy: adminId, createdByAdminId: adminId
+    });
+    if (stage === 'penalty') await syncPenaltyWallet(row._id, adminId);
+    if (stage === 'penalty' && strikes > 0) await addStrike(row, cfg);
+    await audit(adminId, 'LEDGER_CREATE', 'ledger', row._id, null, row.toObject(), reason);
+    await notify(partyType, partyId,
+        stage === 'warning' ? 'Warning from admin' : 'Penalty applied by admin',
+        stage === 'warning' ? String(reason).trim() : `Rs ${amt} penalty: ${String(reason).trim()}`,
+        stage === 'warning' ? 'performance_warning' : 'performance_penalty', { ledgerId: String(row._id) });
+    return FoodPenaltyLedger.findById(row._id).lean();
+}
+
+/** Admin: change the amount and/or reason. If the penalty was already debited the wallet is adjusted by the difference. */
+export async function editLedger(ledgerId, adminId, { amount, reason, note = '' }) {
+    const row = await FoodPenaltyLedger.findById(ledgerId);
+    if (!row) throw new NotFoundError('Ledger entry not found');
+    if (['waived', 'reversed'].includes(row.status)) throw new ValidationError('A cleared penalty cannot be edited');
+    if (row.status === 'disputed') throw new ValidationError('Decide the appeal before editing this penalty');
+    if (!String(note).trim()) throw new ValidationError('Please add a note explaining the edit');
+    const before = row.toObject();
+    const amountGiven = amount !== undefined && amount !== null && amount !== '';
+    if (amountGiven) {
+        if (row.stage !== 'penalty') throw new ValidationError('Only penalties have an amount');
+        const next = Number(amount);
+        if (!Number.isFinite(next) || next <= 0) throw new ValidationError('Amount must be greater than 0');
+        row.amount = next;
+    }
+    if (reason !== undefined) {
+        if (!String(reason).trim()) throw new ValidationError('Reason cannot be empty');
+        row.reason = String(reason).trim();
+    }
+    row.statusReason = String(note).trim();
+    row.decidedBy = adminId;
+    await row.save();
+    if (row.walletDebited && row.amount !== row.walletDebitedAmount) {
+        const delta = row.walletDebitedAmount - row.amount; // positive = give back, negative = take more
+        await movePartyWallet(row.partyType, row.partyId, delta, {
+            type: 'penalty_adjust', ledgerId: row._id, orderId: row.orderId, actorId: adminId,
+            note: `Penalty edited from Rs ${row.walletDebitedAmount} to Rs ${row.amount}`
+        });
+        await FoodPenaltyLedger.updateOne({ _id: row._id }, { $set: { walletDebitedAmount: row.amount } });
+    }
+    const after = await FoodPenaltyLedger.findById(row._id).lean();
+    await audit(adminId, 'LEDGER_EDIT', 'ledger', row._id, before, after, note);
+    await notify(row.partyType, row.partyId, 'Penalty updated', `Your penalty was updated by admin${amountGiven ? ` to Rs ${row.amount}` : ''}.`, 'performance_penalty_update', { ledgerId: String(row._id) });
+    return after;
+}
+
+/* ------------------------------ Wallets (user / restaurant / delivery) ------------------------------ */
+export async function getPartyWalletBalance(partyType, partyId) {
+    const { Model, key } = walletModelFor(partyType);
+    const w = await Model.findOne({ [key]: oid(partyId) }).select('balance').lean();
+    return w?.balance || 0;
+}
+
+/** Admin wallet view: balance + recent movements for a user, restaurant or delivery partner. */
+export async function getWalletView(partyType, partyId, { limit = 50 } = {}) {
+    if (!partyId || !mongoose.Types.ObjectId.isValid(String(partyId))) throw new ValidationError('A valid party is required');
+    const lim = Math.min(Number(limit) || 50, 200);
+    if (partyType === 'USER') {
+        const [w, penalties] = await Promise.all([
+            FoodUserWallet.findOne({ userId: oid(partyId) }).lean(),
+            FoodUserPenalty.find({ userId: oid(partyId), status: { $in: ['pending', 'applied'] } }).select('amount').lean()
+        ]);
+        return {
+            partyType, partyId, balance: w?.balance || 0,
+            outstandingPenalties: penalties.reduce((s, p) => s + (p.amount || 0), 0),
+            transactions: (w?.transactions || []).slice(0, lim)
+        };
+    }
+    if (!['RESTAURANT', 'DELIVERY_PARTNER'].includes(partyType)) throw new ValidationError('Unknown party type');
+    const [balance, transactions, dues] = await Promise.all([
+        getPartyWalletBalance(partyType, partyId),
+        FoodPartyWalletTxn.find({ partyType, partyId: oid(partyId) }).sort({ createdAt: -1 }).limit(lim).lean(),
+        FoodPenaltyLedger.aggregate([{ $match: { partyType, partyId: oid(partyId), status: { $in: ['pending', 'disputed'] }, stage: 'penalty' } }, { $group: { _id: null, total: { $sum: '$amount' } } }])
+    ]);
+    return { partyType, partyId, balance, outstandingPenalties: dues[0]?.total || 0, transactions };
+}
+
+/** Admin: manual credit / debit on a user, restaurant or delivery wallet. */
+export async function adminAdjustWallet(adminId, { partyType, partyId, type, amount, note }) {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) throw new ValidationError('Amount must be greater than 0');
+    if (!['credit', 'debit'].includes(type)) throw new ValidationError('type must be credit or debit');
+    if (!String(note || '').trim()) throw new ValidationError('A note is required');
+    if (!partyId || !mongoose.Types.ObjectId.isValid(String(partyId))) throw new ValidationError('A valid party is required');
+    const description = `Admin ${type}: ${String(note).trim()}`;
+    const meta = { source: 'admin_adjustment', adminId: String(adminId || '') };
+    if (partyType === 'USER') {
+        if (type === 'credit') await userWalletService.refundWalletBalance(partyId, amt, description, meta);
+        else await userWalletService.deductWalletBalance(partyId, amt, description, meta);
+    } else if (['RESTAURANT', 'DELIVERY_PARTNER'].includes(partyType)) {
+        await movePartyWallet(partyType, partyId, type === 'credit' ? amt : -amt, {
+            type: type === 'credit' ? 'admin_credit' : 'admin_debit', actorId: adminId, note: String(note).trim()
+        });
+    } else {
+        throw new ValidationError('Unknown party type');
+    }
+    await audit(adminId, `WALLET_${type.toUpperCase()}`, 'wallet', String(partyId), null, { partyType, amount: amt }, note);
+    return getWalletView(partyType, partyId);
+}
+
 export async function createAppeal(partyType, partyId, { ledgerId, reason, evidence = [] }) {
     const row = await FoodPenaltyLedger.findById(ledgerId);
     if (!row || row.partyType !== partyType || String(row.partyId) !== String(partyId)) throw new NotFoundError('Penalty not found');
     if (!String(reason || '').trim()) throw new ValidationError('Appeal reason is required');
     if (['waived', 'reversed'].includes(row.status)) throw new ValidationError('Penalty is already cleared');
-    if (row.settled) throw new ValidationError('This penalty is already settled; please contact support');
+    // A wallet-debited penalty is auto-settled but can still be appealed (the amount is refunded if the appeal wins).
+    if (row.settled && !row.walletDebited) throw new ValidationError('This penalty is already settled; please contact support');
     const open = await FoodPenaltyAppeal.findOne({ ledgerId: row._id, status: 'open' });
     if (open) throw new ValidationError('An appeal is already open for this penalty');
     const appeal = await FoodPenaltyAppeal.create({ ledgerId: row._id, partyType, partyId: oid(partyId), reason: String(reason).trim(), evidence: Array.isArray(evidence) ? evidence.filter((e) => typeof e === 'string').slice(0, 5) : [] });
@@ -1094,6 +1302,7 @@ export async function decideAppeal(appealId, adminId, approve, note = '') {
         ledger.statusReason = appeal.adminNote;
         ledger.decidedBy = adminId;
         await ledger.save();
+        await syncPenaltyWallet(ledger._id, adminId);
         if (!approve && ledger.status === 'applied' && ledger.stage === 'penalty' && ledger.strikeCount > 0) await addStrike(ledger, await getConfig());
         await audit(adminId, approve ? 'APPEAL_APPROVE' : 'APPEAL_REJECT', 'appeal', appeal._id, before, ledger.toObject(), note);
         await notify(appeal.partyType, appeal.partyId, `Appeal ${appeal.status}`, `Your appeal for order ${ledger.orderId} was ${appeal.status}.${appeal.adminNote ? ` Note: ${appeal.adminNote}` : ''}`, 'performance_appeal_decision', { appealId: String(appeal._id) });
@@ -1134,8 +1343,10 @@ export async function partySummary(partyType, partyId, month) {
         FoodPenaltyLedger.aggregate([{ $match: { partyType, partyId: pid, status: 'applied', stage: 'penalty', settled: false } }, { $group: { _id: null, total: { $sum: '$amount' } } }])
     ]);
     const counted = ledger.filter((l) => COUNTED_STATUSES.includes(l.status));
+    const walletBalance = await getPartyWalletBalance(partyType, pid);
     return {
         month,
+        walletBalance,
         totalStrikes: strikes,
         totalPenalties: counted.reduce((s, l) => s + (l.amount || 0), 0),
         outstandingPenalties: outstanding[0]?.total || 0,

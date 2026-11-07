@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { AlertTriangle, Loader2, Paperclip, ShieldAlert, X } from "lucide-react"
 import { toast } from "sonner"
 import { uploadEvidence } from "@food/api/performanceAPI"
+import PenaltySupportButton from "@food/components/performance/PenaltySupportButton"
 
 export const inr = (v) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(v) || 0)
@@ -17,6 +18,7 @@ export const VIOLATION_LABELS = {
   ORDER_REJECTION: "Order rejection",
   ASSIGNMENT_REJECTION: "Assignment rejection",
   POST_ACCEPT_CANCELLATION: "Cancelled after accepting",
+  MANUAL: "Added by admin",
 }
 
 const STATUS_STYLE = {
@@ -81,7 +83,7 @@ export function AppealModal({ row, role, onClose, onDone, api }) {
           <button onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <p className="mt-1 text-xs text-gray-500">
-          {VIOLATION_LABELS[row.violationType]} · Order {String(row.orderId).slice(-8)} · {inr(row.amount)}
+          {VIOLATION_LABELS[row.violationType]}{row.orderId ? ` · Order ${String(row.orderId).slice(-8)}` : ""} · {inr(row.amount)}
         </p>
         <textarea
           value={reason}
@@ -175,7 +177,10 @@ export default function PartyPerformanceScreen({ api, role, party, title, stats 
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-24">
-      <h1 className="text-lg font-bold">{title}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-bold">{title}</h1>
+        <PenaltySupportButton role={role} />
+      </div>
 
       {dash?.suspension?.suspended && (
         <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -201,6 +206,7 @@ export default function PartyPerformanceScreen({ api, role, party, title, stats 
         })}
         <StatCard label="Strikes (month)" value={dash?.totalStrikes ?? 0} tone={dash?.totalStrikes ? "bad" : "default"} />
         <StatCard label="Penalties (month)" value={inr(dash?.totalPenalties)} tone={dash?.totalPenalties ? "bad" : "default"} />
+        <StatCard label="Wallet balance" value={inr(dash?.walletBalance)} tone={dash?.walletBalance < 0 ? "bad" : "default"} />
       </div>
 
       <Rules cfg={cfg} party={party} />
@@ -211,13 +217,13 @@ export default function PartyPerformanceScreen({ api, role, party, title, stats 
         <div className="space-y-2">
           {ledger.map((r) => {
             const ap = appealByLedger.get(String(r._id))
-            const canAppeal = r.stage === "penalty" && ["applied", "pending"].includes(r.status) && !r.settled && !openAppeal.has(String(r._id))
+            const canAppeal = r.stage === "penalty" && ["applied", "pending"].includes(r.status) && (!r.settled || r.walletDebited) && !openAppeal.has(String(r._id))
             return (
               <div key={r._id} className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold">{VIOLATION_LABELS[r.violationType] || r.violationType}</p>
-                    <p className="text-xs text-gray-500">Order {String(r.orderId).slice(-8)} · {fmtDate(r.createdAt)}</p>
+                    <p className="text-xs text-gray-500">{r.orderId ? `Order ${String(r.orderId).slice(-8)} · ` : ""}{fmtDate(r.createdAt)}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-bold">{r.amount ? inr(r.amount) : "-"}</p>
@@ -232,14 +238,19 @@ export default function PartyPerformanceScreen({ api, role, party, title, stats 
                 {r.reason && <p className="mt-1 text-xs text-gray-600">Reason: {r.reason}</p>}
                 {r.strikeCount > 0 && r.status === "applied" && <p className="mt-1 text-xs font-semibold text-red-600">+{r.strikeCount} strike</p>}
                 {r.statusReason && <p className="mt-1 text-xs text-gray-500">Note: {r.statusReason}</p>}
+                {r.walletDebited && <p className="mt-1 text-xs font-semibold text-red-600">{inr(r.walletDebitedAmount || r.amount)} deducted from your wallet</p>}
+                {r.walletRefunded && <p className="mt-1 text-xs font-semibold text-green-700">Amount returned to your wallet</p>}
                 {ap && (
                   <p className="mt-1 text-xs">Appeal: <StatusPill status={ap.status} />{ap.adminNote ? ` · ${ap.adminNote}` : ""}</p>
                 )}
-                {canAppeal && (
-                  <button onClick={() => setAppealRow(r)} className="mt-2 rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold">
-                    Appeal this penalty
-                  </button>
-                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {canAppeal && (
+                    <button onClick={() => setAppealRow(r)} className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold">
+                      Appeal this penalty
+                    </button>
+                  )}
+                  <PenaltySupportButton role={role} label="Help with this" context={{ orderId: r.orderId, ledgerId: r._id, summary: `${VIOLATION_LABELS[r.violationType] || r.violationType} - ${r.status} - Rs ${r.amount || 0}` }} />
+                </div>
               </div>
             )
           })}

@@ -528,6 +528,15 @@ export async function approveUndeliveredReturnAdminController(req, res, next) {
     }
 }
 
+export async function approveNoShowRescueAdminController(req, res, next) {
+    try {
+        const result = await orderService.approveNoShowRescueAdmin(req.params.orderId, req.user?.userId, req.body || {}, req.adminContext);
+        return sendResponse(res, 200, 'Food sent to Food Rescue', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function rejectUndeliveredReturnAdminController(req, res, next) {
     try {
         const order = await orderService.rejectUndeliveredReturnAdmin(req.params.orderId, req.user?.userId, req.body?.reason, req.adminContext);

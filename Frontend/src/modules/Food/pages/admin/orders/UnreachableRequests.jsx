@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { PhoneOff, RefreshCw, Store, User, Bike, Check, X, Loader2 } from "lucide-react";
+import { PhoneOff, RefreshCw, Store, User, Bike, Check, X, Loader2, Leaf } from "lucide-react";
 import { toast } from "sonner";
 import { adminAPI } from "@food/api";
 
@@ -27,6 +27,7 @@ export default function UnreachableRequests() {
   const [active, setActive] = useState(null); // order being decided
   const [mode, setMode] = useState("approve"); // approve | reject
   const [penalty, setPenalty] = useState("");
+  const [rescuePrice, setRescuePrice] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +61,7 @@ export default function UnreachableRequests() {
     setPenalty("");
     setNote("");
     setReason("");
+    setRescuePrice(String(order?.rescueOption?.defaultPrice ?? ""));
   };
 
   const closeDialog = () => {
@@ -71,7 +73,17 @@ export default function UnreachableRequests() {
     const orderKey = active._id || active.orderMongoId;
     setSubmitting(true);
     try {
-      if (mode === "approve") {
+      if (mode === "rescue") {
+        const price = Number(rescuePrice);
+        const max = Number(active.rescueOption?.foodValue ?? Infinity);
+        if (!Number.isFinite(price) || price <= 0 || price > max) {
+          toast.error(`Enter a food price between 1 and Rs ${max}`);
+          setSubmitting(false);
+          return;
+        }
+        await adminAPI.rescueUndeliveredOrder(orderKey, { rescuePrice: price, note: note.trim() });
+        toast.success("Sent to Food Rescue. Customers in this zone are being notified.");
+      } else if (mode === "approve") {
         const amount = Number(penalty || 0);
         if (!Number.isFinite(amount) || amount < 0) {
           toast.error("Enter a valid penalty amount");
@@ -186,6 +198,15 @@ export default function UnreachableRequests() {
                   >
                     <Check className="w-4 h-4" /> Approve return
                   </button>
+                  {order.rescueOption?.eligible ? (
+                    <button
+                      type="button"
+                      onClick={() => openDialog(order, "rescue")}
+                      className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600"
+                    >
+                      <Leaf className="w-4 h-4" /> Send to Food Rescue
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => openDialog(order, "reject")}
@@ -203,7 +224,39 @@ export default function UnreachableRequests() {
       {active ? (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" onClick={closeDialog}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {mode === "approve" ? (
+            {mode === "rescue" ? (
+              <>
+                <h2 className="text-lg font-bold text-slate-900">Send to Food Rescue</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Order #{active.order_id || active._id} is prepaid. The customer gets the normal cancellation charge (cut from their payment, the rest is refunded).
+                  Customers near the delivery partner are notified, and the same delivery partner delivers it to the buyer.
+                </p>
+                <label className="mt-5 block text-sm font-semibold text-slate-700">
+                  Rescue food price (Rs)
+                  <input
+                    type="number"
+                    min="1"
+                    max={active.rescueOption?.foodValue}
+                    step="1"
+                    value={rescuePrice}
+                    onChange={(e) => setRescuePrice(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500"
+                  />
+                </label>
+                <p className="mt-1 text-xs text-slate-500">
+                  Original food value Rs {active.rescueOption?.foodValue}. Suggested Rs {active.rescueOption?.defaultPrice} ({active.rescueOption?.discountPercent}% off). Delivery fee and taxes are added on top for the buyer.
+                </p>
+                <label className="mt-4 block text-sm font-semibold text-slate-700">
+                  Note (optional)
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500"
+                  />
+                </label>
+              </>
+            ) : mode === "approve" ? (
               <>
                 <h2 className="text-lg font-bold text-slate-900">Approve return to restaurant</h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -265,10 +318,10 @@ export default function UnreachableRequests() {
                 type="button"
                 onClick={submit}
                 disabled={submitting}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60 ${mode === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}`}
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60 ${mode === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : mode === "rescue" ? "bg-orange-500 hover:bg-orange-600" : "bg-rose-600 hover:bg-rose-700"}`}
               >
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {mode === "approve" ? "Approve" : "Reject"}
+                {mode === "approve" ? "Approve" : mode === "rescue" ? "Start Food Rescue" : "Reject"}
               </button>
             </div>
           </div>

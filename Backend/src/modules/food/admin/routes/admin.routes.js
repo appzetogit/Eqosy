@@ -310,6 +310,7 @@ router.post('/orders/:orderId/assign', requireFoodResourceAccess('orders', 'orde
 router.post('/orders/:orderId/handover/approve', orderController.approveOrderHandoverAdminController);
 router.post('/orders/:orderId/handover/reject', orderController.rejectOrderHandoverAdminController);
 router.post('/orders/:orderId/undelivered/approve', orderController.approveUndeliveredReturnAdminController);
+router.post('/orders/:orderId/undelivered/rescue', orderController.approveNoShowRescueAdminController);
 router.post('/orders/:orderId/undelivered/reject', orderController.rejectUndeliveredReturnAdminController);
 router.get('/orders/:orderId/available-partners', requireFoodResourceAccess('orders', 'orders'), orderController.listAvailableDeliveryPartnersForOrderController);
 router.post('/orders/:orderId/cancel', requireFoodResourceAccess('orders', 'orders'), orderController.cancelOrderAdminController);
