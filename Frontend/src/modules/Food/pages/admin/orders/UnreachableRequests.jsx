@@ -28,6 +28,8 @@ export default function UnreachableRequests() {
   const [mode, setMode] = useState("approve"); // approve | reject
   const [penalty, setPenalty] = useState("");
   const [rescuePrice, setRescuePrice] = useState("");
+  const [rescuePct, setRescuePct] = useState("");
+  const [returnPct, setReturnPct] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +64,12 @@ export default function UnreachableRequests() {
     setNote("");
     setReason("");
     setRescuePrice(String(order?.rescueOption?.defaultPrice ?? ""));
+    setRescuePct(String(order?.rescueOption?.penaltyPercent ?? ""));
+    // COD return: suggest the configured % of the food value; the admin can change either the % or the amount.
+    const food = Number(order?.rescueOption?.foodValue ?? order?.pricing?.subtotal ?? 0);
+    const retPct = Number(order?.rescueOption?.returnPenaltyPercent ?? 0);
+    setReturnPct(String(retPct));
+    setPenalty(retPct > 0 && food > 0 ? String(Math.round((food * retPct) / 100)) : "");
   };
 
   const closeDialog = () => {
@@ -81,7 +89,7 @@ export default function UnreachableRequests() {
           setSubmitting(false);
           return;
         }
-        await adminAPI.rescueUndeliveredOrder(orderKey, { rescuePrice: price, note: note.trim() });
+        await adminAPI.rescueUndeliveredOrder(orderKey, { rescuePrice: price, penaltyPercent: rescuePct === "" ? undefined : Number(rescuePct), note: note.trim() });
         toast.success("Sent to Food Rescue. Customers in this zone are being notified.");
       } else if (mode === "approve") {
         const amount = Number(penalty || 0);
@@ -247,6 +255,21 @@ export default function UnreachableRequests() {
                   Original food value Rs {active.rescueOption?.foodValue}. Suggested Rs {active.rescueOption?.defaultPrice} ({active.rescueOption?.discountPercent}% off). Delivery fee and taxes are added on top for the buyer.
                 </p>
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
+                  Customer penalty (% of food value)
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={rescuePct}
+                    onChange={(e) => setRescuePct(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-orange-500"
+                  />
+                </label>
+                <p className="mt-1 text-xs text-slate-500">
+                  Food penalty ≈ Rs {Math.round(((Number(active.rescueOption?.foodValue) || 0) * (Number(rescuePct) || 0)) / 100)}, plus the delivery fee, platform fee, cancellation fee and GST set in Rules. It is taken from the customer's payment right away and the rest is refunded.
+                </p>
+                <label className="mt-4 block text-sm font-semibold text-slate-700">
                   Note (optional)
                   <input
                     type="text"
@@ -262,20 +285,38 @@ export default function UnreachableRequests() {
                 <p className="mt-1 text-sm text-slate-500">
                   Order #{active.order_id || active._id}. The restaurant will get an OTP, the delivery partner keeps their earning.
                 </p>
-                <label className="mt-5 block text-sm font-semibold text-slate-700">
-                  Penalty for the customer (Rs)
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={penalty}
-                    onChange={(e) => setPenalty(e.target.value)}
-                    placeholder="0 = no penalty"
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
-                  />
-                </label>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Penalty (% of food)
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={returnPct}
+                      onChange={(e) => {
+                        setReturnPct(e.target.value);
+                        const food = Number(active.rescueOption?.foodValue ?? active.pricing?.subtotal ?? 0);
+                        setPenalty(String(Math.round((food * (Number(e.target.value) || 0)) / 100)));
+                      }}
+                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Penalty (Rs)
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={penalty}
+                      onChange={(e) => setPenalty(e.target.value)}
+                      placeholder="0 = no penalty"
+                      className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  This amount is added to the same customer account's next order.
+                  Charged on the same customer's next order (they cannot use Cash on Delivery until it is paid). Food value Rs {active.rescueOption?.foodValue ?? active.pricing?.subtotal ?? "-"}. Set 0 for no penalty.
                 </p>
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
                   Note (optional)

@@ -191,6 +191,24 @@ export async function notifyOwnersSafely(targets, payload) {
   }
 }
 
+/**
+ * Instant entry in every open admin panel's notification bar (plus a toast). `zoneId` lets zone-limited admins
+ * see only their own zone. Fire-and-forget: never throws.
+ */
+export function adminBell({ title, message, path = '/admin/food/cancellation-center', type = 'info', category = 'cancellation', zoneId = null, orderMongoId = '' } = {}) {
+  try {
+    const io = getIO();
+    if (!io) return;
+    io.to('admin_room').emit('admin_notification', {
+      id: `${category}-${orderMongoId || 'x'}-${Date.now()}`,
+      title, message, type, category, path, zoneId: zoneId ? String(zoneId) : undefined,
+      orderMongoId: orderMongoId ? String(orderMongoId) : undefined, createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.warn(`Admin bell failed: ${error?.message || error}`);
+  }
+}
+
 export async function notifyAdminsSafely(payload) {
   try {
     const { notifyAdminsSafely: firebaseNotifyAdmins } = await import("../../../../core/notifications/firebase.service.js");

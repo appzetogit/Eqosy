@@ -107,6 +107,10 @@ const configSchema = new Schema(
             enabled: { type: Boolean, default: true },
             /** Prepaid order where the customer never comes to the door: admin may send the food to Food Rescue. */
             noShowEnabled: { type: Boolean, default: true },
+            /** Default penalty (% of food value) when an unreceived PREPAID order goes to Food Rescue; admin can change it per case. */
+            noShowPenaltyPercent: { type: Number, default: 50, min: 0, max: 100 },
+            /** Default penalty (% of food value) suggested when an unreceived COD order is returned to the restaurant. */
+            noShowReturnPenaltyPercent: { type: Number, default: 20, min: 0, max: 100 },
             radiusKm: { type: Number, default: 3, min: 0.1 },
             windowMinutes: { type: Number, default: 15, min: 1 },
             discountPercent: { type: Number, default: 50, min: 0, max: 100 },

@@ -21,6 +21,7 @@ import {
     haversineKm,
     pushStatusHistory,
     generateFourDigitDeliveryOtp,
+    adminBell,
 } from '../../orders/services/order.helpers.js';
 import {
     createRazorpayCheckoutOrder,
@@ -110,7 +111,7 @@ export async function updateConfig(body = {}, adminId = null) {
         throw new ValidationError('Rider compensation minimum cannot exceed the maximum');
     }
     group('rescue', {
-        enabled: 'bool', noShowEnabled: 'bool', radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
+        enabled: 'bool', noShowEnabled: 'bool', noShowPenaltyPercent: { max: 100 }, noShowReturnPenaltyPercent: { max: 100 }, radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
         restaurantSharePercent: { max: 100 }, failedRestaurantCompPercent: { max: 100 }, riderKeepsFoodOnExpiry: 'bool',
         claimHoldMinutes: { min: 1, max: 30 }, deliveryFee: {}, platformFee: {}, gstPercentOnFood: { max: 100 }, maxNotifyUsers: { max: 2000 },
     });
@@ -162,6 +163,7 @@ export async function getPublicConfig() {
 /* ------------------------------ Helpers ------------------------------ */
 const render = (tpl, vars = {}) => String(tpl || '').replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined && vars[k] !== null ? String(vars[k]) : ''));
 const orderLabel = (o) => String(o?.order_id || o?._id || '');
+const inr = (v) => `Rs ${r2(v)}`;
 
 function emit(room, events, payload) {
     try {
@@ -520,7 +522,7 @@ export const isNoShowRescueEnabled = (cfg) => Boolean(cfg?.enabled && cfg?.rescu
 export async function noShowRescueEligibility(order, cfgIn = null) {
     const cfg = cfgIn || (await getConfig());
     const foodValue = r2(order?.pricing?.subtotal);
-    const base = { eligible: false, foodValue, defaultPrice: r2((foodValue * (100 - (cfg.rescue?.discountPercent || 0))) / 100), discountPercent: cfg.rescue?.discountPercent || 0 };
+    const base = { eligible: false, foodValue, defaultPrice: r2((foodValue * (100 - (cfg.rescue?.discountPercent || 0))) / 100), discountPercent: cfg.rescue?.discountPercent || 0, penaltyPercent: cfg.rescue?.noShowPenaltyPercent ?? cfg.stage3?.foodPenaltyPercent ?? 0, returnPenaltyPercent: cfg.rescue?.noShowReturnPenaltyPercent ?? 0 };
     if (!isNoShowRescueEnabled(cfg) || !isPaidOnline(order)) return base;
     const { applies, stage } = await evaluateForOrder(order, cfg);
     return { ...base, eligible: Boolean(applies && stage === 3) };
@@ -531,8 +533,12 @@ export async function noShowRescueEligibility(order, cfgIn = null) {
  * back to the restaurant. The customer gets the normal stage-3 charge (cut from the payment, rest refunded) and the
  * same rider, who is still holding the food, delivers it to whoever buys it.
  */
-export async function rescueNoShowOrder(order, adminId, { rescuePrice, note = '' } = {}) {
-    const cfg = await getConfig({ fresh: true });
+export async function rescueNoShowOrder(order, adminId, { rescuePrice, penaltyPercent, note = '' } = {}) {
+    const baseCfg = await getConfig({ fresh: true });
+    const hasPct = penaltyPercent !== undefined && penaltyPercent !== null && String(penaltyPercent).trim() !== '';
+    const pct = hasPct ? num(penaltyPercent, 'Penalty percent', { max: 100 }) : (baseCfg.rescue?.noShowPenaltyPercent ?? baseCfg.stage3.foodPenaltyPercent);
+    // The admin's percentage replaces the stage-3 food penalty for this case only (frozen in the case snapshot).
+    const cfg = { ...baseCfg, stage3: { ...baseCfg.stage3, foodPenaltyPercent: pct } };
     if (!isNoShowRescueEnabled(cfg)) throw new ValidationError('Food Rescue for undelivered prepaid orders is switched off.');
     if (!isPaidOnline(order)) throw new ValidationError('Only prepaid orders can be sent to Food Rescue.');
     const { applies, stage } = await evaluateForOrder(order, cfg);
@@ -695,6 +701,11 @@ async function activateRescue(order, caseDoc, cfg, { rescueFoodPrice = null } = 
     await FoodCancellationCase.updateOne({ _id: caseDoc._id }, { $set: { listingId: listing._id }, $push: { timeline: { at: new Date(), event: 'rescue_started', note: `Window until ${expiresAt.toISOString()} within ${cfg.rescue.radiusKm} km` } } });
     await FoodOrder.updateOne({ _id: order._id }, { $set: { 'cancellationPolicy.rescueExpiresAt': expiresAt } });
     order.cancellationPolicy.rescueExpiresAt = expiresAt;
+    adminBell({
+        title: '🌿 Food Rescue started',
+        message: `Order #${orderLabel(order)}: ${listing.restaurantName || 'restaurant'} food listed at ${inr(listing.rescueFoodPrice)} (was ${inr(listing.originalFoodValue)}, ${listing.discountPercent}% off) for ${cfg.rescue.windowMinutes} min.`,
+        category: 'food_rescue', zoneId: order.zoneId, orderMongoId: order._id,
+    });
     void notifyNearbyCustomers(listing, order.userId, cfg).catch((e) => logger.warn(`[Rescue] nearby notify failed: ${e?.message}`));
     return listing;
 }
@@ -890,6 +901,11 @@ export async function verifyRescuePayment(userId, { orderId, razorpayOrderId, ra
     await sendOnce(caseDoc._id, 'claimed', { ownerType: 'USER', ownerId: userId, title: 'Rescue order confirmed', body: render(cfg.messages.rescue_new_customer, vars), type: 'food_rescue_confirmed', ...meta });
     if (riderId) emit(rooms.delivery(riderId), ['order_assigned', 'order_status_update'], { orderMongoId: String(order._id), orderId: String(order._id), orderStatus: 'picked_up', status: 'picked_up', statusLabel: 'FOOD RESCUE – DELIVER TO NEW CUSTOMER' });
     emit(rooms.user(caseDoc.userId), ['order_status_update'], { orderMongoId: String(win.originalOrderId), orderStatus: 'cancelled_by_user', statusLabel: 'CANCELLED – FOOD RESCUE CLAIMED', rescueStatus: 'claimed' });
+    adminBell({
+        title: '✅ Food Rescue claimed',
+        message: `Order #${label}: a new customer bought the rescued food for ${inr(win.rescueFoodPrice)}. Restaurant gets ${inr(restaurantAmount)}.`,
+        category: 'food_rescue', zoneId: order.zoneId || original?.zoneId, orderMongoId: order._id,
+    });
     await audit(userId, 'RESCUE_CLAIMED', 'listing', win._id, null, { newOrderId: String(order._id), restaurantAmount });
     return { orderId: String(order._id), status: 'claimed', restaurantWillReceive: restaurantAmount };
 }
@@ -898,7 +914,7 @@ async function expireListingEffects(caseId, { noListing = false } = {}) {
     const caseDoc = await FoodCancellationCase.findById(caseId);
     if (!caseDoc) return;
     const cfg = await getConfig();
-    const order = await FoodOrder.findById(caseDoc.orderId).select('order_id restaurantId userId').lean();
+    const order = await FoodOrder.findById(caseDoc.orderId).select('order_id restaurantId userId zoneId').lean();
     const foodValue = caseDoc.breakdown?.foodValue || 0;
     const comp = caseDoc.faultParty === 'restaurant' ? 0 : r2((foodValue * cfg.rescue.failedRestaurantCompPercent) / 100);
     await FoodCancellationCase.updateOne({ _id: caseId }, { $set: { status: 'rescue_expired' }, $push: { timeline: { at: new Date(), event: 'rescue_expired', note: `Restaurant compensation Rs ${comp}; rider may keep the food` } } });
@@ -918,6 +934,11 @@ async function expireListingEffects(caseId, { noListing = false } = {}) {
     if (caseDoc.riderId && cfg.rescue.riderKeepsFoodOnExpiry) {
         await sendOnce(caseId, 'expired', { ownerType: 'DELIVERY_PARTNER', ownerId: caseDoc.riderId, title: 'Food Rescue ended', body: render(cfg.messages.rescue_expired_rider, vars), type: 'food_rescue_expired', ...meta });
     }
+    adminBell({
+        title: '⌛ Food Rescue expired',
+        message: `Order #${label}: nobody bought the rescued food. Restaurant compensation Rs ${comp}; the delivery partner keeps the food.`,
+        category: 'food_rescue', zoneId: order?.zoneId, orderMongoId: caseDoc.orderId,
+    });
     emit(rooms.user(caseDoc.userId), ['order_status_update'], { orderMongoId: String(caseDoc.orderId), orderStatus: 'cancelled_by_user', statusLabel: meta.statusLabel, rescueStatus: 'expired' });
     void noListing;
 }

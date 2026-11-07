@@ -518,7 +518,7 @@ function mapOrderToTrackingUiStatus(orderLike) {
   const phase = orderLike.deliveryState?.currentPhase
 
   // Terminal states handled first
-  if (isFoodOrderCancelledStatus(statusRaw)) return "cancelled"
+  if (isFoodOrderCancelledStatus(statusRaw) || isUndeliveredReturnOrder(orderLike)) return "cancelled"
   if (statusRaw === "delivered" || statusRaw === "completed") return "delivered"
 
   // Live Ride / Phase-based mapping (Highest priority for precision)
@@ -543,6 +543,12 @@ function mapOrderToTrackingUiStatus(orderLike) {
 
   // Fallback to basic status mapping
   return mapBackendOrderStatusToUi(statusRaw)
+}
+
+/** Customer was not reachable: admin approved taking the food back (or rescuing it). The customer sees it as cancelled. */
+function isUndeliveredReturnOrder(orderLike) {
+  const s = String(orderLike?.status || orderLike?.orderStatus || "").toLowerCase()
+  return s === "returned_to_restaurant" || ["approved", "returned", "rescued"].includes(orderLike?.undeliveredReturn?.status)
 }
 
 /** Prefer live delivery phase when present (socket / polling include deliveryState). */
@@ -1840,7 +1846,8 @@ export default function OrderTracking({ isSharedView = false }) {
 
   const isCancelledOrder =
     orderStatus === "cancelled" ||
-    isFoodOrderCancelledStatus(order?.status)
+    isFoodOrderCancelledStatus(order?.status) ||
+    isUndeliveredReturnOrder(order)
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] pb-4">
@@ -1974,7 +1981,7 @@ export default function OrderTracking({ isSharedView = false }) {
               )}
               {(order?.status === 'returned_to_restaurant' || ['approved', 'returned'].includes(order?.undeliveredReturn?.status)) && (
                 <p className="mt-2 text-gray-500 dark:text-gray-400 font-medium">
-                  We could not reach you, so the delivery partner is returning this order to the restaurant.
+                  Order cancelled: we could not reach you, so the delivery partner is returning this order to the restaurant.
                   {Number(order?.undeliveredReturn?.penaltyAmount) > 0
                     ? ` A penalty of ₹${order.undeliveredReturn.penaltyAmount} will be added to your next order.`
                     : ''}

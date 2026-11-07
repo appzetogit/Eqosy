@@ -281,6 +281,8 @@ function Rules() {
           <h4 className="text-sm font-bold">Food Rescue</h4>
           <Tog label="Food Rescue enabled" value={c.rescue.enabled} onChange={(v) => setIn("rescue", "enabled", v)} />
           <Tog label="Prepaid no-show: admin can send undelivered food to Food Rescue" value={c.rescue.noShowEnabled !== false} onChange={(v) => setIn("rescue", "noShowEnabled", v)} />
+          <Num label="Prepaid no-show: default penalty (charged immediately from payment)" value={c.rescue.noShowPenaltyPercent ?? c.stage3.foodPenaltyPercent} onChange={(v) => setIn("rescue", "noShowPenaltyPercent", v)} suffix="% of food" />
+          <Num label="COD no-show (returned to restaurant): default penalty (charged on next order)" value={c.rescue.noShowReturnPenaltyPercent ?? 20} onChange={(v) => setIn("rescue", "noShowReturnPenaltyPercent", v)} suffix="% of food" />
           <Num label="Radius" value={c.rescue.radiusKm} onChange={(v) => setIn("rescue", "radiusKm", v)} suffix="km" step={0.5} />
           <Num label="Timer" value={c.rescue.windowMinutes} onChange={(v) => setIn("rescue", "windowMinutes", v)} suffix="min" />
           <Num label="Discount on food price" value={c.rescue.discountPercent} onChange={(v) => setIn("rescue", "discountPercent", v)} suffix="%" />

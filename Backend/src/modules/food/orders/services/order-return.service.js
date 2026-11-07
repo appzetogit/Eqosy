@@ -22,6 +22,7 @@ import {
   generateFourDigitDeliveryOtp,
   normalizeOrderForClient,
   notifyAdminsSafely,
+  adminBell,
   notifyOwnersSafely,
   pushStatusHistory,
   sanitizeOrderForExternal,
@@ -152,6 +153,9 @@ export async function requestUndeliveredReturn(orderId, partnerId, payload = {})
       callAttempts,
       message: `${partnerName} waited ${RETURN_MIN_WAIT_MINUTES} min but the customer is not receiving Order #${orderLabel(order)}${prepaid ? ' (PREPAID - can go to Food Rescue)' : ''}. Reason: ${reason}.`,
       isPrepaid: prepaid,
+      zoneId: order.zoneId ? String(order.zoneId) : undefined,
+      title: prepaid ? '📵 Prepaid order not received' : '📵 Customer Unreachable',
+      path: '/admin/food/orders/unreachable-requests',
     };
     emitSafe((io) => {
       io.to('admin_room').emit('admin_undelivered_request', adminPayload);
@@ -217,7 +221,7 @@ export async function approveNoShowRescueAdmin(orderId, adminId, body = {}, admi
   }
   const partnerId = order.undeliveredReturn.requestedBy || order.dispatch?.deliveryPartnerId;
   const { rescueNoShowOrder } = await import('../../cancellation/services/cancellation.service.js');
-  const result = await rescueNoShowOrder(order, adminId, { rescuePrice: body.rescuePrice, note: body.note });
+  const result = await rescueNoShowOrder(order, adminId, { rescuePrice: body.rescuePrice, penaltyPercent: body.penaltyPercent, note: body.note });
 
   if (partnerId) {
     emitSafe((io) => {
@@ -306,7 +310,9 @@ export async function approveUndeliveredReturnAdmin(orderId, adminId, body = {},
     io.to(rooms.user(order.userId)).emit('order_status_update', {
       ...base,
       orderStatus: order.orderStatus,
-      message: 'Your order could not be delivered because we could not reach you.',
+      undeliveredReturn: { status: 'approved', penaltyAmount },
+      statusLabel: 'CANCELLED - COULD NOT REACH YOU',
+      message: 'Your order has been cancelled because we could not reach you.',
     });
   });
 
@@ -321,10 +327,10 @@ export async function approveUndeliveredReturnAdmin(orderId, adminId, body = {},
     data: { type: 'undelivered_return_incoming', orderId: String(order._id), orderMongoId: String(order._id) },
   });
   await notifyOwnersSafely([{ ownerType: 'USER', ownerId: order.userId }], {
-    title: 'Order could not be delivered',
+    title: 'Order cancelled - could not reach you',
     body: penaltyAmount > 0
-      ? `We could not reach you for Order #${label}. A penalty of Rs ${penaltyAmount} will be added to your next order.`
-      : `We could not reach you for Order #${label}, so it is being returned to the restaurant.`,
+      ? `Order #${label} was cancelled because we could not reach you. A penalty of Rs ${penaltyAmount} will be added to your next order.`
+      : `Order #${label} was cancelled because we could not reach you, so it is being returned to the restaurant.`,
     data: { type: 'order_undelivered', orderId: String(order._id), orderMongoId: String(order._id) },
   });
 
@@ -438,7 +444,11 @@ export async function verifyReturnOtpDelivery(orderId, partnerId, otp) {
     io.to(rooms.delivery(partnerId)).emit('order_status_update', payload);
     io.to(rooms.restaurant(order.restaurantId)).emit('order_status_update', payload);
     io.to(rooms.user(order.userId)).emit('order_status_update', payload);
-    io.to('admin_room').emit('admin_notification', payload);
+  });
+  adminBell({
+    title: '✅ Food returned to restaurant',
+    message: `Order #${label} was returned to the restaurant by the delivery partner. Rider earning Rs ${payout} credited.`,
+    path: '/admin/food/orders/unreachable-requests', category: 'undelivered_return', zoneId: order.zoneId, orderMongoId: order._id,
   });
   await notifyOwnersSafely([{ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId }], {
     title: 'Earning credited ✓',

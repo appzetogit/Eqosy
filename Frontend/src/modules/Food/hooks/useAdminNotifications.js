@@ -690,6 +690,8 @@ export default function useAdminNotifications(options = {}) {
           category: payload?.category || "general",
           resource: payload?.resource || null,
           path: payload?.path || payload?.targetUrl || payload?.link || "/admin/food",
+          zoneId: payload?.zoneId,
+          orderMongoId: payload?.orderMongoId,
           createdAt: payload?.createdAt || new Date().toISOString(),
           timeLabel: "Just now",
           metaLabel: joinMeta(title, body),
