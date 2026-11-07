@@ -422,6 +422,39 @@ const mapEmergencyOfflineRequests = (response) => {
     });
 };
 
+// Pending "customer not receiving the order" requests from riders (prepaid orders can go to Food Rescue).
+const mapPendingUndelivered = (response) => {
+  const rows = extractRows(response);
+  return rows.map((item) => {
+    const orderMongoId = String(item?._id || item?.id || item?.orderMongoId || "");
+    const orderDisplayId = item?.order_id || item?.orderId || orderMongoId;
+    const requestedBy = item?.undeliveredReturn?.requestedBy;
+    const partnerName = (typeof requestedBy === "object" ? (requestedBy?.name || requestedBy?.fullName) : null) || "Delivery Partner";
+    const restaurantObj = typeof item?.restaurantId === "object" ? item.restaurantId : null;
+    const restaurantName = restaurantObj?.restaurantName || restaurantObj?.name || item?.restaurantName || "Restaurant";
+    const method = String(item?.payment?.method || "").toLowerCase();
+    const paid = String(item?.payment?.status || "").toLowerCase() === "paid";
+    const prepaid = Boolean(item?.rescueOption?.eligible) || (["razorpay", "razorpay_qr", "wallet"].includes(method) && paid);
+    const reason = item?.undeliveredReturn?.reason || "Customer not answering calls";
+    const requestedAt = item?.undeliveredReturn?.requestedAt || item?.updatedAt || item?.createdAt;
+    return {
+      id: `approval-undelivered-${orderMongoId}`,
+      orderMongoId,
+      orderId: orderDisplayId,
+      title: prepaid ? "📵 Prepaid order not received" : "📵 Customer Unreachable",
+      message: `${partnerName} cannot reach the customer for Order #${orderDisplayId} (${restaurantName}).${prepaid ? " PREPAID - can go to Food Rescue." : ""} Reason: ${reason}. Admin approval needed.`,
+      type: "approval",
+      category: "undelivered_approval",
+      resource: "orders",
+      zoneId: String(restaurantObj?.zoneId?._id || restaurantObj?.zoneId || item?.zoneId || ""),
+      path: "/admin/food/orders/unreachable-requests",
+      createdAt: requestedAt,
+      timeLabel: toDateLabel(requestedAt),
+      metaLabel: joinMeta(`Order #${orderDisplayId}`, partnerName, restaurantName, reason),
+    };
+  });
+};
+
 // The sidebar, navbar and notification pages each mount this hook. Share one in-flight request set
 // (and reuse it for a few seconds) so a single refresh does not hit every endpoint several times.
 let sharedSourcesPromise = null;
@@ -445,6 +478,7 @@ const fetchSharedNotificationSources = (canRead) => {
         canRead("wallet") ? adminAPI.getWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
         canRead("delivery") ? adminAPI.getDeliveryWithdrawals({ status: "pending", page: 1, limit: 50 }) : Promise.resolve({ data: { data: [] } }),
         canRead("delivery") ? adminAPI.getDeliveryPartners({ limit: 500, page: 1 }) : Promise.resolve({ data: { data: [] } }),
+        canRead("orders") ? adminAPI.getPendingUndeliveredReturns() : Promise.resolve({ data: { data: [] } }),
   ]);
   })();
   return sharedSourcesPromise;
@@ -485,12 +519,24 @@ export default function useAdminNotifications(options = {}) {
         withdrawalRes,
         deliveryWithdrawalRes,
         deliveryPartnersRes,
+        undeliveredRes,
       ] = results.map((_, i) => safeGet(i));
+
+      const undeliveredRows = mapPendingUndelivered(undeliveredRes);
+      // Requests already decided (approved / rejected / rescued) must not linger from the stored realtime list.
+      // Only trust the server list when that call succeeded.
+      const undeliveredFetched = results[10]?.status === "fulfilled";
+      const pendingUndeliveredIds = new Set(undeliveredRows.map((r) => r.id));
+      const isStaleUndelivered = (item) =>
+        undeliveredFetched &&
+        String(item?.id || "").startsWith("approval-undelivered-") &&
+        !pendingUndeliveredIds.has(item.id);
 
       const handoverRows = mapPendingHandovers(handoverRes);
       const emergencyRows = mapEmergencyOfflineRequests(deliveryPartnersRes);
 
       const fetchedPending = [
+        ...undeliveredRows,
         ...handoverRows,
         ...emergencyRows,
         ...mapPendingRestaurants(restaurantsRes),
@@ -506,7 +552,7 @@ export default function useAdminNotifications(options = {}) {
       // Filter tasks according to Subadmin permissions & assigned zones
       const aggregated = uniqueById([
         ...fetchedPending.filter((item) => item?.id && !dismissed.has(item.id)),
-        ...storedRealtime.filter((item) => item?.id && !dismissed.has(item.id)),
+        ...storedRealtime.filter((item) => item?.id && !dismissed.has(item.id) && !isStaleUndelivered(item)),
       ])
         .filter((item) => checkAdminNotifAccess(item, currentAdmin))
         .sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
