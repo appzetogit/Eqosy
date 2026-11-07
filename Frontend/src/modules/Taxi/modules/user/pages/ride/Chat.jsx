@@ -235,14 +235,14 @@ const Chat = () => {
       setMessages(
         Array.isArray(ride.messages)
           ? ride.messages
-              .map((message) => normalizeMessage(message, chatRole))
-              .filter((message) => message.message)
-              .map((message) => ({
-                id: message.id,
-                sender: message.senderRole === chatRole ? 'user' : 'other',
-                text: message.message,
-                time: toClock(message.sentAt),
-              }))
+            .map((message) => normalizeMessage(message, chatRole))
+            .filter((message) => message.message)
+            .map((message) => ({
+              id: message.id,
+              sender: message.senderRole === chatRole ? 'user' : 'other',
+              text: message.message,
+              time: toClock(message.sentAt),
+            }))
           : [],
       );
       setChatError('');
@@ -453,9 +453,8 @@ const Chat = () => {
                     className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[78%] px-4 py-2.5 rounded-[18px] shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${
-                        isUser ? 'bg-slate-900 text-white rounded-br-[6px]' : 'bg-white/95 border border-white/80 text-slate-800 rounded-bl-[6px]'
-                      }`}
+                      className={`max-w-[78%] px-4 py-2.5 rounded-[18px] shadow-[0_2px_8px_rgba(15,23,42,0.06)] ${isUser ? 'bg-slate-900 text-white rounded-br-[6px]' : 'bg-white/95 border border-white/80 text-slate-800 rounded-bl-[6px]'
+                        }`}
                     >
                       <p className="text-[14px] font-bold leading-relaxed">{m.text}</p>
                       <span className={`text-[9px] font-black mt-1 block uppercase tracking-wider ${isUser ? 'text-white/50' : 'text-slate-400'}`}>
@@ -495,9 +494,8 @@ const Chat = () => {
             whileTap={{ scale: 0.9 }}
             onClick={() => send()}
             disabled={!input.trim() || !rideId || isJoiningRide}
-            className={`w-8 h-8 rounded-[10px] flex items-center justify-center transition-all shrink-0 ${
-              input.trim() && rideId && !isJoiningRide ? 'bg-slate-900 shadow-[0_4px_10px_rgba(15,23,42,0.2)]' : 'bg-slate-200'
-            }`}
+            className={`w-8 h-8 rounded-[10px] flex items-center justify-center transition-all shrink-0 ${input.trim() && rideId && !isJoiningRide ? 'bg-slate-900 shadow-[0_4px_10px_rgba(15,23,42,0.2)]' : 'bg-slate-200'
+              }`}
           >
             <Send size={14} className={input.trim() && rideId && !isJoiningRide ? 'text-white' : 'text-slate-400'} strokeWidth={2.5} />
           </motion.button>

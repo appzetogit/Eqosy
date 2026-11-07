@@ -159,15 +159,22 @@ export async function requestUndeliveredReturn(orderId, partnerId, payload = {})
     };
     emitSafe((io) => {
       io.to('admin_room').emit('admin_undelivered_request', adminPayload);
-      io.to('admin_room').emit('admin_notification', adminPayload);
       io.to(rooms.delivery(partnerId)).emit('order_return_requested', adminPayload);
     });
     await notifyAdminsSafely({
-      title: '📵 Customer Unreachable - Approval Needed',
+      title: prepaid ? '📵 Prepaid order not received - Approval Needed' : '📵 Customer Unreachable - Approval Needed',
       body: prepaid
         ? `Order #${orderLabel(order)} (prepaid): customer is not picking up the food after ${RETURN_MIN_WAIT_MINUTES} min. Send it to Food Rescue or return it?`
         : `Order #${orderLabel(order)}: ${partnerName} cannot reach the customer. Approve return to restaurant?`,
-      data: { type: 'undelivered_return_request', orderId: String(order._id), orderMongoId: String(order._id) },
+      data: {
+        type: 'undelivered_return_request',
+        orderId: String(order._id),
+        orderMongoId: String(order._id),
+        // Without ring=true the push is classified as a silent status update ("undelivered" contains "delivered").
+        ring: 'true',
+        link: '/admin/food/orders/unreachable-requests',
+        targetUrl: '/admin/food/orders/unreachable-requests',
+      },
     });
   } catch (err) {
     logger.warn(`[OrderReturn] admin notification failed: ${err?.message || err}`);
