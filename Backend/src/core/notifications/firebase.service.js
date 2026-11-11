@@ -328,6 +328,17 @@ const buildMessagePayload = (payload = {}, token) => {
         ...(targetLink ? { fcm_options: { link: targetLink } } : {})
     };
 
+    // iOS (APNs): without this block iOS plays no sound at all.
+    message.apns = {
+        headers: { 'apns-priority': '10' },
+        payload: {
+            aps: {
+                ...(ring ? { sound: 'ride-request-alert.caf' } : (isChat ? { sound: 'default' } : {})),
+                badge: 1,
+            },
+        },
+    };
+
     return message;
 };
 

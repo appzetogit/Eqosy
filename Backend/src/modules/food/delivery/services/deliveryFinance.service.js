@@ -7,6 +7,8 @@ import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
+import { getIO, rooms } from '../../../../config/socket.js';
+import { getCodCashLimit } from './deliveryCashLimit.service.js';
 import { createRazorpayCheckoutOrder, isRazorpayConfigured, verifyCapturedPaymentForReceipt } from '../../orders/helpers/razorpay.helper.js';
 import { isRazorpayxConfigured } from '../../../../core/payments/razorpayx.service.js';
 import { assertVerifiedForPayout } from '../../../../core/payments/payoutAccount.service.js';
@@ -91,7 +93,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
     const totalWithdrawn = Number(withdrawalAgg?.[0]?.totalWithdrawn) || 0;
     const pendingWithdrawals = Number(withdrawalAgg?.[0]?.pendingWithdrawals) || 0;
 
-    const totalCashLimit = Number(cashLimitSettings.deliveryCashLimit) || 0;
+    const totalCashLimit = await getCodCashLimit();
     const deliveryWithdrawalLimit = Number(cashLimitSettings.deliveryWithdrawalLimit) || 100;
 
     // Pocket Balance = (Earnings + Bonus) - Total Withdrawn (approved) - Pending Withdrawals
@@ -163,6 +165,8 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
         totalBonus,
         totalCashLimit,
         availableCashLimit: Math.max(0, totalCashLimit - cashInHand),
+        isCashLimitBreached: cashInHand > totalCashLimit,
+        pendingCashDeposit: (depositList || []).find((d) => d.status === 'Pending' && d.paymentMethod !== 'razorpay') || null,
         deliveryWithdrawalLimit,
         transactions: transactions.slice(0, 50)
     };
@@ -186,6 +190,8 @@ export const requestDeliveryWithdrawal = async (deliveryPartnerId, payload) => {
 
     const partner = await FoodDeliveryPartner.findById(deliveryPartnerId).lean();
     if (!partner) throw new ValidationError('Delivery partner not found');
+    if (partner.status === 'on_hold') throw new ValidationError('Your account is on hold. Withdrawals are disabled until it is released.');
+    if (partner.status === 'terminated') throw new ValidationError('Your account has been terminated.');
 
     // Money only goes to the account that passed the ownership check. A bank override sent in the request is ignored,
     // otherwise someone could point a payout at an unverified account.
@@ -324,4 +330,81 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
         deposit,
         wallet: await getDeliveryPartnerWalletEnhanced(deliveryPartnerId)
     };
+};
+
+/**
+ * Partner submits a manual (bank / UPI) deposit with proof. It stays 'Pending' and does NOT reduce cash in hand
+ * until an admin verifies it (see verifyCashDepositByAdmin).
+ */
+export const submitDeliveryCashDepositRequest = async (deliveryPartnerId, payload = {}) => {
+    const amount = Math.round((Number(payload.amount) || 0) * 100) / 100;
+    const utr = String(payload.utr || '').trim();
+    const proofUrl = String(payload.proofUrl || '').trim();
+    if (!Number.isFinite(amount) || amount < 1) throw new ValidationError('Amount must be at least ₹1');
+    if (!utr && !proofUrl) throw new ValidationError('Enter the transaction/UTR number or attach a deposit proof');
+
+    const wallet = await getDeliveryPartnerWalletEnhanced(deliveryPartnerId);
+    if (amount > wallet.cashInHand) throw new ValidationError('Deposit amount cannot exceed cash in hand');
+
+    const pending = await FoodDeliveryCashDeposit.findOne({ deliveryPartnerId, status: 'Pending', paymentMethod: { $ne: 'razorpay' } }).lean();
+    if (pending) throw new ValidationError('You already have a deposit waiting for admin verification');
+
+    const deposit = await FoodDeliveryCashDeposit.create({
+        deliveryPartnerId,
+        amount,
+        paymentMethod: payload.method === 'upi' ? 'upi' : 'bank_transfer',
+        status: 'Pending',
+        utr,
+        proofUrl,
+        partnerNote: String(payload.note || '').trim().slice(0, 500),
+    });
+    return { deposit, wallet };
+};
+
+/** Admin verifies a pending deposit: only now does cash in hand drop (amount may be corrected by admin). */
+export const verifyCashDepositByAdmin = async (depositId, adminId, { amount, note } = {}) => {
+    if (!mongoose.Types.ObjectId.isValid(depositId)) throw new ValidationError('Invalid deposit id');
+    const existing = await FoodDeliveryCashDeposit.findById(depositId).lean();
+    if (!existing) throw new ValidationError('Deposit not found');
+    if (existing.status !== 'Pending') throw new ValidationError(`Deposit is already ${existing.status}`);
+
+    const wallet = await getDeliveryPartnerWalletEnhanced(existing.deliveryPartnerId);
+    let verifiedAmount = amount !== undefined && amount !== null && amount !== '' ? Number(amount) : Number(existing.amount);
+    if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) throw new ValidationError('Invalid verified amount');
+    verifiedAmount = Math.min(verifiedAmount, wallet.cashInHand);
+    if (verifiedAmount <= 0) throw new ValidationError('Partner has no cash in hand to settle');
+
+    // Atomic Pending -> Completed so a double click can never settle twice.
+    const deposit = await FoodDeliveryCashDeposit.findOneAndUpdate(
+        { _id: depositId, status: 'Pending' },
+        { $set: { status: 'Completed', amount: verifiedAmount, adminId, adminNote: String(note || '').trim(), verifiedAt: new Date() } },
+        { new: true }
+    );
+    if (!deposit) throw new ValidationError('Deposit was already processed');
+
+    const afterWallet = await getDeliveryPartnerWalletEnhanced(existing.deliveryPartnerId);
+    const backUnderLimit = !afterWallet.isCashLimitBreached;
+
+    try {
+        const io = getIO();
+        io?.to(rooms.delivery(existing.deliveryPartnerId)).emit('cash_deposit_verified', {
+            depositId: String(deposit._id),
+            amount: verifiedAmount,
+            message: backUnderLimit
+                ? 'Your cash deposit was verified. You can go online now.'
+                : `Deposit verified, but your cash in hand (Rs ${afterWallet.cashInHand}) is still above the limit of Rs ${afterWallet.totalCashLimit}. Deposit more to go online.`,
+        });
+    } catch (_) { /* socket is best effort */ }
+    return { deposit, wallet: await getDeliveryPartnerWalletEnhanced(existing.deliveryPartnerId) };
+};
+
+export const rejectCashDepositByAdmin = async (depositId, adminId, { note } = {}) => {
+    if (!mongoose.Types.ObjectId.isValid(depositId)) throw new ValidationError('Invalid deposit id');
+    const deposit = await FoodDeliveryCashDeposit.findOneAndUpdate(
+        { _id: depositId, status: 'Pending' },
+        { $set: { status: 'Rejected', adminId, adminNote: String(note || '').trim(), verifiedAt: new Date() } },
+        { new: true }
+    );
+    if (!deposit) throw new ValidationError('Deposit not found or already processed');
+    return { deposit };
 };

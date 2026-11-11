@@ -354,6 +354,17 @@ export const updateDeliveryAvailability = async (userId, payload) => {
 
     const todayKey = new Date().toISOString().slice(0, 10);
 
+    if (validStatus === 'online') {
+        if (partner.status === 'on_hold') {
+            const err = new ValidationError('Your account is on hold. You cannot go online or receive orders until it is released.');
+            err.code = 'ACCOUNT_ON_HOLD';
+            throw err;
+        }
+        // COD cash limit: must deposit (and be admin-verified) before going online again.
+        const { assertCashLimitNotBreached } = await import('./deliveryCashLimit.service.js');
+        await assertCashLimitNotBreached(partner._id);
+    }
+
     if (validStatus === 'online' && !forceBypassForDev) {
         // Step 0: Enforce GPS Location Check (Must have valid GPS coordinates to go online)
         const numLatCheck = Number(latitude);
@@ -491,7 +502,8 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
     }
 
     const cashLimitSettings = await getDeliveryCashLimitSettings();
-    const totalCashLimit = Number(cashLimitSettings.deliveryCashLimit) || 0;
+    const { getCodCashLimit } = await import('./deliveryCashLimit.service.js');
+    const totalCashLimit = await getCodCashLimit();
     const deliveryWithdrawalLimit = Number(cashLimitSettings.deliveryWithdrawalLimit) || 100;
 
     const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);

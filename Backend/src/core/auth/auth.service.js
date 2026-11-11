@@ -566,7 +566,18 @@ export const verifyDeliveryOtpAndLogin = async (phone, otp, fcmToken, platform) 
     await detachTokenFromOtherOwners({ token: fcmToken, keepOwnerType: "DELIVERY_PARTNER", keepOwnerId: deliveryPartner._id });
   }
 
-  if (deliveryPartner.status && deliveryPartner.status !== "approved") {
+  if (deliveryPartner.status === "terminated") {
+    return {
+      pendingApproval: true,
+      isRejected: true,
+      isTerminated: true,
+      rejectionReason: deliveryPartner.terminationReason || null,
+      message: `Your delivery account has been terminated.${deliveryPartner.terminationReason ? ` Reason: ${deliveryPartner.terminationReason}` : ""}`,
+    };
+  }
+
+  // on_hold partners may log in (they see the hold notice); orders and withdrawals are blocked elsewhere.
+  if (deliveryPartner.status && deliveryPartner.status !== "approved" && deliveryPartner.status !== "on_hold") {
     const isRejected = deliveryPartner.status === "rejected";
     return {
       pendingApproval: true,
@@ -1024,6 +1035,13 @@ export const refreshAccessToken = async (token) => {
     const u = await FoodUser.findById(payload.userId).select("isActive").lean();
     if (!u || u.isActive === false) {
       throw new AuthError("User account is deactivated");
+    }
+  }
+
+  if (payload?.role === "DELIVERY_PARTNER") {
+    const dp = await FoodDeliveryPartner.findById(payload.userId).select("status").lean();
+    if (dp?.status === "terminated") {
+      throw new AuthError("Your account has been terminated.");
     }
   }
 

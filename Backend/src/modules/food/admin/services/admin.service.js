@@ -4510,7 +4510,7 @@ export async function updateDeliverySupportTicket(id, body = {}) {
 // ----- Delivery partners (approved list) -----
 export async function getDeliveryPartners(query) {
     const { page = 1, limit = 1000, search } = query;
-    const filter = { status: 'approved' };
+    const filter = { status: { $in: ['approved', 'on_hold'] } };
     if (search && typeof search === 'string' && search.trim()) {
         const term = search.trim();
         filter.$or = [
@@ -5402,26 +5402,77 @@ export async function approveDeliveryPartner(id) {
     return partner.toObject();
 }
 
+/** Tells the partner's device immediately (socket + push) that the account status changed. Best effort. */
+async function notifyDeliveryPartnerAccountStatus(partner, status, reason) {
+    const messages = {
+        terminated: 'Your Eqosy delivery account has been terminated. You can no longer use this account.',
+        on_hold: 'Your account is on hold. You will not receive new orders and cannot withdraw until it is released.',
+        approved: 'Your account hold has been removed. You can go online and receive orders again.',
+    };
+    const message = `${messages[status] || 'Your account status changed.'}${reason && status !== 'approved' ? ` Reason: ${reason}` : ''}`;
+    try {
+        const { getIO, rooms } = await import('../../../../config/socket.js');
+        getIO()?.to(rooms.delivery(partner._id)).emit('account_status_changed', { status, message, reason: reason || '' });
+    } catch (_) { /* socket is best effort */ }
+    try {
+        const { notifyOwnerSafely } = await import('../../../../core/notifications/firebase.service.js');
+        await notifyOwnerSafely(
+            { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
+            { title: status === 'approved' ? 'Account active again' : status === 'on_hold' ? 'Account on hold' : 'Account terminated', body: message, data: { type: 'account_status_changed', status } },
+        );
+    } catch (_) { /* push is best effort */ }
+}
+
 /**
- * Deactivate (block) a delivery partner. Profile, wallet and order history are kept; the partner
- * leaves the approved list, is taken offline and is excluded from dispatch. Re-approving from the
- * join-request page reactivates the account.
+ * TERMINATE a delivery partner: account is closed. Profile, wallet and order history are kept, the partner is taken
+ * offline, gets no further orders, and every API call from their device is rejected (they are logged out).
  */
-export async function deactivateDeliveryPartner(id) {
+export async function deactivateDeliveryPartner(id, reason = '') {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const text = typeof reason === 'string' ? reason.trim() : '';
     const updated = await FoodDeliveryPartner.findByIdAndUpdate(
         id,
         {
             $set: {
-                status: 'rejected',
-                rejectedAt: new Date(),
-                rejectionReason: 'Account deactivated by admin',
+                status: 'terminated',
+                terminatedAt: new Date(),
+                terminationReason: text || 'Account terminated by admin',
                 approvedAt: null,
                 availabilityStatus: 'offline'
             }
         },
         { new: true }
     ).lean();
+    if (updated) {
+        // Drop saved sessions so the device cannot refresh its way back in.
+        try { await FoodRefreshToken.deleteMany({ userId: updated._id }); } catch (_) { /* best effort */ }
+        await notifyDeliveryPartnerAccountStatus(updated, 'terminated', text);
+    }
+    return updated;
+}
+
+/** PUT ON HOLD: partner can still log in and see the app, but gets no new orders and cannot withdraw. */
+export async function holdDeliveryPartner(id, reason = '') {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const text = typeof reason === 'string' ? reason.trim() : '';
+    const updated = await FoodDeliveryPartner.findOneAndUpdate(
+        { _id: id, status: { $in: ['approved', 'on_hold'] } },
+        { $set: { status: 'on_hold', holdAt: new Date(), holdReason: text, availabilityStatus: 'offline' } },
+        { new: true }
+    ).lean();
+    if (updated) await notifyDeliveryPartnerAccountStatus(updated, 'on_hold', text);
+    return updated;
+}
+
+/** Releases a hold (on_hold -> approved). */
+export async function releaseDeliveryPartnerHold(id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const updated = await FoodDeliveryPartner.findOneAndUpdate(
+        { _id: id, status: 'on_hold' },
+        { $set: { status: 'approved', holdReason: '', holdAt: null } },
+        { new: true }
+    ).lean();
+    if (updated) await notifyDeliveryPartnerAccountStatus(updated, 'approved');
     return updated;
 }
 
@@ -5868,7 +5919,8 @@ export async function getDeliveryWallets(query = {}) {
     ]);
 
     const cashLimitSettings = await getDeliveryCashLimitSettings();
-    const globalLimit = Number(cashLimitSettings?.deliveryCashLimit || 0);
+    const { getCodCashLimit } = await import('../../delivery/services/deliveryCashLimit.service.js');
+    const globalLimit = await getCodCashLimit();
 
     const partnerObjectIds = partners
         .map((p) => p._id)
@@ -6009,7 +6061,12 @@ export async function getCashLimitSettlements(query = {}) {
         deliveryIdString: d.deliveryPartnerId?.phone || 'N/A',
         amount: Number(d.amount || 0),
         status: d.status,
-        razorpayPaymentId: d.razorpayPaymentId || '-'
+        razorpayPaymentId: d.razorpayPaymentId || '-',
+        paymentMethod: d.paymentMethod,
+        utr: d.utr || '',
+        proofUrl: d.proofUrl || '',
+        partnerNote: d.partnerNote || '',
+        adminNote: d.adminNote || ''
     }));
 
     return {

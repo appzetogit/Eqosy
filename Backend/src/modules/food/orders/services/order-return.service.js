@@ -282,8 +282,21 @@ export async function approveUndeliveredReturnAdmin(orderId, adminId, body = {},
   });
   await order.save();
 
+  // COD: booked as one policy case + one ledger penalty (shown in the admin Cancellation centre, blocks COD until paid,
+  // restaurant/rider payouts follow when the restaurant OTP confirms the return). Prepaid keeps the older flow below.
+  const cancellation = await import('../../cancellation/services/cancellation.service.js');
+  let handledByPolicy = false;
+  if (!cancellation.isPaidOnline(order)) {
+    try {
+      await cancellation.recordReturnPenalty(order, adminId, { amount: penaltyAmount, percent: body.penaltyPercent, note: adminNote });
+      handledByPolicy = true;
+    } catch (err) {
+      logger.error(`[OrderReturn] could not book the return case for ${order._id}: ${err?.message || err}`);
+    }
+  }
+
   // One penalty per order: charged on the customer's next order.
-  if (penaltyAmount > 0 && order.userId) {
+  if (!handledByPolicy && penaltyAmount > 0 && order.userId) {
     const existing = await FoodUserPenalty.findOne({ orderId: order._id });
     if (existing) {
       if (existing.status === 'pending') {
@@ -437,6 +450,14 @@ export async function verifyReturnOtpDelivery(orderId, partnerId, otp) {
     note: `Food returned to restaurant. Rider earning Rs ${payout} credited.`,
   });
   await order.save();
+
+  // Restaurant's share of the food and the rider's return pay (idempotent; no-op when no policy case exists, e.g. prepaid).
+  try {
+    const { settleReturnPayouts } = await import('../../cancellation/services/cancellation.service.js');
+    await settleReturnPayouts(order._id);
+  } catch (err) {
+    logger.error(`[OrderReturn] return payouts failed for ${order._id}: ${err?.message || err}`);
+  }
 
   const label = orderLabel(order);
   const payload = {

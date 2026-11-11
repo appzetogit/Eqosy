@@ -56,8 +56,21 @@ export async function getConfig({ fresh = false } = {}) {
     }
     // Fill any template the admin never touched so a missing key never produces an empty notification.
     doc.messages = { ...DEFAULT_MESSAGES, ...(doc.messages || {}) };
+    doc = withConfigDefaults(doc);
     cfgCache = { at: Date.now(), doc };
     return doc;
+}
+
+/** Config documents saved before a setting existed lack it: fall back to the policy defaults instead of undefined/NaN. */
+export function withConfigDefaults(doc) {
+    const d = doc || {};
+    const pick = (v, def) => (v === undefined || v === null || v === '' || Number.isNaN(Number(v)) ? def : Number(v));
+    return {
+        ...d,
+        stage2: { ...(d.stage2 || {}), restaurantSharePercent: pick(d.stage2?.restaurantSharePercent, 15) },
+        stage3: { ...(d.stage3 || {}), restaurantSharePercent: pick(d.stage3?.restaurantSharePercent, 30), riderReturnPay: pick(d.stage3?.riderReturnPay, 20) },
+        rescue: { ...(d.rescue || {}), successPenaltyPercent: pick(d.rescue?.successPenaltyPercent, 60) },
+    };
 }
 
 async function audit(actorId, action, targetType, targetId, before, after, note = '') {
@@ -104,14 +117,14 @@ export async function updateConfig(body = {}, adminId = null) {
         }
         patch[name] = out;
     };
-    group('stage2', { foodPenaltyPercent: { max: 100 }, includeRiderCompensation: 'bool', includePlatformFee: 'bool', cancellationFee: {} });
-    group('stage3', { foodPenaltyPercent: { max: 100 }, includeDeliveryFee: 'bool', includePlatformFee: 'bool', cancellationFee: {} });
+    group('stage2', { foodPenaltyPercent: { max: 100 }, includeRiderCompensation: 'bool', includePlatformFee: 'bool', cancellationFee: {}, restaurantSharePercent: { max: 100 } });
+    group('stage3', { foodPenaltyPercent: { max: 100 }, includeDeliveryFee: 'bool', includePlatformFee: 'bool', cancellationFee: {}, restaurantSharePercent: { max: 100 }, riderReturnPay: {} });
     group('riderCompensation', { baseAmount: {}, perKm: {}, minAmount: {}, maxAmount: {}, minTrackedKm: {}, paidInStage3: 'bool', payWhenWaived: 'bool' });
     if ((patch.riderCompensation || before.riderCompensation).minAmount > (patch.riderCompensation || before.riderCompensation).maxAmount) {
         throw new ValidationError('Rider compensation minimum cannot exceed the maximum');
     }
     group('rescue', {
-        enabled: 'bool', noShowEnabled: 'bool', noShowPenaltyPercent: { max: 100 }, noShowReturnPenaltyPercent: { max: 100 }, radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
+        enabled: 'bool', noShowEnabled: 'bool', noShowPenaltyPercent: { max: 100 }, noShowReturnPenaltyPercent: { max: 100 }, successPenaltyPercent: { max: 100 }, radiusKm: { min: 0.1, max: 50 }, windowMinutes: { min: 1, max: 240 }, discountPercent: { max: 100 },
         restaurantSharePercent: { max: 100 }, failedRestaurantCompPercent: { max: 100 }, riderKeepsFoodOnExpiry: 'bool',
         claimHoldMinutes: { min: 1, max: 30 }, deliveryFee: {}, platformFee: {}, gstPercentOnFood: { max: 100 }, maxNotifyUsers: { max: 2000 },
     });
@@ -141,8 +154,9 @@ export async function updateConfig(body = {}, adminId = null) {
         patch.messages = msgs;
     }
     patch.updatedBy = adminId;
-    const after = await FoodCancellationConfig.findOneAndUpdate({ key: 'default' }, { $set: patch }, { new: true, upsert: true }).lean();
-    after.messages = { ...DEFAULT_MESSAGES, ...(after.messages || {}) };
+    const saved = await FoodCancellationConfig.findOneAndUpdate({ key: 'default' }, { $set: patch }, { new: true, upsert: true }).lean();
+    saved.messages = { ...DEFAULT_MESSAGES, ...(saved.messages || {}) };
+    const after = withConfigDefaults(saved);
     cfgCache = { at: Date.now(), doc: after };
     await audit(adminId, 'CONFIG_UPDATE', 'config', 'default', before, after);
     return after;
@@ -245,6 +259,12 @@ function resolveFault(order, cfg, reasonCode) {
     return { waived: false, party: 'customer', note: '', reason };
 }
 
+/**
+ * Prepaid order cancelled after pickup while Food Rescue is on: the customer's final charge depends on the rescue outcome
+ * (sold -> successPenaltyPercent of food, rest refunded; unsold -> the whole payment is kept), so the refund is held until then.
+ */
+export const usesRescueHold = (order, stage, cfg) => stage === 3 && Boolean(cfg?.rescue?.enabled) && isPaidOnline(order);
+
 export function computeBreakdown(order, stage, cfg, waived = false) {
     const foodValue = r2(order.pricing?.subtotal);
     const base = {
@@ -261,11 +281,13 @@ export function computeBreakdown(order, stage, cfg, waived = false) {
     }
     const cfgStage = stage === 3 ? cfg.stage3 : cfg.stage2;
     const platformFee = cfgStage.includePlatformFee ? r2(order.pricing?.platformFee) : 0;
-    const foodPenalty = r2((foodValue * (cfgStage.foodPenaltyPercent || 0)) / 100);
+    // Prepaid + Food Rescue: the charge shown/booked up front is the "rescue sold" one (60% by default).
+    const foodPct = usesRescueHold(order, stage, cfg) ? (cfg.rescue.successPenaltyPercent ?? cfgStage.foodPenaltyPercent ?? 0) : (cfgStage.foodPenaltyPercent || 0);
+    const foodPenalty = r2((foodValue * foodPct) / 100);
     const gst = r2(((platformFee + (cfgStage.cancellationFee || 0) + (cfg.gstOnFoodPenalty ? foodPenalty : 0)) * (cfg.gstPercent || 0)) / 100);
     const charge = {
         ...base,
-        foodPenaltyPercent: cfgStage.foodPenaltyPercent || 0,
+        foodPenaltyPercent: foodPct,
         foodPenalty,
         riderCompensation: stage === 2 && cfgStage.includeRiderCompensation ? riderComp : 0,
         deliveryFee: stage === 3 && cfgStage.includeDeliveryFee ? r2(order.pricing?.deliveryFee) : 0,
@@ -275,7 +297,12 @@ export function computeBreakdown(order, stage, cfg, waived = false) {
     };
     const result = waived ? { ...base, foodPenaltyPercent: charge.foodPenaltyPercent } : charge;
     const out = withTotals(result);
-    out.riderPayable = riderComp; // what the rider is owed regardless of who pays
+    // What the rider is owed regardless of who pays: stage 2 = distance covered (GPS), stage 3 = the order's delivery charge.
+    out.riderPayable = stage === 3 ? (hasRider ? r2(order.pricing?.deliveryFee) : 0) : riderComp;
+    // Restaurant compensation as a % of the food value (stage 2 = prepared, stage 3 = food returned). Nothing when the restaurant was at fault.
+    out.restaurantSharePercent = r2(cfgStage.restaurantSharePercent ?? (stage === 3 ? 30 : 15));
+    out.restaurantPayable = waived ? 0 : r2((foodValue * out.restaurantSharePercent) / 100);
+    out.riderReturnPay = stage === 3 ? r2(cfg.stage3?.riderReturnPay ?? 20) : 0; // only paid when the food is physically returned
     return out;
 }
 
@@ -291,9 +318,12 @@ export async function previewCancellation(orderId, userId, reasonCode = '') {
     const fault = resolveFault(order, cfg, reasonCode);
     const breakdown = computeBreakdown(order, stage, cfg, fault.waived);
     const st = settlementFor(order, breakdown.total);
-    const where = st.online
-        ? `Cancelling now deducts the charges below from your payment of Rs ${st.paid}. You get Rs ${st.refundAmount} back to your original payment method.`
-        : 'Cancelling now adds the charges below to your outstanding balance and disables Cash on Delivery until they are paid.';
+    const hold = usesRescueHold(order, stage, cfg) && !fault.waived;
+    const where = hold
+        ? `If another customer buys your food within ${cfg.rescue.windowMinutes} minutes, Rs ${st.deducted} is kept and Rs ${st.refundAmount} is refunded to your original payment method. If nobody buys it, your full payment of Rs ${st.paid} is kept and nothing is refunded.`
+        : st.online
+            ? `Cancelling now deducts the charges below from your payment of Rs ${st.paid}. You get Rs ${st.refundAmount} back to your original payment method.`
+            : 'Cancelling now adds the charges below to your outstanding balance and disables Cash on Delivery until they are paid.';
     return {
         applies: true,
         stage,
@@ -306,6 +336,8 @@ export async function previewCancellation(orderId, userId, reasonCode = '') {
         deducted: st.deducted,
         refundAmount: st.refundAmount,
         shortfall: st.online ? st.shortfall : 0,
+        refundHeldForRescue: hold,
+        refundIfNotRescued: hold ? 0 : undefined,
         rescueWillStart: stage === 3 && cfg.rescue.enabled,
         message: stage === 2
             ? `The restaurant has already started preparing your food. ${where}`
@@ -423,7 +455,13 @@ async function runPolicyCancellation(order, cfg, stage, fault, breakdown, { reas
             reasonCode, reasonLabel, faultParty: fault.party, chargeWaived: fault.waived, chargeWaivedReason: fault.note,
             breakdown, payMode: settlementFor(order, breakdown.total).online ? 'refund_deduction' : 'outstanding',
             paidAmount: settlementFor(order, breakdown.total).paid,
-            refund: (() => { const x = settlementFor(order, breakdown.total); return x.online ? { status: x.refundAmount > 0 ? 'pending' : 'none', amount: x.refundAmount, deducted: x.deducted, shortfall: x.shortfall } : { status: 'none' }; })(),
+            refund: (() => {
+                const x = settlementFor(order, breakdown.total);
+                if (!x.online) return { status: 'none' };
+                // Prepaid + Food Rescue: the refund waits for the rescue outcome (sold -> refunded, unsold -> payment kept).
+                const status = fault.waived || !usesRescueHold(order, stage, cfg) ? (x.refundAmount > 0 ? 'pending' : 'none') : (x.refundAmount > 0 ? 'held' : 'none');
+                return { status, amount: x.refundAmount, deducted: x.deducted, shortfall: x.shortfall };
+            })(),
             configSnapshot: { stage, rates: { stage2: cfg.stage2, stage3: cfg.stage3, gstPercent: cfg.gstPercent, riderCompensation: cfg.riderCompensation, rescue: cfg.rescue } },
             timeline: [{ at: new Date(), event: 'cancelled', note: `Stage ${stage}: cancelled from "${from}". Charge Rs ${breakdown.total}${fault.waived ? ` (waived: ${fault.note})` : ''}` }],
         });
@@ -492,22 +530,25 @@ async function runPolicyCancellation(order, cfg, stage, fault, breakdown, { reas
     let listing = null;
     if (stage === 3 && cfg.rescue.enabled) listing = await activateRescue(order, caseDoc, cfg, { rescueFoodPrice });
 
-    if (caseDoc.riderId && breakdown.riderPayable > 0 && (breakdown.riderCompensation > 0 || cfg.riderCompensation.payWhenWaived !== false) && (stage === 2 || cfg.riderCompensation.paidInStage3)) {
+    if (caseDoc.riderId && breakdown.riderPayable > 0 && (breakdown.riderCompensation > 0 || breakdown.deliveryFee > 0 || cfg.riderCompensation.payWhenWaived !== false) && (stage === 2 || cfg.riderCompensation.paidInStage3)) {
         await creditParty({
             caseDoc: await FoodCancellationCase.findById(caseDoc._id), key: 'rider', party: 'DELIVERY_PARTNER', partyId: caseDoc.riderId,
-            amount: breakdown.riderPayable, kind: 'rider_travel_compensation', category: 'delivery_payout',
-            description: `Travel compensation for cancelled order ${orderLabel(order)} (${breakdown.riderTrackedKm} km GPS)`,
+            amount: breakdown.riderPayable, kind: stage === 3 ? 'rider_delivery_charge' : 'rider_travel_compensation', category: 'delivery_payout',
+            description: stage === 3
+                ? `Delivery charge for cancelled order ${orderLabel(order)}`
+                : `Travel compensation for cancelled order ${orderLabel(order)} (${breakdown.riderTrackedKm} km GPS)`,
         });
     }
-    if (stage === 2 && !fault.waived && breakdown.foodPenalty > 0) {
+    if (stage === 2 && !fault.waived && breakdown.restaurantPayable > 0) {
         await creditParty({
             caseDoc: await FoodCancellationCase.findById(caseDoc._id), key: 'restaurant', party: 'RESTAURANT', partyId: order.restaurantId,
-            amount: breakdown.foodPenalty, kind: 'restaurant_preparation_compensation', category: 'order_payout',
+            amount: breakdown.restaurantPayable, kind: 'restaurant_preparation_compensation', category: 'order_payout',
             description: `Food preparation compensation for cancelled order ${orderLabel(order)}`,
         });
     }
 
-    if (caseDoc.payMode === 'refund_deduction') await processRefund(caseDoc._id).catch((e) => logger.error(`[Cancellation] refund failed ${caseDoc._id}: ${e?.message}`));
+    // A refund held for the Food Rescue outcome is released (or dropped) when the rescue is sold / expires.
+    if (caseDoc.payMode === 'refund_deduction' && caseDoc.refund?.status !== 'held') await processRefund(caseDoc._id).catch((e) => logger.error(`[Cancellation] refund failed ${caseDoc._id}: ${e?.message}`));
 
     await syncOrderSocket(order, caseDoc, listing);
     await notifyCancellation(caseDoc, order, cfg, { stage, breakdown, fault, listing });
@@ -522,7 +563,7 @@ export const isNoShowRescueEnabled = (cfg) => Boolean(cfg?.enabled && cfg?.rescu
 export async function noShowRescueEligibility(order, cfgIn = null) {
     const cfg = cfgIn || (await getConfig());
     const foodValue = r2(order?.pricing?.subtotal);
-    const base = { eligible: false, foodValue, defaultPrice: r2((foodValue * (100 - (cfg.rescue?.discountPercent || 0))) / 100), discountPercent: cfg.rescue?.discountPercent || 0, penaltyPercent: cfg.rescue?.noShowPenaltyPercent ?? cfg.stage3?.foodPenaltyPercent ?? 0, returnPenaltyPercent: cfg.rescue?.noShowReturnPenaltyPercent ?? 0 };
+    const base = { eligible: false, foodValue, defaultPrice: r2((foodValue * (100 - (cfg.rescue?.discountPercent || 0))) / 100), discountPercent: cfg.rescue?.discountPercent || 0, penaltyPercent: cfg.rescue?.successPenaltyPercent ?? cfg.stage3?.foodPenaltyPercent ?? 0, returnPenaltyPercent: cfg.stage3?.foodPenaltyPercent ?? 0 };
     if (!isNoShowRescueEnabled(cfg) || !isPaidOnline(order)) return base;
     const { applies, stage } = await evaluateForOrder(order, cfg);
     return { ...base, eligible: Boolean(applies && stage === 3) };
@@ -536,9 +577,9 @@ export async function noShowRescueEligibility(order, cfgIn = null) {
 export async function rescueNoShowOrder(order, adminId, { rescuePrice, penaltyPercent, note = '' } = {}) {
     const baseCfg = await getConfig({ fresh: true });
     const hasPct = penaltyPercent !== undefined && penaltyPercent !== null && String(penaltyPercent).trim() !== '';
-    const pct = hasPct ? num(penaltyPercent, 'Penalty percent', { max: 100 }) : (baseCfg.rescue?.noShowPenaltyPercent ?? baseCfg.stage3.foodPenaltyPercent);
-    // The admin's percentage replaces the stage-3 food penalty for this case only (frozen in the case snapshot).
-    const cfg = { ...baseCfg, stage3: { ...baseCfg.stage3, foodPenaltyPercent: pct } };
+    const pct = hasPct ? num(penaltyPercent, 'Penalty percent', { max: 100 }) : (baseCfg.rescue?.successPenaltyPercent ?? baseCfg.stage3.foodPenaltyPercent);
+    // The admin's percentage replaces the "rescue sold" food penalty for this case only (frozen in the case snapshot).
+    const cfg = { ...baseCfg, stage3: { ...baseCfg.stage3, foodPenaltyPercent: pct }, rescue: { ...baseCfg.rescue, successPenaltyPercent: pct } };
     if (!isNoShowRescueEnabled(cfg)) throw new ValidationError('Food Rescue for undelivered prepaid orders is switched off.');
     if (!isPaidOnline(order)) throw new ValidationError('Only prepaid orders can be sent to Food Rescue.');
     const { applies, stage } = await evaluateForOrder(order, cfg);
@@ -576,14 +617,16 @@ async function notifyCancellation(caseDoc, order, cfg, { stage, breakdown, fault
         await sendOnce(caseDoc._id, 'cancel', { ownerType: 'USER', ownerId: order.userId, title: 'Order cancelled', body: render(cfg.messages.nofee_customer, { reason: fault.note || 'no charge' }), type: 'order_cancelled', ...meta });
     } else if (caseDoc.payMode === 'refund_deduction') {
         const refund = r2(caseDoc.refund?.amount);
-        await sendOnce(caseDoc._id, 'cancel', { ownerType: 'USER', ownerId: order.userId, title: 'Cancellation processed', body: render(cfg.messages[stage === 2 ? 's2_customer_online' : 's3_customer_online'], { orderId: label, amount: amountStr, refund }), type: 'cancellation_penalty', data: { amount: amountStr, refund: String(refund) }, ...meta });
+        const held = caseDoc.refund?.status === 'held' || (stage === 3 && usesRescueHold(order, stage, cfg));
+        const tplKey = stage === 2 ? 's2_customer_online' : held ? 's3_customer_online_hold' : 's3_customer_online';
+        await sendOnce(caseDoc._id, 'cancel', { ownerType: 'USER', ownerId: order.userId, title: 'Cancellation processed', body: render(cfg.messages[tplKey], { orderId: label, amount: amountStr, refund, minutes: cfg.rescue.windowMinutes }), type: 'cancellation_penalty', data: { amount: amountStr, refund: String(refund) }, ...meta });
     } else {
         await sendOnce(caseDoc._id, 'cancel', { ownerType: 'USER', ownerId: order.userId, title: 'Cancellation processed', body: render(cfg.messages[stage === 2 ? 's2_customer' : 's3_customer'], { orderId: label, amount: amountStr }), type: 'cancellation_penalty', data: { amount: amountStr }, ...meta });
         if (cfg.cod.blockWhileOutstanding) {
             await sendOnce(caseDoc._id, 'cod', { ownerType: 'USER', ownerId: order.userId, title: 'Cash on Delivery disabled', body: render(cfg.messages.cod_disabled_customer, { amount: amountStr }), type: 'cod_disabled', ...meta });
         }
     }
-    const restaurantAmount = stage === 2 ? caseDoc.breakdown?.foodPenalty || 0 : 0;
+    const restaurantAmount = stage === 2 && !fault.waived ? caseDoc.breakdown?.restaurantPayable ?? breakdown.restaurantPayable ?? 0 : 0;
     await sendOnce(caseDoc._id, 'cancel', { ownerType: 'RESTAURANT', ownerId: order.restaurantId, title: 'Order cancelled', body: render(cfg.messages[stage === 2 ? 's2_restaurant' : 's3_restaurant'], { orderId: label, amount: restaurantAmount }), type: stage === 3 ? 'food_rescue_activated' : 'order_cancelled_after_prep', ...meta });
     if (caseDoc.riderId) {
         await sendOnce(caseDoc._id, 'cancel', { ownerType: 'DELIVERY_PARTNER', ownerId: caseDoc.riderId, title: stage === 3 ? 'Food Rescue activated' : 'Order cancelled', body: render(cfg.messages[stage === 2 ? 's2_rider' : 's3_rider'], { orderId: label, amount: breakdown.riderPayable }), type: stage === 3 ? 'food_rescue_activated' : 'order_cancelled', ...meta });
@@ -891,6 +934,8 @@ export async function verifyRescuePayment(userId, { orderId, razorpayOrderId, ra
         { new: true }
     );
     await FoodOrder.updateOne({ _id: win.originalOrderId }, { $set: { 'cancellationPolicy.rescueStatus': 'claimed' } });
+    // Prepaid original customer: the food was sold, so the held refund (payment minus the "rescue sold" charge) is released now.
+    await finalizeHeldRefund(win.caseId, 'rescued').catch((e) => logger.error(`[Rescue] refund release failed ${win.caseId}: ${e?.message}`));
     const restaurantAmount = r2((win.rescueFoodPrice * cfg.rescue.restaurantSharePercent) / 100);
     const label = orderLabel(original || order);
     const vars = { orderId: label, price: win.rescueFoodPrice, share: cfg.rescue.restaurantSharePercent, amount: restaurantAmount, discount: win.discountPercent };
@@ -908,6 +953,53 @@ export async function verifyRescuePayment(userId, { orderId, razorpayOrderId, ra
     });
     await audit(userId, 'RESCUE_CLAIMED', 'listing', win._id, null, { newOrderId: String(order._id), restaurantAmount });
     return { orderId: String(order._id), status: 'claimed', restaurantWillReceive: restaurantAmount };
+}
+
+/**
+ * Settle the refund that was held for the Food Rescue outcome (prepaid orders cancelled after pickup).
+ *  - 'rescued' / 'released': refund = amount paid minus the "rescue sold" charge (released also covers "no rescue was possible" and admin-closed rescues, which favour the customer).
+ *  - 'expired': nobody bought the food, so the whole payment is kept as the cancellation charge and nothing is refunded.
+ * Atomic on refund.status === 'held', so it can run from the claim, the sweeper and an admin action without double effects.
+ */
+export async function finalizeHeldRefund(caseId, outcome) {
+    const c = await FoodCancellationCase.findById(caseId);
+    if (!c || c.refund?.status !== 'held') return null;
+    const adminTouched = Boolean(c.override?.by);
+    if (outcome !== 'expired' || adminTouched) {
+        const claimed = await FoodCancellationCase.updateOne(
+            { _id: caseId, 'refund.status': 'held' },
+            { $set: { 'refund.status': 'pending' }, $push: { timeline: { at: new Date(), event: 'refund_released', note: `Food Rescue ${outcome}: refund of Rs ${r2(c.refund.amount)} released` } } }
+        );
+        return claimed.modifiedCount ? processRefund(caseId) : null;
+    }
+    const paid = r2(c.paidAmount);
+    const claimed = await FoodCancellationCase.findOneAndUpdate(
+        { _id: caseId, 'refund.status': 'held' },
+        { $set: { 'refund.status': 'none', 'refund.amount': 0, 'refund.deducted': paid, 'refund.shortfall': 0 }, $push: { timeline: { at: new Date(), event: 'rescue_unsold_full_charge', note: `Nobody bought the food: full payment of Rs ${paid} kept, no refund` } } },
+        { new: true }
+    );
+    if (!claimed) return null;
+    const pen = c.penaltyId ? await FoodUserPenalty.findById(c.penaltyId) : null;
+    if (pen && pen.status === 'paid' && pen.paidVia === 'refund_deduction') {
+        const extra = r2(paid - pen.amount);
+        if (extra > 0) {
+            await FoodUserPenalty.updateOne({ _id: pen._id }, { $set: { amount: paid, reason: `${pen.reason} Food Rescue unsuccessful: the full payment is kept.` } });
+            await recordTransaction({
+                entityType: 'admin', entityId: 'admin', type: 'credit', amount: extra, description: `Cancellation charge raised to full payment (rescue unsold), order ${c.orderId}`,
+                category: 'platform_fee', orderId: String(c.orderId), idempotencyKey: `penalty_paid:${pen._id}:rescue_unsold`,
+            }).catch((e) => logger.warn(`[Cancellation] unsold revenue entry failed: ${e?.message}`));
+        }
+    }
+    await FoodOrder.updateOne({ _id: c.orderId }, { $set: { 'cancellationPolicy.penaltyTotal': paid, 'cancellationPolicy.deducted': paid, 'cancellationPolicy.refundAmount': 0 } });
+    const order = await FoodOrder.findById(c.orderId).select('order_id userId').lean();
+    try {
+        await foodTransactionService.updateTransactionStatus(c.orderId, 'cancelled_by_user', { status: 'captured', note: `Cancelled by user (policy). Food Rescue unsold: Rs ${paid} kept, no refund`, recordedByRole: 'USER', recordedById: c.userId });
+    } catch (e) {
+        logger.warn(`[Cancellation] transaction sync failed: ${e?.message}`);
+    }
+    const cfg = await getConfig();
+    await sendOnce(caseId, 'rescue_unsold_customer', { ownerType: 'USER', ownerId: c.userId, title: 'Cancellation charge applied', body: render(cfg.messages.rescue_expired_original_customer, { orderId: orderLabel(order), amount: paid }), type: 'cancellation_penalty', orderId: c.orderId, statusLabel: 'CANCELLED – FOOD RESCUE EXPIRED' });
+    return { kept: paid };
 }
 
 async function expireListingEffects(caseId, { noListing = false } = {}) {
@@ -939,8 +1031,9 @@ async function expireListingEffects(caseId, { noListing = false } = {}) {
         message: `Order #${label}: nobody bought the rescued food. Restaurant compensation Rs ${comp}; the delivery partner keeps the food.`,
         category: 'food_rescue', zoneId: order?.zoneId, orderMongoId: caseDoc.orderId,
     });
+    // Prepaid original customer: unsold food keeps the whole payment; if no rescue was ever possible the refund is simply released.
+    await finalizeHeldRefund(caseId, noListing ? 'released' : 'expired').catch((e) => logger.error(`[Rescue] held refund settle failed ${caseId}: ${e?.message}`));
     emit(rooms.user(caseDoc.userId), ['order_status_update'], { orderMongoId: String(caseDoc.orderId), orderStatus: 'cancelled_by_user', statusLabel: meta.statusLabel, rescueStatus: 'expired' });
-    void noListing;
 }
 
 /* ------------------------------ Outstanding penalty & COD ------------------------------ */
@@ -1130,6 +1223,10 @@ export async function runCancellationSweep() {
     const refundRetry = await FoodCancellationCase.find({ 'refund.status': 'failed', 'refund.attempts': { $lt: 5 } }).limit(20).select('_id').lean();
     for (const c of refundRetry) await processRefund(c._id).catch(() => {});
 
+    // 3c. Safety net: a refund still held although its rescue already ended (crash between the two steps).
+    const stuckHeld = await FoodCancellationCase.find({ 'refund.status': 'held', status: { $in: ['rescue_expired', 'rescue_claimed', 'cancelled', 'closed'] } }).limit(20).select('_id status').lean();
+    for (const c of stuckHeld) await finalizeHeldRefund(c._id, c.status === 'rescue_expired' ? 'expired' : 'released').catch(() => {});
+
     // 4. Retry settlements that failed earlier (idempotent keys make this safe).
     const failed = await FoodCancellationCase.find({ 'settlements.status': 'failed' }).limit(20);
     for (const c of failed) await retrySettlements(c._id).catch(() => {});
@@ -1166,11 +1263,35 @@ export async function listCases({ stage, status, userId, restaurantId, page = 1,
     if (userId) q.userId = oid(userId);
     if (restaurantId) q.restaurantId = oid(restaurantId);
     const lim = Math.min(Number(limit) || 30, 100);
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
         FoodCancellationCase.find(q).sort({ createdAt: -1 }).skip((Math.max(Number(page), 1) - 1) * lim).limit(lim).lean(),
         FoodCancellationCase.countDocuments(q),
     ]);
+    const pens = await FoodUserPenalty.find({ _id: { $in: rows.map((c) => c.penaltyId).filter(Boolean) } }).lean();
+    const byId = new Map(pens.map((p) => [String(p._id), p]));
+    const items = rows.map((c) => ({ ...c, actual: actualOutcome(c, c.penaltyId ? byId.get(String(c.penaltyId)) : null) }));
     return { items, total, page: Number(page) || 1, limit: lim };
+}
+
+/**
+ * What REALLY happened to the customer's money for a case, read from the penalty ledger and the refund, never from the
+ * frozen calculation (which stays as "calculated"). This is what the admin screens show as "charged".
+ */
+export function actualOutcome(c, pen) {
+    const calculated = r2(c.breakdown?.total);
+    const refund = { status: c.refund?.status || 'none', amount: r2(c.refund?.amount) };
+    if (c.stage === 1) return { state: 'not_charged', label: 'No charge', amount: 0, calculated, refund };
+    if (c.chargeWaived) return { state: 'waived', label: 'Waived (not charged)', amount: 0, calculated, refund };
+    if (c.refund?.status === 'held') {
+        return { state: 'pending_rescue', label: 'Provisional: final charge depends on Food Rescue', amount: r2(pen?.amount ?? c.refund.deducted), calculated, refund };
+    }
+    if (!pen) return { state: calculated > 0 ? 'not_recorded' : 'not_charged', label: calculated > 0 ? 'Not charged yet' : 'No charge', amount: 0, calculated, refund };
+    if (pen.status === 'waived') return { state: 'waived', label: 'Waived by admin (not charged)', amount: 0, calculated, refund };
+    if (pen.paidAt) {
+        const cut = pen.paidVia === 'refund_deduction';
+        return { state: cut ? 'deducted' : 'collected', label: cut ? 'Cut from customer payment' : 'Collected from customer', amount: r2(pen.amount), calculated, refund };
+    }
+    return { state: 'unpaid', label: 'Unpaid - COD blocked until paid', amount: r2(pen.amount), calculated, refund };
 }
 
 export async function getCase(caseId) {
@@ -1180,7 +1301,7 @@ export async function getCase(caseId) {
         c.listingId ? FoodRescueListing.findById(c.listingId).lean() : null,
         c.penaltyId ? FoodUserPenalty.findById(c.penaltyId).lean() : null,
     ]);
-    return { ...c, listing, penalty };
+    return { ...c, listing, penalty, actual: actualOutcome(c, penalty) };
 }
 
 export async function listRescues({ status, page = 1, limit = 30 } = {}) {
@@ -1288,7 +1409,163 @@ export async function adminCloseRescue(listingId, adminId, note) {
     const l = await FoodRescueListing.findOneAndUpdate({ _id: oid(listingId), status: { $in: ['active', 'held'] } }, { $set: { status: 'cancelled' } }, { new: true });
     if (!l) throw new ValidationError('Only an open rescue can be closed');
     await audit(adminId, 'RESCUE_CLOSED', 'listing', listingId, null, { status: 'cancelled' }, note);
+    // An admin closing the rescue early must not leave a prepaid customer's refund held forever.
+    await finalizeHeldRefund(l.caseId, 'released').catch((e) => logger.error(`[Rescue] refund release failed ${l.caseId}: ${e?.message}`));
     return l.toObject();
+}
+
+/* ------------------------------ Return to restaurant (customer unreachable, COD) ------------------------------ */
+const RETURN_REASON = 'customer_unreachable_return';
+
+/**
+ * Admin approved sending an unreachable COD order back to the restaurant. Books ONE policy case + one customer penalty
+ * (so it shows in the same ledger, blocks COD until paid and is charged on the next order). The restaurant/rider payouts
+ * are released later, when the restaurant OTP confirms the food is back (settleReturnPayouts).
+ */
+export async function recordReturnPenalty(order, adminId, { amount = null, percent = null, note = '' } = {}) {
+    const baseCfg = await getConfig({ fresh: true });
+    const hasPct = percent !== undefined && percent !== null && String(percent).trim() !== '';
+    const cfg = hasPct ? { ...baseCfg, stage3: { ...baseCfg.stage3, foodPenaltyPercent: num(percent, 'Penalty percent', { max: 100 }) } } : baseCfg;
+    const breakdown = computeBreakdown(order, 3, cfg, false);
+    const finalAmount = amount === null || amount === undefined ? breakdown.total : r2(num(amount, 'Penalty amount'));
+    const overridden = Math.abs(finalAmount - breakdown.total) > 0.009;
+    let caseDoc;
+    try {
+        caseDoc = await FoodCancellationCase.create({
+            orderId: order._id, orderLabel: orderLabel(order), userId: order.userId, restaurantId: order.restaurantId,
+            riderId: order.dispatch?.deliveryPartnerId || order.undeliveredReturn?.requestedBy || null, stage: 3, cancelledFromStatus: order.orderStatus,
+            status: 'cancelled', reasonCode: RETURN_REASON, reasonLabel: 'Customer unreachable - food returned to the restaurant', faultParty: 'customer',
+            breakdown, payMode: 'outstanding', paidAmount: 0, refund: { status: 'none' },
+            configSnapshot: { stage: 3, mode: 'return', rates: { stage3: cfg.stage3, gstPercent: cfg.gstPercent, riderCompensation: cfg.riderCompensation } },
+            ...(overridden ? { override: { by: adminId || null, at: new Date(), note: `Admin set the penalty to Rs ${finalAmount}`, previousTotal: breakdown.total } } : {}),
+            timeline: [{ at: new Date(), event: 'return_approved', note: `Return to restaurant approved. Penalty Rs ${finalAmount}${overridden ? ` (calculated Rs ${breakdown.total})` : ''}${note ? `: ${note}` : ''}` }],
+        });
+    } catch (e) {
+        if (e?.code !== 11000) throw e;
+        caseDoc = await FoodCancellationCase.findOne({ orderId: order._id });
+    }
+    if (finalAmount > 0 && order.userId) {
+        const existing = await FoodUserPenalty.findOne({ orderId: order._id });
+        let pen = existing;
+        if (!existing) {
+            pen = await FoodUserPenalty.create({
+                userId: order.userId, orderId: order._id, amount: finalAmount, source: CANCEL_POLICY_SOURCE, caseId: caseDoc._id, breakdown,
+                reason: `Order #${orderLabel(order)} could not be delivered - customer unreachable (food returned to the restaurant)`, createdByAdminId: adminId || null,
+            });
+        } else if (existing.status === 'pending') {
+            existing.amount = finalAmount; existing.source = CANCEL_POLICY_SOURCE; existing.caseId = caseDoc._id; existing.breakdown = breakdown;
+            await existing.save();
+        }
+        await FoodCancellationCase.updateOne({ _id: caseDoc._id }, { $set: { penaltyId: pen._id } });
+    }
+    await audit(adminId, 'RETURN_PENALTY', 'case', caseDoc._id, null, { amount: finalAmount, calculated: breakdown.total });
+    return { caseId: caseDoc._id, amount: finalAmount, breakdown };
+}
+
+/** Restaurant OTP confirmed the food is back: pay the restaurant its share of the food and the rider the extra return pay (once each). */
+export async function settleReturnPayouts(orderId) {
+    const c = await FoodCancellationCase.findOne({ orderId: oid(orderId), reasonCode: RETURN_REASON });
+    if (!c) return null;
+    const b = c.breakdown || {};
+    const restaurant = await creditParty({
+        caseDoc: c, key: 'return_restaurant', party: 'RESTAURANT', partyId: c.restaurantId, amount: r2(b.restaurantPayable), kind: 'restaurant_return_compensation', category: 'order_payout',
+        description: `Compensation (${b.restaurantSharePercent}% of food) for returned order ${c.orderLabel}`,
+    });
+    const rider = await creditParty({
+        caseDoc: await FoodCancellationCase.findById(c._id), key: 'return_rider', party: 'DELIVERY_PARTNER', partyId: c.riderId, amount: r2(b.riderReturnPay), kind: 'rider_return_pay', category: 'delivery_payout',
+        description: `Return pay for bringing back order ${c.orderLabel}`,
+    });
+    await FoodCancellationCase.updateOne({ _id: c._id }, { $set: { status: 'closed' }, $push: { timeline: { at: new Date(), event: 'returned_to_restaurant', note: `Restaurant Rs ${r2(b.restaurantPayable)}, rider return pay Rs ${r2(b.riderReturnPay)}` } } });
+    return { restaurant, rider };
+}
+
+/* ------------------------------ Live calculator (admin) ------------------------------ */
+const DRAFT_GROUPS = ['stage2', 'stage3', 'riderCompensation', 'rescue', 'cod'];
+
+/** Overlay unsaved admin edits on the saved config. Only known numeric/boolean settings are taken; blanks keep the saved value. */
+function mergeDraft(saved, draft) {
+    if (!draft || typeof draft !== 'object') return saved;
+    const out = { ...saved };
+    for (const k of ['gstPercent', 'gstOnFoodPenalty']) {
+        if (typeof draft[k] === 'boolean' || (draft[k] !== '' && draft[k] != null && Number.isFinite(Number(draft[k])))) out[k] = typeof draft[k] === 'boolean' ? draft[k] : Number(draft[k]);
+    }
+    for (const g of DRAFT_GROUPS) {
+        if (!draft[g] || typeof draft[g] !== 'object') continue;
+        const merged = { ...(saved[g] || {}) };
+        for (const [k, v] of Object.entries(draft[g])) {
+            if (typeof v === 'boolean') merged[k] = v;
+            else if (v !== '' && v != null && Number.isFinite(Number(v))) merged[k] = Number(v);
+        }
+        out[g] = merged;
+    }
+    return out;
+}
+
+/**
+ * Admin calculator: runs the SAME functions the real cancellation uses (computeBreakdown / settlementFor) on an example order,
+ * with the admin's unsaved edits overlaid, so what they see is exactly what a customer would be charged.
+ */
+export async function simulateCancellation(input = {}, draft = null) {
+    const saved = await getConfig({ fresh: true });
+    const cfg = withConfigDefaults(mergeDraft(saved, draft));
+    const stage = Number(input.stage) === 3 ? 3 : 2;
+    const online = String(input.paymentMethod || 'cash') === 'online';
+    const n = (v, d = 0) => (v === '' || v == null || !Number.isFinite(Number(v)) ? d : Math.max(0, Number(v)));
+    const foodValue = r2(n(input.foodValue, 500));
+    const deliveryFee = r2(n(input.deliveryFee, 30));
+    const platformFee = r2(n(input.platformFee, 5));
+    const trackedKm = r2(n(input.trackedKm, 2));
+    const orderTotal = r2(input.orderTotal === '' || input.orderTotal == null ? foodValue + deliveryFee + platformFee : n(input.orderTotal));
+    const customerAtFault = !input.faultParty || input.faultParty === 'customer';
+    const order = {
+        pricing: { subtotal: foodValue, deliveryFee, platformFee, total: orderTotal },
+        payment: { method: online ? 'razorpay' : 'cash', status: online ? 'paid' : 'pending' },
+        cancelTracking: { trackedKm }, dispatch: { deliveryPartnerId: 'rider' }, orderStatus: stage === 3 ? 'picked_up' : 'preparing',
+    };
+    const b = computeBreakdown(order, stage, cfg, !customerAtFault);
+    const hold = usesRescueHold(order, stage, cfg) && customerAtFault;
+    const rescuePrice = r2((foodValue * (100 - (cfg.rescue.discountPercent || 0))) / 100);
+    const rescueRestaurant = r2((rescuePrice * (cfg.rescue.restaurantSharePercent || 0)) / 100);
+    const failedComp = r2((foodValue * (cfg.rescue.failedRestaurantCompPercent || 0)) / 100);
+
+    const customerSide = (total) => {
+        const st = settlementFor(order, total);
+        return online
+            ? { mode: 'cut_from_payment', paid: st.paid, charge: r2(Math.min(total, st.paid)), refund: st.refundAmount, outstanding: st.shortfall, codBlocked: false }
+            : { mode: 'outstanding', paid: 0, charge: r2(total), refund: 0, outstanding: r2(total), codBlocked: Boolean(cfg.cod?.blockWhileOutstanding && total > 0) };
+    };
+    const scenario = (key, title, when, customer, restaurant, restaurantNote, rider, riderNote) => ({ key, title, when, customer, restaurant: { amount: r2(restaurant), note: restaurantNote }, rider: { amount: r2(rider), note: riderNote } });
+
+    const scenarios = [];
+    if (stage === 2) {
+        scenarios.push(scenario('cancelled', 'Cancelled while food is being prepared', 'Customer cancels after the restaurant accepted, before pickup', customerSide(b.total),
+            b.restaurantPayable, `${b.restaurantSharePercent}% of food`, b.riderPayable, `Distance covered (${trackedKm} km GPS)`));
+    } else if (!online) {
+        scenarios.push(scenario('returned', 'Food returned to the restaurant (OTP)', 'Customer unreachable / cancels after pickup and the rider brings the food back', customerSide(b.total),
+            b.restaurantPayable, `${b.restaurantSharePercent}% of food`, b.riderPayable + b.riderReturnPay, `Delivery charge Rs ${b.riderPayable} + return pay Rs ${b.riderReturnPay}`));
+        if (cfg.rescue.enabled) {
+            scenarios.push(scenario('rescue_sold', 'Customer cancels in the app: Food Rescue sold', 'COD cancel in the app starts Food Rescue and someone buys it', customerSide(b.total),
+                rescueRestaurant, `${cfg.rescue.restaurantSharePercent}% of rescue price Rs ${rescuePrice}`, b.riderPayable, 'Delivery charge (new buyer\'s delivery is paid on that order)'));
+            scenarios.push(scenario('rescue_unsold', 'Customer cancels in the app: Food Rescue unsold', 'Nobody buys the food within the rescue window', customerSide(b.total),
+                failedComp, `${cfg.rescue.failedRestaurantCompPercent}% of food`, b.riderPayable, 'Delivery charge'));
+        }
+    } else if (hold) {
+        scenarios.push(scenario('rescue_sold', 'Food Rescue sold', 'Another customer buys the food in the rescue window', customerSide(b.total),
+            rescueRestaurant, `${cfg.rescue.restaurantSharePercent}% of rescue price Rs ${rescuePrice}`, b.riderPayable, 'Delivery charge (new buyer\'s delivery is paid on that order)'));
+        scenarios.push(scenario('rescue_unsold', 'Food Rescue unsold', 'Nobody buys the food: the full payment is kept, no refund', { mode: 'cut_from_payment', paid: orderTotal, charge: orderTotal, refund: 0, outstanding: 0, codBlocked: false },
+            failedComp, `${cfg.rescue.failedRestaurantCompPercent}% of food`, b.riderPayable, 'Delivery charge'));
+    } else {
+        scenarios.push(scenario('cancelled', 'Cancelled after pickup', 'Customer cancels after the rider picked up the food', customerSide(b.total),
+            b.restaurantPayable, `${b.restaurantSharePercent}% of food`, b.riderPayable, 'Delivery charge'));
+    }
+    return {
+        stage, paymentMethod: online ? 'online' : 'cash', foodValue, deliveryFee, platformFee, trackedKm, orderTotal,
+        waived: !customerAtFault, breakdown: b, refundHeldForRescue: hold, scenarios,
+        warnings: [
+            ...(online && orderTotal < b.total ? ['The charge is higher than the amount paid: the extra stays outstanding.'] : []),
+            ...(b.restaurantPayable + b.riderPayable > b.total && customerAtFault && !hold ? ['Eqosy pays out more than it charges the customer for this case.'] : []),
+        ],
+    };
 }
 
 export async function customerSummaryAdmin(userId) {
@@ -1301,10 +1578,28 @@ export async function listAudit({ limit = 100 } = {}) {
 }
 
 export async function summary() {
-    const [cases, outstanding, rescue] = await Promise.all([
-        FoodCancellationCase.aggregate([{ $group: { _id: '$stage', count: { $sum: 1 }, charged: { $sum: '$breakdown.total' } } }]),
-        FoodUserPenalty.aggregate([{ $match: { source: CANCEL_POLICY_SOURCE, paidAt: null, status: { $in: OUTSTANDING_STATUSES } } }, { $group: { _id: null, total: { $sum: '$amount' }, users: { $addToSet: '$userId' } } }]),
+    const policy = { source: CANCEL_POLICY_SOURCE };
+    const [cases, chargedByStage, money, outstanding, rescue] = await Promise.all([
+        FoodCancellationCase.aggregate([{ $group: { _id: '$stage', count: { $sum: 1 }, calculated: { $sum: '$breakdown.total' } } }]),
+        // "Charged" = what the ledger really holds for the case (waived penalties count as 0).
+        FoodUserPenalty.aggregate([
+            { $match: { ...policy, caseId: { $ne: null }, status: { $ne: 'waived' } } },
+            { $lookup: { from: FoodCancellationCase.collection.name, localField: 'caseId', foreignField: '_id', as: 'c' } },
+            { $unwind: '$c' },
+            { $group: { _id: '$c.stage', charged: { $sum: '$amount' } } },
+        ]),
+        FoodUserPenalty.aggregate([
+            { $match: { ...policy, status: { $ne: 'waived' } } },
+            { $group: { _id: { $cond: [{ $ne: ['$paidAt', null] }, { $cond: [{ $eq: ['$paidVia', 'refund_deduction'] }, 'deducted', 'collected'] }, 'outstanding'] }, total: { $sum: '$amount' } } },
+        ]),
+        FoodUserPenalty.aggregate([{ $match: { ...policy, paidAt: null, status: { $in: OUTSTANDING_STATUSES } } }, { $group: { _id: null, total: { $sum: '$amount' }, users: { $addToSet: '$userId' } } }]),
         FoodRescueListing.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     ]);
-    return { byStage: cases, outstandingTotal: r2(outstanding[0]?.total || 0), usersWithOutstanding: outstanding[0]?.users?.length || 0, rescue };
+    const chargedMap = new Map(chargedByStage.map((x) => [x._id, r2(x.charged)]));
+    const moneyMap = Object.fromEntries(money.map((m) => [m._id, r2(m.total)]));
+    return {
+        byStage: cases.map((c) => ({ ...c, charged: chargedMap.get(c._id) || 0 })),
+        money: { deducted: moneyMap.deducted || 0, collected: moneyMap.collected || 0, outstanding: moneyMap.outstanding || 0 },
+        outstandingTotal: r2(outstanding[0]?.total || 0), usersWithOutstanding: outstanding[0]?.users?.length || 0, rescue,
+    };
 }

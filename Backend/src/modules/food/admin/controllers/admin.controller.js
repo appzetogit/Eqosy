@@ -1282,7 +1282,7 @@ export async function approveDeliveryPartner(req, res, next) {
 
 export async function deactivateDeliveryPartner(req, res, next) {
     try {
-        const partner = await adminService.deactivateDeliveryPartner(req.params.id);
+        const partner = await adminService.deactivateDeliveryPartner(req.params.id, req.body?.reason || req.query?.reason || '');
         if (!partner) {
             return res.status(404).json({
                 success: false,
@@ -1291,9 +1291,29 @@ export async function deactivateDeliveryPartner(req, res, next) {
         }
         res.status(200).json({
             success: true,
-            message: 'Delivery partner deactivated successfully',
+            message: 'Delivery partner terminated successfully',
             data: partner
         });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function holdDeliveryPartner(req, res, next) {
+    try {
+        const partner = await adminService.holdDeliveryPartner(req.params.id, req.body?.reason || '');
+        if (!partner) return res.status(404).json({ success: false, message: 'Approved delivery partner not found' });
+        res.status(200).json({ success: true, message: 'Delivery partner put on hold', data: partner });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function releaseDeliveryPartnerHold(req, res, next) {
+    try {
+        const partner = await adminService.releaseDeliveryPartnerHold(req.params.id);
+        if (!partner) return res.status(404).json({ success: false, message: 'Partner is not on hold' });
+        res.status(200).json({ success: true, message: 'Hold removed', data: partner });
     } catch (error) {
         next(error);
     }
@@ -1498,6 +1518,26 @@ export async function getCashLimitSettlements(req, res, next) {
     try {
         const data = await adminService.getCashLimitSettlements(req.query || {});
         res.status(200).json({ success: true, message: 'Cash limit settlements fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function verifyCashDeposit(req, res, next) {
+    try {
+        const { verifyCashDepositByAdmin } = await import('../../delivery/services/deliveryFinance.service.js');
+        const data = await verifyCashDepositByAdmin(req.params.id, req.user?.userId, req.body || {});
+        res.status(200).json({ success: true, message: 'Deposit verified. Cash in hand updated.', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function rejectCashDeposit(req, res, next) {
+    try {
+        const { rejectCashDepositByAdmin } = await import('../../delivery/services/deliveryFinance.service.js');
+        const data = await rejectCashDepositByAdmin(req.params.id, req.user?.userId, req.body || {});
+        res.status(200).json({ success: true, message: 'Deposit rejected', data });
     } catch (error) {
         next(error);
     }

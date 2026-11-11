@@ -2075,6 +2075,8 @@ export async function assignDeliveryPartnerAdmin(
       const sanitizedPayload = sanitizeOrderForExternal(fullOrderDoc || order);
       const deliveryRoom = rooms.delivery(deliveryPartnerId);
 
+      const { buildCashWarningForOffer } = await import('../../delivery/services/deliveryCashLimit.service.js');
+      Object.assign(sanitizedPayload, await buildCashWarningForOffer(deliveryPartnerId, fullOrderDoc || order));
       io.to(deliveryRoom).emit("new_order", sanitizedPayload);
       io.to(deliveryRoom).emit("new_order_available", sanitizedPayload);
       io.to(deliveryRoom).emit("order_assigned", sanitizedPayload);

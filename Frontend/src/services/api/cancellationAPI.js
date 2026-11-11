@@ -24,6 +24,7 @@ export const adminCancellationAPI = {
   getConfig: () => apiClient.get("/food/admin/cancellation/config", admin),
   updateConfig: (body) => apiClient.put("/food/admin/cancellation/config", body, admin),
   summary: () => apiClient.get("/food/admin/cancellation/summary", admin),
+  simulate: (input, draft) => apiClient.post("/food/admin/cancellation/simulate", { input, draft }, admin),
   cases: (params = {}) => apiClient.get("/food/admin/cancellation/cases", { params, ...admin }),
   caseDetail: (id) => apiClient.get(`/food/admin/cancellation/cases/${id}`, admin),
   retrySettlements: (id) => apiClient.post(`/food/admin/cancellation/cases/${id}/retry-settlements`, {}, admin),

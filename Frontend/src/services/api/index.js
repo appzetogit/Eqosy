@@ -394,8 +394,16 @@ export const adminAPI = {
       },
     ),
   /** DELETE /food/admin/delivery/:id - deactivates (blocks) the partner; history is preserved. */
-  deleteDeliveryPartner: (id) =>
-    apiClient.delete(`/food/admin/delivery/${String(id)}`, { contextModule: "admin" }),
+  deleteDeliveryPartner: (id, reason = "") =>
+    apiClient.delete(`/food/admin/delivery/${String(id)}`, {
+      data: { reason: String(reason || "").trim() },
+      contextModule: "admin",
+    }),
+  /** PATCH /food/admin/delivery/:id/hold - no new orders, no withdrawals; partner stays logged in. */
+  holdDeliveryPartner: (id, reason = "") =>
+    apiClient.patch(`/food/admin/delivery/${String(id)}/hold`, { reason: String(reason || "").trim() }, { contextModule: "admin" }),
+  releaseDeliveryPartnerHold: (id) =>
+    apiClient.patch(`/food/admin/delivery/${String(id)}/release-hold`, {}, { contextModule: "admin" }),
   rejectDeliveryPartner: (id, reason) =>
     apiClient.patch(
       `/food/admin/delivery/${String(id)}/reject`,
@@ -855,6 +863,14 @@ export const adminAPI = {
   getCashLimitSettlements: (params = {}) =>
     apiClient.get("/food/admin/delivery/cash-limit-settlements", {
       params,
+      contextModule: "admin",
+    }),
+  verifyCashDeposit: (id, body = {}) =>
+    apiClient.patch(`/food/admin/delivery/cash-limit-settlements/${id}/verify`, body, {
+      contextModule: "admin",
+    }),
+  rejectCashDeposit: (id, body = {}) =>
+    apiClient.patch(`/food/admin/delivery/cash-limit-settlements/${id}/reject`, body, {
       contextModule: "admin",
     }),
 

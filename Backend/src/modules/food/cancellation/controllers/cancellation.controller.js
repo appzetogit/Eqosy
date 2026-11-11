@@ -24,6 +24,7 @@ export const verifyRescue = wrap((req) => svc.verifyRescuePayment(req.user.userI
 export const getConfig = wrap(() => svc.getConfig({ fresh: true }));
 export const updateConfig = wrap((req) => svc.updateConfig(req.body || {}, req.user?.userId));
 export const summary = wrap(() => svc.summary());
+export const simulate = wrap((req) => svc.simulateCancellation(req.body?.input || {}, req.body?.draft || null));
 export const listCases = wrap((req) => svc.listCases(req.query));
 export const getCase = wrap((req) => svc.getCase(req.params.id));
 export const retrySettlements = wrap((req) => svc.retrySettlements(req.params.id));

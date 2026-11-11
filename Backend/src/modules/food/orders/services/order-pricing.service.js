@@ -240,7 +240,7 @@ export function evaluateAdditionalCharges(configuredCharges, itemTotal) {
 
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
-    .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
+    .select("status restaurantName isRestaurant zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
 
@@ -588,15 +588,6 @@ export async function calculateOrderPricing(userId, dto) {
     }
   }
 
-  // GST uses the same admin-configured Food GST rate for every component, including these charges.
-  // The item GST is charged on the value after the coupon discount, so the customer is not taxed on money they never pay.
-  const itemGst = Math.round(Math.max(0, subtotal - discount) * (configuredGstRate / 100));
-  const platformGst = Math.round(platformFee * (configuredGstRate / 100));
-  const deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
-  const additionalChargesGst = Math.round(configuredAdditionalChargesTotal * (configuredGstRate / 100));
-  const tax = itemGst + platformGst + deliveryGst + additionalChargesGst;
-  const gstBreakdown = { item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst };
-
   const zoneIdForSurge = await resolveOrderZoneId(dto, restaurant);
   let surgeAmount = 0;
   let surgeTitle = (feeSettings.surgeTitle && String(feeSettings.surgeTitle).trim()) || "Surge Charge";
@@ -609,6 +600,33 @@ export async function calculateOrderPricing(userId, dto) {
       }
     }
   }
+
+  // Grocery outlets (isRestaurant === false): items carry 0% GST. Only the service charges are taxed:
+  // delivery fee 5%, platform fee + surge + additional charges (small cart etc.) 18%.
+  const isGrocery = restaurant.isRestaurant === false;
+  const GROCERY_DELIVERY_GST_RATE = 5;
+  const GROCERY_SERVICE_GST_RATE = 18;
+
+  let itemGst; let platformGst; let deliveryGst; let additionalChargesGst; let surgeGst = 0;
+  if (isGrocery) {
+    itemGst = 0;
+    deliveryGst = Math.round(deliveryFee * (GROCERY_DELIVERY_GST_RATE / 100));
+    platformGst = Math.round(platformFee * (GROCERY_SERVICE_GST_RATE / 100));
+    surgeGst = Math.round(surgeAmount * (GROCERY_SERVICE_GST_RATE / 100));
+    additionalChargesGst = Math.round(configuredAdditionalChargesTotal * (GROCERY_SERVICE_GST_RATE / 100));
+  } else {
+    // GST uses the same admin-configured Food GST rate for every component, including these charges.
+    // The item GST is charged on the value after the coupon discount, so the customer is not taxed on money they never pay.
+    itemGst = Math.round(Math.max(0, subtotal - discount) * (configuredGstRate / 100));
+    platformGst = Math.round(platformFee * (configuredGstRate / 100));
+    deliveryGst = Math.round(deliveryFee * (configuredGstRate / 100));
+    additionalChargesGst = Math.round(configuredAdditionalChargesTotal * (configuredGstRate / 100));
+  }
+  const tax = itemGst + platformGst + deliveryGst + additionalChargesGst + surgeGst;
+  const gstBreakdown = {
+    item: itemGst, platform: platformGst, delivery: deliveryGst, additionalCharges: additionalChargesGst, surge: surgeGst,
+    ...(isGrocery ? { rates: { item: 0, delivery: GROCERY_DELIVERY_GST_RATE, platform: GROCERY_SERVICE_GST_RATE, surge: GROCERY_SERVICE_GST_RATE, additionalCharges: GROCERY_SERVICE_GST_RATE } } : {}),
+  };
 
   const rawTotal = Math.max(
     0,
@@ -627,7 +645,7 @@ export async function calculateOrderPricing(userId, dto) {
     pricing: {
       subtotal,
       tax,
-      gstRate: configuredGstRate,
+      gstRate: isGrocery ? 0 : configuredGstRate,
       gstBreakdown,
       packagingFee,
       deliveryFee,

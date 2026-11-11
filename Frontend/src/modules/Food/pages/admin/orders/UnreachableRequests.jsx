@@ -1,7 +1,16 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneOff, RefreshCw, Store, User, Bike, Check, X, Loader2, Leaf } from "lucide-react";
 import { toast } from "sonner";
 import { adminAPI } from "@food/api";
+import CancellationCalculator from "../performance/CancellationCalculator";
+
+/** The real order's numbers, so the calculator shows exactly what this customer / restaurant / rider will be charged or paid. */
+const calcInitial = (order) => {
+  const p = order?.pricing || {};
+  const prepaid = ["razorpay", "razorpay_qr", "wallet"].includes(String(order?.payment?.method || "").toLowerCase())
+    && String(order?.payment?.status || "").toLowerCase() === "paid";
+  return { paymentMethod: prepaid ? "online" : "cash", stage: 3, foodValue: p.subtotal || 0, deliveryFee: p.deliveryFee || 0, platformFee: p.platformFee || 0, orderTotal: p.total || "", trackedKm: 0 };
+};
 
 const unwrapRows = (res) => {
   const data = res?.data?.data || res?.data || res;
@@ -33,6 +42,8 @@ export default function UnreachableRequests() {
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Once the admin types an amount themselves, the live calculator stops overwriting it.
+  const penaltyTouched = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -65,11 +76,10 @@ export default function UnreachableRequests() {
     setReason("");
     setRescuePrice(String(order?.rescueOption?.defaultPrice ?? ""));
     setRescuePct(String(order?.rescueOption?.penaltyPercent ?? ""));
-    // COD return: suggest the configured % of the food value; the admin can change either the % or the amount.
-    const food = Number(order?.rescueOption?.foodValue ?? order?.pricing?.subtotal ?? 0);
-    const retPct = Number(order?.rescueOption?.returnPenaltyPercent ?? 0);
-    setReturnPct(String(retPct));
-    setPenalty(retPct > 0 && food > 0 ? String(Math.round((food * retPct) / 100)) : "");
+    // Return: the % comes from Rules (stage 3); the live calculator turns it into the full amount (food + delivery + fees).
+    penaltyTouched.current = false;
+    setReturnPct(String(Number(order?.rescueOption?.returnPenaltyPercent ?? 0)));
+    setPenalty("");
   };
 
   const closeDialog = () => {
@@ -98,7 +108,7 @@ export default function UnreachableRequests() {
           setSubmitting(false);
           return;
         }
-        await adminAPI.approveUndeliveredReturn(orderKey, { penaltyAmount: amount, note: note.trim() });
+        await adminAPI.approveUndeliveredReturn(orderKey, { penaltyAmount: amount, penaltyPercent: returnPct === "" ? undefined : Number(returnPct), note: note.trim() });
         toast.success(
           amount > 0
             ? `Approved. Rs ${amount} penalty will be charged on the customer's next order.`
@@ -231,7 +241,7 @@ export default function UnreachableRequests() {
 
       {active ? (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4" onClick={closeDialog}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {mode === "rescue" ? (
               <>
                 <h2 className="text-lg font-bold text-slate-900">Send to Food Rescue</h2>
@@ -267,8 +277,18 @@ export default function UnreachableRequests() {
                   />
                 </label>
                 <p className="mt-1 text-xs text-slate-500">
-                  Food penalty ≈ Rs {Math.round(((Number(active.rescueOption?.foodValue) || 0) * (Number(rescuePct) || 0)) / 100)}, plus the delivery fee, platform fee, cancellation fee and GST set in Rules. It is taken from the customer's payment right away and the rest is refunded.
+                  If the food is sold, this penalty plus the delivery fee, platform fee, cancellation fee and GST set in Rules is cut from the payment and the rest is refunded. If nobody buys it, the full payment is kept.
                 </p>
+                <div className="mt-4">
+                  <CancellationCalculator
+                    draft={{ rescue: { successPenaltyPercent: rescuePct } }}
+                    initial={calcInitial(active)}
+                    lockedInputs
+                    fixedStage={3}
+                    fixedPayment="online"
+                    title="Live calculator · this order"
+                  />
+                </div>
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
                   Note (optional)
                   <input
@@ -295,9 +315,9 @@ export default function UnreachableRequests() {
                       step="1"
                       value={returnPct}
                       onChange={(e) => {
+                        // Changing the % hands control back to the calculator.
+                        penaltyTouched.current = false;
                         setReturnPct(e.target.value);
-                        const food = Number(active.rescueOption?.foodValue ?? active.pricing?.subtotal ?? 0);
-                        setPenalty(String(Math.round((food * (Number(e.target.value) || 0)) / 100)));
                       }}
                       className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
                     />
@@ -309,15 +329,26 @@ export default function UnreachableRequests() {
                       min="0"
                       step="1"
                       value={penalty}
-                      onChange={(e) => setPenalty(e.target.value)}
+                      onChange={(e) => { penaltyTouched.current = true; setPenalty(e.target.value); }}
                       placeholder="0 = no penalty"
                       className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-500"
                     />
                   </label>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Charged on the same customer's next order (they cannot use Cash on Delivery until it is paid). Food value Rs {active.rescueOption?.foodValue ?? active.pricing?.subtotal ?? "-"}. Set 0 for no penalty.
+                  Charged on the same customer's next order (they cannot use Cash on Delivery until it is paid). The amount follows the calculator below until you type your own. Set 0 for no penalty.
                 </p>
+                <div className="mt-4">
+                  <CancellationCalculator
+                    draft={{ stage3: { foodPenaltyPercent: returnPct } }}
+                    initial={calcInitial(active)}
+                    lockedInputs
+                    fixedStage={3}
+                    fixedPayment="cash"
+                    title="Live calculator · this order (food returned to restaurant)"
+                    onResult={(r) => { if (!penaltyTouched.current && !r.waived) setPenalty(String(r.breakdown?.total ?? 0)); }}
+                  />
+                </div>
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
                   Note (optional)
                   <input

@@ -73,13 +73,13 @@ ok('stage 2 cancelled with 94.5', done2.breakdown.total === 94.5);
 const pen2 = await FoodUserPenalty.findOne({ orderId: o2 });
 ok('penalty row created once', pen2 && pen2.amount === 94.5 && pen2.source === 'cancellation_policy' && pen2.status === 'pending');
 ok('COD disabled while unpaid', (await svc.isCodBlocked(U)).blocked === true && (await svc.isCodBlocked(U)).amount === 94.5);
-ok('restaurant got 20% food compensation', (await walletCredits(R, 'order_payout')) === 40, String(await walletCredits(R, 'order_payout')));
+ok('restaurant got 15% of food (policy share)', (await walletCredits(R, 'order_payout')) === 30, String(await walletCredits(R, 'order_payout')));
 ok('rider got GPS-based compensation', (await walletCredits(P, 'delivery_payout')) === 25, String(await walletCredits(P, 'delivery_payout')));
 await throws('cannot cancel twice / double charge', () => svc.cancelWithPolicy(o2, U, { reasonCode: 'changed_mind', acknowledgePenalty: true }), /cannot be cancelled/);
 ok('still exactly one penalty and one case', (await FoodUserPenalty.countDocuments({ orderId: o2 })) === 1 && (await M.FoodCancellationCase.countDocuments({ orderId: o2 })) === 1);
 const c2 = await M.FoodCancellationCase.findOne({ orderId: o2 });
 await svc.retrySettlements(c2._id);
-ok('retrying settlements never pays twice', (await walletCredits(R, 'order_payout')) === 40 && (await walletCredits(P, 'delivery_payout')) === 25);
+ok('retrying settlements never pays twice', (await walletCredits(R, 'order_payout')) === 30 && (await walletCredits(P, 'delivery_payout')) === 25);
 const ord2 = await FoodOrder.findById(o2);
 ok('order synced: cancelled_by_user + policy fields', ord2.orderStatus === 'cancelled_by_user' && ord2.cancellationPolicy.stage === 2 && ord2.cancellationPolicy.penaltyTotal === 94.5);
 
@@ -104,7 +104,7 @@ const d3 = await svc.cancelWithPolicy(o3, U3, { reasonCode: 'changed_mind', ackn
 const lst = await M.FoodRescueListing.findOne({ originalOrderId: o3 });
 ok('rescue listing: 50% price, rider GPS, 15 min', lst && lst.rescueFoodPrice === 100 && lst.originalFoodValue === 200 && lst.location.coordinates[0] === 75.86 && Math.abs(lst.expiresAt - Date.now() - 15 * MIN) < 5000);
 ok('order label CANCELLED – FOOD RESCUE ACTIVATED', (await FoodOrder.findById(o3)).cancellationPolicy.statusLabel === 'CANCELLED – FOOD RESCUE ACTIVATED');
-ok('rider travel paid in stage 3, restaurant not paid yet', (await walletCredits(P, 'delivery_payout')) === 75 && (await walletCredits(R, 'order_payout')) === 40, String(await walletCredits(P, 'delivery_payout')));
+ok('rider gets the delivery charge in stage 3, restaurant not paid yet', (await walletCredits(P, 'delivery_payout')) === 80 && (await walletCredits(R, 'order_payout')) === 30, String(await walletCredits(P, 'delivery_payout')));
 
 const near = await svc.listNearbyRescues(oid(), { lat: 22.72, lng: 75.86 });
 ok('nearby customer sees it (within 3 km)', near.length === 1 && near[0].rescuePrice === 100);
@@ -145,7 +145,7 @@ ok('listing + case marked claimed', (await M.FoodRescueListing.findById(lst._id)
 await throws('late payer loses and is refunded, not charged twice', () => svc.verifyRescuePayment(buyers[loser], { orderId: loserOrder, razorpayOrderId: 'order_L', razorpayPaymentId: 'pay_L', razorpaySignature: sign('order_L', 'pay_L') }), /someone else claimed/);
 ok('listing still belongs to the winner', String((await M.FoodRescueListing.findById(lst._id)).claimedBy) === String(buyers[winner]));
 await svc.runCancellationSweep();
-ok('claimed rescue is not expired by the sweeper, no compensation paid', (await M.FoodRescueListing.findById(lst._id)).status === 'claimed' && (await walletCredits(R, 'order_payout')) === 40);
+ok('claimed rescue is not expired by the sweeper, no compensation paid', (await M.FoodRescueListing.findById(lst._id)).status === 'claimed' && (await walletCredits(R, 'order_payout')) === 30);
 
 // ---- rescue expiry
 const o4 = await mkOrder('picked_up');
@@ -155,7 +155,7 @@ await M.FoodRescueListing.updateOne({ _id: lst4._id }, { $set: { expiresAt: new 
 await svc.runCancellationSweep();
 await svc.runCancellationSweep();
 ok('unclaimed rescue EXPIRED', (await M.FoodRescueListing.findById(lst4._id)).status === 'expired' && (await M.FoodCancellationCase.findOne({ orderId: o4 })).status === 'rescue_expired');
-ok('restaurant gets 50% of ORIGINAL food value (100), once', (await walletCredits(R, 'order_payout')) === 140, String(await walletCredits(R, 'order_payout')));
+ok('restaurant gets 50% of ORIGINAL food value (100), once', (await walletCredits(R, 'order_payout')) === 130, String(await walletCredits(R, 'order_payout')));
 ok('order label shows expired', (await FoodOrder.findById(o4)).cancellationPolicy.statusLabel === 'CANCELLED – FOOD RESCUE EXPIRED');
 ok('rider told to keep the food', (await M.FoodCancellationCase.findOne({ orderId: o4 })).notified.some((k) => k.startsWith('expired:DELIVERY_PARTNER')));
 const o5 = await mkOrder('picked_up');
@@ -211,7 +211,7 @@ ok('online cancel: refund processed for paid - charge', wd.payMode === 'refund_d
 const wpen = await FoodUserPenalty.findOne({ orderId: w1, source: 'cancellation_policy' });
 ok('deduction recorded as already paid (nothing outstanding, COD stays on)', wpen.status === 'paid' && wpen.paidVia === 'refund_deduction' && wpen.amount === 94.5 && (await svc.isCodBlocked(UW)).blocked === false);
 ok('order payment shows refunded 140.5', (await FoodOrder.findById(w1)).payment.refund.amount === 140.5 && (await FoodOrder.findById(w1)).payment.status === 'refunded');
-ok('restaurant + rider still paid for online cancellations', (await walletCredits(R, 'order_payout')) >= 40);
+ok('restaurant + rider still paid for online cancellations', (await walletCredits(R, 'order_payout')) >= 30);
 const walletTx = (await FoodUser.collection.findOne({ _id: UW }))?.wallet?.transactions || [];
 await svc.processRefund(wc._id);
 ok('refund can never be sent twice', ((await FoodUser.collection.findOne({ _id: UW }))?.wallet?.transactions || []).filter((t) => t.type === 'refund').length === walletTx.filter((t) => t.type === 'refund').length);
@@ -246,8 +246,58 @@ await svc.trackRiderDistance(o8, 25.0, 78.0, 10);
 await svc.trackRiderDistance(o8, 25.0, 78.001, 10);
 ok('GPS teleport is not counted', (await FoodOrder.findById(o8)).cancelTracking.trackedKm < 2.5);
 
+// ---- prepaid, picked up: refund is held for the Food Rescue outcome (sold -> 60% charge, unsold -> full payment kept)
+const refundsOf = async (id) => ((await FoodUser.collection.findOne({ _id: id }))?.wallet?.transactions || []).filter((t) => t.type === 'refund').length;
+const h1 = await onlineOrder('picked_up');
+const hp = await svc.previewCancellation(h1, UW, 'changed_mind');
+ok('prepaid stage 3 preview: 60% of 200 + 30 + 5 + 20 + 4.5 = 179.5, refund 55.5 if rescued, held', hp.stage === 3 && hp.breakdown.foodPenalty === 120 && hp.charge === 179.5 && hp.refundAmount === 55.5 && hp.refundHeldForRescue === true && hp.refundIfNotRescued === 0, JSON.stringify(hp));
+const refundsBefore = await refundsOf(UW);
+await svc.cancelWithPolicy(h1, UW, { reasonCode: 'changed_mind', acknowledgePenalty: true });
+const hc = await M.FoodCancellationCase.findOne({ orderId: h1 });
+ok('refund is HELD (nothing refunded yet)', hc.refund.status === 'held' && hc.refund.amount === 55.5 && (await refundsOf(UW)) === refundsBefore, JSON.stringify(hc.refund));
+ok('admin view: provisional, not final', svc.actualOutcome(hc.toObject(), await FoodUserPenalty.findById(hc.penaltyId).lean()).state === 'pending_rescue');
+const hl = await M.FoodRescueListing.findOne({ originalOrderId: h1 });
+await M.FoodRescueListing.updateOne({ _id: hl._id }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+await svc.runCancellationSweep();
+await svc.runCancellationSweep();
+const hc2 = await M.FoodCancellationCase.findOne({ orderId: h1 });
+const hpen = await FoodUserPenalty.findById(hc.penaltyId);
+ok('unsold rescue: whole payment kept, no refund, charged once', hc2.refund.status === 'none' && hc2.refund.amount === 0 && hc2.refund.deducted === 235 && hpen.amount === 235 && (await refundsOf(UW)) === refundsBefore, JSON.stringify(hc2.refund));
+ok('admin view: actual charge is 235 (cut from payment)', svc.actualOutcome(hc2.toObject(), hpen.toObject()).amount === 235 && svc.actualOutcome(hc2.toObject(), hpen.toObject()).state === 'deducted');
+const h2 = await onlineOrder('picked_up');
+await svc.cancelWithPolicy(h2, UW, { reasonCode: 'changed_mind', acknowledgePenalty: true });
+const hc3 = await M.FoodCancellationCase.findOne({ orderId: h2 });
+await svc.finalizeHeldRefund(hc3._id, 'rescued');
+await svc.finalizeHeldRefund(hc3._id, 'rescued');
+const hc4 = await M.FoodCancellationCase.findOne({ orderId: h2 });
+ok('sold rescue: 55.5 refunded exactly once, charge stays 179.5', hc4.refund.status === 'processed' && hc4.refund.amount === 55.5 && hc4.refund.attempts === 1 && (await FoodUserPenalty.findById(hc3.penaltyId)).amount === 179.5, JSON.stringify({ r: hc4.refund, n: (await refundsOf(UW)) - refundsBefore, pen: (await FoodUserPenalty.findById(hc3.penaltyId))?.amount }));
+
+// ---- COD unreachable return: one policy case + ledger penalty, payouts only after the restaurant OTP
+const UR = oid(); U = UR;
+const ro = await mkOrder('reached_drop');
+const rOrder = await FoodOrder.findById(ro);
+const rec = await svc.recordReturnPenalty(rOrder, oid(), { percent: 50 });
+ok('return penalty = 50% of 200 + 30 + 5 + 20 + 4.5 = 159.5', rec.amount === 159.5 && rec.breakdown.restaurantPayable === 60, JSON.stringify(rec));
+const rpen = await FoodUserPenalty.findOne({ orderId: ro });
+ok('shows in the ledger and blocks COD', rpen.source === 'cancellation_policy' && rpen.status === 'pending' && (await svc.isCodBlocked(UR)).blocked === true);
+const restBefore = await walletCredits(R, 'order_payout');
+const riderBefore = await walletCredits(P, 'delivery_payout');
+await svc.settleReturnPayouts(ro);
+await svc.settleReturnPayouts(ro);
+ok('restaurant gets 30% (60) and rider Rs 20 return pay, once', (await walletCredits(R, 'order_payout')) === restBefore + 60 && (await walletCredits(P, 'delivery_payout')) === riderBefore + 20);
+
+// ---- live calculator uses the same maths, with unsaved edits applied
+const sim = await svc.simulateCancellation({ stage: 2, paymentMethod: 'cash', foodValue: 200, deliveryFee: 30, platformFee: 5, trackedKm: 2.5 }, null);
+ok('calculator matches the real preview (94.5)', sim.breakdown.total === 94.5 && sim.scenarios[0].restaurant.amount === 30 && sim.scenarios[0].customer.codBlocked === true, JSON.stringify(sim.breakdown));
+const sim2 = await svc.simulateCancellation({ stage: 2, paymentMethod: 'cash', foodValue: 200, deliveryFee: 30, platformFee: 5, trackedKm: 2.5 }, { stage2: { foodPenaltyPercent: 50, restaurantSharePercent: 10 } });
+ok('calculator applies unsaved edits live (154.5, restaurant 20)', sim2.breakdown.total === 154.5 && sim2.scenarios[0].restaurant.amount === 20, JSON.stringify(sim2.breakdown));
+const simP = await svc.simulateCancellation({ stage: 3, paymentMethod: 'online', foodValue: 200, deliveryFee: 30, platformFee: 5 }, null);
+ok('calculator prepaid stage 3: rescued 179.5 / refund 55.5, unsold 235 / refund 0', simP.scenarios[0].customer.refund === 55.5 && simP.scenarios[1].customer.charge === 235 && simP.scenarios[1].customer.refund === 0, JSON.stringify(simP.scenarios.map((s) => s.customer)));
+
 const sm = await svc.summary();
-ok('admin summary works', Array.isArray(sm.byStage) && sm.byStage.length >= 2);
+ok('admin summary works', Array.isArray(sm.byStage) && sm.byStage.length >= 2 && typeof sm.money.deducted === 'number');
+const cl = await svc.listCases({});
+ok('case list carries the actual charge state', cl.items.every((c) => c.actual && typeof c.actual.state === 'string'));
 
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');
 await mongoose.disconnect();

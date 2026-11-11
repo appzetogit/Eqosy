@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Loader2, Save, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { adminCancellationAPI as api } from "@food/api/cancellationAPI"
+import CancellationCalculator from "./CancellationCalculator"
 
 const inr = (v) => `₹${(Number(v) || 0).toFixed(2).replace(/\.00$/, "")}`
 const when = (d) => (d ? new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "-")
@@ -23,6 +24,19 @@ const Table = ({ head, children, empty }) => (
     {empty && <p className="p-6 text-center text-sm text-gray-500">{empty}</p>}
   </div>
 )
+
+/** What really happened to the customer's money (from the ledger), with the frozen calculation shown only when it differs. */
+const ACTUAL_TONE = { deducted: "green", collected: "green", unpaid: "red", waived: "gray", not_charged: "gray", pending_rescue: "blue", not_recorded: "amber" }
+const Actual = ({ a }) => {
+  if (!a) return <span className="text-xs text-gray-400">-</span>
+  const money = ["deducted", "collected", "unpaid", "pending_rescue"].includes(a.state)
+  return (
+    <div className="text-xs">
+      {money ? <b className="text-sm">{inr(a.amount)}</b> : null} <Pill tone={ACTUAL_TONE[a.state] || "gray"}>{a.label}</Pill>
+      {Math.abs((a.calculated || 0) - (a.amount || 0)) > 0.009 && a.state !== "not_charged" ? <div className="text-gray-500">calculated {inr(a.calculated)}</div> : null}
+    </div>
+  )
+}
 
 function useLoad(fn, deps) {
   const [data, setData] = useState(null)
@@ -49,7 +63,13 @@ function Cases() {
     <div className="space-y-3">
       {sum.data && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[["Outstanding (unpaid)", inr(sum.data.outstandingTotal)], ["Customers with dues", sum.data.usersWithOutstanding], ...(sum.data.byStage || []).map((s) => [`Stage ${s._id} cases`, `${s.count} · ${inr(s.charged)}`])].map(([l, v]) => (
+          {[
+            ["Cut from prepaid payments", inr(sum.data.money?.deducted)],
+            ["Collected (COD dues paid)", inr(sum.data.money?.collected)],
+            ["Outstanding (unpaid)", inr(sum.data.outstandingTotal)],
+            ["Customers with dues", sum.data.usersWithOutstanding],
+            ...(sum.data.byStage || []).map((s) => [`Stage ${s._id} · ${s.count} cases`, `${inr(s.charged)} actually charged`]),
+          ].map(([l, v]) => (
             <div key={l} className="rounded-xl border border-gray-200 bg-white p-3"><p className="text-[11px] font-medium uppercase text-gray-500">{l}</p><p className="mt-1 text-lg font-bold">{v}</p></div>
           ))}
         </div>
@@ -59,7 +79,7 @@ function Cases() {
         <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-lg border border-gray-300 p-2 text-sm"><option value="">All statuses</option>{["cancelled", "rescue_active", "rescue_claimed", "rescue_expired"].map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>
       </div>
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-        <Table head={["When", "Order", "Stage", "Reason", "Food", "Rider (km)", "Total charged", "Status", ""]} empty={!(data?.items || []).length ? "No cases yet" : null}>
+        <Table head={["When", "Order", "Stage", "Reason", "Food", "Rider (km)", "Customer charge (actual)", "Refund", "Status", ""]} empty={!(data?.items || []).length ? "No cases yet" : null}>
           {(data?.items || []).map((c) => (
             <tr key={c._id}>
               <td className="px-3 py-2 text-xs">{when(c.createdAt)}</td>
@@ -68,7 +88,8 @@ function Cases() {
               <td className="px-3 py-2 text-xs">{c.reasonLabel || "-"}{c.chargeWaived ? <div className="text-green-700">waived: {c.chargeWaivedReason}</div> : null}</td>
               <td className="px-3 py-2">{inr(c.breakdown?.foodValue)}</td>
               <td className="px-3 py-2">{inr(c.breakdown?.riderPayable)} ({c.breakdown?.riderTrackedKm || 0})</td>
-              <td className="px-3 py-2 font-bold">{inr(c.breakdown?.total)}</td>
+              <td className="px-3 py-2"><Actual a={c.actual} /></td>
+              <td className="px-3 py-2 text-xs">{c.refund?.status && c.refund.status !== "none" ? <><b>{inr(c.refund.amount)}</b> <Pill tone={c.refund.status === "processed" ? "green" : c.refund.status === "failed" ? "red" : "amber"}>{c.refund.status === "held" ? "held for rescue" : c.refund.status}</Pill></> : "-"}</td>
               <td className="px-3 py-2"><Pill tone={c.status === "rescue_claimed" ? "green" : c.status === "rescue_active" ? "blue" : c.status === "rescue_expired" ? "red" : "gray"}>{c.status}</Pill></td>
               <td className="px-3 py-2"><button className="text-xs font-semibold text-blue-600" onClick={() => setOpen(c._id)}>Details</button></td>
             </tr>
@@ -93,8 +114,12 @@ function Cases() {
                     <li className="flex justify-between"><span>Platform fee</span><span>{inr(b.platformFee)}</span></li>
                     <li className="flex justify-between"><span>Cancellation charge</span><span>{inr(b.cancellationFee)}</span></li>
                     <li className="flex justify-between"><span>GST</span><span>{inr(b.gst)}</span></li>
-                    <li className="flex justify-between border-t pt-1 font-bold"><span>Total</span><span>{inr(b.total)}</span></li>
+                    <li className="flex justify-between border-t pt-1 font-bold"><span>Calculated total</span><span>{inr(b.total)}</span></li>
+                    <li className="flex items-center justify-between font-bold"><span>Actually charged to customer</span><Actual a={d.actual} /></li>
+                    <li className="flex justify-between"><span>Restaurant compensation ({b.restaurantSharePercent || 0}% of food)</span><span>{inr(b.restaurantPayable)}</span></li>
+                    {b.riderReturnPay > 0 && <li className="flex justify-between"><span>Rider return pay (when food is returned)</span><span>{inr(b.riderReturnPay)}</span></li>}
                   </ul>
+                  {d.refund && d.refund.status !== "none" && <p className="mt-2 text-xs text-gray-600">Refund: {inr(d.refund.amount)} ({d.refund.status === "held" ? "held until the Food Rescue outcome" : d.refund.status}), kept from payment: {inr(d.refund.deducted)}.</p>}
                   <p className="mt-2 text-xs text-gray-500">Cancelled from "{d.cancelledFromStatus}". Fault: {d.faultParty}. {d.penalty ? `Customer penalty: ${inr(d.penalty.amount)} (${d.penalty.paidAt ? "paid" : d.penalty.status}).` : "No customer penalty."}</p>
                   {d.override?.by && <p className="mt-1 text-xs text-blue-700">Admin override: {d.override.note} (was {inr(d.override.previousTotal)})</p>}
                   {d.listing && (
@@ -216,6 +241,8 @@ const MSG_LABELS = {
   s1_customer: "Stage 1 · Customer", s1_restaurant: "Stage 1 · Restaurant", s1_rider: "Stage 1 · Delivery partner",
   s2_customer: "Stage 2 · Customer", s2_restaurant: "Stage 2 · Restaurant", s2_rider: "Stage 2 · Delivery partner",
   s3_customer: "Stage 3 · Customer", s3_restaurant: "Stage 3 · Restaurant", s3_rider: "Stage 3 · Delivery partner",
+  s3_customer_online: "Stage 3 · Prepaid customer (refund processed)", s3_customer_online_hold: "Stage 3 · Prepaid customer (refund waits for Food Rescue)",
+  rescue_expired_original_customer: "Rescue expired · Original prepaid customer (full charge)",
   nofee_customer: "No-charge cancellation · Customer",
   rescue_claimed_rider: "Rescue claimed · Delivery partner", rescue_claimed_restaurant: "Rescue claimed · Restaurant",
   rescue_claimed_original_customer: "Rescue claimed · Original customer", rescue_new_customer: "Rescue claimed · New customer",
@@ -257,16 +284,22 @@ function Rules() {
           <h4 className="text-sm font-bold">Stage 2 · preparing started</h4>
           <Num label="Food cancellation charge" value={c.stage2.foodPenaltyPercent} onChange={(v) => setIn("stage2", "foodPenaltyPercent", v)} suffix="% of food" />
           <Num label="Cancellation charge" value={c.stage2.cancellationFee} onChange={(v) => setIn("stage2", "cancellationFee", v)} suffix="₹" />
+          <Num label="Restaurant gets" value={c.stage2.restaurantSharePercent} onChange={(v) => setIn("stage2", "restaurantSharePercent", v)} suffix="% of food" />
           <Tog label="Charge rider travel compensation" value={c.stage2.includeRiderCompensation} onChange={(v) => setIn("stage2", "includeRiderCompensation", v)} />
           <Tog label="Charge platform fee" value={c.stage2.includePlatformFee} onChange={(v) => setIn("stage2", "includePlatformFee", v)} />
         </div>
         <div className={box}>
           <h4 className="text-sm font-bold">Stage 3 · picked up / out for delivery</h4>
-          <Num label="Food cancellation liability" value={c.stage3.foodPenaltyPercent} onChange={(v) => setIn("stage3", "foodPenaltyPercent", v)} suffix="% of food" />
+          <Num label="Food cancellation liability (COD)" value={c.stage3.foodPenaltyPercent} onChange={(v) => setIn("stage3", "foodPenaltyPercent", v)} suffix="% of food" />
+          <Num label="Prepaid: food penalty if Food Rescue is sold (unsold = full payment kept)" value={c.rescue.successPenaltyPercent} onChange={(v) => setIn("rescue", "successPenaltyPercent", v)} suffix="% of food" />
           <Num label="Cancellation charge" value={c.stage3.cancellationFee} onChange={(v) => setIn("stage3", "cancellationFee", v)} suffix="₹" />
+          <Num label="Restaurant gets when food is returned" value={c.stage3.restaurantSharePercent} onChange={(v) => setIn("stage3", "restaurantSharePercent", v)} suffix="% of food" />
+          <Num label="Rider return pay (on top of delivery charge)" value={c.stage3.riderReturnPay} onChange={(v) => setIn("stage3", "riderReturnPay", v)} suffix="₹" />
           <Tog label="Charge delivery fee" value={c.stage3.includeDeliveryFee} onChange={(v) => setIn("stage3", "includeDeliveryFee", v)} />
           <Tog label="Charge platform fee" value={c.stage3.includePlatformFee} onChange={(v) => setIn("stage3", "includePlatformFee", v)} />
         </div>
+        <div className="md:col-span-2"><CancellationCalculator draft={c} fixedStage={2} title="Live calculator · Stage 2 (accepted / preparing, not picked up)" initial={{ stage: 2 }} /></div>
+        <div className="md:col-span-2"><CancellationCalculator draft={c} fixedStage={3} title="Live calculator · Stage 3 (picked up / out for delivery)" initial={{ stage: 3 }} /></div>
         <div className={box}>
           <h4 className="text-sm font-bold">Delivery partner compensation (GPS distance)</h4>
           <Num label="Base amount" value={c.riderCompensation.baseAmount} onChange={(v) => setIn("riderCompensation", "baseAmount", v)} suffix="₹" />
@@ -281,8 +314,6 @@ function Rules() {
           <h4 className="text-sm font-bold">Food Rescue</h4>
           <Tog label="Food Rescue enabled" value={c.rescue.enabled} onChange={(v) => setIn("rescue", "enabled", v)} />
           <Tog label="Prepaid no-show: admin can send undelivered food to Food Rescue" value={c.rescue.noShowEnabled !== false} onChange={(v) => setIn("rescue", "noShowEnabled", v)} />
-          <Num label="Prepaid no-show: default penalty (charged immediately from payment)" value={c.rescue.noShowPenaltyPercent ?? c.stage3.foodPenaltyPercent} onChange={(v) => setIn("rescue", "noShowPenaltyPercent", v)} suffix="% of food" />
-          <Num label="COD no-show (returned to restaurant): default penalty (charged on next order)" value={c.rescue.noShowReturnPenaltyPercent ?? 20} onChange={(v) => setIn("rescue", "noShowReturnPenaltyPercent", v)} suffix="% of food" />
           <Num label="Radius" value={c.rescue.radiusKm} onChange={(v) => setIn("rescue", "radiusKm", v)} suffix="km" step={0.5} />
           <Num label="Timer" value={c.rescue.windowMinutes} onChange={(v) => setIn("rescue", "windowMinutes", v)} suffix="min" />
           <Num label="Discount on food price" value={c.rescue.discountPercent} onChange={(v) => setIn("rescue", "discountPercent", v)} suffix="%" />

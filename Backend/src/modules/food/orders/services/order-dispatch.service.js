@@ -3,7 +3,7 @@ import { FoodOrder, FoodSettings } from '../models/order.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { FoodDeliveryCashDeposit } from '../../delivery/models/foodDeliveryCashDeposit.model.js';
-import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
+import { getCashBlockedSet, buildCashWarningForOffer } from '../../delivery/services/deliveryCashLimit.service.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { logger } from '../../../../utils/logger.js';
 import { config } from '../../../../config/env.js';
@@ -258,99 +258,21 @@ async function listNearbyOnlineDeliveryPartners(
   return { partners: picked };
 }
 
+/**
+ * Partners already ABOVE the COD cash limit (they must deposit first) get no orders at all, COD or prepaid.
+ * A partner below the limit may still be offered a COD order that pushes them over it: they complete it and
+ * are then forced offline (see enforceCashLimitAfterDelivery); the offer carries a warning for the popup.
+ */
 async function filterPartnersByCodCashLimit(partners = [], order = null) {
   if (!Array.isArray(partners) || partners.length === 0) return [];
 
-  const paymentMethod = String(order?.payment?.method || '').trim().toLowerCase();
-  if (paymentMethod !== 'cash') {
-    return partners;
-  }
-
-  const cashLimitSettings = await getDeliveryCashLimitSettings();
-  const totalCashLimit = Number(cashLimitSettings?.deliveryCashLimit) || 0;
-  if (totalCashLimit <= 0) {
-    return partners;
-  }
-
-  const orderCashImpact = Math.max(0, Number(order?.pricing?.total) || 0);
-
-  const partnerIds = partners
-    .map((partner) => partner?.partnerId)
-    .filter((partnerId) => mongoose.Types.ObjectId.isValid(partnerId))
-    .map((partnerId) => new mongoose.Types.ObjectId(partnerId));
-
-  if (partnerIds.length === 0) {
-    return partners;
-  }
-
-  const [cashCollectedAgg, cashDepositsAgg] = await Promise.all([
-    FoodOrder.aggregate([
-      {
-        $match: {
-          'dispatch.deliveryPartnerId': { $in: partnerIds },
-          orderStatus: 'delivered',
-          'payment.method': 'cash',
-        },
-      },
-      {
-        $group: {
-          _id: '$dispatch.deliveryPartnerId',
-          cashCollected: { $sum: { $ifNull: ['$pricing.total', 0] } },
-        },
-      },
-    ]),
-    FoodDeliveryCashDeposit.aggregate([
-      {
-        $match: {
-          deliveryPartnerId: { $in: partnerIds },
-          status: 'Completed',
-        },
-      },
-      {
-        $group: {
-          _id: '$deliveryPartnerId',
-          depositedCash: { $sum: { $ifNull: ['$amount', 0] } },
-        },
-      },
-    ]),
-  ]);
-
-  const cashCollectedMap = new Map(
-    (cashCollectedAgg || []).map((entry) => [
-      String(entry?._id || ''),
-      Number(entry?.cashCollected) || 0,
-    ]),
-  );
-  const cashDepositsMap = new Map(
-    (cashDepositsAgg || []).map((entry) => [
-      String(entry?._id || ''),
-      Number(entry?.depositedCash) || 0,
-    ]),
-  );
-
-  const eligiblePartners = partners.filter((partner) => {
-    const partnerId = String(partner?.partnerId || '');
-    const cashCollected = cashCollectedMap.get(partnerId) || 0;
-    const depositedCash = cashDepositsMap.get(partnerId) || 0;
-    const cashInHand = Math.max(0, cashCollected - depositedCash);
-    const projectedCashInHand = cashInHand + orderCashImpact;
-    return projectedCashInHand <= totalCashLimit;
-  });
+  const blockedSet = await getCashBlockedSet(partners.map((p) => p?.partnerId));
+  const eligiblePartners = partners.filter((partner) => !blockedSet.has(String(partner?.partnerId || '')));
 
   const skippedCount = partners.length - eligiblePartners.length;
   if (skippedCount > 0) {
-    logger.info(
-      `COD cash-limit filter skipped ${skippedCount} delivery partner(s) for order ${order?._id || ''}.`,
-    );
+    logger.info(`COD cash-limit filter skipped ${skippedCount} delivery partner(s) above the limit for order ${order?._id || ''}.`);
   }
-
-  if (eligiblePartners.length === 0 && partners.length > 0) {
-    logger.warn(
-      `[DeliveryDispatch] All ${partners.length} online partner(s) exceed COD cash limit for order ${order?._id || ''}. Falling back to available online partners so order is not stuck.`,
-    );
-    return partners;
-  }
-
   return eligiblePartners;
 }
 
@@ -481,7 +403,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       }
     }
 
-    const codEligiblePartners = forceRebroadcast ? partners : await filterPartnersByCodCashLimit(partners, order);
+    const codEligiblePartners = await filterPartnersByCodCashLimit(partners, order);
 
     // Filter to strictly ONLINE delivery partners right now
     const partnerIdsToVerify = codEligiblePartners.map(p => p.partnerId).filter(Boolean);
@@ -534,10 +456,13 @@ export async function tryAutoAssign(orderId, options = {}) {
 
       logger.info(`tryAutoAssign: Offering order ${order._id} to partner ${targetPartner.partnerId} (${formattedDistanceKmStr} km).`);
 
+      // Per-partner cash-limit info so the app can show the "Going Offline After This Order" popup before accepting.
+      const cashWarning = await buildCashWarningForOffer(targetPartner.partnerId, order);
+
       if (io) {
         const roomName = rooms.delivery(targetPartner.partnerId);
-        io.to(roomName).emit('new_order', { ...payload, pickupDistanceKm: roundedDistanceKm, forceAlert: true });
-        io.to(roomName).emit('play_notification_sound', { ...payload, pickupDistanceKm: roundedDistanceKm });
+        io.to(roomName).emit('new_order', { ...payload, ...cashWarning, pickupDistanceKm: roundedDistanceKm, forceAlert: true });
+        io.to(roomName).emit('play_notification_sound', { ...payload, ...cashWarning, pickupDistanceKm: roundedDistanceKm });
       }
 
       try {
@@ -545,7 +470,9 @@ export async function tryAutoAssign(orderId, options = {}) {
           [{ ownerType: 'DELIVERY_PARTNER', ownerId: targetPartner.partnerId }],
           {
             title: 'New order request! 🛵',
-            body: `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). Accept now!`,
+            body: cashWarning?.willExceedCashLimit
+              ? `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). You will go offline after this order: cash limit will be exceeded. Deposit your COD cash to receive new orders.`
+              : `Order #${order.order_id || order.orderId || order._id} is nearby (${formattedDistanceKmStr} km). Accept now!`,
             data: {
               type: 'new_order',
               orderId: order._id.toString(),
@@ -555,6 +482,7 @@ export async function tryAutoAssign(orderId, options = {}) {
               link: '/food/delivery/feed',
               click_action: '/food/delivery/feed',
               role: 'delivery',
+              willExceedCashLimit: String(Boolean(cashWarning?.willExceedCashLimit)),
             },
           }
         );

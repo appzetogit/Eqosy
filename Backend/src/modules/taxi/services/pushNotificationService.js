@@ -231,7 +231,7 @@ const sendPushToTargets = async ({
         },
         payload: {
           aps: {
-            sound: isRing ? 'ride-request-alert.mp3' : 'default',
+            sound: isRing ? 'ride-request-alert.caf' : 'default',
             badge: 1,
             'content-available': 1,
           },

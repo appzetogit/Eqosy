@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { reverifyDeliveryPartnerBankDetails, registerDeliveryPartner, updateDeliveryPartnerProfile, updateDeliveryPartnerBankDetails,listSupportTicketsByPartner, createSupportTicket, getSupportTicketByIdAndPartner, updateDeliveryPartnerDetails, updateDeliveryPartnerProfilePhotoBase64, updateDeliveryAvailability, getDeliveryPartnerWallet, getDeliveryPartnerEarnings, getDeliveryPartnerTripHistory, getDeliveryPocketDetails, getActiveEarningAddonsForPartner, deleteDeliveryPartnerAccount, getDeliveryPartnerReviews } from '../services/delivery.service.js';
-import { createDeliveryCashDepositOrder, getDeliveryPartnerWalletEnhanced, requestDeliveryWithdrawal, verifyDeliveryCashDepositPayment } from '../services/deliveryFinance.service.js';
+import { createDeliveryCashDepositOrder, submitDeliveryCashDepositRequest, getDeliveryPartnerWalletEnhanced, requestDeliveryWithdrawal, verifyDeliveryCashDepositPayment } from '../services/deliveryFinance.service.js';
 import { getDeliveryCashLimitSettings, getDeliveryEmergencyHelp } from '../../admin/services/admin.service.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { validateDeliveryRegisterDto, validateDeliveryProfileUpdateDto, validateDeliveryBankDetailsDto } from '../validators/delivery.validator.js';
@@ -246,6 +246,16 @@ export const createCashDepositOrderController = async (req, res, next) => {
         const amount = req.body?.amount;
         const data = await createDeliveryCashDepositOrder(deliveryPartnerId, amount);
         return sendResponse(res, 201, 'Cash deposit order created successfully', data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const submitCashDepositRequestController = async (req, res, next) => {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const data = await submitDeliveryCashDepositRequest(deliveryPartnerId, req.body || {});
+        return sendResponse(res, 201, 'Deposit submitted. It will reduce your cash in hand after admin verification.', data);
     } catch (error) {
         next(error);
     }

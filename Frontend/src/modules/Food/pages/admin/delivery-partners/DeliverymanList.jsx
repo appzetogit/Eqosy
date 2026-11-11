@@ -520,6 +520,31 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
     }
   }
 
+  const handleHoldToggle = async (deliveryman) => {
+    const id = String(deliveryman?._id || "")
+    if (!id) return
+    const onHold = String(deliveryman?.status || "").toLowerCase() === "on_hold"
+    try {
+      if (onHold) {
+        if (!window.confirm(`Remove hold from ${deliveryman?.name || "this partner"}? They can receive orders and withdraw again.`)) return
+        const res = await adminAPI.releaseDeliveryPartnerHold(id)
+        toast.success(res?.data?.message || "Hold removed")
+      } else {
+        if (!window.confirm(`Put ${deliveryman?.name || "this partner"} ON HOLD?\n\nThey will not get new orders and cannot withdraw, but can still log in.`)) return
+        const reason = window.prompt("Reason for hold (shown to the partner, optional):", "") ?? ""
+        const res = await adminAPI.holdDeliveryPartner(id, reason)
+        toast.success(res?.data?.message || "Partner put on hold")
+      }
+      setDeliverymen((prev) => prev.map((item) => (
+        String(item._id) === id
+          ? { ...item, status: onHold ? "approved" : "on_hold", availabilityStatus: onHold ? item.availabilityStatus : "offline" }
+          : item
+      )))
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not update hold status")
+    }
+  }
+
   const handleDelete = async (deliveryman) => {
     const deliverymanId = String(deliveryman?._id || "")
     if (!deliverymanId) {
@@ -528,16 +553,17 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
     }
 
     const confirmed = window.confirm(
-      `Deactivate ${deliveryman?.name || "this delivery partner"}?\n\nThis will block the account and log them out, while preserving profile, wallet, and history.`,
+      `TERMINATE ${deliveryman?.name || "this delivery partner"}?\n\nThe account is closed: no more orders are assigned and they are logged out of the app. Profile, wallet and history are kept.`,
     )
 
     if (!confirmed) {
       return
     }
+    const terminationReason = window.prompt("Reason for termination (shown to the partner, optional):", "") ?? ""
 
     try {
       setDeletingDeliveryId(deliverymanId)
-      const response = await adminAPI.deleteDeliveryPartner(deliverymanId)
+      const response = await adminAPI.deleteDeliveryPartner(deliverymanId, terminationReason)
 
       if (!response?.data?.success) {
         toast.error(response?.data?.message || "Failed to deactivate delivery partner")
@@ -1090,10 +1116,17 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => handleHoldToggle(dm)}
+                                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${String(dm.status).toLowerCase() === "on_hold" ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+                                title={String(dm.status).toLowerCase() === "on_hold" ? "Remove hold" : "Put on hold: no new orders, no withdrawals"}
+                              >
+                                {String(dm.status).toLowerCase() === "on_hold" ? "Release" : "Hold"}
+                              </button>
+                              <button
                                 onClick={() => handleDelete(dm)}
                                 disabled={deletingDeliveryId === String(dm._id)}
                                 className="p-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
-                                title="Delete Delivery Partner"
+                                title="Terminate Delivery Partner"
                               >
                                 {deletingDeliveryId === String(dm._id) ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />

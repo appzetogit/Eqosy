@@ -32,6 +32,10 @@ export const DEFAULT_MESSAGES = {
     rescue_nearby_customer: '{restaurant}: food at {discount}% off (Rs {price}, was Rs {original}) near you. Claim it within {minutes} minutes.',
     s2_customer_online:
         'Your cancellation request has been processed. Since the restaurant had already started preparing your food, cancellation charges of Rs {amount} were deducted from your payment. Rs {refund} is being refunded to your original payment method. You can view the breakdown in your account.',
+    s3_customer_online_hold:
+        'Your order has been cancelled after pickup and Eqosy Food Rescue has started. If another customer buys the food within {minutes} minutes, cancellation charges of Rs {amount} are kept and Rs {refund} is refunded to your original payment method. If nobody buys it, the full payment is kept as the cancellation charge and no refund is given.',
+    rescue_expired_original_customer:
+        'Food Rescue for your cancelled order #{orderId} was unsuccessful. As per the cancellation policy the full payment of Rs {amount} has been kept as the cancellation charge. No refund is applicable.',
     s3_customer_online:
         'Your order has been cancelled after the food was prepared and picked up. Eqosy Food Rescue has been activated. Cancellation charges of Rs {amount} were deducted from your payment and Rs {refund} is being refunded to your original payment method.',
     refund_customer: 'Your refund of Rs {refund} for order #{orderId} has been initiated. It reaches your original payment method in 5-7 working days (wallet refunds are instant).',
@@ -64,12 +68,18 @@ const configSchema = new Schema(
             includeRiderCompensation: { type: Boolean, default: true },
             includePlatformFee: { type: Boolean, default: true },
             cancellationFee: { type: Number, default: 20, min: 0 },
+            /** Restaurant's compensation as % of the food value (the customer pays foodPenaltyPercent, Eqosy keeps the difference). */
+            restaurantSharePercent: { type: Number, default: 15, min: 0, max: 100 },
         },
         stage3: {
             foodPenaltyPercent: { type: Number, default: 50, min: 0, max: 100 },
             includeDeliveryFee: { type: Boolean, default: true },
             includePlatformFee: { type: Boolean, default: true },
             cancellationFee: { type: Number, default: 20, min: 0 },
+            /** Restaurant's compensation (% of food) when the food is returned to it. */
+            restaurantSharePercent: { type: Number, default: 30, min: 0, max: 100 },
+            /** Extra amount the rider gets for bringing the food back to the restaurant. */
+            riderReturnPay: { type: Number, default: 20, min: 0 },
         },
         /** GST applied on platform fee + cancellation fee (and on the food penalty when gstOnFoodPenalty is on). */
         gstPercent: { type: Number, default: 18, min: 0, max: 100 },
@@ -111,6 +121,8 @@ const configSchema = new Schema(
             noShowPenaltyPercent: { type: Number, default: 50, min: 0, max: 100 },
             /** Default penalty (% of food value) suggested when an unreceived COD order is returned to the restaurant. */
             noShowReturnPenaltyPercent: { type: Number, default: 20, min: 0, max: 100 },
+            /** Prepaid, Food Rescue SOLD: food penalty % for the original customer (rest of the payment refunded). If nobody buys, the full payment is kept. */
+            successPenaltyPercent: { type: Number, default: 60, min: 0, max: 100 },
             radiusKm: { type: Number, default: 3, min: 0.1 },
             windowMinutes: { type: Number, default: 15, min: 1 },
             discountPercent: { type: Number, default: 50, min: 0, max: 100 },
@@ -178,6 +190,9 @@ const caseSchema = new Schema(
             foodValue: { type: Number, default: 0 },
             foodPenaltyPercent: { type: Number, default: 0 },
             foodPenalty: { type: Number, default: 0 },
+            restaurantPayable: { type: Number, default: 0 },
+            restaurantSharePercent: { type: Number, default: 0 },
+            riderReturnPay: { type: Number, default: 0 },
             riderCompensation: { type: Number, default: 0 },
             riderPayable: { type: Number, default: 0 },
             riderTrackedKm: { type: Number, default: 0 },
@@ -194,7 +209,7 @@ const caseSchema = new Schema(
         payMode: { type: String, enum: ['outstanding', 'refund_deduction'], default: 'outstanding' },
         paidAmount: { type: Number, default: 0 },
         refund: {
-            status: { type: String, enum: ['none', 'pending', 'processing', 'processed', 'failed'], default: 'none' },
+            status: { type: String, enum: ['none', 'held', 'pending', 'processing', 'processed', 'failed'], default: 'none' },
             amount: { type: Number, default: 0 },
             deducted: { type: Number, default: 0 },
             shortfall: { type: Number, default: 0 },

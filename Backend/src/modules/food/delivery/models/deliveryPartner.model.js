@@ -98,9 +98,14 @@ const deliveryPartnerSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ['pending', 'approved', 'rejected'],
+            // on_hold: stays logged in but gets no orders and cannot withdraw. terminated: account is closed.
+            enum: ['pending', 'approved', 'rejected', 'on_hold', 'terminated'],
             default: 'pending'
         },
+        holdReason: { type: String, default: '' },
+        holdAt: { type: Date, default: null },
+        terminationReason: { type: String, default: '' },
+        terminatedAt: { type: Date, default: null },
         rejectionReason: { type: String },
         rejectedAt: { type: Date },
         approvedAt: { type: Date },

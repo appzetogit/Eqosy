@@ -247,6 +247,8 @@ router.patch('/withdrawals/:id', requireFoodResourceAccess('wallet', 'wallet'), 
 router.get('/delivery/withdrawals', requireFoodResourceAccess('delivery', 'delivery'), adminController.getDeliveryWithdrawals);
 router.patch('/delivery/withdrawals/:id', requireFoodResourceAccess('delivery', 'delivery'), adminController.updateDeliveryWithdrawalStatus);
 router.get('/delivery/cash-limit-settlements', requireFoodResourceAccess('delivery', 'delivery'), adminController.getCashLimitSettlements);
+router.patch('/delivery/cash-limit-settlements/:id/verify', requireFoodResourceAccess('delivery', 'delivery'), adminController.verifyCashDeposit);
+router.patch('/delivery/cash-limit-settlements/:id/reject', requireFoodResourceAccess('delivery', 'delivery'), adminController.rejectCashDeposit);
 
 // ----- Delivery partners & general -----
 router.get('/delivery/join-requests', requireFoodResourceAccess('delivery', 'delivery'), adminController.getDeliveryJoinRequests);
@@ -281,6 +283,8 @@ router.get('/delivery/:id', requireFoodResourceAccess('delivery', 'delivery'), a
 router.patch('/delivery/:id/approve', requireFoodResourceAccess('delivery', 'delivery'), adminController.approveDeliveryPartner);
 router.patch('/delivery/:id/reject', requireFoodResourceAccess('delivery', 'delivery'), adminController.rejectDeliveryPartner);
 router.delete('/delivery/:id', requireFoodResourceAccess('delivery', 'delivery'), adminController.deactivateDeliveryPartner);
+router.patch('/delivery/:id/hold', requireFoodResourceAccess('delivery', 'delivery'), adminController.holdDeliveryPartner);
+router.patch('/delivery/:id/release-hold', requireFoodResourceAccess('delivery', 'delivery'), adminController.releaseDeliveryPartnerHold);
 router.post('/delivery/:id/approve-emergency-offline', requireFoodResourceAccess('delivery', 'delivery'), adminController.approveEmergencyOfflineController);
 
 // ----- Zones -----

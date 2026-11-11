@@ -64,6 +64,20 @@ export default function CashLimitSettlement() {
     }
   }
 
+  const reviewDeposit = async (tx, action) => {
+    const verb = action === "verify" ? "verify" : "reject"
+    if (!window.confirm(`${verb === "verify" ? "Verify" : "Reject"} deposit of ${formatCurrency(tx.amount)} from ${tx.deliveryName}?${verb === "verify" ? " Their cash in hand will be reduced." : ""}`)) return
+    try {
+      const res = verb === "verify"
+        ? await adminAPI.verifyCashDeposit(tx.id)
+        : await adminAPI.rejectCashDeposit(tx.id)
+      toast.success(res?.data?.message || `Deposit ${verb === "verify" ? "verified" : "rejected"}`)
+      fetchData()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || `Could not ${verb} deposit`)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [page])
@@ -125,13 +139,14 @@ export default function CashLimitSettlement() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">ID</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Amount</th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Razorpay</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Razorpay / UTR</th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
                   {transactions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={8} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <Package className="w-16 h-16 text-slate-400 mb-4" />
                           <p className="text-lg font-semibold text-slate-700">No transactions</p>
@@ -162,14 +177,29 @@ export default function CashLimitSettlement() {
                             className={`px-2 py-0.5 rounded text-xs font-semibold ${
                               tx.status === "Completed"
                                 ? "bg-green-100 text-green-700"
-                                : "bg-slate-100 text-slate-700"
+                                : tx.status === "Pending"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : tx.status === "Rejected" || tx.status === "Failed"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-slate-100 text-slate-700"
                             }`}
                           >
                             {tx.status || "—"}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-mono">
-                          {tx.razorpayPaymentId ? tx.razorpayPaymentId.slice(0, 12) + "…" : "—"}
+                          {tx.razorpayPaymentId && tx.razorpayPaymentId !== "-" ? tx.razorpayPaymentId.slice(0, 12) + "…" : (tx.utr || "—")}
+                          {tx.proofUrl ? (
+                            <a href={tx.proofUrl} target="_blank" rel="noreferrer" className="ml-2 text-blue-600 underline">proof</a>
+                          ) : null}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-xs">
+                          {tx.status === "Pending" && tx.paymentMethod !== "razorpay" ? (
+                            <div className="flex gap-2">
+                              <button onClick={() => reviewDeposit(tx, "verify")} className="px-3 py-1 rounded bg-green-600 text-white font-semibold">Verify</button>
+                              <button onClick={() => reviewDeposit(tx, "reject")} className="px-3 py-1 rounded bg-red-100 text-red-700 font-semibold">Reject</button>
+                            </div>
+                          ) : "—"}
                         </td>
                       </tr>
                     ))

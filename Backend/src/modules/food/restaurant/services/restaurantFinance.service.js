@@ -305,6 +305,9 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
         commissionRate: commissionRateFormatted,
         adminCommission: { type: commType, value: commVal, formattedRate: commissionRateFormatted },
         currentCycle,
+        // Lifetime figures so clients can show total earned / withdrawable balance without the cycle window.
+        lifetimeEarnings: globalEstimatedPayout,
+        availableBalance,
         invoiceSummary,
         pastCycles: pastCyclesResult
     };

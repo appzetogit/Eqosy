@@ -19,7 +19,7 @@ const foodDeliveryCashDepositSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Completed', 'Failed'],
+        enum: ['Pending', 'Completed', 'Failed', 'Rejected'],
         default: 'Pending',
         index: true
     },
@@ -32,7 +32,12 @@ const foodDeliveryCashDepositSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
-    adminNote: String
+    adminNote: String,
+    /** Manual bank/UPI deposit submitted by the partner and verified by admin. */
+    utr: { type: String, default: '', trim: true },
+    proofUrl: { type: String, default: '', trim: true },
+    partnerNote: { type: String, default: '', trim: true },
+    verifiedAt: Date
 }, { 
     collection: 'food_delivery_cash_deposits', 
     timestamps: true 

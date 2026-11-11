@@ -19,6 +19,7 @@ import * as dispatchService from './order-dispatch.service.js';
 import * as performanceService from '../../performance/services/performance.service.js';
 import { isPartnerInActiveZoneSync, isPartnerInZoneStrict, resolveRestaurantZoneId } from './order-dispatch.service.js';
 import * as paymentService from './order-payment.service.js';
+import { assertCashLimitNotBreached, enforceCashLimitAfterDelivery } from '../../delivery/services/deliveryCashLimit.service.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
 
 import {
@@ -391,6 +392,13 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
   await performanceService.assertNotSuspended('DELIVERY_PARTNER', deliveryPartnerId);
+  {
+    const acct = await FoodDeliveryPartner.findById(deliveryPartnerId).select('status').lean();
+    if (acct?.status === 'on_hold') throw new ForbiddenError('Your account is on hold. You cannot accept new orders.');
+    if (acct?.status === 'terminated') throw new ForbiddenError('Your account has been terminated.');
+  }
+  // Above the COD cash limit: no new orders until a deposit is verified by admin.
+  await assertCashLimitNotBreached(deliveryPartnerId);
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
@@ -1110,6 +1118,9 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     note: `Delivery completed. Prev status: ${prevPayStatus}`,
   });
 
+  // COD limit: if this delivery pushed cash in hand above the limit the partner is forced offline now.
+  const cashStatus = await enforceCashLimitAfterDelivery(order, deliveryPartnerId);
+
   void performanceService.onOrderDelivered(order);
 
   emitOrderUpdate(order, deliveryPartnerId);
@@ -1121,7 +1132,10 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     prevPayStatus,
     paymentStatus: order.payment?.status,
   });
-  return sanitizeOrderForExternal(order);
+  const sanitized = sanitizeOrderForExternal(order);
+  return cashStatus?.blocked
+    ? { ...sanitized, cashLimitExceeded: true, wentOffline: true, cashInHand: cashStatus.cashInHand, cashLimit: cashStatus.limit }
+    : sanitized;
 }
 
 export async function updateOrderStatusDelivery(orderId, deliveryPartnerId, orderStatus) {

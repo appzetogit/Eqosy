@@ -20,6 +20,7 @@ const access = requireFoodResourceAccess('fee_settings', 'fee_settings');
 adminCancellationRouter.get('/config', access, c.getConfig);
 adminCancellationRouter.put('/config', access, c.updateConfig);
 adminCancellationRouter.get('/summary', access, c.summary);
+adminCancellationRouter.post('/simulate', access, c.simulate);
 adminCancellationRouter.get('/cases', access, c.listCases);
 adminCancellationRouter.get('/cases/:id', access, c.getCase);
 adminCancellationRouter.post('/cases/:id/retry-settlements', access, c.retrySettlements);
