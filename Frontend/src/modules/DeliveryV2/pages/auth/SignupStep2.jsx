@@ -5,6 +5,7 @@ import { deliveryAPI } from "@food/api"
 import { toast } from "sonner"
 import { isFlutterBridgeAvailable, openCamera } from "@food/utils/imageUploadUtils"
 import useDeliveryBackNavigation from "../../hooks/useDeliveryBackNavigation"
+import { compressImage } from "../../utils/compressImage"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -177,13 +178,20 @@ export default function SignupStep2() {
     fileInputRefs.current[docType]?.click()
   }
 
-  const handleFileSelect = async (docType, file) => {
-    if (!file) return
+  const handleFileSelect = async (docType, originalFile) => {
+    if (!originalFile) return
 
-    if (!file.type.startsWith("image/")) {
+    if (!originalFile.type.startsWith("image/")) {
       toast.error("Please select an image file")
       return
     }
+    if (originalFile.size > 25 * 1024 * 1024) {
+      toast.error("Image is too large. Please choose a smaller photo")
+      return
+    }
+
+    // Shrink before upload so all 8 documents fit within the server's body limit
+    const file = await compressImage(originalFile)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image size should be less than 5MB")
       return

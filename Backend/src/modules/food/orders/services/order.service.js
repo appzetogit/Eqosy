@@ -2623,7 +2623,7 @@ export async function deleteOrderAdmin(orderId, adminId, adminContext = null) {
  * Refund an order's online/wallet payment. Idempotent: does nothing if already refunded.
  * Returns { attempted, success, message } and mutates order.payment (caller saves).
  */
-async function refundOrderPayment(order, { amount, reason = "" } = {}) {
+async function refundOrderPayment(order, { amount, reason = "", manual = false, reference = "" } = {}) {
   const method = String(order.payment?.method || "").toLowerCase();
   const status = String(order.payment?.status || "").toLowerCase();
   const alreadyRefunded =
@@ -2646,6 +2646,15 @@ async function refundOrderPayment(order, { amount, reason = "" } = {}) {
         { orderId: order._id },
       );
       order.payment.refund = { status: "processed", amount: refundAmount, processedAt: new Date() };
+    } else if (manual) {
+      // Admin refunds the customer by hand (Razorpay dashboard / UPI / bank); we only record it. No Razorpay API call.
+      order.payment.refund = {
+        status: "processed",
+        amount: refundAmount,
+        refundId: String(reference || "").trim().slice(0, 100),
+        manual: true,
+        processedAt: new Date(),
+      };
     } else {
       const paymentId = order.payment?.razorpay?.paymentId;
       if (!paymentId) {
@@ -2782,7 +2791,7 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
 }
 
 /** Admin manual refund (for cancelled orders whose automatic refund did not happen / failed). */
-export async function refundOrderAdmin(orderId, adminId, refundAmount = null, adminContext = null) {
+export async function refundOrderAdmin(orderId, adminId, refundAmount = null, adminContext = null, { manual = false, reference = "" } = {}) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 
@@ -2794,7 +2803,7 @@ export async function refundOrderAdmin(orderId, adminId, refundAmount = null, ad
     throw new ValidationError("Only cancelled orders can be refunded. Cancel the order first.");
   }
 
-  const result = await refundOrderPayment(order, { amount: refundAmount, reason: "admin refund" });
+  const result = await refundOrderPayment(order, { amount: refundAmount, reason: "admin refund", manual, reference });
   if (!result.success) throw new ValidationError(result.message || "Refund failed");
 
   pushStatusHistory(order, {

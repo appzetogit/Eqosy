@@ -205,6 +205,9 @@ export default function FoodRescuePopup() {
                           {inr(listing.rescuePrice)}
                         </motion.span>
                       </p>
+                      {listing.pricing?.total != null && (
+                        <p className="mt-0.5 text-xs font-bold text-gray-700 dark:text-gray-200">Total order price: <span className="notranslate">{inr(listing.pricing.total)}</span></p>
+                      )}
                       <p className="mt-1 truncate text-xs font-semibold text-gray-500">{title} · {listing.restaurantName || "Restaurant"}</p>
                     </div>
                   </div>

@@ -67,6 +67,9 @@ const buildMenuFromFoods = async (foods = []) => {
             approvedAt: food.approvedAt,
             rejectedAt: food.rejectedAt,
             preparationTime: food.preparationTime || '',
+            pendingPreparationTime: food.pendingPreparationTime || '',
+            prepTimeApprovalStatus: food.prepTimeApprovalStatus || 'none',
+            prepTimeRejectionReason: food.prepTimeRejectionReason || '',
             createdAt: food.createdAt,
             updatedAt: food.updatedAt
         });

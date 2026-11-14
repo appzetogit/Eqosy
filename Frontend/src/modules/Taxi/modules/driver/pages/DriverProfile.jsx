@@ -26,7 +26,16 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
-import { clearDriverAuthState, getCurrentDriver, updateDriverProfile } from '../services/registrationService';
+import { clearDriverAuthState, getCurrentDriver, getLocalDriverToken, updateDriverProfile } from '../services/registrationService';
+import api from '../../../shared/api/axiosInstance';
+
+const SUMMARY_PERIODS = [
+    { id: 'today', label: 'Today' },
+    { id: 'this_week', label: 'Weekly' },
+    { id: 'this_month', label: 'Monthly' },
+    { id: 'all', label: 'All' },
+];
+const formatInr = (v) => `₹${Math.round(Number(v || 0)).toLocaleString('en-IN')}`;
 import LanguageRow from '@/shared/language/LanguageRow'
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response || null;
@@ -81,9 +90,27 @@ const DriverProfile = () => {
     const [error, setError] = useState('');
     const [routeBookingBusy, setRouteBookingBusy] = useState(false);
     const [preferenceBusy, setPreferenceBusy] = useState(false);
+    const [addressLabel, setAddressLabel] = useState('');
+    const [summaries, setSummaries] = useState({});
+    const [summaryPeriod, setSummaryPeriod] = useState('today');
     const role = localStorage.getItem('role') || 'driver';
     const isOwner = role === 'owner';
     const routePrefix = isOwner ? '/taxi/owner' : '/taxi/driver';
+
+    useEffect(() => {
+        let active = true;
+        const token = getLocalDriverToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        SUMMARY_PERIODS.forEach(({ id }) => {
+            api.get('/drivers/earnings', { headers, params: { period: id } })
+                .then((res) => {
+                    const data = res?.data?.data || res?.data || {};
+                    if (active) setSummaries((prev) => ({ ...prev, [id]: data.summary || {} }));
+                })
+                .catch(() => {});
+        });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -173,6 +200,41 @@ const DriverProfile = () => {
         } finally {
             setPreferenceBusy(false);
         }
+    };
+
+    const handleSaveAddress = () => {
+        if (routeBookingBusy) return;
+        if (!navigator.geolocation) {
+            setError('Location is not available on this device.');
+            return;
+        }
+        setRouteBookingBusy(true);
+        setError('');
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const nextCoordinates = [position.coords.longitude, position.coords.latitude];
+                const nextLabel = addressLabel.trim() || formatRouteBookingLabel(nextCoordinates);
+                try {
+                    const response = await updateDriverProfile({
+                        routeBooking: { enabled: true, coordinates: nextCoordinates, label: nextLabel },
+                    });
+                    const next = normalizeRouteBookingPreferences(
+                        unwrapDriver(response)?.routeBooking || { enabled: true, coordinates: nextCoordinates, label: nextLabel },
+                    );
+                    setRouteBookingPreferences(writeRouteBookingPreferences(next));
+                    setAddressLabel('');
+                } catch (err) {
+                    setError(err?.response?.data?.message || err?.message || 'Could not save address.');
+                } finally {
+                    setRouteBookingBusy(false);
+                }
+            },
+            () => {
+                setRouteBookingBusy(false);
+                setError('Please allow location permission to save your address.');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+        );
     };
 
     const handleRouteBookingToggle = async () => {
@@ -372,6 +434,70 @@ const DriverProfile = () => {
                     )}
                 </div>
             </header>
+
+            {/* Earnings summary */}
+            <div className="mx-5 mt-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Earnings Summary</h3>
+                <div className="mt-3 flex gap-1.5 rounded-xl bg-slate-100 p-1">
+                    {SUMMARY_PERIODS.map((p) => (
+                        <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setSummaryPeriod(p.id)}
+                            className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${summaryPeriod === p.id ? 'bg-slate-900 text-white' : 'text-slate-500'}`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+                {(() => {
+                    const s = summaries[summaryPeriod] || {};
+                    const cells = [
+                        { label: 'Net Earnings', value: formatInr(s.totalNetEarnings) },
+                        { label: 'Trips', value: Number(s.totalTrips || 0) },
+                        { label: 'Gross Fare', value: formatInr(s.totalGrossFare) },
+                        { label: 'Commission', value: formatInr(s.totalCommission) },
+                        { label: 'Tips', value: formatInr(s.totalTips) },
+                        { label: 'Cash Earnings', value: formatInr(s.cashEarnings) },
+                    ];
+                    return (
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                            {cells.map((c) => (
+                                <div key={c.label} className="rounded-xl bg-slate-50 px-3 py-2">
+                                    <p className="text-[10px] font-medium text-slate-400">{c.label}</p>
+                                    <p className="text-[15px] font-black text-slate-900">{c.value}</p>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
+            </div>
+
+            {/* Saved address */}
+            {!isOwner && (
+                <div className="mx-5 mt-5 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Saved Address</h3>
+                    <p className="mt-2 text-[13px] font-semibold text-slate-800">
+                        {routeBookingPreferences.coordinates ? routeBookingPreferences.label || formatRouteBookingLabel(routeBookingPreferences.coordinates) : 'No address saved yet'}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                        <input
+                            value={addressLabel}
+                            onChange={(e) => setAddressLabel(e.target.value)}
+                            placeholder="Name (e.g. Home)"
+                            className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleSaveAddress}
+                            disabled={routeBookingBusy}
+                            className="rounded-xl bg-slate-900 px-3 py-2 text-[12px] font-bold text-white disabled:opacity-60"
+                        >
+                            {routeBookingBusy ? 'Saving...' : 'Save current location'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Which requests this captain accepts (limited by what the admin allows for the vehicle type) */}
             {!isOwner && (servicePreferenceOptions.length > 0 || rideModeOptions.length > 0) && (

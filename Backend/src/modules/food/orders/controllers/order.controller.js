@@ -419,7 +419,10 @@ export async function refundOrderAdminController(req, res, next) {
     try {
         const adminId = req.user?.userId;
         const amount = req.body?.refundAmount;
-        const result = await orderService.refundOrderAdmin(req.params.orderId, adminId, amount, req.adminContext);
+        const result = await orderService.refundOrderAdmin(req.params.orderId, adminId, amount, req.adminContext, {
+            manual: req.body?.manual === true,
+            reference: req.body?.reference || '',
+        });
         return sendResponse(res, 200, 'Refund processed successfully', result);
     } catch (err) {
         next(err);

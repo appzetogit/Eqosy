@@ -25,6 +25,7 @@ export default function FoodRescue() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState("")
+  const [summary, setSummary] = useState(null) // listing whose price breakdown is open
   const timer = useRef(null)
 
   const load = useCallback(async (p) => {
@@ -58,7 +59,13 @@ export default function FoodRescue() {
     return () => clearInterval(timer.current)
   }, [pos, load])
 
+  // Backing out (closing the payment sheet / failed payment) frees the hold so others can claim it again.
+  const release = async (id) => {
+    try { await cancellationAPI.releaseRescue(id) } catch { /* hold also expires on its own */ }
+  }
+
   const claim = async (item) => {
+    setSummary(null)
     const addr = getDefaultAddress?.()
     const c = addr?.location?.coordinates
     if (!addr || !Array.isArray(c)) { toast.error("Please add a delivery address with a map location first"); return }
@@ -90,8 +97,8 @@ export default function FoodRescue() {
             setBusyId("")
           }
         },
-        onClose: () => { setBusyId(""); load(pos) },
-        onError: (err) => { setBusyId(""); toast.error(err?.description || "Payment failed") },
+        onClose: async () => { await release(item.id); setBusyId(""); load(pos) },
+        onError: async (err) => { await release(item.id); setBusyId(""); toast.error(err?.description || "Payment failed"); load(pos) },
       })
     } catch (e) {
       setBusyId("")
@@ -125,15 +132,35 @@ export default function FoodRescue() {
                 <span className="text-xl font-black text-emerald-600">{inr(it.rescuePrice)}</span>
                 <span className="ml-2 text-xs text-gray-400 line-through">{inr(it.originalPrice)}</span>
                 <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">{it.discountPercent}% OFF</span>
-                <p className="text-[10px] text-gray-400">Food price. Delivery, platform fee and taxes extra.</p>
+                <p className="mt-0.5 text-[11px] font-semibold text-gray-600 dark:text-gray-300">Total order price: {inr(it.pricing?.total ?? it.rescuePrice)}</p>
               </div>
-              <button onClick={() => claim(it)} disabled={busyId === it.id || it.status === "held"} className="flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
-                {busyId === it.id && <Loader2 className="h-4 w-4 animate-spin" />}{it.status === "held" ? "Being claimed" : "Claim now"}
+              <button onClick={() => setSummary(it)} disabled={busyId === it.id || (it.status === "held" && !it.heldByMe)} className="flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+                {busyId === it.id && <Loader2 className="h-4 w-4 animate-spin" />}{it.status === "held" && !it.heldByMe ? "Being claimed" : "Claim now"}
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {summary && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setSummary(null)}>
+          <div className="w-full max-w-xl rounded-t-3xl bg-white p-5 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-black">Price breakdown</p>
+            <p className="text-xs text-gray-500">{summary.restaurantName}</p>
+            <div className="mt-3 space-y-1.5 text-sm">
+              <div className="flex justify-between"><span>Food (rescued, {summary.discountPercent}% off)</span><span>{inr(summary.pricing?.foodPrice ?? summary.rescuePrice)}</span></div>
+              <div className="flex justify-between"><span>Taxes</span><span>{inr(summary.pricing?.tax)}</span></div>
+              <div className="flex justify-between"><span>Delivery fee</span><span>{inr(summary.pricing?.deliveryFee)}</span></div>
+              <div className="flex justify-between"><span>Platform fee</span><span>{inr(summary.pricing?.platformFee)}</span></div>
+              <div className="flex justify-between border-t border-gray-200 pt-2 text-base font-black dark:border-zinc-700"><span>Total to pay</span><span>{inr(summary.pricing?.total ?? summary.rescuePrice)}</span></div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setSummary(null)} className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-bold dark:border-zinc-700">Cancel</button>
+              <button onClick={() => claim(summary)} className="flex-1 rounded-xl bg-black py-2.5 text-sm font-bold text-white">Pay {inr(summary.pricing?.total ?? summary.rescuePrice)}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

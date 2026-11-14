@@ -2285,6 +2285,13 @@ export const getDriverEarningsFilter = async (req, res) => {
     lastSun.setDate(lastMon.getDate() + 6);
     fromDate = new Date(lastMon.getFullYear(), lastMon.getMonth(), lastMon.getDate(), 0, 0, 0, 0);
     toDate = new Date(lastSun.getFullYear(), lastSun.getMonth(), lastSun.getDate(), 23, 59, 59, 999);
+  } else if (normPeriod === 'this_month') {
+    fromDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  } else if (normPeriod === 'last_month') {
+    fromDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    toDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  } else if (normPeriod === 'all') {
+    fromDate = new Date(2000, 0, 1, 0, 0, 0, 0);
   } else if (normPeriod === 'custom_date' && date) {
     const parsed = new Date(date);
     if (!isNaN(parsed.getTime())) {

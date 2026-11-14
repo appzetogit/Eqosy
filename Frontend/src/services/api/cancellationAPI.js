@@ -17,6 +17,7 @@ export const cancellationAPI = {
   verifyPenalty: (body) => apiClient.post("/food/cancellation/penalty/verify", body, user),
   nearbyRescues: (lat, lng) => apiClient.get("/food/cancellation/rescue/nearby", { params: { lat, lng }, ...user }),
   claimRescue: (id, body) => apiClient.post(`/food/cancellation/rescue/${id}/claim`, body, user),
+  releaseRescue: (id) => apiClient.post(`/food/cancellation/rescue/${id}/release`, {}, user),
   verifyRescue: (body) => apiClient.post("/food/cancellation/rescue/verify", body, user),
 };
 

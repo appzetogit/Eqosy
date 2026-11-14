@@ -13,6 +13,7 @@ userCancellationRouter.post('/penalty/verify', c.verifyPenalty);
 userCancellationRouter.get('/rescue/nearby', c.nearbyRescues);
 userCancellationRouter.post('/rescue/verify', c.verifyRescue);
 userCancellationRouter.post('/rescue/:id/claim', c.claimRescue);
+userCancellationRouter.post('/rescue/:id/release', c.releaseRescue);
 
 /** Mounted inside the admin router at /cancellation (admin auth + context already applied). */
 export const adminCancellationRouter = express.Router();

@@ -15,6 +15,8 @@ import {
     GLOBAL_CATEGORY_FILTER
 } from '../../shared/categoryWorkflow.js';
 
+import { prepTimeNeedsApproval, PREP_TIME_APPROVAL_THRESHOLD_MINUTES } from '../../shared/prepTime.js';
+
 const toStr = (v) => (v != null ? String(v).trim() : '');
 const APPROVED_CATEGORY_FILTER = [
     { approvalStatus: 'approved' },
@@ -307,7 +309,31 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
     if (body.isRecommended !== undefined) {
         update.isRecommended = normalizeRecommendedFlag(body.isRecommended);
     }
-    if (body.preparationTime !== undefined) update.preparationTime = toStr(body.preparationTime);
+    let prepTimeApprovalRequested = false;
+    const requestedPrepTime = body.preparationTime !== undefined ? toStr(body.preparationTime) : undefined;
+    if (requestedPrepTime !== undefined) {
+        const itemUnderReview = isStructuralContentChange || (existing.approvalStatus || 'approved') === 'pending';
+        if (requestedPrepTime === toStr(existing.preparationTime)) {
+            // Unchanged: drop any stale pending request for a different value.
+            if (existing.prepTimeApprovalStatus === 'pending') {
+                update.pendingPreparationTime = '';
+                update.prepTimeApprovalStatus = 'none';
+            }
+        } else if (prepTimeNeedsApproval(requestedPrepTime) && !itemUnderReview) {
+            // Live value stays as-is until an admin approves the longer time.
+            update.pendingPreparationTime = requestedPrepTime;
+            update.prepTimeApprovalStatus = 'pending';
+            update.prepTimeRequestedAt = new Date();
+            update.prepTimeRejectionReason = '';
+            prepTimeApprovalRequested = true;
+        } else {
+            // <= 30 min, or the whole item is already going through approval.
+            update.preparationTime = requestedPrepTime;
+            update.pendingPreparationTime = '';
+            update.prepTimeApprovalStatus = 'none';
+            update.prepTimeRejectionReason = '';
+        }
+    }
     if (body.availableTime !== undefined) {
         update.availableTime = normalizeAvailableTime(body.availableTime);
     }
@@ -354,6 +380,23 @@ export async function updateRestaurantFood(restaurantId, foodId, body = {}) {
             stockQuantity: updated.stockQuantity,
             restaurantId
         });
+    }
+
+    if (updated && prepTimeApprovalRequested) {
+        try {
+            const { notifyAdminsSafely } = await import('../../../../core/notifications/firebase.service.js');
+            void notifyAdminsSafely({
+                title: 'Prep Time Approval Request ⏱️',
+                body: `"${updated.name}" prep time ${updated.pendingPreparationTime} (over ${PREP_TIME_APPROVAL_THRESHOLD_MINUTES} min) needs approval.`,
+                data: {
+                    type: 'approval_request',
+                    subType: 'food',
+                    id: String(updated._id)
+                }
+            });
+        } catch (e) {
+            console.error('Failed to notify admins of prep time approval request:', e);
+        }
     }
 
     if (updated && shouldResubmitForApproval) {

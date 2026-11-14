@@ -865,26 +865,13 @@ export default function OrdersPage({ statusKey = "all" }) {
 
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
   const handleRefund = (order) => {
-    const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-    
-    if (isWalletPayment) {
-      // Show modal for wallet refunds
-      setSelectedOrderForRefund(order)
-      setRefundModalOpen(true)
-    } else {
-      // For non-wallet payments, use the old confirm dialog flow
-      const confirmMessage = `Are you sure you want to process refund for order ${order.orderId}?\n\nThis will initiate a Razorpay refund to the customer's original payment method.`;
-      
-      if (!confirm(confirmMessage)) {
-        return
-      }
-      
-      processRefund(order, null) // null amount means use default
-    }
+    // Always show the amount first. Wallet refunds credit the wallet; online payments are refunded by the admin manually.
+    setSelectedOrderForRefund(order)
+    setRefundModalOpen(true)
   }
 
-  // Process refund with amount
-  const processRefund = async (order, refundAmount = null) => {
+  // Process refund with amount (manual = admin already paid the customer back outside the app)
+  const processRefund = async (order, refundAmount = null, { manual = false, reference = "" } = {}) => {
     // Try using MongoDB _id first (more reliable for route matching), then fallback to orderId string
     // Backend accepts either MongoDB ObjectId (24 chars) or orderId string
     // Using MongoDB _id is more reliable for route matching (no dashes/special chars)
@@ -917,7 +904,7 @@ export default function OrdersPage({ statusKey = "all" }) {
       })
       
       // Include refundAmount in request body if provided (ensure it's a number)
-      const requestData = refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}
+      const requestData = { ...(refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}), ...(manual ? { manual: true, reference } : {}) }
       debugLog('?? Request data being sent:', requestData)
       const response = await adminAPI.processRefund(orderIdToUse, requestData)
       
@@ -996,9 +983,11 @@ export default function OrdersPage({ statusKey = "all" }) {
   }
 
   // Handle refund confirmation from modal
-  const handleRefundConfirm = (amount) => {
+  const handleRefundConfirm = (amount, reference = "") => {
     if (selectedOrderForRefund) {
-      processRefund(selectedOrderForRefund, amount)
+      const o = selectedOrderForRefund
+      const isWallet = o.paymentType === "Wallet" || o.payment?.method === "wallet"
+      processRefund(o, amount, isWallet ? {} : { manual: true, reference })
     }
   }
 

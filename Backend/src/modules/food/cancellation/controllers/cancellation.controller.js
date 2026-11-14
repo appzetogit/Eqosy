@@ -18,7 +18,8 @@ export const payPenalty = wrap((req) => svc.createPenaltyPayment(req.user.userId
 export const verifyPenalty = wrap((req) => svc.verifyPenaltyPayment(req.user.userId, req.body || {}));
 export const nearbyRescues = wrap((req) => svc.listNearbyRescues(req.user.userId, req.query));
 export const claimRescue = wrap((req) => svc.claimRescue(req.params.id, req.user.userId, req.body || {}));
-export const verifyRescue = wrap((req) => svc.verifyRescuePayment(req.user.userId, req.body || {}));
+export const releaseRescue = wrap((req) => svc.releaseRescue(req.params.id, req.user.userId));
+export const verifyRescue =wrap((req) => svc.verifyRescuePayment(req.user.userId, req.body || {}));
 
 /* Admin */
 export const getConfig = wrap(() => svc.getConfig({ fresh: true }));

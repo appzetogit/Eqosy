@@ -134,6 +134,7 @@ const paymentSchema = new mongoose.Schema(
             },
             amount: { type: Number, default: 0 },
             refundId: { type: String, default: '' },
+            manual: { type: Boolean, default: false }, // admin paid it back outside the Razorpay API; refundId then holds the admin's reference
             processedAt: { type: Date }
         }
     },

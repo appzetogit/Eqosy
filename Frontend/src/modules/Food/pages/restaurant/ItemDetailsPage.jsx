@@ -131,7 +131,11 @@ export default function ItemDetailsPage() {
     const itemVariants = getFoodVariants(item)
     setVariants(itemVariants.map(createVariantDraft))
     setBasePrice(itemVariants.length === 0 ? item.price?.toString() || "" : "")
-    setPreparationTime(item.preparationTime || "")
+    setPreparationTime(
+      item.prepTimeApprovalStatus === "pending" && item.pendingPreparationTime
+        ? item.pendingPreparationTime
+        : item.preparationTime || "",
+    )
     setGst(item.gst?.toString() || "5.0")
     setIsRecommended(item.isRecommended || false)
     setIsInStock(item.isAvailable !== false)
@@ -1155,6 +1159,31 @@ export default function ItemDetailsPage() {
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
                 </div>
+                {(() => {
+                  const nums = String(preparationTime || "").match(/\d+/g)
+                  const needsApproval = nums && Math.max(...nums.map(Number)) > 30
+                  if (itemData?.prepTimeApprovalStatus === "pending" && itemData?.pendingPreparationTime) {
+                    return (
+                      <p className="mt-1 text-xs text-amber-600">
+                        "{itemData.pendingPreparationTime}" is waiting for admin approval
+                        {itemData.preparationTime ? ` (current: ${itemData.preparationTime})` : ""}.
+                      </p>
+                    )
+                  }
+                  if (itemData?.prepTimeApprovalStatus === "rejected") {
+                    return (
+                      <p className="mt-1 text-xs text-red-600">
+                        Longer prep time was rejected by admin
+                        {itemData.prepTimeRejectionReason ? `: ${itemData.prepTimeRejectionReason}` : "."}
+                      </p>
+                    )
+                  }
+                  return needsApproval ? (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Prep time above 30 mins needs admin approval.
+                    </p>
+                  ) : null
+                })()}
               </div>
               {/* <div>
                 <label className="block text-xs text-gray-600 mb-1">GST</label>

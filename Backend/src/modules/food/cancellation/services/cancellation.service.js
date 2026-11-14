@@ -749,14 +749,26 @@ async function activateRescue(order, caseDoc, cfg, { rescueFoodPrice = null } = 
         message: `Order #${orderLabel(order)}: ${listing.restaurantName || 'restaurant'} food listed at ${inr(listing.rescueFoodPrice)} (was ${inr(listing.originalFoodValue)}, ${listing.discountPercent}% off) for ${cfg.rescue.windowMinutes} min.`,
         category: 'food_rescue', zoneId: order.zoneId, orderMongoId: order._id,
     });
-    void notifyNearbyCustomers(listing, order.userId, cfg).catch((e) => logger.warn(`[Rescue] nearby notify failed: ${e?.message}`));
+    void notifyNearbyCustomers(listing, order.userId, cfg, order.deliveryAddress?.location?.coordinates).catch((e) => logger.warn(`[Rescue] nearby notify failed: ${e?.message}`));
     return listing;
 }
 
-async function notifyNearbyCustomers(listing, excludeUserId, cfg) {
+/** Anyone within this distance of the cancelled order's drop address is kept away from its rescue (stops friends/family gaming it). */
+const RESCUE_EXCLUDE_KM = 0.3;
+const isNearCoords = (a, b) => Array.isArray(a) && a.length === 2 && Array.isArray(b) && b.length === 2
+    && haversineKm(a[1], a[0], b[1], b[0]) <= RESCUE_EXCLUDE_KM;
+
+async function notifyNearbyCustomers(listing, excludeUserId, cfg, dropCoords = null) {
     if (!cfg.rescue.maxNotifyUsers) return;
+    const excluded = [excludeUserId];
+    if (Array.isArray(dropCoords) && dropCoords.length === 2) {
+        const close = await FoodUser.find({
+            'addresses.location': { $near: { $geometry: { type: 'Point', coordinates: dropCoords }, $maxDistance: RESCUE_EXCLUDE_KM * 1000 } },
+        }).select('_id').limit(500).lean();
+        excluded.push(...close.map((u) => u._id));
+    }
     const users = await FoodUser.find({
-        _id: { $ne: excludeUserId },
+        _id: { $nin: excluded },
         'addresses.location': { $near: { $geometry: { type: 'Point', coordinates: listing.location.coordinates }, $maxDistance: cfg.rescue.radiusKm * 1000 } },
     }).select('_id').limit(cfg.rescue.maxNotifyUsers).lean();
     const body = render(cfg.messages.rescue_nearby_customer, {
@@ -771,10 +783,23 @@ async function notifyNearbyCustomers(listing, excludeUserId, cfg) {
     await FoodRescueListing.updateOne({ _id: listing._id }, { $set: { notifiedCount: users.length } });
 }
 
-const publicListing = (l, distanceKm) => ({
-    id: String(l._id), restaurantName: l.restaurantName, items: l.items, originalPrice: l.originalFoodValue, rescuePrice: l.rescueFoodPrice,
-    discountPercent: l.discountPercent, expiresAt: l.expiresAt, status: l.status, distanceKm: distanceKm != null ? r2(distanceKm) : undefined,
-});
+/** Customer-facing price split of a rescue listing (same maths as claimRescue). */
+const rescuePricing = (l, cfg) => {
+    const foodPrice = l.rescueFoodPrice;
+    const tax = r2((foodPrice * (cfg.rescue.gstPercentOnFood || 0)) / 100);
+    const deliveryFee = r2(cfg.rescue.deliveryFee);
+    const platformFee = r2(cfg.rescue.platformFee);
+    return { foodPrice, tax, deliveryFee, platformFee, total: r2(foodPrice + tax + deliveryFee + platformFee) };
+};
+
+const publicListing = (l, distanceKm, { cfg = null, userId = null } = {}) => {
+    const heldByMe = Boolean(userId && l.status === 'held' && l.heldBy && String(l.heldBy) === String(userId));
+    return {
+        id: String(l._id), restaurantName: l.restaurantName, items: l.items, originalPrice: l.originalFoodValue, rescuePrice: l.rescueFoodPrice,
+        discountPercent: l.discountPercent, expiresAt: l.expiresAt, status: l.status, distanceKm: distanceKm != null ? r2(distanceKm) : undefined,
+        heldByMe, pricing: cfg ? rescuePricing(l, cfg) : undefined,
+    };
+};
 
 export async function listNearbyRescues(userId, { lat, lng }) {
     const cfg = await getConfig();
@@ -786,11 +811,31 @@ export async function listNearbyRescues(userId, { lat, lng }) {
         status: { $in: ['active', 'held'] }, expiresAt: { $gt: new Date() },
         location: { $near: { $geometry: { type: 'Point', coordinates: [ln, la] }, $maxDistance: cfg.rescue.radiusKm * 1000 } },
     }).limit(30).lean();
-    const orders = await FoodOrder.find({ _id: { $in: rows.map((r) => r.originalOrderId) } }).select('userId').lean();
+    const orders = await FoodOrder.find({ _id: { $in: rows.map((r) => r.originalOrderId) } }).select('userId deliveryAddress.location').lean();
     const own = new Set(orders.filter((o) => String(o.userId) === String(userId)).map((o) => String(o._id)));
+    const dropOf = new Map(orders.map((o) => [String(o._id), o.deliveryAddress?.location?.coordinates]));
+    // Also hide it from someone standing within 300 m of the cancelled order's drop address.
     return rows
-        .filter((r) => !own.has(String(r.originalOrderId)))
-        .map((r) => publicListing(r, haversineKm(la, ln, r.location.coordinates[1], r.location.coordinates[0])));
+        .filter((r) => !own.has(String(r.originalOrderId)) && !isNearCoords([ln, la], dropOf.get(String(r.originalOrderId))))
+        .map((r) => publicListing(r, haversineKm(la, ln, r.location.coordinates[1], r.location.coordinates[0]), { cfg, userId }));
+}
+
+/**
+ * The customer backed out (closed the payment sheet / payment failed): free the hold right away so the food shows
+ * as claimable again for everyone, and drop their unpaid rescue order so it never looks "claimed" or cancelled anywhere.
+ * Only touches a listing this user holds and an order that is still unpaid.
+ */
+export async function releaseRescue(listingId, userId) {
+    const listing = await FoodRescueListing.findOneAndUpdate(
+        { _id: oid(listingId), status: 'held', heldBy: oid(userId) },
+        { $set: { status: 'active', heldBy: null, holdUntil: null, holdOrderId: null } },
+        { new: false }
+    );
+    if (!listing) return { released: false };
+    if (listing.holdOrderId) {
+        await FoodOrder.deleteOne({ _id: listing.holdOrderId, userId: oid(userId), orderStatus: 'pending_payment', 'payment.status': { $ne: 'paid' } });
+    }
+    return { released: true };
 }
 
 /**
@@ -827,6 +872,7 @@ export async function claimRescue(listingId, userId, { address, paymentMethod = 
         const original = await FoodOrder.findById(listing.originalOrderId).lean();
         if (!original) throw new NotFoundError('Original order not found');
         if (String(original.userId) === String(userId)) throw new ForbiddenError('You cannot buy back your own cancelled order');
+        if (isNearCoords(coords, original.deliveryAddress?.location?.coordinates)) throw new ForbiddenError('This food is not available for your location');
         const dist = haversineKm(coords[1], coords[0], listing.location.coordinates[1], listing.location.coordinates[0]);
         if (dist > cfg.rescue.radiusKm) throw new ValidationError(`This food is only available within ${cfg.rescue.radiusKm} km`);
 

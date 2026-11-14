@@ -6214,6 +6214,20 @@ export async function bulkApproveFoodItems(restaurantId) {
         }
     );
 
+    // 1b. Bulk approve pending prep-time (> 30 min) requests on already approved items
+    const prepFilter = { prepTimeApprovalStatus: 'pending', approvalStatus: { $ne: 'pending' } };
+    if (filter.restaurantId) prepFilter.restaurantId = filter.restaurantId;
+    await FoodItem.updateMany(prepFilter, [
+        {
+            $set: {
+                preparationTime: '$pendingPreparationTime',
+                pendingPreparationTime: '',
+                prepTimeApprovalStatus: 'none',
+                prepTimeRejectionReason: ''
+            }
+        }
+    ]);
+
     // 2. Bulk Approve Addons
     // For addons, we need to move 'draft' to 'published'
     // UpdateMany with pipeline (if MongoDB 4.2+) or manual loop

@@ -309,6 +309,15 @@ export default function FoodApproval() {
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700 font-semibold">
                             {request.itemName || '-'}
+                            {request.requestKind === 'prep_time' ? (
+                              <div className="text-xs font-medium text-amber-600">
+                                Prep time: {request.preparationTime || '-'} → {request.pendingPreparationTime}
+                              </div>
+                            ) : request.preparationTime ? (
+                              <div className={`text-xs font-medium ${request.prepTimeNeedsApproval ? 'text-amber-600' : 'text-gray-500'}`}>
+                                Prep time: {request.preparationTime}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700 capitalize text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${request.entityType === 'addon' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -426,6 +435,16 @@ export default function FoodApproval() {
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Food Type</label>
                             <p className="text-sm text-gray-700">{selectedRequest.foodType}</p>
+                        </div>
+                    )}
+                    {(selectedRequest.preparationTime || selectedRequest.pendingPreparationTime) && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Preparation Time</label>
+                            <p className="text-sm text-gray-700">
+                              {selectedRequest.requestKind === 'prep_time'
+                                ? `${selectedRequest.preparationTime || '-'} → ${selectedRequest.pendingPreparationTime} (over 30 mins)`
+                                : selectedRequest.preparationTime}
+                            </p>
                         </div>
                     )}
                     {selectedRequest.requestedAt && (

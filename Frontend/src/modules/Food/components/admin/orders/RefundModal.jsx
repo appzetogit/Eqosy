@@ -12,6 +12,8 @@ import { Button } from "@food/components/ui/button"
 export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, isProcessing }) {
   const [refundAmount, setRefundAmount] = useState("")
   const [error, setError] = useState("")
+  const [reference, setReference] = useState("")
+  const isWallet = order?.paymentType === "Wallet" || order?.payment?.method === "wallet"
 
   // Set default refund amount when order changes
   useEffect(() => {
@@ -19,6 +21,7 @@ export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, is
       const defaultAmount = order.totalAmount || 0
       setRefundAmount(defaultAmount.toString())
       setError("")
+      setReference("")
     }
   }, [order, isOpen])
 
@@ -50,7 +53,7 @@ export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, is
       return
     }
 
-    onConfirm(amount)
+    onConfirm(amount, reference.trim())
   }
 
   const handleClose = () => {
@@ -71,7 +74,7 @@ export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, is
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
             <Wallet className="w-5 h-5 text-purple-600" />
-            Wallet Refund
+            {isWallet ? "Wallet Refund" : "Manual Refund"}
           </DialogTitle>
           <DialogDescription className="text-slate-600">
             Order ID: <span className="font-semibold">{order.orderId}</span>
@@ -108,11 +111,37 @@ export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, is
             </p>
           </div>
 
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <p className="text-sm text-purple-800">
-              <span className="font-semibold">Note:</span> यह पैसा ग्राहक के वॉलेट में क्रेडिट हो जाएगा और ऑर्डर का स्टेटस "Refunded" हो जाएगा।
-            </p>
-          </div>
+          {isWallet ? (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p className="text-sm text-purple-800">
+                <span className="font-semibold">Note:</span> यह पैसा ग्राहक के वॉलेट में क्रेडिट हो जाएगा और ऑर्डर का स्टेटस "Refunded" हो जाएगा।
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 space-y-1">
+                <p><span className="font-semibold">Customer:</span> {order.customerName || "-"} {order.customerPhone ? `(${order.customerPhone})` : ""}</p>
+                <p><span className="font-semibold">Refund to pay:</span> ₹{(parseFloat(refundAmount) || 0).toFixed(2)}</p>
+                {order.payment?.razorpay?.paymentId && <p><span className="font-semibold">Razorpay payment:</span> {order.payment.razorpay.paymentId}</p>}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Refund reference / UTR (optional)</label>
+                <input
+                  type="text"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  disabled={isProcessing}
+                  placeholder="Transaction id of your manual refund"
+                  className="w-full px-3 py-2.5 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  <span className="font-semibold">Note:</span> Pehle yeh amount customer ko khud wapas bhejein (Razorpay dashboard / UPI / bank). Uske baad "Mark as Refunded" dabayein. Yeh Razorpay se automatic refund nahi karta, sirf record save karta hai.
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
@@ -129,7 +158,7 @@ export default function RefundModal({ isOpen, onOpenChange, order, onConfirm, is
             disabled={isProcessing || !refundAmount || parseFloat(refundAmount) <= 0}
             className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white"
           >
-            {isProcessing ? "Processing..." : "Refund"}
+            {isProcessing ? "Processing..." : isWallet ? "Refund" : "Mark as Refunded"}
           </Button>
         </div>
       </DialogContent>

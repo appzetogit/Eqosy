@@ -4,6 +4,7 @@ import { FoodItem } from '../models/food.model.js';
 import { FoodAddon } from '../../restaurant/models/foodAddon.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { syncMenuItemApprovalStatus } from '../../restaurant/services/restaurantMenu.service.js';
+import { prepTimeNeedsApproval } from '../../shared/prepTime.js';
 import { getFoodDisplayPrice, serializeFoodVariants } from './foodVariant.service.js';
 
 const toRestaurantDisplayId = (mongoId) => {
@@ -32,7 +33,17 @@ export async function listPendingFoodApprovals(query = {}) {
         .sort({ requestedAt: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select('restaurantId categoryName name price variants image foodType approvalStatus requestedAt createdAt')
+        .select('restaurantId categoryName name price variants image foodType approvalStatus preparationTime requestedAt createdAt')
+        .lean();
+
+    // Approved items whose restaurant asked for a prep time above the limit.
+    const prepFilter = { prepTimeApprovalStatus: 'pending', approvalStatus: { $ne: 'pending' } };
+    if (filter.restaurantId) prepFilter.restaurantId = filter.restaurantId;
+    if (filter.$or) prepFilter.$or = filter.$or;
+    const prepTimeList = await FoodItem.find(prepFilter)
+        .sort({ prepTimeRequestedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .select('restaurantId categoryName name price variants image foodType preparationTime pendingPreparationTime prepTimeRequestedAt createdAt')
         .lean();
 
     const addonList = await FoodAddon.find({ approvalStatus: 'pending' })
@@ -43,6 +54,7 @@ export async function listPendingFoodApprovals(query = {}) {
 
     const restaurantIds = Array.from(new Set([
         ...foodList.map((f) => String(f.restaurantId)),
+        ...prepTimeList.map((f) => String(f.restaurantId)),
         ...addonList.map((a) => String(a.restaurantId))
     ].filter(Boolean)));
 
@@ -68,8 +80,35 @@ export async function listPendingFoodApprovals(query = {}) {
         variants: serializeFoodVariants(f.variants),
         image: f.image || '',
         images: f.image ? [f.image] : [],
+        preparationTime: f.preparationTime || '',
+        prepTimeNeedsApproval: prepTimeNeedsApproval(f.preparationTime),
         requestedAt: f.requestedAt || f.createdAt,
         isActionable: (f.approvalStatus || 'pending') === 'pending'
+    }));
+
+    const prepTimeRequests = prepTimeList.map((f) => ({
+        _id: f._id,
+        id: f._id,
+        entityType: 'food',
+        type: 'food',
+        requestKind: 'prep_time',
+        restaurantName: restaurantMap.get(String(f.restaurantId)) || 'Unknown Restaurant',
+        restaurantId: toRestaurantDisplayId(f.restaurantId),
+        category: f.categoryName || '',
+        itemName: f.name,
+        foodType: f.foodType || 'Non-Veg',
+        sectionName: f.categoryName || '',
+        subsectionName: '',
+        approvalStatus: 'pending',
+        price: getFoodDisplayPrice(f),
+        variants: serializeFoodVariants(f.variants),
+        image: f.image || '',
+        images: f.image ? [f.image] : [],
+        preparationTime: f.preparationTime || '',
+        pendingPreparationTime: f.pendingPreparationTime || '',
+        prepTimeNeedsApproval: true,
+        requestedAt: f.prepTimeRequestedAt || f.createdAt,
+        isActionable: true
     }));
 
     const addonRequests = addonList.map((a) => ({
@@ -93,7 +132,7 @@ export async function listPendingFoodApprovals(query = {}) {
         description: a.draft?.description || ''
     }));
 
-    const allRequests = [...foodRequests, ...addonRequests].sort((a, b) => 
+    const allRequests = [...foodRequests, ...prepTimeRequests, ...addonRequests].sort((a, b) => 
         new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
     );
 
@@ -109,6 +148,7 @@ export async function approveFoodItem(id) {
         { $set: { approvalStatus: 'approved', approvedAt: new Date(), rejectedAt: null, rejectionReason: '' } },
         { new: true }
     ).lean();
+    if (!updated) return approvePrepTimeRequest(id);
     if (updated?.restaurantId) {
         // Single DB update; makes user-facing menu reflect approval immediately.
         await syncMenuItemApprovalStatus(updated.restaurantId, updated._id, 'approved', '');
@@ -155,6 +195,7 @@ export async function rejectFoodItem(id, reason) {
         { $set: { approvalStatus: 'rejected', rejectedAt: new Date(), rejectionReason: r, approvedAt: null } },
         { new: true }
     ).lean();
+    if (!updated) return rejectPrepTimeRequest(id, r);
     if (updated?.restaurantId) {
         await syncMenuItemApprovalStatus(updated.restaurantId, updated._id, 'rejected', r);
         
@@ -189,3 +230,67 @@ export async function rejectFoodItem(id, reason) {
 }
 
 
+
+async function invalidateMenuCache(restaurantId) {
+    try {
+        const { invalidateCache } = await import('../../../../middleware/cache.js');
+        await invalidateCache(`restaurant_menu:${restaurantId}`);
+    } catch (cacheErr) {
+        console.error('Failed to invalidate cache after prep time review:', cacheErr);
+    }
+}
+
+async function notifyRestaurantSafely(restaurantId, payload) {
+    try {
+        const { notifyOwnersSafely } = await import('../../../core/notifications/firebase.service.js');
+        await notifyOwnersSafely([{ ownerType: 'RESTAURANT', ownerId: restaurantId }], payload);
+    } catch (e) {
+        console.error('Failed to send prep time review notification:', e);
+    }
+}
+
+/** Apply the requested prep time (> 30 min) to an already approved item. */
+async function approvePrepTimeRequest(id) {
+    const pending = await FoodItem.findOne({ _id: id, prepTimeApprovalStatus: 'pending' })
+        .select('pendingPreparationTime')
+        .lean();
+    if (!pending) return null;
+    const updated = await FoodItem.findOneAndUpdate(
+        { _id: id, prepTimeApprovalStatus: 'pending' },
+        {
+            $set: {
+                preparationTime: pending.pendingPreparationTime,
+                pendingPreparationTime: '',
+                prepTimeApprovalStatus: 'none',
+                prepTimeRejectionReason: ''
+            }
+        },
+        { new: true }
+    ).lean();
+    if (updated?.restaurantId) {
+        await invalidateMenuCache(updated.restaurantId);
+        await notifyRestaurantSafely(updated.restaurantId, {
+            title: 'Prep Time Approved ⏱️',
+            body: `Prep time "${updated.preparationTime}" for "${updated.name}" has been approved.`,
+            data: { type: 'prep_time_approved', foodId: String(updated._id), restaurantId: String(updated.restaurantId) }
+        });
+    }
+    return updated;
+}
+
+async function rejectPrepTimeRequest(id, reason) {
+    const updated = await FoodItem.findOneAndUpdate(
+        { _id: id, prepTimeApprovalStatus: 'pending' },
+        { $set: { prepTimeApprovalStatus: 'rejected', prepTimeRejectionReason: reason } },
+        { new: true }
+    ).lean();
+    if (updated?.restaurantId) {
+        await invalidateMenuCache(updated.restaurantId);
+        await notifyRestaurantSafely(updated.restaurantId, {
+            title: 'Prep Time Rejected ❌',
+            body: `Prep time "${updated.pendingPreparationTime}" for "${updated.name}" was rejected. Reason: ${reason}`,
+            data: { type: 'prep_time_rejected', foodId: String(updated._id), restaurantId: String(updated.restaurantId), reason }
+        });
+    }
+    return updated;
+}
