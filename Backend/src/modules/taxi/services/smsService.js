@@ -203,7 +203,7 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
 
   const digits = String(phone || '').replace(/\D/g, '');
   const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
-  const apiKey = (env.sms?.indiaHub?.apiKey || process.env.SMS_INDIA_HUB_API_KEY || 'a1c4cde49bf4444fa858a7c631c7eaa6').trim();
+  const apiKey = (env.sms?.indiaHub?.apiKey || process.env.SMS_INDIA_HUB_API_KEY || '').trim();
   const senderId = (env.sms?.indiaHub?.senderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
   const peId = (env.sms?.indiaHub?.peId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
   const templateId = (env.sms?.indiaHub?.dltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();

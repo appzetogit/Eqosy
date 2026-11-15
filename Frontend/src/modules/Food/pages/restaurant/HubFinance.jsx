@@ -1453,8 +1453,11 @@ export default function HubFinance() {
                         toast.error(`Minimum withdrawal amount is ${formatCurrency(minimumWithdrawalAmount)}`)
                         return
                       }
-                      if (amount > withdrawableAmount) return
-                      
+                      if (amount > withdrawableAmount) {
+                        toast.error(`You can withdraw at most ${formatCurrency(withdrawableAmount)} (your available earnings)`)
+                        return
+                      }
+
                       try {
                         setSubmittingWithdrawal(true)
                         const response = await restaurantAPI.createWithdrawalRequest(amount)

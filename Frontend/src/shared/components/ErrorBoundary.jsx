@@ -1,5 +1,33 @@
 import React from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { resolveCurrentAppHomeRoute } from '../utils/activeModule.js'
+
+const RECOVER_KEY = 'eb-recover-log'
+
+const getHomeRoute = () => {
+  try {
+    return resolveCurrentAppHomeRoute() || '/'
+  } catch {
+    return '/'
+  }
+}
+
+const normalizePath = (p) => String(p || '').split('?')[0].replace(/\/$/, '') || '/'
+
+/** Allow at most 2 automatic "send to home" recoveries within 15s, so a broken home page cannot loop. */
+const canAutoRecover = () => {
+  try {
+    const now = Date.now()
+    const log = JSON.parse(sessionStorage.getItem(RECOVER_KEY) || '[]').filter((t) => now - t < 15000)
+    if (log.length >= 2) return false
+    log.push(now)
+    sessionStorage.setItem(RECOVER_KEY, JSON.stringify(log))
+    return true
+  } catch {
+    return true
+  }
+}
 
 const isModuleChunkError = (error) => {
   if (!error) return false
@@ -48,6 +76,19 @@ class ErrorBoundary extends React.Component {
     // Automatically recover from module fetch / dev HMR update errors
     if (isModuleChunkError(error)) {
       this.triggerAutoRecovery()
+      return
+    }
+
+    // Any other error: quietly take the user to the app home instead of showing a scary error screen.
+    if (this.props.onRecover) {
+      this.props.onRecover(() => this.setState({ hasError: false, error: null }))
+    }
+  }
+
+  componentDidUpdate(prevProps) {
+    // Navigating to another page clears the error state.
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null })
     }
   }
 
@@ -105,34 +146,19 @@ class ErrorBoundary extends React.Component {
       window.sessionStorage.removeItem('chunk-auto-reload-ts')
       window.sessionStorage.removeItem('chunk-auto-reload-count')
       window.sessionStorage.removeItem('page-has-been-refreshed')
+      window.sessionStorage.removeItem(RECOVER_KEY)
     } catch {
       // ignore
     }
-    let homeRoute = '/'
-    try {
-      homeRoute = resolveCurrentAppHomeRoute() || '/'
-    } catch {
-      // fall back to root
+    const homeRoute = getHomeRoute()
+    const alreadyHome = normalizePath(this.props.currentPath) === normalizePath(homeRoute)
+    this.setState({ hasError: false, error: null })
+    if (this.props.navigate) {
+      this.props.navigate(homeRoute, { replace: true })
+      if (alreadyHome) window.location.reload()
+      return
     }
-    try {
-      if (window.location?.hash?.startsWith('#/')) {
-        window.location.hash = `#${homeRoute}`
-        window.location.reload()
-        return
-      }
-      const target = new URL(homeRoute, window.location.origin).href
-      const alreadyThere = target === window.location.href
-      // replace() always navigates; if we are already on the home URL some WebViews ignore it, so reload.
-      if (alreadyThere) {
-        window.location.reload()
-      } else {
-        window.location.replace(target)
-        // Safety net: if the navigation was swallowed, force a reload.
-        setTimeout(() => window.location.reload(), 800)
-      }
-    } catch {
-      window.location.href = '/'
-    }
+    window.location.assign(homeRoute)
   }
 
   render() {
@@ -168,16 +194,16 @@ class ErrorBoundary extends React.Component {
             </div>
             
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              {isModuleErr ? 'Connection or Update Issue' : 'Something went wrong'}
+              {isModuleErr ? 'Connection or Update Issue' : 'Oops! Something went wrong'}
             </h2>
             
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
               {isModuleErr
                 ? 'Failed to load the required application module. The server may have updated or reconnected. Please refresh.'
-                : 'An unexpected error occurred in the application view.'}
+                : 'We hit a small problem showing this page. Please reload, or go back to the home screen.'}
             </p>
 
-            {this.state.error?.message && (
+            {import.meta.env.DEV && this.state.error?.message && (
               <details className="mb-6 text-left bg-gray-50 dark:bg-gray-900 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-red-600 dark:text-red-400 overflow-x-auto max-h-32">
                 <summary className="cursor-pointer font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                   Technical details
@@ -209,4 +235,34 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-export default ErrorBoundary
+function ErrorBoundaryWithRouter({ children }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const resetKey = `${location.pathname}${location.search}`
+
+  const handleRecover = (reset) => {
+    const homeRoute = getHomeRoute()
+    // Already on home (or recovery keeps failing): keep the friendly fallback screen instead of looping.
+    if (normalizePath(location.pathname) === normalizePath(homeRoute) || !canAutoRecover()) return
+    reset()
+    navigate(homeRoute, { replace: true })
+    setTimeout(() => {
+      toast.message('Sorry, something went wrong on that page.', {
+        description: 'We have taken you back to the home screen.'
+      })
+    }, 300)
+  }
+
+  return (
+    <ErrorBoundary
+      resetKey={resetKey}
+      currentPath={location.pathname}
+      navigate={navigate}
+      onRecover={handleRecover}
+    >
+      {children}
+    </ErrorBoundary>
+  )
+}
+
+export default ErrorBoundaryWithRouter

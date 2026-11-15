@@ -35,7 +35,9 @@ export const createWithdrawalRequestController = async (req, res, next) => {
         }
 
         const finance = await getRestaurantFinance(restaurantId);
-        const totalEarnings = Number(finance?.currentCycle?.netAvailable ?? finance?.currentCycle?.estimatedPayout ?? 0);
+        if (!finance) return sendError(res, 400, 'Unable to verify your earnings. Please try again.');
+        // availableBalance = lifetime earnings - all pending/approved withdrawals.
+        const totalEarnings = Math.round(Number(finance.availableBalance ?? finance.currentCycle?.netAvailable ?? 0) * 100) / 100;
         const withdrawalSettings = await getRestaurantWithdrawalSettings();
         const minimumWithdrawalAmount = Number(withdrawalSettings?.minimumWithdrawalAmount) || 0;
 
@@ -43,8 +45,16 @@ export const createWithdrawalRequestController = async (req, res, next) => {
             return sendError(res, 400, `Minimum withdrawal amount is Rs ${minimumWithdrawalAmount.toLocaleString('en-IN')}`);
         }
 
-        if (parsedAmount > totalEarnings) {
-            return sendError(res, 400, `Insufficient balance. Available to withdraw: Rs ${totalEarnings.toLocaleString('en-IN')}`);
+        if (totalEarnings <= 0) {
+            return sendError(res, 400, 'No balance available to withdraw.');
+        }
+
+        if (Math.round(parsedAmount * 100) / 100 > totalEarnings) {
+            return sendError(
+                res,
+                400,
+                `Withdrawal amount (Rs ${parsedAmount.toLocaleString('en-IN')}) cannot exceed your available earnings (Rs ${totalEarnings.toLocaleString('en-IN')})`
+            );
         }
 
         const mergedBankDetails = {
@@ -65,6 +75,16 @@ export const createWithdrawalRequestController = async (req, res, next) => {
         });
 
         await withdrawal.save();
+
+        // Concurrency guard: two simultaneous requests can both pass the check above.
+        // Re-check after saving; if this request pushed the restaurant over its earnings, roll it back.
+        const after = await getRestaurantFinance(restaurantId);
+        const lifetime = Number(after?.lifetimeEarnings ?? 0);
+        const deducted = Number(after?.currentCycle?.totalWithdrawn ?? 0);
+        if (after && deducted - lifetime > 0.009) {
+            await FoodRestaurantWithdrawal.deleteOne({ _id: withdrawal._id });
+            return sendError(res, 400, 'Withdrawal amount cannot exceed your available earnings. Please refresh and try again.');
+        }
 
         return sendResponse(res, 201, 'Withdrawal request submitted successfully', withdrawal);
     } catch (error) {
