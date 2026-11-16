@@ -18,12 +18,35 @@ const getNotificationKey = (payload) =>
 
 // Only new-order style pushes (data.ring === "true") and chat may make a sound.
 // Status updates (rider arrived, picked up, delivered...) are shown silently.
+// Status-style pushes that must NEVER make a sound, whatever else the payload carries.
+// NOTE: "rider_arrived" contains the text "ride", so a plain type.includes("ride") check used to
+// ring the restaurant for "rider arrived" / "delivered" updates.
+const SILENT_STATUS_TYPES = [
+  "rider_arrived", "partner_arrived", "reached_pickup", "picked_up", "out_for_delivery",
+  "reached_drop", "at_drop", "delivered", "order_completed", "mark_completed",
+  "order_status_update", "status_update", "order_ready", "ready_for_pickup", "cancel",
+];
+
+function isTaxiRideType(type, data) {
+  return (
+    Boolean(data.rideId) ||
+    type === "ride_request" ||
+    type === "new_ride" ||
+    type.startsWith("ride_") ||
+    type.startsWith("new_ride")
+  );
+}
+
 function shouldPlaySound(payload = {}) {
   const data = payload?.data || {};
   const type = String(data.type || payload?.type || "").toLowerCase();
   if (type.includes("chat") || data.openChat === "true" || data.conversationId) return true;
-  if (type.includes("ride") || type.includes("delivery") || data.serviceType || data.rideId) return true;
-  return String(data.ring) === "true";
+  if (SILENT_STATUS_TYPES.some((t) => type.includes(t))) return false;
+  // The backend decides (data.ring) when it can; it is authoritative.
+  if (data.ring === "true") return true;
+  if (data.ring === "false") return false;
+  // Legacy payloads without a ring flag: only real taxi ride requests ring.
+  return isTaxiRideType(type, data);
 }
 
 function getSoundPath(payload = {}) {
@@ -168,7 +191,7 @@ async function loadFirebaseWebConfig() {
       });
 
       const playSound = shouldPlaySound(payload);
-      const isRide = String(payload?.data?.type || "").includes("ride") || Boolean(payload?.data?.rideId);
+      const isRide = isTaxiRideType(String(payload?.data?.type || "").toLowerCase(), payload?.data || {});
 
       self.registration.showNotification(title, {
         body,
@@ -221,7 +244,7 @@ self.addEventListener("push", (event) => {
       // If app/tab is closed or in background, show native OS notification popup!
       if (!visibleClient) {
         const playSound = shouldPlaySound(payload);
-        const isRide = String(payload?.data?.type || "").includes("ride") || Boolean(payload?.data?.rideId);
+        const isRide = isTaxiRideType(String(payload?.data?.type || "").toLowerCase(), payload?.data || {});
 
         await self.registration.showNotification(title, {
           body,

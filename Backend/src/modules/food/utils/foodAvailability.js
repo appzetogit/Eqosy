@@ -52,8 +52,16 @@ export function isFoodItemAvailableNow(food, referenceDate = new Date()) {
         return true; // Fallback to available if time range not properly set
     }
 
-    const hrs = String(referenceDate.getHours()).padStart(2, '0');
-    const mins = String(referenceDate.getMinutes()).padStart(2, '0');
+    // Item timings are entered in local (IST) time; the server may run in UTC,
+    // so never use referenceDate.getHours() here.
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: process.env.APP_TIMEZONE || 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(referenceDate);
+    const hrs = parts.find((p) => p.type === 'hour')?.value || '00';
+    const mins = parts.find((p) => p.type === 'minute')?.value || '00';
     const currentTime = `${hrs}:${mins}`;
 
     if (startTime <= endTime) {

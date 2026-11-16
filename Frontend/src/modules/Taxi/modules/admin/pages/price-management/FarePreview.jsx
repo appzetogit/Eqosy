@@ -40,12 +40,15 @@ export const computeFarePreview = (form, { distanceKm, rideMinutes, waitingMinut
 
   const commissionValue = num(form.admin_commission_from_driver);
   const commissionIsPercent = String(form.admin_commission_type_from_driver) !== '2';
-  const commission = Math.min(commissionIsPercent ? (total * commissionValue) / 100 : commissionValue, total);
+  // Commission is on the bill AFTER removing GST; GST is not income for admin or driver.
+  const gstInTotal = Math.min(Math.round(taxAmount * 100) / 100, total);
+  const commissionBase = Math.max(0, total - gstInTotal);
+  const commission = Math.min(commissionIsPercent ? (commissionBase * commissionValue) / 100 : commissionValue, commissionBase);
 
   return {
     basePrice, withinBase, extraKm, distanceCharge, timeCharge, subtotal, taxAmount, surge,
     rideFare, freeBefore, billableWaiting, waitingRate, waitingCharge, total,
-    commission, driverEarning: total - commission,
+    commissionBase, commission, driverEarning: commissionBase - commission,
   };
 };
 
@@ -139,7 +142,7 @@ const FarePreview = ({ formData }) => {
           <div className="rounded-xl border border-slate-100 bg-white px-4 py-3">
             <Row
               label="Admin commission from driver"
-              hint={String(formData.admin_commission_type_from_driver) === '2' ? 'Fixed amount' : `${num(formData.admin_commission_from_driver)}% of the total`}
+              hint={String(formData.admin_commission_type_from_driver) === '2' ? 'Fixed amount' : `${num(formData.admin_commission_from_driver)}% of ${rupee(result.commissionBase)} (total minus GST)`}
               value={rupee(result.commission)}
             />
             <Row label="Driver earns" value={rupee(result.driverEarning)} strong />

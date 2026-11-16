@@ -7,6 +7,14 @@ import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getWalletSettings } from '../../services/appSettingsService.js';
 import { applyOwnerWalletAdjustment, resolveOwnerPayout, splitRideEarning } from '../../services/ownerPayoutService.js';
+import { splitInclusiveGst } from '../../services/gstService.js';
+
+// GST-exclusive part of a GST-inclusive ride fare, using the rate snapshotted on the ride.
+const getTaxableRideFare = (ride, inclusiveFare) => {
+  const snapshot = ride?.pricingSnapshot?.gst;
+  const rate = snapshot?.enabled ? Number(snapshot.rate) || 0 : 0;
+  return Math.round(splitInclusiveGst(inclusiveFare, rate).taxableAmount);
+};
 
 const normalizeAmount = (value, fieldName = 'amount') => {
   const amount = Number(value);
@@ -330,7 +338,7 @@ const settleFleetRide = async ({
   session,
 }) => {
   const payout = await resolveOwnerPayout(ownerId);
-  const net = Math.max(baseRideFare - commissionAmount, 0);
+  const net = Math.max(getTaxableRideFare(ride, baseRideFare) - commissionAmount, 0);
   const { ownerShare, driverShare } = splitRideEarning({ net, ownerSharePercent: payout.ownerSharePercent });
   const metadata = {
     fare,
@@ -420,7 +428,9 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     const previousCancellationFee = Math.max(0, Math.round(ride.previousCancellationFee || 0));
     const baseRideFare = Math.max(0, Math.round(ride.baseRideFare || (fare - previousCancellationFee)));
     const surgeAmount = Math.max(0, Math.round(ride?.pricingSnapshot?.ride_surge_amount || 0));
-    const commissionableFare = Math.max(0, Math.round(baseRideFare - surgeAmount));
+    // Commission is taken on the fare AFTER removing GST (GST is not admin/driver income).
+    const taxableRideFare = getTaxableRideFare(ride, baseRideFare);
+    const commissionableFare = Math.max(0, Math.round(taxableRideFare - surgeAmount));
     const commissionConfig = await resolveCommissionConfigForRide(ride, session);
     const commissionAmount = Math.round(computeCommissionAmount({
       fare: commissionableFare,
@@ -428,7 +438,7 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       value: commissionConfig.value,
     }));
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
-    const driverEarnings = Math.max(Math.round(baseRideFare - commissionAmount), 0);
+    const driverEarnings = Math.max(Math.round(taxableRideFare - commissionAmount), 0);
     const amount = paymentMethod === 'cash'
       ? -Math.round(commissionAmount + previousCancellationFee)
       : driverEarnings;

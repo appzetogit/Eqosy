@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShieldCheck, DollarSign, CheckCircle2,
-  QrCode, Loader2, Info, X, RefreshCw, Package, Camera, Image as ImageIcon
+  QrCode, Loader2, Info, X, RefreshCw, Package, Camera, Image as ImageIcon,
+  MessageCircle, Phone, Navigation
 } from 'lucide-react';
 import { deliveryAPI, uploadAPI } from '@food/api';
 import { toast } from 'sonner';
@@ -50,7 +51,60 @@ const DeliveryInstructionsPanel = ({ note }) => {
   )
 }
 
-const OtpModal = ({ order, onVerified, onClose }) => {
+// Customer location + phone bar, so the rider can still navigate / call while verifying the handover.
+const CustomerContactBar = ({ contact }) => {
+  const { name, address, phone, mapNavUrl, onChat, unreadChatCount = 0 } = contact || {};
+  if (!name && !address && !phone && !mapNavUrl && !onChat) return null;
+
+  return (
+    <div className="w-full mb-6 flex items-center justify-between gap-3 rounded-3xl border border-gray-100 bg-gray-50 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <span className="block text-[9px] font-black uppercase tracking-widest text-gray-400">Customer</span>
+        {name && <p className="truncate text-sm font-black text-gray-950">{name}</p>}
+        {address && <p className="line-clamp-2 text-[11px] font-bold leading-tight text-gray-500">{address}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {onChat && (
+          <button
+            type="button"
+            onClick={onChat}
+            className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-orange-100 bg-orange-50 text-orange-600 transition-colors active:scale-90"
+            aria-label="Chat with customer"
+          >
+            <MessageCircle className="h-5 w-5" />
+            {unreadChatCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[10px] font-black text-white">
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
+        )}
+        {phone && (
+          <button
+            type="button"
+            onClick={() => { window.location.href = `tel:${phone}`; }}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-emerald-600 transition-colors active:scale-90"
+            aria-label="Call customer"
+          >
+            <Phone className="h-5 w-5" />
+          </button>
+        )}
+        {mapNavUrl && (
+          <button
+            type="button"
+            onClick={() => window.open(mapNavUrl, '_blank')}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-950 text-white shadow-xl transition-colors active:scale-90"
+            aria-label="Navigate to customer"
+          >
+            <Navigation className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const OtpModal = ({ order, contact, onVerified, onClose }) => {
   const [otp, setOtp] = useState(['', '', '', '']);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
@@ -129,6 +183,8 @@ const OtpModal = ({ order, onVerified, onClose }) => {
             <button onClick={onClose} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all active:scale-90"><X className="w-5 h-5" /></button>
           </div>
 
+          <CustomerContactBar contact={contact} />
+
           <DeliveryInstructionsPanel note={order?.note} />
 
           <PaymentBadge order={order} className="mb-6" />
@@ -171,7 +227,7 @@ const OtpModal = ({ order, onVerified, onClose }) => {
 };
 
 
-const PaymentModal = ({ order, otpString, onNext, onClose }) => {
+const PaymentModal = ({ order, contact, otpString, onNext, onClose }) => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [collectQrLink, setCollectQrLink] = useState(null);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
@@ -301,6 +357,8 @@ const PaymentModal = ({ order, otpString, onNext, onClose }) => {
               </div>
               <button onClick={onClose} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all active:scale-90"><X className="w-5 h-5" /></button>
             </div>
+
+            <CustomerContactBar contact={contact} />
 
             <DeliveryInstructionsPanel note={order?.note} />
 
@@ -464,7 +522,7 @@ const compressImageFile = async (file, maxSide = 1280, quality = 0.8) => {
   });
 };
 
-const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
+const HandoverPhotoModal = ({ order, contact, verifiedOtp, onComplete, onClose }) => {
   const [photoUrl, setPhotoUrl] = useState(order?.deliveryVerification?.handoverImageUrl || null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -541,6 +599,8 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
           </div>
           <button onClick={onClose} className="p-3 bg-gray-50 rounded-2xl text-gray-400 hover:text-gray-600 active:scale-90"><X className="w-5 h-5" /></button>
         </div>
+
+        <CustomerContactBar contact={contact} />
 
         <DeliveryInstructionsPanel note={order?.note} />
 
@@ -645,7 +705,7 @@ const HandoverPhotoModal = ({ order, verifiedOtp, onComplete, onClose }) => {
   );
 };
 
-export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
+export const DeliveryVerificationModal = ({ order, contact, onComplete, onClose }) => {
   const alreadyVerified = !!order?.deliveryVerification?.dropOtp?.verified;
   const paymentMethod = (
     order?.paymentMethod ||
@@ -683,6 +743,7 @@ export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
         <OtpModal
           key="otp-modal"
           order={order}
+          contact={contact}
           onVerified={handleOtpVerified}
           onClose={onClose || (() => { })}
         />
@@ -691,6 +752,7 @@ export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
         <PaymentModal
           key="payment-modal"
           order={order}
+          contact={contact}
           otpString={verifiedOtp}
           onNext={handlePaymentNext}
           onClose={onClose || (() => { })}
@@ -700,6 +762,7 @@ export const DeliveryVerificationModal = ({ order, onComplete, onClose }) => {
         <HandoverPhotoModal
           key="photo-modal"
           order={order}
+          contact={contact}
           verifiedOtp={verifiedOtp}
           onComplete={onComplete}
           onClose={onClose || (() => { })}

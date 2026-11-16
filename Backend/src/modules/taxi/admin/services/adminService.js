@@ -6635,6 +6635,9 @@ export const createSetPrice = async (payload, currentAdmin = null) => {
     cancellation_fee_goes_to: payload.cancellation_fee_goes_to ?? payload.fee_goes_to ?? 'admin',
     user_cancellation_fee_type: payload.user_cancellation_fee_type || 'percentage',
     driver_cancellation_fee_type: payload.driver_cancellation_fee_type || 'percentage',
+    ...(payload.cancellation_policy && typeof payload.cancellation_policy === 'object'
+      ? { cancellation_policy: sanitizeCancellationPolicy(payload.cancellation_policy) }
+      : {}),
 
     order_number: Number(payload.order_number ?? payload.eta_sequence ?? 1),
     bill_status: Number(payload.bill_status ?? 1),
@@ -6642,6 +6645,28 @@ export const createSetPrice = async (payload, currentAdmin = null) => {
   });
 
   return setPrice.toObject();
+};
+
+const sanitizeCancellationPolicy = (input = {}, current = {}) => {
+  const numberOr = (key, fallback) => {
+    const raw = input[key];
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  const boolOr = (key, fallback) => (input[key] === undefined ? fallback : input[key] === true || input[key] === 1 || input[key] === '1' || input[key] === 'true');
+  return {
+    enable_cancellation_charge: boolOr('enable_cancellation_charge', current.enable_cancellation_charge ?? true),
+    free_cancellation_time_mins: numberOr('free_cancellation_time_mins', current.free_cancellation_time_mins ?? 2),
+    fixed_cancellation_charge: numberOr('fixed_cancellation_charge', current.fixed_cancellation_charge ?? 50),
+    percentage_cancellation_charge: numberOr('percentage_cancellation_charge', current.percentage_cancellation_charge ?? 0),
+    max_cancellation_fee: numberOr('max_cancellation_fee', current.max_cancellation_fee ?? 150),
+    charge_after_driver_accepted: boolOr('charge_after_driver_accepted', current.charge_after_driver_accepted ?? true),
+    charge_after_driver_arrived: boolOr('charge_after_driver_arrived', current.charge_after_driver_arrived ?? true),
+    driver_cancellation_penalty: numberOr('driver_cancellation_penalty', current.driver_cancellation_penalty ?? 30),
+    driver_compensation_percentage: numberOr('driver_compensation_percentage', current.driver_compensation_percentage ?? 0),
+    cancellation_grace_period_driver_arrived: numberOr('cancellation_grace_period_driver_arrived', current.cancellation_grace_period_driver_arrived ?? 5),
+  };
 };
 
 export const updateSetPrice = async (id, payload, currentAdmin = null) => {
@@ -6720,6 +6745,14 @@ export const updateSetPrice = async (id, payload, currentAdmin = null) => {
     setPrice.package_vehicle_prices = Array.isArray(payload.package_vehicle_prices)
       ? payload.package_vehicle_prices.map((item) => normalizePackageVehiclePriceItem(item))
       : [];
+  }
+
+  // The nested cancellation policy (free minutes, fixed/percentage charge, max fee...) was never saved before,
+  // so edits in the Set Prices form silently kept the old values.
+  if (payload.cancellation_policy && typeof payload.cancellation_policy === 'object') {
+    const current = setPrice.cancellation_policy?.toObject?.() || setPrice.cancellation_policy || {};
+    setPrice.cancellation_policy = sanitizeCancellationPolicy(payload.cancellation_policy, current);
+    setPrice.markModified('cancellation_policy');
   }
 
   await setPrice.save();

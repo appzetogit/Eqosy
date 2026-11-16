@@ -1989,6 +1989,17 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 {showVerification && tripStatus !== 'COMPLETED' && (
                   <DeliveryVerificationModal
                     order={activeOrder}
+                    contact={{
+                      name: customerName,
+                      address: customerAddress,
+                      phone: customerPhone,
+                      mapNavUrl,
+                      unreadChatCount: partnerUnreadChatCount,
+                      onChat: () => {
+                        setPartnerUnreadChatCount(0);
+                        setShowEmbeddedChatModal(true);
+                      },
+                    }}
                     onComplete={async (otp, photoUrl) => {
                       const res = await completeDelivery(otp, photoUrl);
                       setShowVerification(false);

@@ -32,15 +32,18 @@ export const getCancellationPolicy = async (ride) => {
     const userCancelFeeType = String(setPrice.user_cancellation_fee_type || '').trim().toLowerCase();
     const userCancelFee = Number(setPrice.user_cancellation_fee ?? 0);
 
-    const fixedCharge = userCancelFeeType === 'percentage'
-      ? 0
-      : userCancelFeeType === 'fixed'
-      ? userCancelFee
+    // The explicit "user cancellation fee" wins only when the admin actually entered one (> 0); otherwise the saved
+    // policy's own fixed/percentage charge applies (an empty fee used to force the charge to 0).
+    const useUserFee = Number.isFinite(userCancelFee) && userCancelFee > 0
+      && (userCancelFeeType === 'percentage' || userCancelFeeType === 'fixed');
+
+    const fixedCharge = useUserFee
+      ? (userCancelFeeType === 'fixed' ? userCancelFee : 0)
       : Number(setPrice.cancellation_policy.fixed_cancellation_charge ?? 50);
 
-    const percentageCharge = userCancelFeeType === 'percentage'
-      ? userCancelFee
-      : 0;
+    const percentageCharge = useUserFee
+      ? (userCancelFeeType === 'percentage' ? userCancelFee : 0)
+      : Number(setPrice.cancellation_policy.percentage_cancellation_charge ?? 0);
 
     return {
       enable_cancellation_charge: setPrice.cancellation_policy.enable_cancellation_charge ?? true,

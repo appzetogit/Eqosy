@@ -1900,6 +1900,14 @@ export default function OrdersMain() {
           const targetOrders = allOrders.filter((order) => {
             if (hasOrderBeenShown(order)) return false;
 
+            // The rider already reached / picked up / delivered this order: it is no longer a new order, never ring for it.
+            const progressStatuses = ["reached_pickup", "picked_up", "out_for_delivery", "reaching_drop", "reached_drop", "at_drop", "delivered"];
+            const deliveryProgress = String(order.deliveryState?.status || order.dispatch?.status || "").toLowerCase();
+            if (progressStatuses.includes(deliveryProgress)) {
+              markOrderAsShown(order);
+              return false;
+            }
+
             const isConfirmed = order.status === "confirmed";
 
             if (isConfirmed && !order.scheduledAt) return true; // ordinary confirmed fallback
@@ -2278,7 +2286,8 @@ export default function OrdersMain() {
     if (audioRef.current) {
       if (!isMuted) {
         audioRef.current.pause();
-      } else {
+      } else if (showNewOrderPopupRef.current) {
+        // Only resume the buzzer while a new-order popup is actually open; unmuting alone must never ring.
         audioRef.current.muted = false;
         audioRef.current.volume = 1;
         audioRef.current.currentTime = 0;
