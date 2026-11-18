@@ -27,6 +27,7 @@ let gigReminderInterval = null;
 let scheduledOrdersInterval = null;
 let performanceSweepInterval = null;
 let cancellationSweepInterval = null;
+let fulfilmentSweepInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -46,6 +47,7 @@ const gracefulShutdown = async (signal) => {
             if (scheduledOrdersInterval) clearInterval(scheduledOrdersInterval);
             if (performanceSweepInterval) clearInterval(performanceSweepInterval);
             if (cancellationSweepInterval) clearInterval(cancellationSweepInterval);
+            if (fulfilmentSweepInterval) clearInterval(fulfilmentSweepInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -213,6 +215,17 @@ const startServer = async () => {
             }
         };
         cancellationSweepInterval = setInterval(runCancellationSweep, 30 * 1000);
+
+        // Partial-fulfilment customer-response timeouts (notify store/admin; never cancels an order).
+        const runFulfilmentSweep = async () => {
+            try {
+                const { runFulfilmentSweep: sweep } = await import('./src/modules/food/orders/services/partialFulfilment.service.js');
+                await sweep();
+            } catch (err) {
+                logger.error(`Fulfilment sweep error: ${err.message}`);
+            }
+        };
+        fulfilmentSweepInterval = setInterval(runFulfilmentSweep, 20 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

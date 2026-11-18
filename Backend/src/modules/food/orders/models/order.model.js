@@ -268,6 +268,46 @@ const undeliveredReturnSchema = new mongoose.Schema(
     { _id: false }
 );
 
+/**
+ * Smart partial fulfilment / item replacement. Additive: orders that never hit an unavailable item keep
+ * `state: 'none'` and behave exactly as before. The order's own `orderStatus` is NOT changed by this flow
+ * (it stays `created` until the store confirms the final order), so dispatch/cancellation/payout logic is untouched.
+ */
+const fulfilmentSchema = new mongoose.Schema(
+    {
+        state: {
+            type: String,
+            enum: ['none', 'awaiting_customer', 'applying', 'awaiting_payment', 'resolved', 'cancelled'],
+            default: 'none'
+        },
+        version: { type: Number, default: 0 },
+        reportedAt: { type: Date, default: null },
+        reportedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+        deadlineAt: { type: Date, default: null },
+        responseWindowSec: { type: Number, default: 300 },
+        timeoutNotifiedAt: { type: Date, default: null },
+        /** Lines the store could not fulfil in the current round. lineKey = index into order.items. */
+        unavailableItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        /** Store suggestions. The customer still has to pick and confirm every replacement. */
+        suggestions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        /** Frozen copy of the order as first placed (items, pricing, payment total). Never overwritten. */
+        original: { type: mongoose.Schema.Types.Mixed, default: null },
+        /** Proposed change waiting for the customer's extra payment (prepaid upsell). */
+        pending: { type: mongoose.Schema.Types.Mixed, default: null },
+        decision: {
+            action: { type: String, default: '' }, // replace | remove | mixed | cancel | auto_remove
+            at: { type: Date, default: null },
+            by: { type: String, default: '' }
+        },
+        /** Every applied change: before/after bill, what was removed/replaced and how it was settled. */
+        modifications: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        refunds: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        additionalPayments: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        history: { type: [mongoose.Schema.Types.Mixed], default: [] }
+    },
+    { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
     {
         order_id: {
@@ -373,6 +413,8 @@ const orderSchema = new mongoose.Schema(
             ),
             default: () => ({})
         },
+        /** Partial fulfilment / replacement workflow state (see fulfilmentSchema). */
+        fulfilment: { type: fulfilmentSchema, default: undefined },
         /** Customer-cancellation policy result (stage, penalty, rescue state), synced to all apps. */
         cancellationPolicy: {
             type: new mongoose.Schema(
@@ -512,6 +554,7 @@ orderSchema.index({ 'dispatch.status': 1, orderStatus: 1, updatedAt: -1 });
 orderSchema.index({ 'dispatch.deliveryPartnerId': 1, 'dispatch.status': 1, updatedAt: -1 });
 orderSchema.index({ 'payment.status': 1, createdAt: -1 });
 orderSchema.index({ 'payment.method': 1, createdAt: -1 });
+orderSchema.index({ 'fulfilment.state': 1, 'fulfilment.deadlineAt': 1 }, { sparse: true });
 
 orderSchema.pre('save', async function (next) {
     if (!this.order_id) {
@@ -535,6 +578,8 @@ const settingsSchema = new mongoose.Schema(
         maxDistanceCycle: { type: Number, default: 5 }, // default 5km
         maxDistanceElectricScooter: { type: Number, default: 10 }, // default 10km
         // Dev Mode (key: 'demo_mode'): lets reviewers/testers see demo data from any location.
+        // Partial order fulfilment & replacement settings (key: 'partial_fulfilment'); see partialFulfilment.service.
+        partialFulfilment: { type: mongoose.Schema.Types.Mixed, default: undefined },
         demoMode: {
             locationBypass: { type: Boolean, default: false },
             zoneId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodZone' },

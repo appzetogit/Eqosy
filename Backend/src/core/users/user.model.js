@@ -134,6 +134,12 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: 'USER'
         },
+        /** What to do if a store runs out of an item and the customer does not answer in time. 'ask' never acts on its own. */
+        unavailableItemPreference: {
+            type: String,
+            enum: ['ask', 'remove'],
+            default: 'ask'
+        },
         addresses: {
             type: [userAddressSchema],
             default: []

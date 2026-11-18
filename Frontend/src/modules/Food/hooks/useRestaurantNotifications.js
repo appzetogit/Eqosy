@@ -103,8 +103,8 @@ export const useRestaurantNotifications = () => {
   const BROWSER_NOTIFICATION_DEDUPE_MS = 20000;
   const NOTIFICATION_PERMISSION_ASKED_KEY = 'restaurant_notification_permission_asked';
 
-  const getOrderAlertKey = (orderData = {}) => (
-    String(
+  const getOrderAlertKey = (orderData = {}) => {
+    const base = String(
       orderData?.orderMongoId ||
       orderData?.order_mongo_id ||
       orderData?.orderId ||
@@ -112,8 +112,12 @@ export const useRestaurantNotifications = () => {
       orderData?._id ||
       orderData?.id ||
       ''
-    ).trim()
-  );
+    ).trim();
+    // A customer-modified order (after unavailable items) needs the store's attention again: give each decision
+    // version its own key so it rings/pops up once more instead of being treated as already alerted.
+    if (base && orderData?.fulfilment?.state === 'resolved') return `${base}:fv${orderData.fulfilment.version || 1}`;
+    return base;
+  };
 
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
@@ -362,6 +366,8 @@ export const useRestaurantNotifications = () => {
         // "confirmed" means restaurant already accepted → do NOT ring again.
         const newPendingOrders = (rows || [])
           .filter((o) => String(o?.status || o?.orderStatus || "").toLowerCase() === "created")
+          // Waiting for the customer to decide about unavailable items: nothing for the store to accept yet.
+          .filter((o) => !['awaiting_customer', 'awaiting_payment', 'applying'].includes(o?.fulfilment?.state))
           .sort((a, b) => {
             const at = a?.updatedAt || a?.createdAt || 0;
             const bt = b?.updatedAt || b?.createdAt || 0;
@@ -376,7 +382,7 @@ export const useRestaurantNotifications = () => {
           newPendingOrders.forEach((o) => {
             const key = getOrderAlertKey(o);
             const createdAtMs = new Date(o.createdAt || o.updatedAt || 0).getTime();
-            if (key && now - createdAtMs > 60000) {
+            if (key && now - createdAtMs > 60000 && o?.fulfilment?.state !== 'resolved') {
               alertedOrderIdsRef.current.add(key);
             }
           });

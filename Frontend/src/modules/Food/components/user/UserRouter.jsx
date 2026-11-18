@@ -37,6 +37,7 @@ const AddressSelectorPage = lazy(() => import("@food/pages/user/cart/AddressSele
 const Orders = lazy(() => import("@food/pages/user/orders/Orders"))
 const OrderTracking = lazy(() => import("@food/pages/user/orders/OrderTracking"))
 const SharedOrderTrackingPage = lazy(() => import("@food/pages/user/orders/SharedOrderTrackingPage"))
+const UnavailableItems = lazy(() => import("@food/pages/user/orders/UnavailableItems"))
 const OrderInvoice = lazy(() => import("@food/pages/user/orders/OrderInvoice"))
 const UserOrderDetails = lazy(() => import("@food/pages/user/orders/UserOrderDetails"))
 const FoodOrderChatScreen = lazy(() => import("@food/pages/user/orders/FoodOrderChatScreen"))
@@ -173,6 +174,14 @@ export default function UserRouter() {
             element={
               <ProtectedRoute requiredRole="user" loginPath="/login">
                 <OrderTracking />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="orders/:orderId/unavailable-items"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/login">
+                <UnavailableItems />
               </ProtectedRoute>
             }
           />

@@ -39,6 +39,7 @@ import * as performanceService from '../../performance/services/performance.serv
 import * as cancellationService from '../../cancellation/services/cancellation.service.js';
 import * as deliveryService from './order-delivery.service.js';
 import * as paymentService from './order-payment.service.js';
+import * as partialFulfilmentService from './partialFulfilment.service.js';
 import {
   enqueueOrderEvent,
   generateFourDigitDeliveryOtp,
@@ -54,6 +55,7 @@ import {
   applyAggregateRating,
   buildDeliverySocketPayload,
   notifyRestaurantNewOrder,
+  isScheduledOrderOnHold,
   isStatusAdvance,
   emitOrderStatusSocket,
 } from './order.helpers.js';
@@ -97,6 +99,17 @@ function toObjectId(id, fieldName = 'ID') {
 // ----- Create order -----
 export async function createOrder(userId, dto) {
   try {
+    if (dto.scheduledAt) {
+      const scheduledTs = new Date(dto.scheduledAt).getTime();
+      if (!Number.isFinite(scheduledTs)) {
+        throw new ValidationError("Invalid scheduled time. Please select a valid delivery time.");
+      }
+      // 1 minute grace for clock skew / slot rounding; anything earlier is in the past.
+      if (scheduledTs < Date.now() - 60 * 1000) {
+        throw new ValidationError("Scheduled time has already passed. Please select a future time.");
+      }
+    }
+
     const restaurantId = toObjectId(dto.restaurantId, 'Restaurant ID');
     const restaurant = await FoodRestaurant.findById(restaurantId)
       .select("status restaurantName zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
@@ -427,7 +440,7 @@ export async function createOrder(userId, dto) {
 
       const isScheduledFutureOrder =
         Boolean(order.scheduledAt) &&
-        (new Date(order.scheduledAt).getTime() - Date.now() > 35 * 60 * 1000);
+        (new Date(order.scheduledAt).getTime() - Date.now() > 30 * 60 * 1000);
 
       const formattedScheduledTime = order.scheduledAt
         ? new Date(order.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -562,7 +575,14 @@ export async function verifyPayment(userId, dto) {
   void cancellationService.markPenaltiesPaidForOrder(order._id, 'online');
 
   // After online payment is verified, now notify restaurant about the new order.
-  await notifyRestaurantNewOrder(order);
+  // Scheduled orders stay on hold until 30 min before scheduledAt (released by processScheduledFoodOrders).
+  if (!isScheduledOrderOnHold(order)) {
+    if (order.scheduledAt) {
+      order.scheduledDispatched = true;
+      await order.save();
+    }
+    await notifyRestaurantNewOrder(order);
+  }
 
   // Notify Customer about payment success
   await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
@@ -1313,9 +1333,21 @@ export async function listOrdersRestaurant(restaurantId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
   const filter = {
     restaurantId: new mongoose.Types.ObjectId(restaurantId),
-    $or: [
-      { "payment.method": { $in: ["cash", "wallet"] } },
-      { "payment.status": { $in: ["paid", "authorized", "captured", "settled", "refunded"] } },
+    $and: [
+      {
+        $or: [
+          { "payment.method": { $in: ["cash", "wallet"] } },
+          { "payment.status": { $in: ["paid", "authorized", "captured", "settled", "refunded"] } },
+        ],
+      },
+      // Hide scheduled orders that are still on hold (released 30 min before scheduledAt)
+      {
+        $or: [
+          { scheduledAt: null },
+          { scheduledDispatched: true },
+          { scheduledAt: { $lte: new Date(Date.now() + 30 * 60 * 1000) } },
+        ],
+      },
     ],
   };
   const [docs, total] = await Promise.all([
@@ -1346,6 +1378,13 @@ export async function updateOrderStatusRestaurant(
     restaurantId: new mongoose.Types.ObjectId(restaurantId),
   });
   if (!order) throw new NotFoundError("Order not found");
+  if (isScheduledOrderOnHold(order)) {
+    throw new ValidationError("This is a scheduled order and will be available 30 minutes before the scheduled time");
+  }
+  // Partial fulfilment: the store cannot accept/prepare until the customer has decided and any extra payment is done.
+  if (['confirmed', 'preparing'].includes(String(orderStatus))) {
+    await partialFulfilmentService.assertStoreCanAccept(order);
+  }
   const from = order.orderStatus;
   if (!isStatusAdvance(from, orderStatus)) {
     // Accepting an order that already moved on (stale popup / double tap) is a harmless no-op, not an error.
@@ -1398,6 +1437,11 @@ export async function updateOrderStatusRestaurant(
     note: note || "",
   });
   await order.save();
+
+  // Partial fulfilment: record that the store confirmed the final (customer-modified) order.
+  if (['confirmed', 'preparing'].includes(String(orderStatus)) && order.fulfilment?.state === 'resolved') {
+    void partialFulfilmentService.onStoreConfirmed(order, restaurantId);
+  }
 
   // Performance system hooks (non-blocking; never alter order flow, refunds or payments).
   if (['confirmed', 'preparing'].includes(orderStatus) && !['confirmed', 'preparing'].includes(String(from))) {

@@ -16,6 +16,7 @@ import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js'
 import userRoutes from '../modules/food/user/routes/user.routes.js';
 import { userPerformanceRouter } from '../modules/food/performance/routes/performance.routes.js';
 import { userCancellationRouter } from '../modules/food/cancellation/routes/cancellation.routes.js';
+import { userFulfilmentRouter } from '../modules/food/orders/routes/partialFulfilment.routes.js';
 import orderUserRoutes from '../modules/food/orders/routes/order.routes.user.js';
 import orderChatRoutes from '../modules/food/orders/routes/orderChat.routes.js';
 import paymentRoutes from '../core/payments/payment.routes.js';
@@ -79,6 +80,7 @@ router.use('/v1/food/user', authMiddleware, requireRoles('USER'), userRoutes);
 router.use('/v1/food/notifications', authMiddleware, requireRoles('USER', 'RESTAURANT', 'DELIVERY_PARTNER'), notificationRoutes);
 router.use('/v1/food/cancellation', authMiddleware, requireRoles('USER'), userCancellationRouter);
 router.use('/v1/food/orders', orderChatRoutes);
+router.use('/v1/food/orders', authMiddleware, requireRoles('USER'), userFulfilmentRouter);
 router.use('/v1/food/orders', authMiddleware, requireRoles('USER'), userPerformanceRouter);
 router.use('/v1/food/orders', authMiddleware, requireRoles('USER'), orderUserRoutes);
 router.use('/v1/food/payments', authMiddleware, paymentRoutes);

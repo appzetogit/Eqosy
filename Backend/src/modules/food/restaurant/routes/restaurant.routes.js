@@ -70,6 +70,7 @@ import {
     uploadBulkMenuController
 } from '../controllers/bulkUpload.controller.js';
 import * as orderController from '../../orders/controllers/order.controller.js';
+import { restaurantFulfilmentHandlers } from '../../orders/routes/partialFulfilment.routes.js';
 import { restaurantPerformanceRouter } from '../../performance/routes/performance.routes.js';
 import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { sendError } from '../../../../utils/response.js';
@@ -238,6 +239,9 @@ router.use('/performance', authMiddleware, requireRestaurant, restaurantPerforma
 router.get('/orders', authMiddleware, requireRestaurant, orderController.listOrdersRestaurantController);
 router.get('/orders/:orderId', authMiddleware, requireRestaurant, orderController.getOrderByIdRestaurantController);
 router.patch('/orders/:orderId/status', authMiddleware, requireRestaurant, orderController.updateOrderStatusRestaurantController);
+// Partial fulfilment: store reports unavailable items (customer then decides) / lists same-store alternatives.
+router.post('/orders/:orderId/unavailable-items', authMiddleware, requireRestaurant, restaurantFulfilmentHandlers.reportUnavailable);
+router.get('/orders/:orderId/alternatives', authMiddleware, requireRestaurant, restaurantFulfilmentHandlers.alternatives);
 router.post('/orders/:orderId/resend-notification', authMiddleware, requireRestaurant, orderController.resendDeliveryNotificationRestaurantController);
 
 // Complaints (restaurant dashboard)

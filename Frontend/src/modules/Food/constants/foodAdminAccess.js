@@ -229,6 +229,7 @@ const PATH_RESOURCE_RULES = [
 
   // Specific order routes before generic /admin/food/orders
   { prefix: '/admin/food/order-detect-delivery', resource: 'orders' },
+  { prefix: '/admin/food/partial-fulfilment', resource: 'orders' },
   { prefix: '/admin/food/orders', resource: 'orders' },
 
   // Specific restaurant routes before generic /admin/food/restaurants

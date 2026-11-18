@@ -432,6 +432,9 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     total: apiOrder?.pricing?.total || previousOrder?.total || 0,
     // Backend canonical field is orderStatus; keep legacy `status` for UI compatibility.
     status: apiOrder?.orderStatus || apiOrder?.status || previousOrder?.status || 'pending',
+    // Partial fulfilment (unavailable items): stage drives the banner that sends the customer to the decision screen.
+    fulfilmentStage: apiOrder?.fulfilmentStage ?? previousOrder?.fulfilmentStage ?? null,
+    fulfilmentState: apiOrder?.fulfilment?.state ?? previousOrder?.fulfilmentState ?? null,
     deliveryPartner: apiOrder?.deliveryPartner || (apiOrder?.deliveryPartnerId ? {
       name: apiOrder.deliveryPartnerId.name || apiOrder.deliveryPartnerId.fullName || 'Delivery Partner',
       phone: apiOrder.deliveryPartnerId.phone || apiOrder.deliveryPartnerId.phoneNumber || '',
@@ -1927,6 +1930,26 @@ export default function OrderTracking({ isSharedView = false }) {
           )}
         </div>
       </motion.div>
+
+      {/* Unavailable items: customer decision / payment adjustment / waiting for store */}
+      {order?.fulfilmentStage && order.fulfilmentStage.code !== 'cancelled' && (
+        <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-200">{order.fulfilmentStage.label}</p>
+          <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
+            {order.fulfilmentStage.code === 'awaiting_store_confirmation'
+              ? 'Your decision is saved. The store will confirm your updated order shortly.'
+              : 'Some items in your order are unavailable. Choose a replacement, continue without them, or cancel.'}
+          </p>
+          {order.fulfilmentStage.code !== 'awaiting_store_confirmation' && (
+            <button
+              onClick={() => navigate(`/food/user/orders/${order.mongoId || order.id || orderId}/unavailable-items`)}
+              className="mt-3 rounded-full bg-amber-600 px-5 py-2 text-xs font-bold text-white"
+            >
+              Review &amp; decide
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Map Section */}
       {!isDeliveredOrder && orderStatus !== 'cancelled' && (

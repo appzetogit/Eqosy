@@ -37,6 +37,7 @@ const JoiningRequest = lazy(() => import("@food/pages/admin/restaurant/JoiningRe
 const CommissionLeague = lazy(() => import("@food/pages/admin/restaurant/CommissionLeague"));
 const PerformanceCenter = lazy(() => import("@food/pages/admin/performance/PerformanceCenter"));
 const CancellationCenter = lazy(() => import("@food/pages/admin/performance/CancellationCenter"));
+const PartialFulfilment = lazy(() => import("@food/pages/admin/orders/PartialFulfilment"));
 const RestaurantLeaderboard = lazy(() => import("@food/pages/admin/restaurant/RestaurantLeaderboard"));
 const RestaurantPerformance = lazy(() => import("@food/pages/admin/restaurant/RestaurantPerformance"));
 const RestaurantCommission = lazy(() => import("@food/pages/admin/restaurant/RestaurantCommission"));
@@ -232,6 +233,7 @@ export default function AdminRouter() {
             <Route path="orders/canceled" element={<OrdersPage statusKey="canceled" />} />
             <Route path="orders/restaurant-cancelled" element={<OrdersPage statusKey="restaurant-cancelled" />} />
             <Route path="orders/unreachable-requests" element={<UnreachableRequests />} />
+            <Route path="partial-fulfilment" element={<PartialFulfilment />} />
             <Route path="orders/payment-failed" element={<OrdersPage statusKey="payment-failed" />} />
             <Route path="orders/refunded" element={<OrdersPage statusKey="refunded" />} />
             <Route path="orders/offline-payments" element={<OrdersPage statusKey="offline-payments" />} />

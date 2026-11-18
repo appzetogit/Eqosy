@@ -158,7 +158,7 @@ export function isModuleAuthenticated(module) {
  * the previous user, which the server rightly rejects with 403 "Not your order".
  */
 export function clearUserSessionCache() {
-  ["userOrders", "lastPlacedOrder", "shownRatingForOrders"].forEach((key) => {
+  ["userOrders", "lastPlacedOrder", "shownRatingForOrders", "food-cart-recipient-details-v1"].forEach((key) => {
     try {
       localStorage.removeItem(key);
     } catch {

@@ -105,6 +105,12 @@ export const adminSidebarMenu = [
       },
       {
         type: "link",
+        label: "Partial Fulfilment & Replacements",
+        path: "/admin/food/partial-fulfilment",
+        icon: "FileText",
+      },
+      {
+        type: "link",
         label: "Order Detect Delivery",
         path: "/admin/food/order-detect-delivery",
         icon: "Truck",

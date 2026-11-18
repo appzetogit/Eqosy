@@ -416,3 +416,80 @@ export async function settleRestaurant(orderId, adminId) {
         recordedById: adminId
     });
 }
+
+/**
+ * Re-derives the money split of an order whose items/bill were changed by the partial-fulfilment flow
+ * (unavailable item removed / replaced) so store share, commission, rider payout and platform revenue stay exact.
+ * Uses the same formulas as createInitialTransaction. Only valid before the order is delivered (earnings are
+ * credited at delivery), so no wallet movement is needed here.
+ */
+export async function syncTransactionAfterOrderModification(order, { note = 'Order modified (partial fulfilment)', recordedByRole = 'SYSTEM', recordedById, extraHistory = [] } = {}) {
+    if (!order?._id) return null;
+    const transaction = await FoodTransaction.findOne({ orderId: order._id });
+    if (!transaction) return null;
+
+    const p = order.pricing || {};
+    const num = (v) => Number(v) || 0;
+    const total = num(p.total);
+    const subtotal = num(p.subtotal);
+    const packagingFee = num(p.packagingFee);
+    const platformFee = num(p.platformFee);
+    const additionalChargesTotal = num(p.additionalChargesTotal);
+    const commission = num(p.restaurantCommission);
+    const discount = num(p.discount);
+    const riderTotalPayout = num(order.riderTotalPayout) || num(order.riderEarning);
+
+    let restaurantNet = subtotal + packagingFee - commission;
+    let platformNetProfit = platformFee + additionalChargesTotal + commission;
+    if (discount > 0 && p.couponCode) {
+        try {
+            const { FoodOffer } = await import('../../admin/models/offer.model.js');
+            const offer = await FoodOffer.findOne({ couponCode: String(p.couponCode).toUpperCase() }).lean();
+            if (offer?.createdByRole === 'RESTAURANT') restaurantNet -= discount;
+            else platformNetProfit -= discount;
+        } catch {
+            platformNetProfit -= discount;
+        }
+    }
+    restaurantNet = Math.max(0, Math.round(restaurantNet * 100) / 100);
+    platformNetProfit = Math.max(0, Math.round(platformNetProfit * 100) / 100);
+
+    transaction.pricing.subtotal = subtotal;
+    transaction.pricing.tax = num(p.tax);
+    transaction.pricing.restaurantCommission = commission;
+    transaction.pricing.discount = discount;
+    transaction.pricing.total = total;
+    transaction.pricing.deliveryPartnerIncentiveEligible = p.deliveryPartnerIncentiveEligible === true;
+    transaction.pricing.deliveryPartnerIncentiveAmount = num(p.deliveryPartnerIncentiveAmount);
+
+    transaction.payment.amountDue = num(order.payment?.amountDue ?? total);
+    transaction.amounts.totalCustomerPaid = total;
+    transaction.amounts.restaurantShare = restaurantNet;
+    transaction.amounts.restaurantCommission = commission;
+    transaction.amounts.riderShare = riderTotalPayout;
+    transaction.amounts.riderIncentivePay = num(order.riderIncentivePay);
+    transaction.amounts.riderTotalPayout = riderTotalPayout;
+    transaction.amounts.platformNetProfit = platformNetProfit;
+    transaction.amounts.taxAmount = num(p.tax);
+
+    transaction.history.push({
+        kind: 'order_modified',
+        amount: total,
+        at: new Date(),
+        note,
+        recordedBy: { role: recordedByRole, id: recordedById }
+    });
+    for (const h of extraHistory) {
+        transaction.history.push({
+            kind: h.kind,
+            amount: h.amount,
+            at: new Date(),
+            note: h.note || '',
+            recordedBy: { role: recordedByRole, id: recordedById }
+        });
+    }
+    transaction.markModified('pricing');
+    transaction.markModified('amounts');
+    await transaction.save();
+    return transaction;
+}

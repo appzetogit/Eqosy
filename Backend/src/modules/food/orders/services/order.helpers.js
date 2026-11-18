@@ -260,6 +260,25 @@ export function pushStatusHistory(order, { byRole, byId, from, to, note = "" }) 
   });
 }
 
+/**
+ * Customer-facing stage of the partial-fulfilment workflow (null when the order never had an unavailable item).
+ * The real orderStatus is intentionally left alone; apps show this label while orderStatus is still 'created'.
+ */
+export function getFulfilmentStage(orderLike) {
+  const state = orderLike?.fulfilment?.state;
+  if (!state || state === 'none') return null;
+  const status = String(orderLike?.orderStatus || '');
+  if (state === 'cancelled') return { code: 'cancelled', label: 'Order cancelled' };
+  if (status !== 'created') return null; // store already confirmed / order moved on: normal status labels apply
+  switch (state) {
+    case 'awaiting_customer': return { code: 'awaiting_customer_decision', label: 'Awaiting Customer Decision' };
+    case 'applying': return { code: 'processing_decision', label: 'Processing your decision' };
+    case 'awaiting_payment': return { code: 'payment_adjustment', label: 'Payment Adjustment' };
+    case 'resolved': return { code: 'awaiting_store_confirmation', label: 'Awaiting Store Confirmation' };
+    default: return null;
+  }
+}
+
 export function normalizeOrderForClient(orderDoc) {
   const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc || {};
   const mongoId = (order._id || orderDoc?._id || "").toString();
@@ -271,6 +290,7 @@ export function normalizeOrderForClient(orderDoc) {
     orderId: displayId,
     distanceKm: distanceKm != null && !isNaN(Number(distanceKm)) ? Number(distanceKm) : null,
     status: order?.orderStatus || order?.status || "",
+    fulfilmentStage: getFulfilmentStage(order),
     deliveredAt:
       order?.deliveryState?.deliveredAt || order?.deliveredAt || null,
     deliveryPartnerId:
@@ -385,9 +405,21 @@ export function canExposeOrderToRestaurant(orderLike) {
 }
 
 
+export const SCHEDULED_DISPATCH_LEAD_MS = 30 * 60 * 1000;
+
+/**
+ * A scheduled order stays on hold (not shown to restaurant / delivery partners) until
+ * 30 minutes before scheduledAt, at which point the watchdog releases it.
+ */
+export function isScheduledOrderOnHold(orderLike) {
+  if (!orderLike?.scheduledAt || orderLike.scheduledDispatched === true) return false;
+  return new Date(orderLike.scheduledAt).getTime() - Date.now() > SCHEDULED_DISPATCH_LEAD_MS;
+}
+
 export async function notifyRestaurantNewOrder(orderDoc) {
   try {
     if (!orderDoc || !canExposeOrderToRestaurant(orderDoc)) return;
+    if (isScheduledOrderOnHold(orderDoc)) return;
 
     const targetRestaurantId = resolveRoomOwnerId(orderDoc.restaurantId);
     if (!targetRestaurantId) {

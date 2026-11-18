@@ -83,6 +83,16 @@ const formatFullAddress = (address) => {
 
 const RUPEE_SYMBOL = "\u20B9"
 const CART_RECIPIENT_DETAILS_STORAGE_KEY = "food-cart-recipient-details-v1"
+
+// Id of the customer currently logged in (empty string if unknown).
+const getCurrentCustomerId = () => {
+  try {
+    const u = JSON.parse(window.localStorage.getItem("user_user") || "null")
+    return String(u?._id || u?.id || u?.userId || "")
+  } catch {
+    return ""
+  }
+}
 const CART_ORDER_NOTE_STORAGE_KEY = "food-cart-order-note-v1"
 const CART_TIP_PREFERENCE_KEY = "food-cart-tip-preference-v1"
 const TIP_PRESET_AMOUNTS = [15, 20, 30]
@@ -726,6 +736,13 @@ function CartInner() {
       }
 
       const stored = JSON.parse(raw)
+      // Recipient details belong to the account that saved them. If a different customer is logged in
+      // now (or the owner is unknown), discard them so the old person's name/phone is never used.
+      if (!stored?.ownerId || stored.ownerId !== getCurrentCustomerId()) {
+        window.localStorage.removeItem(CART_RECIPIENT_DETAILS_STORAGE_KEY)
+        hasRestoredRecipientRef.current = true
+        return
+      }
       setRecipientDetails({
         name: stored?.name || "",
         phone: sanitizeRecipientPhone(stored?.phone || ""),
@@ -757,6 +774,7 @@ function CartInner() {
           name: recipientDetails.name || "",
           phone: sanitizeRecipientPhone(recipientDetails.phone || ""),
           isEditingRecipient,
+          ownerId: getCurrentCustomerId(),
         })
       )
     } catch {
@@ -1876,8 +1894,9 @@ function CartInner() {
       }
       const scheduleString = `${scheduledDate}T${scheduledTime}:00`
       const scheduleDateObj = new Date(scheduleString)
-      if (scheduleDateObj < new Date()) {
-        toast.error("Scheduled time must be in the future")
+      if (Number.isNaN(scheduleDateObj.getTime()) || scheduleDateObj.getTime() < Date.now()) {
+        toast.error("Scheduled time has already passed. Please select a future time.")
+        setShowTimeSlotModal(true)
         return
       }
       if (!scheduledTimeAvailability.isValid) {

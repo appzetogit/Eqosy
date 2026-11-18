@@ -35,6 +35,7 @@ import ResendNotificationButton from "@food/components/restaurant/ResendNotifica
 import RequestMoreTime from "@food/components/performance/RequestMoreTime";
 import PenaltyWarning from "@food/components/performance/PenaltyWarning";
 import PenaltySupportButton from "@food/components/performance/PenaltySupportButton";
+import ReportUnavailableModal from "@food/components/restaurant/ReportUnavailableModal";
 import { restaurantPerformanceAPI } from "@food/api/performanceAPI";
 const debugLog = (...args) => { };
 const debugWarn = (...args) => { };
@@ -1507,6 +1508,7 @@ export default function OrdersMain() {
   const [countdown, setCountdown] = useState(240); // 4 minutes in seconds
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [showRejectPopup, setShowRejectPopup] = useState(false);
+  const [showUnavailableModal, setShowUnavailableModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [showCancelPopup, setShowCancelPopup] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -1734,7 +1736,8 @@ export default function OrdersMain() {
         return; // Do not show the immediate popup
       }
 
-      if (!hasOrderBeenShown(newOrder)) {
+      // A customer-modified order (after unavailable items) is shown again so the store can confirm the final order.
+      if (newOrder?.fulfilmentResolved || newOrder?.fulfilment?.state === 'resolved' || !hasOrderBeenShown(newOrder)) {
         markOrderAsShown(newOrder);
         setPopupOrder(newOrder);
         setShowNewOrderPopup(true);
@@ -2221,6 +2224,24 @@ export default function OrdersMain() {
     setRejectReason("");
     setCountdown(240);
     setPrepTime(11);
+  };
+
+  // Items marked unavailable: the customer decides, so just close the popup (the order is NOT rejected).
+  const handleUnavailableDone = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    const current = popupOrder || newOrder;
+    if (current) markOrderAsShown(current);
+    setShowUnavailableModal(false);
+    setShowNewOrderPopup(false);
+    setPopupOrder(null);
+    clearNewOrder();
+    setCountdown(240);
+    setPrepTime(11);
+    setAcceptSwipeProgress(0);
+    requestOrdersRefresh();
   };
 
   const handleRejectCancel = () => {
@@ -3067,6 +3088,17 @@ export default function OrdersMain() {
                       </motion.button>
                     </div>
 
+                    {((popupOrder || newOrder)?.fulfilmentResolved || (popupOrder || newOrder)?.fulfilment?.state === 'resolved') && (
+                      <p className="rounded-lg bg-emerald-50 p-2 text-center text-xs font-semibold text-emerald-700">
+                        Customer updated this order — please confirm the final order.
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setShowUnavailableModal(true)}
+                      disabled={isAcceptingOrder}
+                      className="w-full bg-white border-2 border-amber-500 text-amber-700 py-3 rounded-lg font-semibold text-sm hover:bg-amber-50 transition-colors disabled:opacity-60">
+                      Some items unavailable?
+                    </button>
                     <button
                       onClick={handleRejectClick}
                       disabled={isAcceptingOrder}
@@ -3080,6 +3112,14 @@ export default function OrdersMain() {
           </>
         )}
       </AnimatePresence>
+
+      {showUnavailableModal && (popupOrder || newOrder) && (
+        <ReportUnavailableModal
+          order={popupOrder || newOrder}
+          onClose={() => setShowUnavailableModal(false)}
+          onDone={handleUnavailableDone}
+        />
+      )}
 
       {/* Reject Order Popup */}
       <AnimatePresence>
