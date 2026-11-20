@@ -120,7 +120,7 @@ const CONFIG_FIELDS = [
     'extensionCutoffMin', 'deliveryBaseMinutes', 'deliveryMinutesPerKm', 'deliveryBufferMinutes',
     'externalDelayReasons', 'maxExternalDelayMinutes', 'restaurantDelaySlabs', 'deliveryDelaySlabs',
     'restaurantRejectionSlabs', 'deliveryRejectionSlabs', 'strikeLadder', 'orderTiers', 'extensionResponseWindowMin',
-    'validRejectionReasons', 'autoWaiveValidReasons', 'requireAdminApproval', 'autoEnforceSuspension'
+    'validRejectionReasons', 'autoWaiveValidReasons', 'autoEnforceSuspension'
 ];
 
 export async function audit(actorId, action, targetType, targetId, before, after, note = '') {
@@ -432,7 +432,8 @@ export async function recordViolation({
     let status;
     if (stage === 'warning') status = 'warning';
     else if (stage === 'waived_auto') status = 'waived';
-    else status = (cfg.requireAdminApproval || reviewHold) ? 'pending' : 'applied';
+    // A money penalty is never cut automatically: it always waits for admin approval (warnings are not affected).
+    else status = 'pending';
     if (stage === 'warning') reviewHold = false;
 
     let row;
@@ -454,7 +455,7 @@ export async function recordViolation({
     } else if (stage === 'waived_auto') {
         await notify(partyType, partyId, 'No penalty applied', `Your ${label} on order ${row.orderId} was accepted as valid.`, 'performance_waived', ids);
     } else if (status === 'pending') {
-        await notify(partyType, partyId, 'Penalty under review', `A Rs ${amount} penalty for ${label} is awaiting admin review.`, 'performance_penalty_pending', ids);
+        await notify(partyType, partyId, 'Penalty under review', `A Rs ${amount} penalty has been raised for ${label}${delayMinutes ? ` (${delayMinutes} min late)` : ''} on order ${row.orderId}. It will be deducted only after admin approval.`, 'performance_penalty_pending', ids);
         await notifyAdmins('Penalty needs review', `${partyType} ${label} on order ${row.orderId}.`, 'performance_review_needed', ids);
     } else {
         await notify(partyType, partyId, 'Penalty applied', `Rs ${amount} penalty for ${label}${delayMinutes ? ` (${delayMinutes} min late)` : ''}. You can appeal it from the performance page.`, 'performance_penalty', ids);
@@ -1338,7 +1339,8 @@ export async function decideAppeal(appealId, adminId, approve, note = '') {
             await FoodStrike.updateOne({ ledgerId: ledger._id }, { $set: { revoked: true } });
         } else if (ledger.status === 'disputed') {
             const cfg = await getConfig();
-            ledger.status = (cfg.requireAdminApproval && !ledger.decidedBy) || ledger.reviewHold ? 'pending' : 'applied';
+            // Penalties always need admin approval: one an admin never approved goes back to pending.
+            ledger.status = !ledger.decidedBy || ledger.reviewHold ? 'pending' : 'applied';
         }
         ledger.statusReason = appeal.adminNote;
         ledger.decidedBy = adminId;

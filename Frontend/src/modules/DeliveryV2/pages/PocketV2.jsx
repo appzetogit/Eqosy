@@ -27,6 +27,8 @@ export const PocketV2 = () => {
     availableCashLimit: 0,
     totalCashLimit: 0,
     weeklyEarnings: 0,
+    weeklyPenalty: 0,
+    weeklyGross: 0,
     weeklyOrders: 0,
     payoutAmount: 0,
     payoutPeriod: 'Current Week',
@@ -74,6 +76,8 @@ export const PocketV2 = () => {
           availableCashLimit: Number(wallet.availableCashLimit) || 0,
           totalCashLimit: Number(wallet.totalCashLimit) || 0,
           weeklyEarnings: Number(summary.totalEarnings) || 0,
+          weeklyPenalty: Number(summary.penaltyDeducted) || 0,
+          weeklyGross: Number(summary.grossEarnings) || 0,
           weeklyOrders: Number(summary.totalOrders) || 0,
           payoutAmount: Number(wallet.lastPayout?.amount || wallet.totalWithdrawn || 0),
           payoutPeriod: wallet.lastPayout ? new Date(wallet.lastPayout.date).toLocaleDateString() : 'No recent payout',
@@ -229,6 +233,14 @@ export const PocketV2 = () => {
              <h2 className="text-4xl font-black text-black tracking-tighter">
                 ₹{walletState.weeklyEarnings.toFixed(0)}
              </h2>
+             {walletState.weeklyPenalty > 0 && (
+               <p
+                 onClick={(e) => { e.stopPropagation(); navigate('/food/delivery/pocket/deductions'); }}
+                 className="mt-2 text-xs font-bold text-red-600"
+               >
+                 ₹{walletState.weeklyPenalty.toFixed(0)} penalty deducted (earned ₹{walletState.weeklyGross.toFixed(0)}). Tap to see details
+               </p>
+             )}
           </div>
 
           {/* 3. EARNINGS GUARANTEE - API DRIVEN (NO STATIC VALUES) */}

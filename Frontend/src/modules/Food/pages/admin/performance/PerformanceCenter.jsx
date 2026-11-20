@@ -713,7 +713,6 @@ function Rules() {
           {field("Customer response window (min)", "extensionResponseWindowMin")}
           {field("Allow extension request after deadline (min)", "extensionCutoffMin")}
           {toggle("Auto-waive valid reasons", "autoWaiveValidReasons", "Off = penalty waits for admin review when a valid reason is chosen")}
-          {toggle("Penalties need admin approval", "requireAdminApproval")}
           {toggle("Block suspended accounts", "autoEnforceSuspension", "Suspended restaurants cannot accept orders; suspended riders cannot accept deliveries")}
         </div>
       </div>

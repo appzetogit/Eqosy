@@ -114,8 +114,6 @@ const performanceConfigSchema = new Schema(
         },
         /** true = a valid reason waives instantly; false = held in 'pending' for admin review. */
         autoWaiveValidReasons: { type: Boolean, default: false },
-        /** If true, every penalty starts 'pending' and needs admin approval; otherwise 'applied'. */
-        requireAdminApproval: { type: Boolean, default: false },
         autoEnforceSuspension: { type: Boolean, default: false },
         updatedBy: { type: Schema.Types.ObjectId, default: null }
     },

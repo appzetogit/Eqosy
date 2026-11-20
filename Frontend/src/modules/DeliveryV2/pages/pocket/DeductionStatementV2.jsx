@@ -37,7 +37,7 @@ export const DeductionStatementV2 = () => {
            const all = response.data.data.transactions || [];
            const filtered = all.filter((t) => {
               const type = String(t.type || '').trim().toLowerCase();
-              const isManualDeduction = type === 'withdrawal' || type === 'deposit';
+              const isManualDeduction = type === 'withdrawal' || type === 'deposit' || type === 'penalty';
               if (!isManualDeduction) return false;
 
               const baseDate = t.date || t.createdAt;

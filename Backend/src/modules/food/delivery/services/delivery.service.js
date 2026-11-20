@@ -4,6 +4,7 @@ import { DeliverySupportTicket } from '../models/supportTicket.model.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { FoodEarningAddon } from '../../admin/models/earningAddon.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
+import { FoodPenaltyLedger } from '../../performance/models/performance.models.js';
 import { uploadImageBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
@@ -613,8 +614,11 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
         description: t.reference ? `Bonus - ${t.reference}` : 'Bonus'
     }));
 
+    const penaltyDeductions = await getAppliedPenaltyDeductions(partnerId);
+    const totalPenalties = penaltyDeductions.total;
+
     const totalWithdrawn = 0;
-    const totalBalance = totalEarned + totalBonus;
+    const totalBalance = totalEarned + totalBonus - totalPenalties;
     const availableCashLimit = Math.max(0, totalCashLimit - cashInHand);
 
     return {
@@ -623,10 +627,11 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
         cashInHand,
         totalWithdrawn,
         totalEarned,
+        totalPenalties,
         totalCashLimit,
         availableCashLimit,
         deliveryWithdrawalLimit,
-        transactions: [...paymentTransactions, ...bonusTransactions].sort((a, b) => {
+        transactions: [...paymentTransactions, ...bonusTransactions, ...penaltyDeductions.items].sort((a, b) => {
             const ad = a?.date ? new Date(a.date).getTime() : 0;
             const bd = b?.date ? new Date(b.date).getTime() : 0;
             return bd - ad;
@@ -634,6 +639,45 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
         joiningBonusClaimed: false,
         joiningBonusAmount: 0
     };
+};
+
+/**
+ * Admin-approved penalties already cut from this rider's wallet (status applied + walletDebited).
+ * Returned as statement rows so the app can show exactly where money was deducted.
+ */
+const getAppliedPenaltyDeductions = async (partnerId, range = null) => {
+    const match = {
+        partyType: 'DELIVERY_PARTNER',
+        partyId: partnerId,
+        stage: 'penalty',
+        status: 'applied',
+        walletDebited: true,
+    };
+    if (range) match.walletDebitedAt = { $gte: range.start, $lte: range.end };
+    const rows = await FoodPenaltyLedger.find(match)
+        .sort({ walletDebitedAt: -1 })
+        .limit(1000)
+        .select('violationType orderId amount walletDebitedAmount walletDebitedAt delayMinutes')
+        .lean();
+    const items = rows.map((r) => {
+        const label = String(r.violationType || 'penalty').replace(/_/g, ' ').toLowerCase();
+        const amount = Number(r.walletDebitedAmount) || Number(r.amount) || 0;
+        const when = r.walletDebitedAt || new Date();
+        const orderRef = r.orderId ? String(r.orderId) : '';
+        return {
+            _id: r._id,
+            type: 'penalty',
+            amount,
+            status: 'Completed',
+            date: when,
+            createdAt: when,
+            orderId: orderRef,
+            metadata: { orderId: orderRef, violationType: r.violationType },
+            description: `Penalty deducted: ${label}${r.delayMinutes ? ` (${r.delayMinutes} min late)` : ''}${orderRef ? `, order ${orderRef.slice(-6)}` : ''}`,
+        };
+    });
+    const total = items.reduce((sum, i) => sum + i.amount, 0);
+    return { items, total };
 };
 
 // ----- Delivery partner earnings summary (Pocket / requests page) -----
@@ -683,15 +727,22 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
         ])
     ]);
 
-    const totalEarnings = Number(agg?.[0]?.totalEarnings) || 0;
+    const grossEarnings = Number(agg?.[0]?.totalEarnings) || 0;
+    // Admin-approved penalties cut in this period come off the earnings shown to the rider.
+    const penaltyDeductions = await getAppliedPenaltyDeductions(partnerId, range);
+    const penaltyDeducted = penaltyDeductions.total;
+    const totalEarnings = grossEarnings - penaltyDeducted;
 
     // Frontend only strongly relies on totalEarnings + totalOrders.
     const summary = {
         totalEarnings,
+        grossEarnings,
+        penaltyDeducted,
+        penalties: penaltyDeductions.items,
         totalOrders,
         totalHours: 0,
         totalMinutes: 0,
-        orderEarning: totalEarnings,
+        orderEarning: grossEarnings,
         incentive: 0,
         otherEarnings: 0
     };
