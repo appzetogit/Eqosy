@@ -113,6 +113,9 @@ export function validateCreateOrderDto(body) {
         restaurantName: z.string().optional(),
         customerName: z.string().optional(),
         customerPhone: z.string().optional(),
+        orderForSomeoneElse: z.boolean().optional(),
+        recipientName: z.string().max(80).optional(),
+        recipientPhone: z.string().optional(),
         pricing: pricingSchema,
         deliveryFleet: z.string().optional(),
         note: z.string().optional(),
@@ -128,7 +131,16 @@ export function validateCreateOrderDto(body) {
     if (!result.success) {
         throw new ValidationError(zodMessage(result.error));
     }
-    return result.data;
+    const data = result.data;
+    if (data.orderForSomeoneElse) {
+        const name = String(data.recipientName || '').trim();
+        const digits = String(data.recipientPhone || '').replace(/\D/g, '').slice(-10);
+        if (name.length < 2) throw new ValidationError("Enter the name of the person receiving this order");
+        if (!/^[6-9]\d{9}$/.test(digits)) throw new ValidationError("Enter a valid 10-digit mobile number for the person receiving this order");
+        data.recipientName = name;
+        data.recipientPhone = digits;
+    }
+    return data;
 }
 
 export function validateVerifyPaymentDto(body) {

@@ -145,7 +145,14 @@ function CartInner() {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [couponCode, setCouponCode] = useState("")
   const [manualCouponCode, setManualCouponCode] = useState("")
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash")
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(() => {
+    try {
+      const last = window.localStorage.getItem("food-last-payment-method")
+      return last === "razorpay" ? "razorpay" : "cash"
+    } catch {
+      return "cash"
+    }
+  })
   const [showPaymentSheet, setShowPaymentSheet] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
@@ -179,6 +186,12 @@ function CartInner() {
     name: "",
     phone: "",
   })
+  // "Order for someone else": the receiver's own name/phone + a tracking link we hand back after ordering.
+  const [orderForSomeoneElse, setOrderForSomeoneElse] = useState(false)
+  const [otherRecipient, setOtherRecipient] = useState({ name: "", phone: "" })
+  const [placedShareId, setPlacedShareId] = useState("")
+  // Online order that was created but not paid yet, so "Retry payment" reuses it instead of creating a duplicate.
+  const pendingOnlineOrderRef = useRef(null)
 
   const [sendCutlery, setSendCutlery] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
@@ -643,8 +656,14 @@ function CartInner() {
       addressCoords.longitude
     );
   }, [currentLocation, defaultAddress, deliveryAddressMode]);
-  const recipientName = String(recipientDetails.name || "").trim() || userProfile?.name || "Your Name"
-  const recipientPhone = sanitizeRecipientPhone(recipientDetails.phone || "") || userProfile?.phone || ""
+  const otherPhoneDigits = String(otherRecipient.phone || "").replace(/\D/g, "").slice(-10)
+  const isOtherRecipientValid = String(otherRecipient.name || "").trim().length >= 2 && /^[6-9]\d{9}$/.test(otherPhoneDigits)
+  const recipientName = orderForSomeoneElse
+    ? String(otherRecipient.name || "").trim()
+    : String(recipientDetails.name || "").trim() || userProfile?.name || "Your Name"
+  const recipientPhone = orderForSomeoneElse
+    ? otherPhoneDigits
+    : sanitizeRecipientPhone(recipientDetails.phone || "") || userProfile?.phone || ""
   const selectedAddressCoordinates = defaultAddress?.location?.coordinates
   const zoneLocation = selectedAddressCoordinates?.length === 2
     ? {
@@ -781,6 +800,27 @@ function CartInner() {
       // Ignore storage errors and keep cart flow working.
     }
   }, [recipientDetails, isEditingRecipient])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("food-cart-other-recipient-v1")
+      const stored = raw ? JSON.parse(raw) : null
+      if (stored?.ownerId && stored.ownerId === getCurrentCustomerId()) {
+        setOtherRecipient({ name: stored.name || "", phone: String(stored.phone || "").replace(/\D/g, "").slice(-10) })
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!otherRecipient.name && !otherRecipient.phone) return
+    try {
+      window.localStorage.setItem("food-cart-other-recipient-v1", JSON.stringify({ ...otherRecipient, ownerId: getCurrentCustomerId() }))
+    } catch {
+      // ignore
+    }
+  }, [otherRecipient])
 
   useEffect(() => {
     hasRestoredNoteRef.current = true
@@ -1871,6 +1911,78 @@ function CartInner() {
   }
 
 
+  // One place that finishes any successful order (COD, wallet or paid online).
+  const finishPlacedOrder = (order) => {
+    pendingOnlineOrderRef.current = null
+    setPlacedOrderId(String(order?._id || order?.orderId || order?.id || ""))
+    setPlacedShareId(String(order?.shareTrackingId || ""))
+    setShowOrderSuccess(true)
+    window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
+    clearCart()
+    setNote("")
+    setShowNoteInput(false)
+    try {
+      window.localStorage.removeItem(CART_ORDER_NOTE_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+    setIsPlacingOrder(false)
+  }
+
+  // Opens Razorpay for an order that already exists. Used for the first attempt and for "Retry payment".
+  const openOnlinePayment = async (order, razorpay) => {
+    const payer = userProfile || {}
+    const payerPhone = String(payer.phone || "").replace(/\D/g, "").slice(-10)
+    const companyName = await getCompanyNameAsync()
+    const orderRef = order._id || order.orderId
+    const stopSpinner = () => setIsPlacingOrder(false)
+
+    await initRazorpayPayment({
+      key: razorpay.key,
+      amount: razorpay.amount, // already in paise from backend
+      currency: razorpay.currency || 'INR',
+      order_id: razorpay.orderId,
+      name: companyName,
+      description: `Order ${orderRef} - ${RUPEE_SYMBOL}${(razorpay.amount / 100).toFixed(2)}`,
+      // The person paying is the logged-in user, even when the food is for someone else.
+      prefill: { name: payer.name || "", email: payer.email || "", contact: payerPhone },
+      notes: { orderId: orderRef, userId: payer.id || "", restaurantId: restaurantId || "unknown" },
+      handler: async (response) => {
+        try {
+          const verifyOrderId = order?._id || order?.id || order?.orderMongoId
+          if (!verifyOrderId) throw new Error("Unable to verify payment: missing order id")
+          const verifyResponse = await orderAPI.verifyPayment({
+            orderId: verifyOrderId,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpaySignature: response.razorpay_signature
+          })
+          if (!verifyResponse?.data?.success) throw new Error(verifyResponse?.data?.message || "Payment verification failed")
+          finishPlacedOrder(order)
+        } catch (error) {
+          debugError("Payment verification error:", error)
+          // Money may have been taken: keep the order so Retry/Orders can recover it, and say so clearly.
+          toast.error(
+            error?.response?.data?.message || error?.message ||
+            "We could not confirm your payment yet. If money was deducted, it will be confirmed shortly. Check My Orders."
+          , { duration: 8000 })
+          stopSpinner()
+        }
+      },
+      onError: (error) => {
+        debugError("Razorpay payment error:", error)
+        if (error?.code !== 'PAYMENT_CANCELLED' && error?.message !== 'PAYMENT_CANCELLED') {
+          toast.error(error?.description || error?.message || "Payment failed. Tap Retry payment to try again.")
+        }
+        stopSpinner()
+      },
+      onClose: () => {
+        toast("Payment not completed. Tap \"Retry payment\" to continue with the same order.")
+        stopSpinner()
+      }
+    })
+  }
+
   const handlePlaceOrder = async () => {
     if (isRestaurantOffline) {
       toast.error("Restaurant is offline. Cannot place order.")
@@ -1908,6 +2020,11 @@ function CartInner() {
 
     if (cart.length === 0) {
       alert("Your cart is empty")
+      return
+    }
+
+    if (orderForSomeoneElse && !isOtherRecipientValid) {
+      toast.error("Enter the receiver's name and a valid 10-digit phone number")
       return
     }
 
@@ -2142,6 +2259,7 @@ function CartInner() {
         },
         customerName: recipientName,
         customerPhone: recipientPhone || defaultAddress?.phone || "",
+        ...(orderForSomeoneElse ? { orderForSomeoneElse: true, recipientName, recipientPhone } : {}),
         restaurantId: finalRestaurantId,
         restaurantName: finalRestaurantName || undefined,
         pricing: orderPricing,
@@ -2168,55 +2286,39 @@ function CartInner() {
         return
       }
 
+      // Online payment retry: the order already exists, so reopen payment instead of creating a duplicate.
+      const cartSignature = `${finalRestaurantId}|${cart.map((i) => `${i.id}:${i.quantity}`).join(",")}|${recipientPhone}`
+      const pending = pendingOnlineOrderRef.current
+      if (
+        selectedPaymentMethod === "razorpay" && pending &&
+        pending.signature === cartSignature &&
+        pending.amountPaise === Math.round((Number(orderPricing.total) || 0) * 100)
+      ) {
+        await openOnlinePayment(pending.order, pending.razorpay)
+        return
+      }
+      pendingOnlineOrderRef.current = null
+
       // Create order in backend
       const orderResponse = await orderAPI.createOrder(orderPayload)
-
-      debugLog("? Order created successfully:", orderResponse.data)
-
       const rawOrderData = orderResponse?.data?.data
       const order = rawOrderData?.order || rawOrderData || {}
       const razorpay = rawOrderData?.razorpay
-      const orderIdToStore = String(order?._id || order?.orderId || order?.id || "")
 
-      if (addOrder && order) addOrder(order);
+      if (addOrder && order) addOrder(order)
       try {
-        if (order) localStorage.setItem("lastPlacedOrder", JSON.stringify(order));
+        if (order) localStorage.setItem("lastPlacedOrder", JSON.stringify(order))
       } catch { }
 
-      // Cash flow: order placed without online payment
       if (selectedPaymentMethod === "cash") {
         toast.success("Order placed with Cash on Delivery")
-        setPlacedOrderId(orderIdToStore)
-        setShowOrderSuccess(true)
-        window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
-        clearCart()
-        setNote("")
-        setShowNoteInput(false)
-        try {
-          window.localStorage.removeItem(CART_ORDER_NOTE_STORAGE_KEY)
-        } catch {
-          // ignore
-        }
-        setIsPlacingOrder(false)
+        finishPlacedOrder(order)
         return
       }
 
-      // Wallet flow: order placed with wallet payment (already processed in backend)
       if (selectedPaymentMethod === "wallet") {
         toast.success("Order placed with Wallet payment")
-        setPlacedOrderId(orderIdToStore)
-        setShowOrderSuccess(true)
-        window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
-        clearCart()
-        setNote("")
-        setShowNoteInput(false)
-        try {
-          window.localStorage.removeItem(CART_ORDER_NOTE_STORAGE_KEY)
-        } catch {
-          // ignore
-        }
-        setIsPlacingOrder(false)
-        // Refresh wallet balance
+        finishPlacedOrder(order)
         try {
           const walletResponse = await userAPI.getWallet()
           if (walletResponse?.data?.success && walletResponse?.data?.data?.wallet) {
@@ -2229,114 +2331,11 @@ function CartInner() {
       }
 
       if (!razorpay || !razorpay.orderId || !razorpay.key) {
-        debugError("? Razorpay initialization failed:", { razorpay, order })
-        throw new Error(razorpay ? "Razorpay payment gateway is not configured. Please contact support." : "Failed to initialize payment")
+        throw new Error(razorpay ? "Online payment is not available right now. Please pay with wallet or cash, or contact support." : "Failed to start payment. Please try again.")
       }
 
-      debugLog("?? Razorpay order created:", {
-        orderId: razorpay.orderId,
-        amount: razorpay.amount,
-        currency: razorpay.currency,
-        keyPresent: !!razorpay.key
-      })
-
-      // Get user info for Razorpay prefill
-      const userInfo = userProfile || {}
-      const userPhone = recipientPhone || userInfo.phone || defaultAddress?.phone || ""
-      const userEmail = userInfo.email || ""
-      const userName = recipientName || userInfo.name || ""
-
-      // Format phone number (remove non-digits, take last 10 digits)
-      const formattedPhone = userPhone.replace(/\D/g, "").slice(-10)
-
-      debugLog("?? User info for payment:", {
-        name: userName,
-        email: userEmail,
-        phone: formattedPhone
-      })
-
-      // Get company name for Razorpay
-      const companyName = await getCompanyNameAsync()
-
-      // Initialize Razorpay payment
-      await initRazorpayPayment({
-        key: razorpay.key,
-        amount: razorpay.amount, // Already in paise from backend
-        currency: razorpay.currency || 'INR',
-        order_id: razorpay.orderId,
-        name: companyName,
-        description: `Order ${order._id || order.orderId} - ${RUPEE_SYMBOL}${(razorpay.amount / 100).toFixed(2)}`,
-        prefill: {
-          name: userName,
-          email: userEmail,
-          contact: formattedPhone
-        },
-        notes: {
-          orderId: order._id || order.orderId,
-          userId: userInfo.id || "",
-          restaurantId: restaurantId || "unknown"
-        },
-        handler: async (response) => {
-          try {
-            debugLog("? Payment successful, verifying...", {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id
-            })
-
-            // Verify payment with backend
-            const verifyOrderId = order?._id || order?.id || order?.orderMongoId
-            if (!verifyOrderId) {
-              throw new Error("Unable to verify payment: missing order id from create-order response")
-            }
-            const verifyResponse = await orderAPI.verifyPayment({
-              orderId: verifyOrderId,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature
-            })
-
-            debugLog("? Payment verification response:", verifyResponse.data)
-
-            if (verifyResponse.data.success) {
-              // Payment successful
-              debugLog("?? Order placed successfully:", {
-                orderId: order._id || order.orderId,
-                paymentId: verifyResponse.data.data?.payment?.paymentId
-              })
-              setPlacedOrderId(order._id || order.orderId)
-              setShowOrderSuccess(true)
-              window.dispatchEvent(new CustomEvent('order-placed', { detail: { order } }))
-              clearCart()
-              setIsPlacingOrder(false)
-            } else {
-              throw new Error(verifyResponse.data.message || "Payment verification failed")
-            }
-          } catch (error) {
-            debugError("? Payment verification error:", error)
-            const errorMessage =
-              error?.response?.data?.message ||
-              error?.response?.data?.error?.message ||
-              error?.response?.data?.errors?.[0]?.message ||
-              error?.message ||
-              "Payment verification failed. Please contact support."
-            alert(errorMessage)
-            setIsPlacingOrder(false)
-          }
-        },
-        onError: (error) => {
-          debugError("? Razorpay payment error:", error)
-          // Don't show alert for user cancellation
-          if (error?.code !== 'PAYMENT_CANCELLED' && error?.message !== 'PAYMENT_CANCELLED') {
-            const errorMessage = error?.description || error?.message || "Payment failed. Please try again."
-            alert(errorMessage)
-          }
-          setIsPlacingOrder(false)
-        },
-        onClose: () => {
-          debugLog("?? Payment modal closed by user")
-          setIsPlacingOrder(false)
-        }
-      })
+      pendingOnlineOrderRef.current = { order, razorpay, signature: cartSignature, amountPaise: Math.round((Number(orderPricing.total) || 0) * 100) }
+      await openOnlinePayment(order, razorpay)
     } catch (error) {
       debugError("? Order creation error:", error)
 
@@ -2390,6 +2389,7 @@ function CartInner() {
 
   const handleGoToOrders = () => {
     setShowOrderSuccess(false)
+    setOrderForSomeoneElse(false)
     const groceryQuery = cartContext.isGrocery ? "&vertical=grocery" : ""
     if (placedOrderId) {
       navigate(`/food/user/orders/${placedOrderId}?confirmed=true${groceryQuery}`)
@@ -3080,68 +3080,108 @@ function CartInner() {
                 </div>
               </div>
 
-              {/* Contact */}
+              {/* Contact / Order for someone else */}
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
-                    <Phone className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400 mt-0.5" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Phone className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400" />
+                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Who is this order for?</p>
+                </div>
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 dark:bg-[#111111] p-1">
+                  {[
+                    { id: false, label: "Myself" },
+                    { id: true, label: "Someone else" },
+                  ].map((opt) => (
+                    <button
+                      key={String(opt.id)}
+                      type="button"
+                      onClick={() => {
+                        setOrderForSomeoneElse(opt.id)
+                        pendingOnlineOrderRef.current = null
+                      }}
+                      className={`rounded-lg py-2 text-sm font-semibold transition-all ${orderForSomeoneElse === opt.id
+                        ? "bg-white dark:bg-[#2a2a2a] text-[color:var(--app-primary,#EB590E)] shadow-sm"
+                        : "text-gray-500 dark:text-gray-400"
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {!orderForSomeoneElse ? (
+                  <div className="mt-3 flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 font-medium">
                         {recipientName}, <span className="font-semibold">{recipientPhone || "+91-XXXXXXXXXX"}</span>
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Order recipient details
-                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Order recipient details</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingRecipient((prev) => !prev)}
+                      className="text-[color:var(--app-primary,#EB590E)] text-xs md:text-sm font-semibold whitespace-nowrap"
+                    >
+                      {isEditingRecipient ? "Done" : "Change"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingRecipient((prev) => !prev)}
-                    className="text-[color:var(--app-primary,#EB590E)] text-xs md:text-sm font-semibold whitespace-nowrap"
-                  >
-                    {isEditingRecipient ? "Done" : "Change"}
-                  </button>
-                </div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Receiver's name</label>
+                      <input
+                        type="text"
+                        value={otherRecipient.name}
+                        maxLength={80}
+                        onChange={(e) => setOtherRecipient((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Name of the person receiving the order"
+                        className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Receiver's phone number</label>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-300">+91</span>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={otherRecipient.phone}
+                          onChange={(e) => setOtherRecipient((prev) => ({ ...prev, phone: e.target.value.replace(/\D/g, "").slice(-10) }))}
+                          placeholder="10-digit mobile number"
+                          className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
+                        />
+                      </div>
+                      {otherRecipient.phone && !/^[6-9]\d{9}$/.test(otherPhoneDigits) && (
+                        <p className="mt-1 text-[11px] text-red-500">Enter a valid 10-digit mobile number</p>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+                      The delivery partner will call and hand the food to this person. After you order, you get a link to share with them so they can track the order live.
+                    </p>
+                  </div>
+                )}
 
-                {isEditingRecipient && (
+                {!orderForSomeoneElse && isEditingRecipient && (
                   <div className="mt-4 pt-4 border-t border-dashed border-gray-200 dark:border-gray-800 space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
-                        Name
-                      </label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Name</label>
                       <input
                         type="text"
                         value={recipientDetails.name}
-                        onChange={(e) =>
-                          setRecipientDetails((prev) => ({
-                            ...prev,
-                            name: e.target.value,
-                          }))
-                        }
-                        placeholder="Enter recipient name"
+                        onChange={(e) => setRecipientDetails((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Enter your name"
                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
-                        Phone Number
-                      </label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Phone Number</label>
                       <input
                         type="tel"
                         value={recipientDetails.phone}
-                        onChange={(e) =>
-                          setRecipientDetails((prev) => ({
-                            ...prev,
-                            phone: sanitizeRecipientPhone(e.target.value),
-                          }))
-                        }
-                        placeholder="Enter recipient phone"
+                        onChange={(e) => setRecipientDetails((prev) => ({ ...prev, phone: sanitizeRecipientPhone(e.target.value) }))}
+                        placeholder="Enter your phone"
                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[color:var(--app-primary,#EB590E)]"
                       />
                     </div>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                      Agar aap kisi aur ke liye order kar rahe ho, to yahan uska naam aur phone save kar do.
-                    </p>
                   </div>
                 )}
               </div>
@@ -3588,6 +3628,8 @@ function CartInner() {
                   ? "Calculating Fees..."
                   : !hasSavedAddress
                   ? "Select Address"
+                  : selectedPaymentMethod === "razorpay"
+                  ? (pendingOnlineOrderRef.current ? "Retry Payment" : `Pay ${RUPEE_SYMBOL}${Math.round(total)}`)
                   : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
@@ -3801,6 +3843,47 @@ function CartInner() {
               <p className="text-gray-600 dark:text-gray-300">Your delicious food is on its way</p>
             </div>
 
+            {orderForSomeoneElse && placedShareId && (() => {
+              const trackUrl = `${window.location.origin}/food/user/track-shared/${placedShareId}`
+              const msg = `Hi ${recipientName}, I ordered food for you from ${restaurantName}. Track your order live here: ${trackUrl}`
+              return (
+                <div className="mt-8 w-full max-w-sm rounded-2xl border border-orange-100 dark:border-gray-800 bg-orange-50/60 dark:bg-[#1a1a1a] p-4 text-center" style={{ animation: 'slideUp 0.5s ease-out 0.9s both' }}>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Share tracking link with {recipientName}</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">They can open it without logging in and see exactly where the order is.</p>
+                  <div className="mt-3 flex gap-2">
+                    <a
+                      href={`https://wa.me/91${recipientPhone}?text=${encodeURIComponent(msg)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white"
+                    >
+                      WhatsApp
+                    </a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (navigator.share) await navigator.share({ title: "Track my order", text: msg, url: trackUrl })
+                          else { await navigator.clipboard.writeText(trackUrl); toast.success("Link copied") }
+                        } catch { /* user closed the share sheet */ }
+                      }}
+                      className="flex-1 rounded-xl border border-gray-300 dark:border-gray-700 py-2.5 text-sm font-bold text-gray-800 dark:text-gray-100"
+                    >
+                      Share
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => { try { await navigator.clipboard.writeText(trackUrl); toast.success("Link copied") } catch { toast.error("Could not copy the link") } }}
+                      className="rounded-xl border border-gray-300 dark:border-gray-700 px-4 py-2.5 text-sm font-bold text-gray-800 dark:text-gray-100"
+                      aria-label="Copy tracking link"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Action Button */}
             <button
               onClick={handleGoToOrders}
@@ -3853,8 +3936,8 @@ function CartInner() {
                   {[
                     {
                       id: 'razorpay',
-                      name: 'Online Payment',
-                      description: 'UPI, Cards, Netbanking',
+                      name: 'Pay Online',
+                      description: 'UPI, Cards, Netbanking - pay in one tap',
                       icon: <Zap className="w-5 h-5" />,
                       color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
                       selectedColor: 'bg-emerald-500 text-white',
@@ -3890,6 +3973,7 @@ function CartInner() {
                       onClick={() => {
                         if (!option.disabled) {
                           setSelectedPaymentMethod(option.id)
+                          try { window.localStorage.setItem("food-last-payment-method", option.id) } catch { /* ignore */ }
                           setShowPaymentSheet(false)
                         }
                       }}
@@ -3966,7 +4050,7 @@ function CartInner() {
                     onClick={() => setShowPaymentSheet(false)}
                     className="flex-1 bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-secondary,#D94F0C)] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98]"
                   >
-                    Confirm Order
+                    Done
                   </Button>
                 </div>
               </div>

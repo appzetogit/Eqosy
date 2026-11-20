@@ -16,6 +16,7 @@ export const publicConfig = wrap(() => svc.getPublicConfig());
 /* Admin */
 export const getConfig = wrap(() => svc.getConfig({ fresh: true }));
 export const updateConfig = wrap((req) => svc.updateConfig(req.body || {}, req.user?.userId));
+export const searchParties = wrap((req) => svc.searchParties(String(req.query.partyType || '').toUpperCase(), req.query.q));
 export const listLedger = wrap((req) => svc.listLedger(req.query));
 export const decideLedger = wrap((req) => svc.decideLedger(req.params.id, req.user?.userId, req.body?.action, req.body?.note));
 export const createLedger = wrap((req) => svc.createManualLedger(req.user?.userId, req.body || {}));

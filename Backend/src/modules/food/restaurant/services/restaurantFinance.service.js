@@ -313,3 +313,83 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
     };
 }
 
+
+/**
+ * Sales report for a restaurant: delivered orders only, with sales / earning / admin commission.
+ * Query: from, to (ISO dates), page, limit.
+ */
+export async function getRestaurantSalesReport(restaurantId, query = {}) {
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) return null;
+    const rid = new mongoose.Types.ObjectId(restaurantId);
+
+    const from = parseISODateParam(query.from);
+    const to = parseISODateParamEnd(query.to);
+    const limit = Math.min(Math.max(parseInt(query.limit, 10) || 20, 1), 100);
+    const page = Math.max(parseInt(query.page, 10) || 1, 1);
+
+    const filter = { restaurantId: rid };
+    if (from || to) {
+        filter.createdAt = {};
+        if (from) filter.createdAt.$gte = from;
+        if (to) filter.createdAt.$lte = to;
+    }
+
+    const rawTx = await FoodTransaction.find(filter)
+        .populate('orderId', 'orderId createdAt items pricing deliveryState orderStatus')
+        .sort({ createdAt: -1 })
+        .lean();
+
+    const completed = (rawTx || []).filter(isCompletedTx);
+
+    const rows = completed.map((tx) => {
+        const order = (tx.orderId && typeof tx.orderId === 'object') ? tx.orderId : {};
+        const items = (Array.isArray(order.items) ? order.items : []).map((it) => ({
+            name: it?.name || '',
+            quantity: Number(it?.quantity) || 1,
+            price: Number(it?.price) || 0,
+        }));
+        const subtotal = Number(order?.pricing?.subtotal ?? tx?.pricing?.subtotal) || 0;
+        const packagingFee = Number(order?.pricing?.packagingFee ?? tx?.pricing?.packagingFee) || 0;
+        const commission = resolveTxCommission(tx);
+        return {
+            id: String(tx._id),
+            orderId: order?.orderId || String(tx.orderId?._id || tx.orderId || ''),
+            createdAt: tx.createdAt,
+            items,
+            sale: subtotal + packagingFee,
+            customerPaid: Number(tx.amounts?.totalCustomerPaid) || 0,
+            commission,
+            earning: resolveTxPayout(tx),
+            paymentMethod: tx.paymentMethod || order?.payment?.method || '',
+            orderStatus: order?.orderStatus || tx.status,
+            settled: Boolean(tx.settlement?.isRestaurantSettled),
+        };
+    });
+
+    const round = (n) => Math.round(n * 100) / 100;
+    const summary = rows.reduce(
+        (acc, r) => {
+            acc.totalOrders += 1;
+            acc.totalSales += r.sale;
+            acc.totalCommission += r.commission;
+            acc.totalEarning += r.earning;
+            if (r.settled) acc.settledEarning += r.earning;
+            return acc;
+        },
+        { totalOrders: 0, totalSales: 0, totalCommission: 0, totalEarning: 0, settledEarning: 0 }
+    );
+    summary.totalSales = round(summary.totalSales);
+    summary.totalCommission = round(summary.totalCommission);
+    summary.totalEarning = round(summary.totalEarning);
+    summary.settledEarning = round(summary.settledEarning);
+    summary.pendingEarning = round(summary.totalEarning - summary.settledEarning);
+
+    const total = rows.length;
+    return {
+        summary,
+        orders: rows.slice((page - 1) * limit, page * limit),
+        total,
+        page,
+        limit,
+    };
+}

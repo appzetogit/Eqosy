@@ -86,6 +86,7 @@ router.patch('/restaurants/complaints/:id', requireFoodResourceAccess('support',
 router.get('/restaurants', requireFoodResourceAccess('restaurants', 'restaurants'), adminController.getRestaurants);
 router.get('/dashboard-stats', adminController.getDashboardStats);
 router.get('/reports/restaurants', requireFoodResourceAccess('reports', 'reports'), adminController.getRestaurantReport);
+router.get('/reports/restaurants/:id/sales', requireFoodResourceAccess('reports', 'reports'), adminController.getRestaurantSalesReportAdmin);
 router.get('/reports/transactions', requireFoodResourceAccess('reports', 'reports'), adminController.getTransactionReport);
 router.get('/reports/customer-orders', requireFoodResourceAccess('reports', 'reports'), adminController.getCustomerOrdersReport);
 router.get('/reports/tax', requireFoodResourceAccess('reports', 'reports'), adminController.getTaxReport);

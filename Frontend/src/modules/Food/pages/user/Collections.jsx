@@ -4,6 +4,8 @@ import { ArrowLeft, Plus, Share2, UtensilsCrossed, Store, X } from "lucide-react
 import { Button } from "@food/components/ui/button"
 import { Input } from "@food/components/ui/input"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
+import { useUserCollections } from "@food/utils/userCollections"
+import { useProfile } from "@food/context/ProfileContext"
 
 // Import banner
 import collectionsBanner from "@food/assets/collectionspagebanner.png"
@@ -27,29 +29,20 @@ export default function Collections() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState("")
 
-  // Delivery collections
-  const [deliveryCollections, setDeliveryCollections] = useState([
-    { id: "bookmarks", name: "Bookmarks", dishes: 0, restaurants: 0, isDefault: true }
-  ])
-
-  // Dining collections
-  const [diningCollections, setDiningCollections] = useState([
-    { id: "bookmarks", name: "Bookmarks", dishes: 0, restaurants: 0, isDefault: true }
-  ])
-
-  const currentCollections = activeTab === "delivery" ? deliveryCollections : diningCollections
-  const setCurrentCollections = activeTab === "delivery" ? setDeliveryCollections : setDiningCollections
+  // "Bookmarks" is the built-in list (your favorites); the rest are the collections the user created.
+  const { collections, create } = useUserCollections()
+  const { getFavorites } = useProfile()
+  const bookmarks = { id: "bookmarks", name: "Bookmarks", dishes: 0, restaurants: getFavorites().length, isDefault: true }
+  const currentCollections = [
+    bookmarks,
+    ...collections
+      .filter((c) => (c.type || "delivery") === activeTab)
+      .map((c) => ({ id: c.id, name: c.name, dishes: 0, restaurants: c.items.length, isDefault: false })),
+  ]
 
   const handleCreateCollection = () => {
     if (newCollectionName.trim()) {
-      const newCollection = {
-        id: `collection-${Date.now()}`,
-        name: newCollectionName.trim(),
-        dishes: 0,
-        restaurants: 0,
-        isDefault: false
-      }
-      setCurrentCollections(prev => [...prev, newCollection])
+      create(newCollectionName, activeTab)
       setNewCollectionName("")
       setIsCreateDialogOpen(false)
     }

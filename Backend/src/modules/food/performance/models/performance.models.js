@@ -64,7 +64,7 @@ const performanceConfigSchema = new Schema(
     {
         key: { type: String, default: 'default', unique: true },
         enabled: { type: Boolean, default: true },
-        defaultPrepMinutes: { type: Number, default: 20, min: 1 },
+        defaultPrepMinutes: { type: Number, default: 25, min: 1 },
         /** Ceiling for a restaurant-entered prep time on accept. */
         maxPrepMinutes: { type: Number, default: 120, min: 1 },
         /** Warn restaurant / rider this many minutes BEFORE their deadline, with the penalty that follows. */

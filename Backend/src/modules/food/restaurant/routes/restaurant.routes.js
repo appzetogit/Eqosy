@@ -74,7 +74,7 @@ import { restaurantFulfilmentHandlers } from '../../orders/routes/partialFulfilm
 import { restaurantPerformanceRouter } from '../../performance/routes/performance.routes.js';
 import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { sendError } from '../../../../utils/response.js';
-import { getRestaurantFinanceController } from '../controllers/restaurantFinance.controller.js';
+import { getRestaurantFinanceController, getRestaurantSalesReportController } from '../controllers/restaurantFinance.controller.js';
 import { getMyLeagueDashboard } from '../../admin/controllers/commissionLeague.controller.js';
 
 import { cacheResponse, invalidateCache } from '../../../../middleware/cache.js';
@@ -131,6 +131,7 @@ router.patch('/dining-settings', authMiddleware, requireRestaurant, updateCurren
 router.get('/outlet-timings', authMiddleware, requireRestaurant, getCurrentRestaurantOutletTimingsController);
 router.put('/outlet-timings', authMiddleware, requireRestaurant, upsertCurrentRestaurantOutletTimingsController);
 router.get('/finance', authMiddleware, requireRestaurant, getRestaurantFinanceController);
+router.get('/sales-report', authMiddleware, requireRestaurant, getRestaurantSalesReportController);
 router.get('/commission-league', authMiddleware, requireRestaurant, getMyLeagueDashboard);
 router.get('/reviews', authMiddleware, requireRestaurant, getRestaurantReviewsController);
 router.post('/withdraw', authMiddleware, requireRestaurant, createWithdrawalRequestController);

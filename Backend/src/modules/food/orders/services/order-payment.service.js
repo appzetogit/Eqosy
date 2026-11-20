@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import QRCode from 'qrcode';
 import { FoodOrder } from '../models/order.model.js';
 import { FoodTransaction } from '../models/foodTransaction.model.js';
 import {
@@ -126,14 +127,39 @@ export async function createCollectQr(
   }
 
   const user = order.userId || {};
+
+  // Rider tapped "Show QR" again: reuse the live link instead of creating a new one every time.
+  const existingQr = payment.qr || {};
+  const existingExpiry = existingQr.expiresAt ? new Date(existingQr.expiresAt).getTime() : null;
+  if (
+    existingQr.shortUrl && existingQr.paymentLinkId &&
+    String(existingQr.status || '').toLowerCase() === 'created' &&
+    payment.status === 'pending_qr' &&
+    Number(payment.amountDue) === Number(amountDue) &&
+    (existingExpiry === null || existingExpiry > Date.now() + 2 * 60 * 1000)
+  ) {
+    return {
+      shortUrl: existingQr.shortUrl,
+      imageUrl: existingQr.shortUrl,
+      qrDataUrl: await QRCode.toDataURL(existingQr.shortUrl, { width: 480, margin: 2, errorCorrectionLevel: 'M' }),
+      amount: amountDue,
+      expiresAt: existingQr.expiresAt || null,
+      reused: true,
+    };
+  }
+
+  // Prefer the person actually receiving the order; never send placeholder contact details.
+  const frontendBase = String(process.env.FRONTEND_URL || '').replace(/\/+$/, '');
   const link = await createPaymentLink({
     amountPaise: Math.round(amountDue * 100),
     currency: 'INR',
-    description: `Order ${order._id.toString()} - COD collect`,
+    description: `Order ${order.order_id || order._id.toString()} - pay on delivery`,
     orderId: order._id.toString(),
-    customerName: customerInfo.name || user.name || 'Customer',
-    customerEmail: customerInfo.email || user.email || 'customer@example.com',
-    customerPhone: customerInfo.phone || user.phone,
+    referenceId: `${order._id.toString()}-${Date.now().toString(36)}`,
+    customerName: customerInfo.name || order.customerName || user.name,
+    customerEmail: customerInfo.email || user.email,
+    customerPhone: customerInfo.phone || order.customerPhone || order.deliveryAddress?.phone || user.phone,
+    callbackUrl: frontendBase && order.shareTrackingId ? `${frontendBase}/food/user/track-shared/${order.shareTrackingId}` : '',
   });
 
 
@@ -241,7 +267,16 @@ export async function createCollectQr(
     amountDue,
   });
 
+  const finalUrl = link?.short_url ?? link?.shortUrl ?? link?.short_url_path ?? null;
+  let qrDataUrl = null;
+  try {
+    if (finalUrl) qrDataUrl = await QRCode.toDataURL(finalUrl, { width: 480, margin: 2, errorCorrectionLevel: 'M' });
+  } catch (e) {
+    logger.warn(`[CollectQr] QR image generation failed: ${e?.message}`);
+  }
+
   return {
+    qrDataUrl,
     shortUrl:
       link?.short_url ?? link?.shortUrl ?? link?.short_url_path ?? null,
     imageUrl:

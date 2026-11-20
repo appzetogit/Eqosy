@@ -28,6 +28,7 @@ let scheduledOrdersInterval = null;
 let performanceSweepInterval = null;
 let cancellationSweepInterval = null;
 let fulfilmentSweepInterval = null;
+let selfieCleanupInterval = null;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received, starting graceful shutdown`);
@@ -48,6 +49,7 @@ const gracefulShutdown = async (signal) => {
             if (performanceSweepInterval) clearInterval(performanceSweepInterval);
             if (cancellationSweepInterval) clearInterval(cancellationSweepInterval);
             if (fulfilmentSweepInterval) clearInterval(fulfilmentSweepInterval);
+            if (selfieCleanupInterval) clearInterval(selfieCleanupInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
         } catch (err) {
@@ -226,6 +228,18 @@ const startServer = async () => {
             }
         };
         fulfilmentSweepInterval = setInterval(runFulfilmentSweep, 20 * 1000);
+
+        // Delivery verification selfies are removed (file + DB) after 2 days (SELFIE_RETENTION_DAYS).
+        const runSelfieCleanup = async () => {
+            try {
+                const { runSelfieCleanup: cleanup } = await import('./src/modules/food/delivery/services/selfieCleanup.service.js');
+                await cleanup();
+            } catch (err) {
+                logger.error(`Selfie cleanup error: ${err.message}`);
+            }
+        };
+        selfieCleanupInterval = setInterval(runSelfieCleanup, 60 * 60 * 1000);
+        setTimeout(runSelfieCleanup, 60 * 1000);
 
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

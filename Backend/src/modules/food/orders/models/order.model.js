@@ -360,6 +360,18 @@ const orderSchema = new mongoose.Schema(
         },
         customerName: { type: String, default: '', trim: true },
         customerPhone: { type: String, default: '', trim: true },
+        /** "Order for someone else": the person who receives the food (the payer is `userId`). */
+        recipient: {
+            type: new mongoose.Schema(
+                {
+                    isSomeoneElse: { type: Boolean, default: false },
+                    name: { type: String, default: '', trim: true },
+                    phone: { type: String, default: '', trim: true }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
         pricing: {
             type: pricingSchema,
             required: false

@@ -34,6 +34,14 @@ const Table = ({ head, children, empty }) => (
   </div>
 )
 
+/** Name + phone of a restaurant / rider (falls back to a short id if the account was deleted). */
+const Who = ({ name, phone, id, type }) => (
+  <div className="text-xs leading-tight">
+    <div className="font-semibold text-gray-900">{name || `${type === "RESTAURANT" ? "Restaurant" : "Rider"} ...${String(id || "").slice(-6)}`}</div>
+    {phone ? <a href={`tel:${phone}`} className="text-blue-600">{phone}</a> : null}
+  </div>
+)
+
 const useLoad = (fn, deps) => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -69,10 +77,10 @@ function Overview({ kind, onWallet, onCreate }) {
     <div className="space-y-3">
       <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border border-gray-300 p-2 text-sm" />
       {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-        <Table head={["Partner ID", "Violations", isR ? "Prep delays" : "Delivery delays", "Rejections", "Cancels after accept", "Warnings", "Strikes", "Penalties", "Outstanding", "Status", ""]} empty={!(data || []).length ? "No violations this month" : null}>
+        <Table head={["Partner", "Violations", isR ? "Prep delays" : "Delivery delays", "Rejections", "Cancels after accept", "Warnings", "Strikes", "Penalties", "Outstanding", "Status", ""]} empty={!(data || []).length ? "No violations this month" : null}>
           {(data || []).map((r) => (
             <tr key={r.partyId}>
-              <td className="px-3 py-2 font-mono text-xs">{String(r.partyId).slice(-8)}</td>
+              <td className="px-3 py-2"><Who name={r.partyName} phone={r.partyPhone} id={r.partyId} type={isR ? "RESTAURANT" : "DELIVERY_PARTNER"} /></td>
               <td className="px-3 py-2">{r.violations}</td>
               <td className="px-3 py-2">{r.delays}</td>
               <td className="px-3 py-2">{r.rejections}</td>
@@ -86,7 +94,7 @@ function Overview({ kind, onWallet, onCreate }) {
                 <div className="flex flex-wrap gap-2 text-xs font-semibold">
                   <button className="text-blue-600" onClick={() => setOpen(r.partyId)}>Dashboard</button>
                   <button className="text-green-700" onClick={() => onWallet(isR ? "RESTAURANT" : "DELIVERY_PARTNER", r.partyId)}>Wallet</button>
-                  <button className="text-red-700" onClick={() => onCreate(isR ? "RESTAURANT" : "DELIVERY_PARTNER", r.partyId)}>Add penalty</button>
+                  <button className="text-red-700" onClick={() => onCreate(isR ? "RESTAURANT" : "DELIVERY_PARTNER", r.partyId, r.partyName, r.partyPhone)}>Add penalty</button>
                 </div>
               </td>
             </tr>
@@ -96,7 +104,7 @@ function Overview({ kind, onWallet, onCreate }) {
       {open && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-bold">{isR ? "Restaurant" : "Delivery partner"} {String(open).slice(-8)} · {month}</h3>
+            <h3 className="font-bold">{isR ? "Restaurant" : "Delivery partner"} · {detail.data?.partyName || String(open).slice(-8)}{detail.data?.partyPhone ? ` · ${detail.data.partyPhone}` : ""} · {month}</h3>
             <button className="text-xs text-gray-500" onClick={() => setOpen(null)}>Close</button>
           </div>
           {detail.loading || !detail.data ? <Loader2 className="h-5 w-5 animate-spin" /> : (
@@ -137,18 +145,61 @@ function Modal({ title, onClose, children }) {
 
 const inputCls = "w-full rounded-lg border border-gray-300 p-2 text-sm"
 
+function PartyPicker({ partyType, value, onPick }) {
+  const [q, setQ] = useState("")
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  useEffect(() => {
+    if (value || q.trim().length < 2) { setResults([]); return undefined }
+    let live = true
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.searchParties(partyType, q.trim())
+        if (live) setResults(res?.data?.data || [])
+      } catch { if (live) setResults([]) } finally { if (live) setSearching(false) }
+    }, 300)
+    return () => { live = false; clearTimeout(t) }
+  }, [q, partyType, value])
+  if (value) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border border-green-300 bg-green-50 p-2 text-sm">
+        <div><div className="font-semibold">{value.name}</div><div className="text-xs text-gray-600">{value.phone || "no phone"}</div></div>
+        <button type="button" onClick={() => onPick(null)} className="text-xs font-semibold text-red-600">Change</button>
+      </div>
+    )
+  }
+  return (
+    <div className="relative">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${partyType === "RESTAURANT" ? "restaurant" : "delivery partner"} by name or phone`} className={inputCls} />
+      {searching && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-gray-400" />}
+      {results.length > 0 && (
+        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+          {results.map((r) => (
+            <button type="button" key={r.id} onClick={() => { onPick(r); setQ("") }} className="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50">
+              <span className="font-semibold">{r.name}</span> <span className="text-xs text-gray-500">{r.phone}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!searching && q.trim().length >= 2 && !results.length && <p className="mt-1 text-xs text-gray-500">No match found</p>}
+    </div>
+  )
+}
+
 function CreatePenaltyModal({ prefill, onClose, onDone }) {
-  const [f, setF] = useState({ partyType: prefill?.partyType || "RESTAURANT", partyId: prefill?.partyId || "", stage: "penalty", amount: "", strikeCount: 0, reason: "", orderId: "" })
+  const [party, setParty] = useState(prefill?.partyId ? { id: prefill.partyId, name: prefill.partyName || `ID ...${String(prefill.partyId).slice(-6)}`, phone: prefill.partyPhone || "" } : null)
+  const [f, setF] = useState({ partyType: prefill?.partyType || "RESTAURANT", partyId: "", stage: "penalty", amount: "", strikeCount: 0, reason: "", orderId: "" })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
   const submit = async () => {
-    if (!f.partyId.trim()) return toast.error("Enter the restaurant / delivery partner ID")
+    if (!party?.id) return toast.error("Select the restaurant / delivery partner")
     if (!f.reason.trim()) return toast.error("A reason is required")
     if (f.stage === "penalty" && !(Number(f.amount) > 0)) return toast.error("Enter a penalty amount")
     setBusy(true)
     try {
-      await api.createLedger({ ...f, partyId: f.partyId.trim(), orderId: f.orderId.trim() || undefined, amount: Number(f.amount) || 0, strikeCount: Number(f.strikeCount) || 0 })
-      toast.success(f.stage === "warning" ? "Warning added" : "Penalty added and deducted from wallet")
+      await api.createLedger({ ...f, partyId: party.id, orderId: f.orderId.trim() || undefined, amount: Number(f.amount) || 0, strikeCount: Number(f.strikeCount) || 0 })
+      toast.success(f.stage === "warning" ? `Warning sent to ${party.name}` : `Penalty deducted from ${party.name}'s wallet`)
       onDone()
     } catch (e) {
       toast.error(apiMsg(e, "Failed"))
@@ -158,12 +209,12 @@ function CreatePenaltyModal({ prefill, onClose, onDone }) {
   }
   return (
     <Modal title="Create warning / penalty" onClose={onClose}>
-      <select value={f.partyType} onChange={(e) => set("partyType", e.target.value)} className={inputCls}>
+      <select value={f.partyType} onChange={(e) => { set("partyType", e.target.value); setParty(null) }} className={inputCls}>
         <option value="RESTAURANT">Restaurant</option><option value="DELIVERY_PARTNER">Delivery partner</option>
       </select>
-      <input value={f.partyId} onChange={(e) => set("partyId", e.target.value)} placeholder="Restaurant / delivery partner ID (full)" className={inputCls} />
+      <PartyPicker partyType={f.partyType} value={party} onPick={setParty} />
       <select value={f.stage} onChange={(e) => set("stage", e.target.value)} className={inputCls}>
-        <option value="penalty">Penalty (deducted from wallet)</option><option value="warning">Warning only</option>
+        <option value="penalty">Penalty (deducted from wallet)</option><option value="warning">Warning only (notification, no money cut)</option>
       </select>
       {f.stage === "penalty" && (
         <div className="flex gap-2">
@@ -172,7 +223,7 @@ function CreatePenaltyModal({ prefill, onClose, onDone }) {
         </div>
       )}
       <input value={f.orderId} onChange={(e) => set("orderId", e.target.value)} placeholder="Order ID (optional)" className={inputCls} />
-      <textarea value={f.reason} onChange={(e) => set("reason", e.target.value)} rows={3} placeholder="Reason (shown to the party)" className={inputCls} />
+      <textarea value={f.reason} onChange={(e) => set("reason", e.target.value)} rows={3} placeholder="Reason (sent to the party in notification)" className={inputCls} />
       <button onClick={submit} disabled={busy} className="w-full rounded-lg bg-black py-2.5 text-sm font-semibold text-white disabled:opacity-60">{busy ? "Saving..." : "Create"}</button>
     </Modal>
   )
@@ -262,7 +313,7 @@ function Ledger({ onWallet, prefill, clearPrefill }) {
             <tr key={r._id} className="align-top">
               <td className="px-3 py-2 text-xs">{fmtDate(r.createdAt)}</td>
               <td className="px-3 py-2 font-mono text-xs">{r.orderId ? String(r.orderId).slice(-8) : "-"}</td>
-              <td className="px-3 py-2 text-xs">{r.partyType === "RESTAURANT" ? "Rest." : "Rider"} {String(r.partyId).slice(-6)}</td>
+              <td className="px-3 py-2"><Who name={r.partyName} phone={r.partyPhone} id={r.partyId} type={r.partyType} /><div className="text-[10px] text-gray-500">{r.partyType === "RESTAURANT" ? "Restaurant" : "Delivery"}</div></td>
               <td className="px-3 py-2 text-xs">{VIOLATION_LABELS[r.violationType]}{r.occurrenceInMonth ? ` #${r.occurrenceInMonth}` : ""}{r.reason ? <div className="text-gray-500">{r.reason}</div> : null}</td>
               <td className="px-3 py-2 text-xs">{fmtDate(r.originalEta)}</td>
               <td className="px-3 py-2 text-xs">{fmtDate(r.approvedEta)}</td>
@@ -332,7 +383,7 @@ function Wallets({ target }) {
       {query && (loading || !data ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <StatCard label={`${PARTY_LABELS[query.partyType]} wallet`} value={inr(data.balance)} tone={data.balance < 0 ? "bad" : "default"} />
+            <StatCard label={`${data.partyName ? `${data.partyName}${data.partyPhone ? ` (${data.partyPhone})` : ""} - ` : ""}${PARTY_LABELS[query.partyType]} wallet`} value={inr(data.balance)} tone={data.balance < 0 ? "bad" : "default"} />
             <StatCard label="Penalty dues (pending)" value={inr(data.outstandingPenalties)} tone={data.outstandingPenalties ? "bad" : "default"} />
           </div>
           <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
@@ -393,7 +444,7 @@ function Appeals() {
           {(data || []).map((a) => (
             <tr key={a._id} className="align-top">
               <td className="px-3 py-2 text-xs">{fmtDate(a.createdAt)}</td>
-              <td className="px-3 py-2 text-xs">{a.partyType === "RESTAURANT" ? "Rest." : "Rider"} {String(a.partyId).slice(-6)}</td>
+              <td className="px-3 py-2"><Who name={a.partyName} phone={a.partyPhone} id={a.partyId} type={a.partyType} /></td>
               <td className="px-3 py-2 font-mono text-xs">{String(a.ledgerId).slice(-8)}</td>
               <td className="max-w-xs px-3 py-2 text-xs">{a.reason}{a.adminNote ? <div className="text-gray-500">Admin: {a.adminNote}</div> : null}</td>
               <td className="px-3 py-2 text-xs">{(a.evidence || []).map((u, i) => <a key={u} href={u} target="_blank" rel="noreferrer" className="mr-1 text-blue-600 underline">file {i + 1}</a>)}</td>
@@ -535,7 +586,7 @@ function Strikes() {
           {(data || []).map((s) => (
             <tr key={s._id}>
               <td className="px-3 py-2 text-xs">{fmtDate(s.createdAt)}</td>
-              <td className="px-3 py-2 text-xs">{s.partyType === "RESTAURANT" ? "Rest." : "Rider"} {String(s.partyId).slice(-6)}</td>
+              <td className="px-3 py-2"><Who name={s.partyName} phone={s.partyPhone} id={s.partyId} type={s.partyType} /></td>
               <td className="px-3 py-2 font-mono text-xs">{String(s.orderId || "").slice(-8)}</td>
               <td className="px-3 py-2">{s.monthlyCount}</td>
               <td className="px-3 py-2 capitalize">{s.action}</td>
@@ -707,7 +758,7 @@ export default function PerformanceCenter() {
   const [walletTarget, setWalletTarget] = useState(null)
   const [createPrefill, setCreatePrefill] = useState(null)
   const openWallet = (partyType, partyId) => { setWalletTarget({ partyType, partyId: String(partyId) }); setTab("wallets") }
-  const openCreate = (partyType, partyId) => { setCreatePrefill({ partyType, partyId: String(partyId) }); setTab("ledger") }
+  const openCreate = (partyType, partyId, partyName = "", partyPhone = "") => { setCreatePrefill({ partyType, partyId: String(partyId), partyName, partyPhone }); setTab("ledger") }
   return (
     <div className="space-y-4 p-4">
       <h1 className="text-xl font-bold">Penalties & Performance</h1>

@@ -230,6 +230,7 @@ const OtpModal = ({ order, contact, onVerified, onClose }) => {
 const PaymentModal = ({ order, contact, otpString, onNext, onClose }) => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [collectQrLink, setCollectQrLink] = useState(null);
+  const [collectQrImage, setCollectQrImage] = useState(null);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   // Online / wallet orders are already paid: this screen then only confirms "PAID", nothing to collect.
   const isInitialPaid =
@@ -293,13 +294,15 @@ const PaymentModal = ({ order, contact, otpString, onNext, onClose }) => {
   const generateQr = async () => {
     setIsGeneratingQr(true);
     try {
+      // Name / phone are optional: the server uses the order's receiver details when these are empty.
       const res = await deliveryAPI.createCollectQr(orderId, {
-        name: order.userName || 'Customer',
-        phone: order.userPhone || ''
+        name: order.customerName || order.userName || '',
+        phone: order.customerPhone || order.userPhone || ''
       });
       const link = res?.data?.data?.shortUrl || res?.data?.shortUrl || null;
       if (link) {
         setCollectQrLink(link);
+        setCollectQrImage(res?.data?.data?.qrDataUrl || null);
         setPaymentStatus('pending');
         setShowQrModal(true);
         setIsCashAccepted(false);
@@ -450,11 +453,12 @@ const PaymentModal = ({ order, contact, otpString, onNext, onClose }) => {
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-gray-950 font-bold text-xl mb-2">Scan to Pay</h3>
-              <p className="text-gray-500 text-sm mb-8 font-medium">Order Total: ₹{Number.isInteger(amountToCollect) ? amountToCollect : amountToCollect.toFixed(2)}</p>
+              <p className="text-gray-500 text-sm mb-2 font-medium">Order Total: ₹{Number.isInteger(amountToCollect) ? amountToCollect : amountToCollect.toFixed(2)}</p>
+              <p className="text-gray-400 text-xs mb-6">Customer scans with any UPI app or camera. The payment opens with the amount already filled.</p>
 
               <div className="relative p-6 bg-gray-50 rounded-3xl border-2 border-gray-100 mb-8">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(collectQrLink)}`}
+                  src={collectQrImage || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(collectQrLink)}`}
                   alt="Razorpay QR"
                   className="w-56 h-56"
                 />

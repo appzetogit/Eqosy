@@ -140,16 +140,18 @@ export async function createOrder(userId, dto) {
     const settings = await getDispatchSettings();
     const dispatchMode = settings.dispatchMode;
 
+    // For "order for someone else" the rider calls / hands over to the recipient, not the payer.
+    const forOther = Boolean(dto.orderForSomeoneElse);
     const deliveryAddress = {
       label: dto.address?.label || "Home",
-      name: dto.address?.name || dto.address?.fullName || dto.customerName || "",
-      fullName: dto.address?.fullName || dto.address?.name || dto.customerName || "",
+      name: forOther ? dto.recipientName : (dto.address?.name || dto.address?.fullName || dto.customerName || ""),
+      fullName: forOther ? dto.recipientName : (dto.address?.fullName || dto.address?.name || dto.customerName || ""),
       street: dto.address?.street || "",
       additionalDetails: dto.address?.additionalDetails || "",
       city: dto.address?.city || "",
       state: dto.address?.state || "",
       zipCode: dto.address?.zipCode || "",
-      phone: dto.address?.phone || "",
+      phone: forOther ? dto.recipientPhone : (dto.address?.phone || ""),
       location: dto.address?.location?.coordinates
         ? { type: "Point", coordinates: dto.address.location.coordinates }
         : undefined,
@@ -318,8 +320,11 @@ export async function createOrder(userId, dto) {
         itemId: toObjectId(item.itemId, 'Item ID')
       })),
       deliveryAddress,
-      customerName: String(dto.customerName || deliveryAddress.fullName || ""),
-      customerPhone: String(dto.customerPhone || deliveryAddress.phone || ""),
+      customerName: String((forOther ? dto.recipientName : dto.customerName) || deliveryAddress.fullName || ""),
+      customerPhone: String((forOther ? dto.recipientPhone : dto.customerPhone) || deliveryAddress.phone || ""),
+      ...(dto.orderForSomeoneElse
+        ? { recipient: { isSomeoneElse: true, name: dto.recipientName, phone: dto.recipientPhone } }
+        : {}),
       pricing: normalizedPricing,
       payment,
       orderStatus: initialStatus,
@@ -1289,6 +1294,22 @@ export async function getOrderPublic(shareId) {
   const sanitized = sanitizeOrderForExternal(order);
   const normalized = normalizeOrderForClient(sanitized);
 
+  // This link can be forwarded to anyone: strip payment, payout, commission and the payer's identity.
+  for (const k of ['payment', 'transactionId', 'riderBasePay', 'riderSurgePay', 'riderDeliveryFeeShare', 'riderIncentivePay', 'riderTotalPayout', 'userId', 'deliveryOtp', 'statusHistory']) {
+    delete normalized[k];
+  }
+  if (normalized.pricing) {
+    normalized.pricing = {
+      subtotal: normalized.pricing.subtotal, tax: normalized.pricing.tax, packagingFee: normalized.pricing.packagingFee,
+      deliveryFee: normalized.pricing.deliveryFee, platformFee: normalized.pricing.platformFee,
+      discount: normalized.pricing.discount, total: normalized.pricing.total, currency: normalized.pricing.currency,
+    };
+  }
+  const maskPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length > 4 ? `${'X'.repeat(d.length - 4)}${d.slice(-4)}` : ''; };
+  if (normalized.deliveryAddress) normalized.deliveryAddress = { ...normalized.deliveryAddress, phone: maskPhone(normalized.deliveryAddress.phone) };
+  normalized.customerPhone = maskPhone(normalized.customerPhone);
+  if (normalized.recipient) normalized.recipient = { isSomeoneElse: Boolean(normalized.recipient.isSomeoneElse), name: normalized.recipient.name || '', phone: maskPhone(normalized.recipient.phone) };
+
   return {
     shareTrackingId: order.shareTrackingId,
     order: {
@@ -2159,7 +2180,14 @@ export async function listAvailableDeliveryPartnersForOrder(orderId, options = {
   if (!order) throw new NotFoundError("Order not found");
   await assertSubadminOrderZoneAccess(order, adminContext);
 
-  const resolvedZoneId = order.zoneId || order.restaurantId?.zoneId || (await resolveOrderZoneId(order, order.restaurantId));
+  // Same zone rule as auto-dispatch: restaurant's Food zone, rider belongs to it if profile zone matches
+  // OR their last GPS fix is inside the zone polygon. (Profile zoneId alone is unreliable - it can point to a
+  // Taxi zone, which made online riders vanish from the reassign list.)
+  const activeZones = await FoodZone.find({ isActive: true }).select("_id coordinates").lean();
+  const restaurantZoneId = dispatchService.resolveRestaurantZoneId(order.restaurantId, activeZones);
+  const resolvedZoneId =
+    restaurantZoneId ||
+    (order.zoneId && activeZones.some((z) => String(z._id) === String(order.zoneId)) ? String(order.zoneId) : null);
 
   const filter = { status: "approved" };
 
@@ -2167,22 +2195,14 @@ export async function listAvailableDeliveryPartnersForOrder(orderId, options = {
     filter.availabilityStatus = "online";
   }
 
-  // Zone-strict filtering: only show drivers from the SAME zone as the restaurant.
-  // If the order/restaurant has a resolved zone, filter strictly by that zone only.
-  // Do NOT include null-zone or zone-less drivers – they may belong to a different city entirely.
-  if (resolvedZoneId) {
-    const zoneIdStr = String(resolvedZoneId);
-    const validObjectIds = [zoneIdStr];
-    if (mongoose.Types.ObjectId.isValid(zoneIdStr)) {
-      validObjectIds.push(new mongoose.Types.ObjectId(zoneIdStr));
-    }
-    filter.zoneId = { $in: validObjectIds };
-  }
-
-  const partners = await FoodDeliveryPartner.find(filter)
-    .select("name phone vehicleType vehicleNumber availabilityStatus rating totalRatings zoneId profilePhoto")
+  let partners = await FoodDeliveryPartner.find(filter)
+    .select("name phone vehicleType vehicleNumber availabilityStatus rating totalRatings zoneId profilePhoto lastLat lastLng")
     .sort({ availabilityStatus: -1, createdAt: -1 })
     .lean();
+
+  if (resolvedZoneId) {
+    partners = partners.filter((p) => dispatchService.isPartnerInZoneStrict(p, resolvedZoneId, activeZones));
+  }
 
   const partnerIds = partners.map(p => p._id);
   const activeCounts = await FoodOrder.aggregate([

@@ -1280,7 +1280,17 @@ export async function getRestaurantReport(query = {}) {
         };
     });
 
-    return { restaurants, total, page, limit };
+    const sum = (key) => Math.round(restaurantDocs.reduce((a, r) => a + (orderMap.get(String(r._id))?.[key] || 0), 0) * 100) / 100;
+    const summary = {
+        totalRestaurants: total,
+        totalOrder: sum('totalOrder'),
+        totalOrderAmount: sum('totalOrderAmount'),
+        totalDiscountGiven: sum('totalDiscountGiven'),
+        totalAdminCommission: sum('totalAdminCommission'),
+        totalVATTAX: sum('totalVATTAX')
+    };
+
+    return { restaurants, total, page, limit, summary };
 }
 
 export async function getTaxReport(query = {}) {

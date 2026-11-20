@@ -36,6 +36,46 @@ function monthRange(month, offsetMin = 330) {
     return [new Date(Date.UTC(y, m - 1, 1) - offsetMin * MIN), new Date(Date.UTC(y, m, 1) - offsetMin * MIN)];
 }
 
+
+/* ------------------------------ Party identity (name + phone) ------------------------------ */
+/** Looks up display name / phone for a mixed list of restaurants and delivery partners. */
+async function partyIdentityMap(pairs = []) {
+    const ids = { RESTAURANT: new Set(), DELIVERY_PARTNER: new Set() };
+    for (const [t, id] of pairs) if (ids[t] && id && mongoose.Types.ObjectId.isValid(String(id))) ids[t].add(String(id));
+    const out = new Map();
+    const [rests, riders] = await Promise.all([
+        ids.RESTAURANT.size ? FoodRestaurant.find({ _id: { $in: [...ids.RESTAURANT].map(oid) } }).select('restaurantName ownerName ownerPhone').lean() : [],
+        ids.DELIVERY_PARTNER.size ? mongoose.model('FoodDeliveryPartner').find({ _id: { $in: [...ids.DELIVERY_PARTNER].map(oid) } }).select('name phone countryCode').lean() : []
+    ]);
+    for (const r of rests) out.set(`RESTAURANT:${r._id}`, { partyName: r.restaurantName || r.ownerName || 'Restaurant', partyPhone: r.ownerPhone || '' });
+    for (const d of riders) out.set(`DELIVERY_PARTNER:${d._id}`, { partyName: d.name || 'Delivery partner', partyPhone: d.phone || '' });
+    return out;
+}
+
+/** Adds partyName / partyPhone to rows that carry `partyType` (or use fixedType) and `partyId`. */
+async function withParty(rows = [], fixedType = null) {
+    if (!rows.length) return rows;
+    const typeOf = (r) => fixedType || r.partyType;
+    const map = await partyIdentityMap(rows.map((r) => [typeOf(r), r.partyId]));
+    return rows.map((r) => ({ ...r, partyName: '', partyPhone: '', ...(map.get(`${typeOf(r)}:${r.partyId}`) || {}) }));
+}
+
+/** Admin picker: find restaurants / delivery partners by name or phone. */
+export async function searchParties(partyType, q = '') {
+    const term = String(q || '').trim();
+    if (term.length < 2) return [];
+    const rx = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    if (partyType === 'RESTAURANT') {
+        const rows = await FoodRestaurant.find({ $or: [{ restaurantName: rx }, { ownerName: rx }, { ownerPhone: rx }] }).select('restaurantName ownerName ownerPhone').limit(15).lean();
+        return rows.map((r) => ({ id: String(r._id), name: r.restaurantName || r.ownerName || 'Restaurant', phone: r.ownerPhone || '' }));
+    }
+    if (partyType === 'DELIVERY_PARTNER') {
+        const rows = await mongoose.model('FoodDeliveryPartner').find({ $or: [{ name: rx }, { phone: rx }] }).select('name phone').limit(15).lean();
+        return rows.map((r) => ({ id: String(r._id), name: r.name || 'Delivery partner', phone: r.phone || '' }));
+    }
+    throw new ValidationError('partyType must be RESTAURANT or DELIVERY_PARTNER');
+}
+
 /* ------------------------------ Config ------------------------------ */
 let cfgCache = { at: 0, doc: null };
 
@@ -1075,7 +1115,7 @@ export async function listLedger({ partyType, partyId, status, violationType, or
         FoodPenaltyLedger.find(q).sort({ createdAt: -1 }).skip((Math.max(Number(page), 1) - 1) * lim).limit(lim).lean(),
         FoodPenaltyLedger.countDocuments(q)
     ]);
-    return { items, total, page: Number(page) || 1, limit: lim };
+    return { items: await withParty(items), total, page: Number(page) || 1, limit: lim };
 }
 
 /** Admin actions: approve (pending -> applied), waive, reverse, settle (finance deducted it from payout). */
@@ -1226,7 +1266,8 @@ export async function getWalletView(partyType, partyId, { limit = 50 } = {}) {
         FoodPartyWalletTxn.find({ partyType, partyId: oid(partyId) }).sort({ createdAt: -1 }).limit(lim).lean(),
         FoodPenaltyLedger.aggregate([{ $match: { partyType, partyId: oid(partyId), status: { $in: ['pending', 'disputed'] }, stage: 'penalty' } }, { $group: { _id: null, total: { $sum: '$amount' } } }])
     ]);
-    return { partyType, partyId, balance, outstandingPenalties: dues[0]?.total || 0, transactions };
+    const who = (await partyIdentityMap([[partyType, partyId]])).get(`${partyType}:${partyId}`) || {};
+    return { partyType, partyId, ...who, balance, outstandingPenalties: dues[0]?.total || 0, transactions };
 }
 
 /** Admin: manual credit / debit on a user, restaurant or delivery wallet. */
@@ -1276,7 +1317,7 @@ export async function listAppeals({ partyType, partyId, status } = {}) {
     if (partyType) q.partyType = partyType;
     if (partyId) q.partyId = oid(partyId);
     if (status) q.status = status;
-    return FoodPenaltyAppeal.find(q).sort({ createdAt: -1 }).limit(200).lean();
+    return withParty(await FoodPenaltyAppeal.find(q).sort({ createdAt: -1 }).limit(200).lean());
 }
 
 export async function decideAppeal(appealId, adminId, approve, note = '') {
@@ -1315,7 +1356,7 @@ export async function listStrikes({ partyType, partyId, month } = {}) {
     if (partyType) q.partyType = partyType;
     if (partyId) q.partyId = oid(partyId);
     if (month) q.month = month;
-    return FoodStrike.find(q).sort({ createdAt: -1 }).limit(200).lean();
+    return withParty(await FoodStrike.find(q).sort({ createdAt: -1 }).limit(200).lean());
 }
 
 /** Admin exception: lift a strike / suspension without touching the ledger entry. */
@@ -1375,8 +1416,9 @@ export async function restaurantDashboard(restaurantId, month) {
         : 0;
     const bulkKeys = new Set((cfg.orderTiers || []).filter((t) => t.countsAsBulk).map((t) => t.key));
     const base = await partySummary('RESTAURANT', restaurantId, month);
+    const who = (await partyIdentityMap([['RESTAURANT', restaurantId]])).get(`RESTAURANT:${restaurantId}`) || {};
     return {
-        ...base,
+        ...base, ...who,
         totalOrders: orders.length,
         acceptedOrders: accepted.length,
         rejectedOrders: rejected,
@@ -1405,8 +1447,9 @@ export async function deliveryDashboard(partnerId, month) {
     const timed = judged.filter((o) => o.deliveryEval.pickedUpAt);
     const avg = timed.length ? Math.round(timed.reduce((s, o) => s + (new Date(o.deliveryState.deliveredAt) - new Date(o.deliveryEval.pickedUpAt)), 0) / timed.length / MIN) : 0;
     const base = await partySummary('DELIVERY_PARTNER', partnerId, month);
+    const who = (await partyIdentityMap([['DELIVERY_PARTNER', partnerId]])).get(`DELIVERY_PARTNER:${partnerId}`) || {};
     return {
-        ...base,
+        ...base, ...who,
         totalAssigned: orders.length,
         acceptedAssignments: accepted.length,
         rejectedAssignments: rejectedOffers,
@@ -1442,9 +1485,10 @@ export async function adminOverview(partyType, month) {
         { $group: { _id: '$partyId', strikes: { $sum: 1 }, suspendedUntil: { $max: '$suspendedUntil' } } }
     ]);
     const sm = new Map(strikes.map((s) => [String(s._id), s]));
+    const idMap = await partyIdentityMap(rows.map((r) => [partyType, r._id]));
     return rows.map((r) => {
         const st = sm.get(String(r._id));
-        return { partyId: r._id, ...r, _id: undefined, strikes: st?.strikes || 0, suspendedUntil: st?.suspendedUntil && st.suspendedUntil > new Date() ? st.suspendedUntil : null };
+        return { partyId: r._id, ...r, ...(idMap.get(`${partyType}:${r._id}`) || { partyName: '', partyPhone: '' }), _id: undefined, strikes: st?.strikes || 0, suspendedUntil: st?.suspendedUntil && st.suspendedUntil > new Date() ? st.suspendedUntil : null };
     });
 }
 

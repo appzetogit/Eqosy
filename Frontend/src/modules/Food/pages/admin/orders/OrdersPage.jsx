@@ -16,8 +16,9 @@ import { useOrdersManagement } from "@food/components/admin/orders/useOrdersMana
 import { Loader2 } from "lucide-react"
 import { OrdersDashboardSkeleton } from "@food/components/ui/loading-skeletons"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
-import alertSound from "@food/assets/audio/alert.mp3"
-import originalSound from "@food/assets/audio/original.mp3"
+// Admin new-order ring: same tone as the chat notification (served from /public)
+const alertSound = "/notification_message-notify-8-313753.mp3"
+const originalSound = alertSound
 import { getCurrentUser } from "@food/utils/auth"
 import { canWriteFood, isFoodSuperAdminLike } from "@food/constants/foodAdminAccess"
 const debugLog = (...args) => {}

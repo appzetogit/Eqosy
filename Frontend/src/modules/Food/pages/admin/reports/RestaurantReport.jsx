@@ -13,6 +13,9 @@ const debugError = (...args) => {}
 export default function RestaurantReport() {
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
+  const [summary, setSummary] = useState(null)
+  const [detail, setDetail] = useState(null) // { restaurant, loading, data, page }
+  const [detailRange, setDetailRange] = useState({ from: "", to: "" })
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
     zone: "All Zones",
@@ -56,8 +59,10 @@ export default function RestaurantReport() {
 
         if (response?.data?.success && response.data.data) {
           setRestaurants(response.data.data.restaurants || [])
+          setSummary(response.data.data.summary || null)
         } else {
           setRestaurants([])
+          setSummary(null)
           if (response?.data?.message) {
             toast.error(response.data.message)
           }
@@ -79,6 +84,24 @@ export default function RestaurantReport() {
   }, [restaurants])
 
   const totalRestaurants = filteredRestaurants.length
+
+  const inr = (n) => `\u20B9${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const loadDetail = async (restaurant, page = 1, range = detailRange) => {
+    setDetail((d) => ({ restaurant, loading: true, data: d?.restaurant?._id === restaurant._id ? d.data : null, page }))
+    try {
+      const res = await adminAPI.getRestaurantSalesReport(restaurant._id, {
+        page,
+        limit: 20,
+        from: range.from || undefined,
+        to: range.to || undefined,
+      })
+      setDetail({ restaurant, loading: false, data: res?.data?.data || null, page })
+    } catch (error) {
+      toast.error("Failed to load restaurant sales")
+      setDetail({ restaurant, loading: false, data: null, page })
+    }
+  }
 
   const handleReset = () => {
     setFilters({
@@ -252,6 +275,24 @@ export default function RestaurantReport() {
           </div>
         </div>
 
+        {/* Overall totals */}
+        {summary && (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            {[
+              { label: "Total Restaurants", value: summary.totalRestaurants },
+              { label: "Total Orders", value: summary.totalOrder },
+              { label: "Total Order Amount", value: inr(summary.totalOrderAmount) },
+              { label: "Total Discount Given", value: inr(summary.totalDiscountGiven) },
+              { label: "Total Admin Commission", value: inr(summary.totalAdminCommission) },
+            ].map((c) => (
+              <div key={c.label} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <p className="text-xs text-slate-500">{c.label}</p>
+                <p className="text-xl font-bold text-slate-900 mt-1">{c.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Restaurant Report Table Section */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -366,12 +407,13 @@ export default function RestaurantReport() {
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
                 {filteredRestaurants.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-20 text-center">
+                    <td colSpan={10} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
                         <p className="text-sm text-slate-500">No restaurants match your search</p>
@@ -432,6 +474,14 @@ export default function RestaurantReport() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-slate-700">{renderStars(restaurant.averageRatings, restaurant.reviews)}</span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => { const r = { from: "", to: "" }; setDetailRange(r); loadDetail(restaurant, 1, r) }}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          View
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -440,6 +490,105 @@ export default function RestaurantReport() {
           </div>
         </div>
       </div>
+
+      {/* Per-restaurant detail */}
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
+        <DialogContent className="max-w-4xl bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{detail?.restaurant?.restaurantName} - Sales Report</DialogTitle>
+          </DialogHeader>
+          {detail?.loading && !detail?.data ? (
+            <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
+          ) : !detail?.data ? (
+            <p className="py-8 text-center text-sm text-slate-500">No data</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-slate-500">Date:</span>
+                <input
+                  type="date"
+                  value={detailRange.from}
+                  max={detailRange.to || undefined}
+                  onChange={(e) => { const r = { ...detailRange, from: e.target.value }; setDetailRange(r); loadDetail(detail.restaurant, 1, r) }}
+                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-slate-500">to</span>
+                <input
+                  type="date"
+                  value={detailRange.to}
+                  min={detailRange.from || undefined}
+                  onChange={(e) => { const r = { ...detailRange, to: e.target.value }; setDetailRange(r); loadDetail(detail.restaurant, 1, r) }}
+                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                />
+                {(detailRange.from || detailRange.to) && (
+                  <button
+                    onClick={() => { const r = { from: "", to: "" }; setDetailRange(r); loadDetail(detail.restaurant, 1, r) }}
+                    className="text-xs text-blue-600 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+                {detail.loading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Orders", value: detail.data.summary.totalOrders },
+                  { label: "Sales", value: inr(detail.data.summary.totalSales) },
+                  { label: "Admin Commission", value: inr(detail.data.summary.totalCommission) },
+                  { label: "Restaurant Earning", value: inr(detail.data.summary.totalEarning) },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs text-slate-500">{c.label}</p>
+                    <p className="text-lg font-bold text-slate-900">{c.value}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">
+                Settled: {inr(detail.data.summary.settledEarning)} | Pending: {inr(detail.data.summary.pendingEarning)} (delivered orders only{detailRange.from || detailRange.to ? ", selected dates" : ", all time"})
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-[10px] uppercase text-slate-700">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Order</th>
+                      <th className="px-3 py-2 text-left">Date</th>
+                      <th className="px-3 py-2 text-left">Items</th>
+                      <th className="px-3 py-2 text-right">Sale</th>
+                      <th className="px-3 py-2 text-right">Commission</th>
+                      <th className="px-3 py-2 text-right">Earning</th>
+                      <th className="px-3 py-2 text-left">Payout</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {detail.data.orders.length === 0 ? (
+                      <tr><td colSpan={7} className="py-8 text-center text-slate-500">No delivered orders</td></tr>
+                    ) : detail.data.orders.map((o) => (
+                      <tr key={o.id}>
+                        <td className="px-3 py-2 font-medium">#{o.orderId}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{new Date(o.createdAt).toLocaleString("en-IN")}</td>
+                        <td className="px-3 py-2 max-w-[220px] truncate" title={o.items.map((i) => `${i.quantity} x ${i.name}`).join(", ")}>
+                          {o.items.map((i) => `${i.quantity} x ${i.name}`).join(", ")}
+                        </td>
+                        <td className="px-3 py-2 text-right">{inr(o.sale)}</td>
+                        <td className="px-3 py-2 text-right text-red-600">{inr(o.commission)}</td>
+                        <td className="px-3 py-2 text-right text-green-600 font-medium">{inr(o.earning)}</td>
+                        <td className="px-3 py-2">{o.settled ? "Settled" : "Pending"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {detail.data.total > detail.data.limit && (
+                <div className="flex items-center justify-center gap-4">
+                  <button disabled={detail.page <= 1 || detail.loading} onClick={() => loadDetail(detail.restaurant, detail.page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-30">Prev</button>
+                  <span className="text-sm">{detail.page} / {Math.ceil(detail.data.total / detail.data.limit)}</span>
+                  <button disabled={detail.page >= Math.ceil(detail.data.total / detail.data.limit) || detail.loading} onClick={() => loadDetail(detail.restaurant, detail.page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-30">Next</button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>

@@ -1,5 +1,5 @@
 import { sendResponse, sendError } from '../../../../utils/response.js';
-import { getRestaurantFinance } from '../services/restaurantFinance.service.js';
+import { getRestaurantFinance, getRestaurantSalesReport } from '../services/restaurantFinance.service.js';
 
 export const getRestaurantFinanceController = async (req, res, next) => {
     try {
@@ -14,3 +14,15 @@ export const getRestaurantFinanceController = async (req, res, next) => {
     }
 };
 
+
+export const getRestaurantSalesReportController = async (req, res, next) => {
+    try {
+        const restaurantId = req.user?.userId;
+        if (!restaurantId) return sendError(res, 401, 'Restaurant authentication required');
+
+        const data = await getRestaurantSalesReport(restaurantId, req.query || {});
+        return sendResponse(res, 200, 'Sales report fetched successfully', data);
+    } catch (error) {
+        next(error);
+    }
+};

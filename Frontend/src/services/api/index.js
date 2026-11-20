@@ -697,6 +697,12 @@ export const adminAPI = {
       params: { page: 1, limit: 1000, ...params },
       contextModule: "admin",
     }),
+  /** Per-restaurant sales/earning/commission order list (admin). */
+  getRestaurantSalesReport: (id, params = {}) =>
+    apiClient.get(`/food/admin/reports/restaurants/${id}/sales`, {
+      params,
+      contextModule: "admin",
+    }),
   getTransactionReport: (params = {}) =>
     apiClient.get("/food/admin/reports/transactions", {
       params: { page: 1, limit: 1000, ...params },
@@ -1133,6 +1139,12 @@ export const restaurantAPI = {
   /** Finance dashboard for `hub-finance`. */
   getFinance: (params = {}) =>
     apiClient.get("/food/restaurant/finance", {
+      contextModule: "restaurant",
+      params: params || {},
+    }),
+  /** Sales report: orders, sales, earning & admin commission. */
+  getSalesReport: (params = {}) =>
+    apiClient.get("/food/restaurant/sales-report", {
       contextModule: "restaurant",
       params: params || {},
     }),

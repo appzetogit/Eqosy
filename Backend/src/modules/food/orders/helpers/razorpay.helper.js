@@ -73,23 +73,50 @@ export async function createRazorpayCheckoutOrder(amountPaise, currency = 'INR',
     };
 }
 
-export function createPaymentLink({ amountPaise, currency = 'INR', description, orderId, customerName, customerEmail, customerPhone }) {
+/**
+ * Payment link for COD collection (rider shows its QR).
+ * - UPI-first link (opens the customer's UPI app with the amount filled) when the Razorpay account supports it,
+ *   otherwise falls back to the normal hosted link.
+ * - Customer details are only sent when real; never a placeholder phone / email.
+ */
+export async function createPaymentLink({
+    amountPaise, currency = 'INR', description, orderId, referenceId,
+    customerName, customerEmail, customerPhone, callbackUrl, expireInMinutes = 30
+}) {
     const instance = getRazorpayInstance();
-    if (!instance) return Promise.reject(new Error('Razorpay not configured'));
-    return instance.paymentLink
-        .create({
-            amount: Math.round(amountPaise),
-            currency,
-            description: description || `Order ${orderId}`,
-            customer: {
-                name: customerName || 'Customer',
-                email: customerEmail || 'customer@example.com',
-                contact: customerPhone ? String(customerPhone).replace(/\D/g, '').slice(-10) : '9999999999'
-            }
-        })
-        .catch((error) => {
-            throw new Error(getRazorpayErrorMessage(error));
-        });
+    if (!instance) throw new Error('Razorpay not configured');
+
+    const phone = String(customerPhone || '').replace(/\D/g, '').slice(-10);
+    const email = String(customerEmail || '').trim();
+    const customer = {};
+    if (customerName && String(customerName).trim()) customer.name = String(customerName).trim().slice(0, 60);
+    if (/^[6-9]\d{9}$/.test(phone)) customer.contact = phone;
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) && !/@example\.com$/i.test(email)) customer.email = email;
+
+    const payload = {
+        amount: Math.round(amountPaise),
+        currency,
+        accept_partial: false,
+        description: description || `Order ${orderId}`,
+        reference_id: String(referenceId || orderId).slice(0, 40),
+        notify: { sms: false, email: false },
+        reminder_enable: false,
+        // Razorpay needs at least 15 minutes; the rider can always generate a fresh one.
+        expire_by: Math.floor(Date.now() / 1000) + Math.max(16, Number(expireInMinutes) || 30) * 60,
+        ...(Object.keys(customer).length ? { customer } : {}),
+        ...(callbackUrl && /^https:\/\//i.test(callbackUrl) ? { callback_url: callbackUrl, callback_method: 'get' } : {})
+    };
+
+    try {
+        return await instance.paymentLink.create({ ...payload, upi_link: true });
+    } catch {
+        // UPI links are not enabled on every account: use the regular link instead of failing the delivery.
+    }
+    try {
+        return await instance.paymentLink.create(payload);
+    } catch (error) {
+        throw new Error(getRazorpayErrorMessage(error));
+    }
 }
 
 export function verifyPaymentSignature(orderId, paymentId, signature) {

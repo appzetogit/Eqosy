@@ -773,6 +773,7 @@ export default function ExploreMore() {
   ]
 
   const accountingItems = [
+    { id: 0, label: "Sales & Earnings", icon: IndianRupee, route: "/food/restaurant/sales-report" },
     { id: 1, label: "Payout", icon: IndianRupee, route: "/food/restaurant/hub-finance" },
     { id: 2, label: "Invoices", icon: Receipt, route: "/food/restaurant/hub-finance?tab=invoices" },
     { id: 3, label: "Bank details", icon: Building2, route: "/food/restaurant/update-bank-details" },

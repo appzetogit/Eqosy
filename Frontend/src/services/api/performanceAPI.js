@@ -13,6 +13,7 @@ export const adminPerformanceAPI = {
     apiClient.get(`/food/admin/performance/${kind === "delivery" ? "delivery-partners" : "restaurants"}`, { params: { month }, ...admin }),
   detail: (kind, id, month) =>
     apiClient.get(`/food/admin/performance/${kind === "delivery" ? "delivery-partners" : "restaurants"}/${id}`, { params: { month }, ...admin }),
+  searchParties: (partyType, q) => apiClient.get("/food/admin/performance/parties/search", { params: { partyType, q }, ...admin }),
   ledger: (params = {}) => apiClient.get("/food/admin/performance/ledger", { params, ...admin }),
   /** Manual warning / penalty. body: { partyType, partyId, stage, amount, strikeCount, reason, orderId? } */
   createLedger: (body) => apiClient.post("/food/admin/performance/ledger", body, admin),

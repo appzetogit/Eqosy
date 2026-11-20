@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import mongoSanitize from 'mongo-sanitize';
 import xssClean from 'xss-clean';
 import routes from './routes/index.js';
+import imageResizeRoute from './routes/imageResize.route.js';
 import errorHandler from './middleware/errorHandler.js';
 import { apiRateLimiter } from './middleware/rateLimit.js';
 import { responseTimeLogger } from './middleware/responseTimeLogger.js';
@@ -109,6 +110,9 @@ app.use((req, _res, next) => {
     next();
 });
 app.use(xssClean());
+
+// Image thumbnails (before the rate limiter: a screen loads many images at once)
+app.use('/api/v1/img', imageResizeRoute);
 
 // Global rate limiting for API routes
 app.use('/api', apiRateLimiter);

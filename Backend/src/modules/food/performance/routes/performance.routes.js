@@ -7,6 +7,7 @@ export const adminPerformanceRouter = express.Router();
 const access = requireFoodResourceAccess('fee_settings', 'fee_settings');
 adminPerformanceRouter.get('/config', access, c.getConfig);
 adminPerformanceRouter.put('/config', access, c.updateConfig);
+adminPerformanceRouter.get('/parties/search', access, c.searchParties);
 adminPerformanceRouter.get('/ledger', access, c.listLedger);
 adminPerformanceRouter.post('/ledger', access, c.createLedger);
 adminPerformanceRouter.patch('/ledger/:id', access, c.editLedger);

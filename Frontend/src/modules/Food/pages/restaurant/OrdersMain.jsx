@@ -1504,7 +1504,21 @@ export default function OrdersMain() {
   const [showNewOrderPopup, setShowNewOrderPopup] = useState(false);
   const [popupOrder, setPopupOrder] = useState(null); // Store order for popup (from Socket.IO or API)
   const [isMuted, setIsMuted] = useState(false);
-  const [prepTime, setPrepTime] = useState(11);
+  // Default preparation time comes from the admin setting (25 min unless changed), shown pre-filled on accept.
+  const [defaultPrep, setDefaultPrep] = useState(25);
+  const [maxPrep, setMaxPrep] = useState(120);
+  const [prepTime, setPrepTime] = useState(25);
+  useEffect(() => {
+    let live = true;
+    restaurantPerformanceAPI.config().then((res) => {
+      const c = res?.data?.data;
+      if (!live || !c) return;
+      const d = Number(c.defaultPrepMinutes);
+      if (d >= 1) { setDefaultPrep(d); setPrepTime(d); }
+      if (Number(c.maxPrepMinutes) >= 1) setMaxPrep(Number(c.maxPrepMinutes));
+    }).catch(() => { /* keep the 25 min fallback */ });
+    return () => { live = false; };
+  }, []);
   const [countdown, setCountdown] = useState(240); // 4 minutes in seconds
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [showRejectPopup, setShowRejectPopup] = useState(false);
@@ -2170,7 +2184,7 @@ export default function OrdersMain() {
     setPopupOrder(null);
     clearNewOrder();
     setCountdown(240);
-    setPrepTime(11);
+    setPrepTime(defaultPrep);
     setAcceptSwipeProgress(0);
     setIsAcceptingOrder(false);
 
@@ -2223,7 +2237,7 @@ export default function OrdersMain() {
     clearNewOrder();
     setRejectReason("");
     setCountdown(240);
-    setPrepTime(11);
+    setPrepTime(defaultPrep);
   };
 
   // Items marked unavailable: the customer decides, so just close the popup (the order is NOT rejected).
@@ -2239,7 +2253,7 @@ export default function OrdersMain() {
     setPopupOrder(null);
     clearNewOrder();
     setCountdown(240);
-    setPrepTime(11);
+    setPrepTime(defaultPrep);
     setAcceptSwipeProgress(0);
     requestOrdersRefresh();
   };
@@ -2268,7 +2282,7 @@ export default function OrdersMain() {
     setPopupOrder(null);
     clearNewOrder();
     setCountdown(240);
-    setPrepTime(11);
+    setPrepTime(defaultPrep);
     setAcceptSwipeProgress(0);
   };
 
@@ -3025,9 +3039,10 @@ export default function OrdersMain() {
                         </button>
                         <span className="text-base font-semibold text-gray-900 min-w-[60px] text-center">
                           {prepTime} mins
+                          {prepTime === defaultPrep ? <span className="block text-[10px] font-medium text-gray-400">default</span> : null}
                         </span>
                         <button
-                          onClick={() => setPrepTime(prepTime + 1)}
+                          onClick={() => setPrepTime(Math.min(maxPrep, prepTime + 1))}
                           className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
                           <Plus className="w-4 h-4 text-gray-700" />
                         </button>

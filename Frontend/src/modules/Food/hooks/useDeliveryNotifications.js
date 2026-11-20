@@ -328,6 +328,8 @@ export const useDeliveryNotifications = (options = {}) => {
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
   const joinedDeliveryRoomRef = useRef(null);
   const joinedTrackingRoomsRef = useRef(new Set());
+  // Offers that arrived while another offer was still on screen / pending. Shown (and rung) one after another.
+  const pendingOrderQueueRef = useRef([]);
   const ALERT_LOOP_INTERVAL_MS = 4500;
   const ALERT_LOOP_MAX_MS = 120000;
   const ALERT_DEDUPE_MS = 15000;
@@ -505,6 +507,48 @@ export const useDeliveryNotifications = (options = {}) => {
       debugWarn('Error showing background delivery notification:', error);
     }
   }, []);
+
+  // Show an incoming offer. If another offer is already pending, queue it instead of overwriting it.
+  const presentIncomingOrder = useCallback((orderData) => {
+    const key = getOrderAlertKey(orderData);
+    const current = newOrderRef.current;
+    if (!current || current.isClaimedByOther || (key && key === getOrderAlertKey(current))) {
+      newOrderRef.current = orderData;
+      setNewOrder(orderData);
+      return;
+    }
+    const queue = pendingOrderQueueRef.current;
+    const idx = key ? queue.findIndex((o) => getOrderAlertKey(o) === key) : -1;
+    if (idx >= 0) queue[idx] = orderData;
+    else queue.push(orderData);
+  }, []);
+
+  // Move on to the next queued offer (if any) and ring for it.
+  const showNextQueuedOrder = useCallback(() => {
+    const next = pendingOrderQueueRef.current.shift() || null;
+    newOrderRef.current = next;
+    setNewOrder(next);
+    if (next) {
+      activeOrderRef.current = next;
+      playNotificationSound(next);
+      startAlertLoop(playNotificationSound);
+    }
+    return next;
+  }, [playNotificationSound, startAlertLoop]);
+
+  // An order is gone (cancelled / taken / reassigned): drop it from the queue, and advance if it was the one on screen.
+  const dropOrderAndAdvance = useCallback((data = {}) => {
+    const key = getOrderAlertKey(data);
+    if (key) {
+      const before = pendingOrderQueueRef.current.length;
+      pendingOrderQueueRef.current = pendingOrderQueueRef.current.filter((o) => getOrderAlertKey(o) !== key);
+      const cur = newOrderRef.current;
+      if (cur && getOrderAlertKey(cur) !== key && pendingOrderQueueRef.current.length !== before) return;
+    }
+    stopAlertLoop();
+    activeOrderRef.current = null;
+    showNextQueuedOrder();
+  }, [stopAlertLoop, showNextQueuedOrder]);
 
   const handleIncomingOrderAlert = useCallback((orderData = {}) => {
     if (!isOnlineRef.current) {
@@ -741,6 +785,7 @@ export const useDeliveryNotifications = (options = {}) => {
     if (isOnlineOption === false) {
       stopAlertLoop();
       activeOrderRef.current = null;
+      pendingOrderQueueRef.current = [];
       setNewOrder(null);
     }
   }, [isOnlineOption, stopAlertLoop]);
@@ -1085,7 +1130,7 @@ export const useDeliveryNotifications = (options = {}) => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
       });
-      setNewOrder(orderData);
+      presentIncomingOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
 
@@ -1101,7 +1146,7 @@ export const useDeliveryNotifications = (options = {}) => {
         dispatchStatus: orderData?.dispatch?.status,
       });
       // Treat it the same as new_order for now - delivery boy can accept it
-      setNewOrder(orderData);
+      presentIncomingOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
 
@@ -1114,7 +1159,7 @@ export const useDeliveryNotifications = (options = {}) => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
       });
-      setNewOrder(orderData);
+      presentIncomingOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
 
@@ -1216,6 +1261,13 @@ export const useDeliveryNotifications = (options = {}) => {
 
       window.dispatchEvent(new CustomEvent('order_claimed_by_other', { detail: data }));
 
+      // A queued (not yet shown) offer taken by someone else just disappears from the queue.
+      if (claimedId) {
+        pendingOrderQueueRef.current = pendingOrderQueueRef.current.filter(
+          (o) => getOrderAlertKey(o) !== claimedId
+        );
+      }
+
       if (activeOrderRef.current && getOrderAlertKey(activeOrderRef.current) === claimedId) {
         stopAlertLoop();
         const updated = {
@@ -1237,9 +1289,12 @@ export const useDeliveryNotifications = (options = {}) => {
       debugLog('?? Order reassigned to another partner:', data);
       if (data.orderId === activeOrderRef.current?._id || data.orderId === activeOrderRef.current?.orderId) {
         debugLog('?? Removing reassigned order from local state');
-        stopAlertLoop();
-        activeOrderRef.current = null;
-        setNewOrder(null);
+        dropOrderAndAdvance(data);
+      } else {
+        const rid = String(data?.orderId || '');
+        pendingOrderQueueRef.current = pendingOrderQueueRef.current.filter(
+          (o) => !rid || getOrderAlertKey(o) !== rid
+        );
       }
     });
 
@@ -1297,9 +1352,7 @@ export const useDeliveryNotifications = (options = {}) => {
 
     socketRef.current.on('order_cancelled', (data) => {
       debugLog('❌ Order cancelled event received in delivery partner app:', data);
-      stopAlertLoop();
-      activeOrderRef.current = null;
-      setNewOrder(null);
+      dropOrderAndAdvance(data);
       const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
       toast.error(`User cancelled order #${displayId}`);
       window.dispatchEvent(new CustomEvent('delivery_order_cancelled', { detail: data }));
@@ -1308,9 +1361,7 @@ export const useDeliveryNotifications = (options = {}) => {
     socketRef.current.on('order_status_update', (data) => {
       const statusStr = String(data?.orderStatus || data?.status || '').toLowerCase();
       if (statusStr.includes('cancel')) {
-        stopAlertLoop();
-        activeOrderRef.current = null;
-        setNewOrder(null);
+        dropOrderAndAdvance(data);
         const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
         toast.error(`User cancelled order #${displayId}`);
       }
@@ -1504,7 +1555,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, handleIncomingOrderAlert, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
+  }, [deliveryPartnerId, handleIncomingOrderAlert, presentIncomingOrder, dropOrderAndAdvance, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
 
   useEffect(() => {
     if (!deliveryPartnerId) {
@@ -1525,10 +1576,16 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [deliveryPartnerId, joinDeliveryRoomIfPossible, recoverDeliveryState]);
 
   // Helper functions
+  // Called when the rider accepts / passes / dismisses the offer on screen: bring up (and ring for) the next queued one.
   const clearNewOrder = () => {
     stopAlertLoop();
     activeOrderRef.current = null;
-    setNewOrder(null);
+    if (isOnlineRef.current) {
+      showNextQueuedOrder();
+    } else {
+      pendingOrderQueueRef.current = [];
+      setNewOrder(null);
+    }
   };
 
   const clearOrderReady = () => {

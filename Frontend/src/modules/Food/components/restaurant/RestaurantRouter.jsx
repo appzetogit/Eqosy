@@ -36,6 +36,7 @@ const PerformancePage = lazy(() => import("@food/pages/restaurant/PerformancePag
 const FinanceDetailsPage = lazy(() => import("@food/pages/restaurant/FinanceDetailsPage"))
 const WithdrawalHistoryPage = lazy(() => import("@food/pages/restaurant/WithdrawalHistoryPage"))
 const PhoneNumbersPage = lazy(() => import("@food/pages/restaurant/PhoneNumbersPage"))
+const SalesReport = lazy(() => import("@food/pages/restaurant/SalesReport"))
 const DownloadReport = lazy(() => import("@food/pages/restaurant/DownloadReport"))
 const ManageOutlets = lazy(() => import("@food/pages/restaurant/ManageOutlets"))
 const UpdateBankDetails = lazy(() => import("@food/pages/restaurant/UpdateBankDetails"))
@@ -101,6 +102,7 @@ export default function RestaurantRouter() {
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><CommissionLeaguePage /></ProtectedRoute>} path="commission-league" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><PerformancePage /></ProtectedRoute>} path="performance" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><PhoneNumbersPage /></ProtectedRoute>} path="phone" />
+        <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><SalesReport /></ProtectedRoute>} path="sales-report" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><DownloadReport /></ProtectedRoute>} path="download-report" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><ManageOutlets /></ProtectedRoute>} path="manage-outlets" />
         <Route element={<ProtectedRoute requiredRole="restaurant" loginPath="/food/restaurant/login"><UpdateBankDetails /></ProtectedRoute>} path="update-bank-details" />

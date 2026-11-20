@@ -413,7 +413,8 @@ export const updateDeliveryAvailability = async (userId, payload) => {
             throw err;
         }
 
-        if (String(selfieImageUrl || '').trim()) {
+        // Re-sending the selfie we already hold must not refresh its timestamps (it would never expire).
+        if (String(selfieImageUrl || '').trim() && String(selfieImageUrl).trim() !== String(onlineSelfie.imageUrl || '')) {
             partner.onlineSelfie = {
                 ...(onlineSelfie || {}),
                 imageUrl: selfieImageUrl.trim(),

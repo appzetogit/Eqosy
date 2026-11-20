@@ -139,6 +139,17 @@ export async function getRestaurants(req, res, next) {
     }
 }
 
+export async function getRestaurantSalesReportAdmin(req, res, next) {
+    try {
+        const { getRestaurantSalesReport } = await import('../../restaurant/services/restaurantFinance.service.js');
+        const data = await getRestaurantSalesReport(req.params.id, req.query || {});
+        if (!data) return res.status(400).json({ success: false, message: 'Invalid restaurant id' });
+        res.status(200).json({ success: true, message: 'Restaurant sales report fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function getRestaurantReport(req, res, next) {
     try {
         const data = await adminService.getRestaurantReport(req.query || {}, req.adminContext);
