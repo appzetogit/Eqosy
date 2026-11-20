@@ -243,6 +243,7 @@ const PATH_RESOURCE_RULES = [
   { prefix: '/admin/food/food-approval', resource: 'foods' },
   { prefix: '/admin/food/categories', resource: 'categories' },
   { prefix: '/admin/food/zone-setup', resource: 'zones' },
+  { prefix: '/admin/food/zone-order-control', resource: 'zones' },
 
   // Delivery routes
   { prefix: '/admin/food/delivery-cash-limit', resource: 'delivery' },

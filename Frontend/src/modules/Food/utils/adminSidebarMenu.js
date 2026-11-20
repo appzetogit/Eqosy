@@ -62,6 +62,12 @@ export const adminSidebarMenu = [
         icon: "MapPin",
       },
       {
+        type: "link",
+        label: "Zone Order Control",
+        path: "/admin/food/zone-order-control",
+        icon: "MapPin",
+      },
+      {
         type: "expandable",
         label: "Restaurants",
         icon: "UtensilsCrossed",

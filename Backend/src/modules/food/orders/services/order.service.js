@@ -137,6 +137,26 @@ export async function createOrder(userId, dto) {
       throw new ValidationError(availability.message || "Restaurant is currently closed and not accepting orders");
     }
 
+    // Admin paused new orders for this zone (e.g. heavy rain): block before pricing / payment.
+    try {
+      const pauseZoneId = await resolveOrderZoneId(
+        { ...dto, address: dto.address || dto.deliveryAddress, deliveryAddress: dto.deliveryAddress || dto.address },
+        restaurant
+      ) || restaurant.zoneId;
+      if (pauseZoneId && mongoose.Types.ObjectId.isValid(String(pauseZoneId))) {
+        const pausedZone = await FoodZone.findById(pauseZoneId).select("orderingPaused orderingPausedMessage").lean();
+        if (pausedZone?.orderingPaused) {
+          throw new ValidationError(
+            pausedZone.orderingPausedMessage ||
+              "We are not taking orders in your area right now. Please try again later."
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof ValidationError) throw err;
+      logger.warn(`Zone ordering-pause check failed: ${err.message}`);
+    }
+
     const settings = await getDispatchSettings();
     const dispatchMode = settings.dispatchMode;
 

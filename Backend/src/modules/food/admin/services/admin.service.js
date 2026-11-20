@@ -5640,6 +5640,38 @@ export async function updateZone(id, body) {
     return { zone: zone.toObject() };
 }
 
+export const DEFAULT_ORDERING_PAUSED_MESSAGE =
+    'Due to heavy rain we are not taking orders in your area right now. Please try again a little later.';
+
+/**
+ * Pause / resume new orders for one zone and set the message customers see.
+ * Zone-restricted subadmins can only change their own zones.
+ */
+export async function setZoneOrdering(id, body = {}, adminContext = null) {
+    if (!mongoose.Types.ObjectId.isValid(id)) return { error: 'Invalid zone id' };
+
+    if (adminContext && !isSuperAdminLike(adminContext)) {
+        const allowed = normalizeObjectIdList(adminContext.food_zone_ids || adminContext.zone_ids || []).map(String);
+        if (!allowed.includes(String(id))) return { error: 'You do not have access to this zone', status: 403 };
+    }
+
+    const zone = await FoodZone.findById(id);
+    if (!zone) return null;
+
+    const paused = body.paused === true || body.paused === 'true' || body.paused === 1;
+    zone.orderingPaused = paused;
+    if (body.message !== undefined) {
+        zone.orderingPausedMessage = String(body.message || '').trim().slice(0, 300);
+    }
+    if (paused && !zone.orderingPausedMessage) zone.orderingPausedMessage = DEFAULT_ORDERING_PAUSED_MESSAGE;
+    zone.orderingPausedAt = paused ? new Date() : null;
+    zone.orderingPausedBy = paused && adminContext?._id && mongoose.Types.ObjectId.isValid(adminContext._id)
+        ? adminContext._id
+        : null;
+    await zone.save();
+    return { zone: zone.toObject() };
+}
+
 export async function deleteZone(id) {
     const zone = await FoodZone.findByIdAndDelete(id);
     return zone ? { id } : null;

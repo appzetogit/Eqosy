@@ -69,7 +69,7 @@ export const detectZonePublicController = async (req, res, next) => {
 export const listZonesPublicController = async (_req, res, next) => {
     try {
         const zones = await FoodZone.find({ isActive: true })
-            .select('name zoneName serviceLocation country unit isActive coordinates createdAt')
+            .select('name zoneName serviceLocation country unit isActive coordinates createdAt orderingPaused orderingPausedMessage')
             .sort({ createdAt: 1 })
             .lean();
 

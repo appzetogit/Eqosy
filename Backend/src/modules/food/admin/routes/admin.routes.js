@@ -294,6 +294,7 @@ router.post('/delivery/:id/approve-emergency-offline', requireFoodResourceAccess
 router.get('/zones', requireFoodResourceAccess('zones', 'zones'), adminController.getZones);
 router.get('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.getZoneById);
 router.post('/zones', requireFoodResourceAccess('zones', 'zones'), adminController.createZone);
+router.patch('/zones/:id/ordering', requireFoodResourceAccess('zones', 'zones'), adminController.setZoneOrdering);
 router.patch('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.updateZone);
 router.delete('/zones/:id', requireFoodResourceAccess('zones', 'zones'), adminController.deleteZone);
 

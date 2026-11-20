@@ -671,10 +671,17 @@ function CartInner() {
       longitude: selectedAddressCoordinates[0]
     }
     : currentLocation
-  const { zoneId } = useZone(zoneLocation, {
+  const { zoneId, zone: cartZone } = useZone(zoneLocation, {
     persistToStorage: false,
     usePersistedFallback: false,
   }) // Resolve zone for cart pricing only; do not overwrite global browse zone
+
+  // Admin paused new orders for this zone (e.g. heavy rain). Message is rendered as page text/toast,
+  // so the site's Google Translate shows it in the customer's selected language.
+  const isOrderingPaused = Boolean(cartZone?.orderingPaused)
+  const orderingPausedMessage =
+    cartZone?.orderingPausedMessage ||
+    "We are not taking orders in your area right now. Please try again later."
 
   const zoneOfRestaurant = (r) => String(r?.zoneId?._id || r?.zoneId?.id || r?.zoneId || "")
   // Cart restaurant belongs to another zone than the delivery location (e.g. Indore restaurant, Dewas address).
@@ -1984,6 +1991,10 @@ function CartInner() {
   }
 
   const handlePlaceOrder = async () => {
+    if (isOrderingPaused) {
+      toast.error(orderingPausedMessage, { duration: 9000 })
+      return
+    }
     if (isRestaurantOffline) {
       toast.error("Restaurant is offline. Cannot place order.")
       return
@@ -3592,6 +3603,8 @@ function CartInner() {
               onClick={
                 !isUserAuthenticated
                   ? handleLoginRedirect
+                  : isOrderingPaused
+                  ? () => toast.error(orderingPausedMessage, { duration: 9000 })
                   : isRestaurantOffline
                   ? () => toast.error("Restaurant is currently closed. Please order from an open outlet.")
                   : isRestaurantOutOfZone
@@ -3600,9 +3613,9 @@ function CartInner() {
                   ? () => toast.error(pricingError)
                   : handlePlaceOrder
               }
-              disabled={isUserAuthenticated && (isPlacingOrder || loadingPricing || !!pricingError || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline || isRestaurantOutOfZone)}
+              disabled={isUserAuthenticated && !isOrderingPaused && (isPlacingOrder || loadingPricing || !!pricingError || (hasSavedAddress && !isPricingAvailable) || (selectedPaymentMethod === "wallet" && walletBalance < total) || isRestaurantOffline || isRestaurantOutOfZone)}
               className={`w-full ${
-                isRestaurantOffline || isRestaurantOutOfZone || pricingError
+                isOrderingPaused || isRestaurantOffline || isRestaurantOutOfZone || pricingError
                   ? "bg-gray-400 dark:bg-gray-700 cursor-not-allowed shadow-none"
                   : "bg-gradient-to-r from-[color:var(--app-primary,#EB590E)] to-[#E23744] hover:from-[color:var(--app-secondary,#D94F0C)] hover:to-[#CF2834] shadow-lg shadow-[color:var(--app-primary,#EB590E)]/30"
               } text-white px-6 h-12 md:h-14 rounded-2xl font-bold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]`}
@@ -3616,6 +3629,8 @@ function CartInner() {
               <div className="flex items-center gap-1 mx-auto text-sm md:text-lg tracking-wide">
                 {!isUserAuthenticated
                   ? "Login to Place Order"
+                  : isOrderingPaused
+                  ? "Orders Paused In Your Area"
                   : isRestaurantOffline
                   ? "Restaurant Closed"
                   : isRestaurantOutOfZone

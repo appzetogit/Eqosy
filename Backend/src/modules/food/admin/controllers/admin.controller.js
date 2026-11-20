@@ -1364,6 +1364,21 @@ export async function getZones(req, res, next) {
     }
 }
 
+export async function setZoneOrdering(req, res, next) {
+    try {
+        const result = await adminService.setZoneOrdering(req.params.id, req.body || {}, req.adminContext);
+        if (!result) return res.status(404).json({ success: false, message: 'Zone not found' });
+        if (result.error) return res.status(result.status || 400).json({ success: false, message: result.error });
+        res.status(200).json({
+            success: true,
+            message: result.zone.orderingPaused ? 'Orders paused for this zone' : 'Orders resumed for this zone',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function getZoneById(req, res, next) {
     try {
         const zone = await adminService.getZoneById(req.params.id);

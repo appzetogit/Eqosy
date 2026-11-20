@@ -51,7 +51,20 @@ const zoneSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
             index: true
-        }
+        },
+        /** Admin can pause new orders for a whole zone (e.g. heavy rain). Users see orderingPausedMessage. */
+        orderingPaused: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        orderingPausedMessage: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+        orderingPausedAt: { type: Date, default: null },
+        orderingPausedBy: { type: mongoose.Schema.Types.ObjectId, default: null }
     },
     {
         collection: 'food_zones',

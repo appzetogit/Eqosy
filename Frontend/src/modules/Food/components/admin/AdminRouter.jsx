@@ -27,6 +27,7 @@ const ZoneSetup = lazy(() => import("@food/pages/admin/restaurant/ZoneSetup"));
 const ZoneRestaurantsList = lazy(() =>
   import("@food/pages/admin/restaurant/ZoneRestaurantsList")
 );
+const ZoneOrderControl = lazy(() => import("@food/pages/admin/restaurant/ZoneOrderControl"));
 const AddZone = lazy(() => import("@food/pages/admin/restaurant/AddZone"));
 const ViewZone = lazy(() => import("@food/pages/admin/restaurant/ViewZone"));
 const AllZonesMap = lazy(() => import("@food/pages/admin/restaurant/AllZonesMap"));
@@ -241,6 +242,7 @@ export default function AdminRouter() {
             <Route path="order-refunds/new" element={<NewRefundRequests />} />
 
             {/* RESTAURANT MANAGEMENT */}
+            <Route path="zone-order-control" element={<ZoneOrderControl />} />
             <Route path="zone-setup" element={<ZoneSetup />} />
             <Route path="zone-setup/map" element={<AllZonesMap />} />
             <Route path="zone-setup/delivery-boy-view" element={<DeliveryBoyViewMap />} />

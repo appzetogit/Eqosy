@@ -691,6 +691,11 @@ export const adminAPI = {
       contextModule: "admin",
     });
   },
+  /** Pause / resume new orders for one zone. Body: { paused: boolean, message?: string } */
+  setZoneOrdering: (zoneId, body = {}) =>
+    apiClient.patch(`/food/admin/zones/${zoneId}/ordering`, body, {
+      contextModule: "admin",
+    }),
   /** Restaurant report (admin). */
   getRestaurantReport: (params = {}) =>
     apiClient.get("/food/admin/reports/restaurants", {
