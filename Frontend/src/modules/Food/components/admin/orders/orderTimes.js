@@ -17,11 +17,13 @@ export function getOrderTimes(order, now = new Date()) {
 
   const placed = d(o.createdAt)
   const accepted = d(o.prep?.acceptedAt) || firstAt("confirmed", "preparing")
-  const ready = d(ds.foodReadyAt) || firstAt("ready_for_pickup", "ready")
   const riderAccepted = d(o.dispatch?.acceptedAt)
   const reachedPickup = d(ds.reachedPickupAt)
   const pickedUp = d(ds.pickedUpAt) || d(o.deliveryEval?.pickedUpAt)
   const delivered = d(ds.deliveredAt) || d(o.deliveredAt)
+  // The restaurant's clock stops when it marks the food ready, or at the latest when the rider takes it
+  // (picked up / delivered) even if "ready" was never tapped.
+  const ready = d(ds.foodReadyAt) || firstAt("ready_for_pickup", "ready") || pickedUp || delivered
   const approved = d(o.prep?.approvedEta)
   const adjusted = d(o.deliveryEval?.adjustedEta)
 

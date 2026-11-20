@@ -847,6 +847,8 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
     currentPhase: 'en_route_to_delivery',
     status: 'picked_up',
     pickedUpAt,
+    // Restaurant handed the food over: its preparation clock stops here if "ready" was never tapped.
+    foodReadyAt: foodReadyAt || pickedUpAt,
     riderWaitDurationMs: waitDurationMs,
     billImageUrl,
   };
