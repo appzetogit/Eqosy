@@ -145,14 +145,8 @@ function CartInner() {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [couponCode, setCouponCode] = useState("")
   const [manualCouponCode, setManualCouponCode] = useState("")
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(() => {
-    try {
-      const last = window.localStorage.getItem("food-last-payment-method")
-      return last === "razorpay" ? "razorpay" : "cash"
-    } catch {
-      return "cash"
-    }
-  })
+  // Always start on online payment; COD is an explicit per-order choice.
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("razorpay")
   const [showPaymentSheet, setShowPaymentSheet] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
@@ -1507,7 +1501,7 @@ function CartInner() {
   useEffect(() => {
     if (
       selectedPaymentMethod === "cash" &&
-      ((pricing?.codLimit != null && total >= pricing.codLimit) || pricing?.codBlocked)
+      ((pricing?.codLimit != null && total >= pricing.codLimit) || pricing?.codBlocked || pricing?.codRestaurantEnabled === false)
     ) {
       setSelectedPaymentMethod("razorpay");
     }
@@ -3598,6 +3592,12 @@ function CartInner() {
               </div>
             </div>
 
+            {pricing?.codRestaurantEnabled === false && (
+              <p className="text-xs font-semibold text-red-500 px-1">
+                This restaurant doesn't accept COD orders.
+              </p>
+            )}
+
             {/* Place Order Button */}
             <button
               onClick={
@@ -3972,23 +3972,19 @@ function CartInner() {
                     {
                       id: 'cash',
                       name: 'Cash on Delivery',
-                      description: pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
-                      disabled: Boolean(pricing?.codBlocked),
-                      disabledText: 'Pay charges first',
+                      description: pricing?.codRestaurantEnabled === false ? "This restaurant doesn't accept COD orders." : (pricing?.codLimit != null && total >= pricing.codLimit) ? `COD is available only for orders below ${RUPEE_SYMBOL}${pricing.codLimit}` : pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
+                      disabled: pricing?.codRestaurantEnabled === false || (pricing?.codLimit != null && total >= pricing.codLimit) || Boolean(pricing?.codBlocked),
+                      disabledText: pricing?.codRestaurantEnabled === false ? 'Not available' : (pricing?.codLimit != null && total >= pricing.codLimit) ? 'Order too high' : 'Pay charges first',
                       icon: <Banknote className="w-5 h-5" />,
                       color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
                       selectedColor: 'bg-orange-500 text-white'
                     }
-                  ].filter((option) => {
-                    if (option.id !== 'cash') return true
-                    return !(pricing?.codLimit != null && total >= pricing.codLimit)
-                  }).map((option) => (
+                  ].map((option) => (
                     <button
                       key={option.id}
                       onClick={() => {
                         if (!option.disabled) {
                           setSelectedPaymentMethod(option.id)
-                          try { window.localStorage.setItem("food-last-payment-method", option.id) } catch { /* ignore */ }
                           setShowPaymentSheet(false)
                         }
                       }}

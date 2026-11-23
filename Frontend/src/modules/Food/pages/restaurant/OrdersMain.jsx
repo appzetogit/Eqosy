@@ -26,6 +26,7 @@ import {
 import { toast } from "sonner";
 import BottomNavOrders from "@food/components/restaurant/BottomNavOrders";
 import RestaurantNavbar from "@food/components/restaurant/RestaurantNavbar";
+import CodToggleCard from "@food/components/restaurant/CodToggleCard";
 import notificationSound from "@food/assets/audio/alert.mp3";
 import { restaurantAPI, diningAPI } from "@food/api";
 import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotifications";
@@ -42,6 +43,18 @@ const debugWarn = (...args) => { };
 const debugError = (...args) => { };
 
 const STORAGE_KEY = "restaurant_online_status";
+
+// Customer name / phone from any order shape (API list, socket payload, popup).
+const getCustomerName = (order) =>
+  order?.userId?.name || order?.user?.name || order?.customerName || "";
+const getCustomerPhone = (order) =>
+  String(
+    order?.customerPhone ||
+      order?.userId?.phone ||
+      order?.user?.phone ||
+      order?.phone ||
+      "",
+  ).trim();
 
 // Top filter tabs
 const filterTabs = [
@@ -2507,6 +2520,9 @@ export default function OrdersMain() {
         <RestaurantNavbar showNotifications={true} />
       </div>
 
+      {/* COD on/off for this restaurant */}
+      <CodToggleCard className="mx-4 mt-3" />
+
       {/* Support: always reachable from the orders screen */}
       <div className="fixed bottom-24 right-3 z-40 shadow-lg rounded-lg">
         <PenaltySupportButton role="restaurant" variant="solid" label="Support" />
@@ -2819,6 +2835,32 @@ export default function OrdersMain() {
                       </div>
                     </div>
                   )}
+
+                  {/* Customer name + phone */}
+                  {(() => {
+                    const o = popupOrder || newOrder;
+                    const cName = getCustomerName(o);
+                    const cPhone = getCustomerPhone(o);
+                    if (!cName && !cPhone) return null;
+                    return (
+                      <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Customer</p>
+                          <p className="text-sm font-semibold text-gray-900 truncate">{cName || "Customer"}</p>
+                          {cPhone && <p className="text-xs font-medium text-gray-700">{cPhone}</p>}
+                        </div>
+                        {cPhone && (
+                          <a
+                            href={`tel:${cPhone}`}
+                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-green-500 text-white active:bg-green-600"
+                            aria-label="Call customer"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Customer info */}
                   <div className="mb-4">
@@ -3499,6 +3541,7 @@ function OrderCard({
             "",
         ).trim()
       : "";
+  const customerPhone = getCustomerPhone(fullOrder);
   const hasPartnerAssigned = Boolean(
     deliveryPartnerId &&
     (deliveryPartnerName || deliveryPartnerPhone || normalizedDispatchStatus === "accepted") &&
@@ -3539,6 +3582,9 @@ function OrderCard({
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">Order #{orderId}</p>
             <p className="text-[11px] text-gray-500 truncate">{customerName}</p>
+            {customerPhone && (
+              <p className="text-[11px] font-semibold text-gray-700 truncate">{customerPhone}</p>
+            )}
             {hasPartnerAssigned ? (
               <p className="text-[10px] font-bold text-blue-600 truncate flex items-center gap-1 mt-0.5">
                 <span>🏍️</span> {deliveryPartnerName || 'Partner Assigned'}
@@ -3578,6 +3624,17 @@ function OrderCard({
             {statusLabel}
           </span>
           <span className="text-[10px] text-gray-400">{timePlaced}</span>
+          {customerPhone && (
+            <a
+              href={`tel:${customerPhone}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-2 inline-flex items-center justify-center w-7 h-7 rounded-full border border-green-200 bg-green-50 text-green-600 active:bg-green-100 transition-colors"
+              title={`Call customer: ${customerPhone}`}
+              aria-label="Call customer"
+            >
+              <Phone className="w-3.5 h-3.5" />
+            </a>
+          )}
           {canCallDeliveryPartner && (
             <a
               href={`tel:${deliveryPartnerPhone}`}

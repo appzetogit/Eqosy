@@ -1159,6 +1159,16 @@ export default function OrderTracking({ isSharedView = false }) {
     return `${minutes}:${String(seconds).padStart(2, '0')}`
   }, [editWindowRemainingMs])
 
+  const restaurantContactPhone = String(
+    order?.restaurantPhone ||
+      order?.restaurantId?.phone ||
+      order?.restaurantId?.ownerPhone ||
+      order?.restaurantId?.primaryContactNumber ||
+      order?.restaurant?.phone ||
+      order?.restaurant?.ownerPhone ||
+      '',
+  ).trim();
+
   const handleCallRestaurant = (e) => {
     // Prevent event bubbling if necessary
     if (e && e.stopPropagation) e.stopPropagation();
@@ -2090,8 +2100,20 @@ export default function OrderTracking({ isSharedView = false }) {
                     {order?.restaurant?.restaurantName || order?.restaurantId?.restaurantName || storeWord}
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{storeWord}</p>
+                  {restaurantContactPhone && (
+                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">{restaurantContactPhone}</p>
+                  )}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={handleCallRestaurant}
+                aria-label={`Call ${storeWord}`}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                Call
+              </button>
             </div>
           </div>
         )}

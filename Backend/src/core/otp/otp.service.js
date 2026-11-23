@@ -6,6 +6,9 @@ import { logger } from '../../utils/logger.js';
 import { ValidationError } from '../auth/errors.js';
 import { sendOtpSms } from '../../modules/taxi/services/smsService.js';
 
+// Phones that always log in with OTP 1234 (no SMS): team numbers + seeded Dewas demo restaurants (scripts/seed-dewas-demo.js).
+const STATIC_OTP_NUMBERS = ['9755633147', '7974161582', '7354126134', '9000030001', '9000030002', '9000030003', '9000030004', '9000030005'];
+
 const generateOtpCode = () => {
     const code = crypto.randomInt(1000, 9999);
     return String(code);
@@ -91,7 +94,7 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     }
     const now = new Date();
 
-    const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+    const staticNumbers = STATIC_OTP_NUMBERS;
     const isStaticNumber = staticNumbers.includes(normalizedPhone);
 
     // Rate Limiting Logic
@@ -171,7 +174,7 @@ export const verifyOtp = async (phone, otp, scope = 'default') => {
         return { valid: false, reason: 'Invalid phone format' };
     }
 
-    const staticNumbers = ['9755633147', '7974161582', '7354126134'];
+    const staticNumbers = STATIC_OTP_NUMBERS;
     if (staticNumbers.includes(normalizedPhone) && otp === '1234') {
         return { valid: true };
     }

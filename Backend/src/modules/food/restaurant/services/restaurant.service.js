@@ -242,6 +242,7 @@ const toRestaurantProfile = (doc) => {
             diningType: String(doc.diningSettings?.diningType || 'family-dining').trim() || 'family-dining'
         },
         isAcceptingOrders: doc.isAcceptingOrders !== false,
+        codEnabled: doc.codEnabled === true,
         status: doc.status || null,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
@@ -671,6 +672,7 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
                 'estimatedDeliveryTimeMinutes',
                 'diningSettings',
                 'isAcceptingOrders',
+                'codEnabled',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -742,6 +744,7 @@ export const updateRestaurantAcceptingOrders = async (restaurantId, isAcceptingO
                 'openDays',
                 'diningSettings',
                 'isAcceptingOrders',
+                'codEnabled',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -838,6 +841,7 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
                 'estimatedDeliveryTimeMinutes',
                 'diningSettings',
                 'isAcceptingOrders',
+                'codEnabled',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -2295,3 +2299,20 @@ export async function updateRestaurantOffer(restaurantId, offerId, body) {
     await doc.save();
     return doc.toObject();
 }
+
+export const updateRestaurantCodEnabled = async (restaurantId, codEnabled) => {
+    if (!restaurantId) {
+        throw new ValidationError('Invalid restaurant id');
+    }
+    if (typeof codEnabled !== 'boolean') {
+        throw new ValidationError('codEnabled must be a boolean');
+    }
+    // Only affects new orders: existing orders keep their own payment.method.
+    const doc = await FoodRestaurant.findByIdAndUpdate(
+        restaurantId,
+        { $set: { codEnabled } },
+        { new: true, runValidators: true }
+    ).lean();
+    if (!doc) throw new ValidationError('Restaurant not found');
+    return toRestaurantProfile(doc);
+};

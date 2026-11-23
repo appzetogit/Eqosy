@@ -1213,6 +1213,19 @@ export const restaurantAPI = {
         restaurantCurrentCacheTime = Date.now();
         return res;
       }),
+  /** PATCH /food/restaurant/cod. Body: { codEnabled: boolean } */
+  updateCodEnabled: (codEnabled) =>
+    apiClient
+      .patch(
+        "/food/restaurant/cod",
+        { codEnabled: Boolean(codEnabled) },
+        { contextModule: "restaurant" },
+      )
+      .then((res) => {
+        restaurantCurrentCached = null;
+        restaurantCurrentCacheTime = 0;
+        return res;
+      }),
   /** Upload and set restaurant profile image (multipart). Field name: file */
   uploadProfileImage: (file) => {
     if (!file) return Promise.reject(new Error("File is required"));

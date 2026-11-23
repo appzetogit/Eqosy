@@ -240,7 +240,7 @@ export function evaluateAdditionalCharges(configuredCharges, itemTotal) {
 
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
-    .select("status restaurantName isRestaurant zoneId location isAcceptingOrders isActive openingTime closingTime outletTimings deliveryTimings openDays")
+    .select("status restaurantName isRestaurant zoneId location isAcceptingOrders codEnabled isActive openingTime closingTime outletTimings deliveryTimings openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
 
@@ -666,6 +666,7 @@ export async function calculateOrderPricing(userId, dto) {
       additionalChargesTotal,
       penaltyAmount,
       cancellationPenaltyAmount,
+      codRestaurantEnabled: restaurant.codEnabled === true,
       codBlocked: Boolean(codStatus.blocked),
       codBlockedAmount: codStatus.amount || 0,
       discount,
@@ -679,7 +680,7 @@ export async function calculateOrderPricing(userId, dto) {
       // Checkout options the admin has left open (online also needs working Razorpay keys).
       paymentMethods: {
         // Cash on Delivery stays off while any cancellation charge is unpaid; it returns the moment it is paid.
-        cash: feeSettings?.paymentMethods?.cash !== false && !codStatus.blocked,
+        cash: feeSettings?.paymentMethods?.cash !== false && !codStatus.blocked && restaurant.codEnabled === true,
         razorpay: feeSettings?.paymentMethods?.online !== false && isRazorpayConfigured(),
         wallet: feeSettings?.paymentMethods?.wallet !== false,
       },

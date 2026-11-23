@@ -278,17 +278,8 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
       ? [
           {
             'dispatch.status': { $in: ['unassigned', 'assigned'] },
-            orderStatus: {
-              $nin: [
-                'delivered',
-                'returned_to_restaurant',
-                'cancelled_by_user',
-                'cancelled_by_restaurant',
-                'cancelled_by_admin',
-                'rejected',
-                'Rejected'
-              ]
-            },
+            // Open orders only reach riders AFTER the restaurant has accepted them (never while still 'created' / 'pending_payment').
+            orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'ready'] },
           },
           {
             'dispatch.deliveryPartnerId': partnerObjId,
@@ -431,7 +422,8 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
     }
   }
   const now = new Date();
-  const acceptedStatuses = ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up'];
+  // 'created' is excluded on purpose: a rider can only take an order once the restaurant has accepted it.
+  const acceptedStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'picked_up'];
   const cancellableStatuses = [
     'cancelled_by_user',
     'cancelled_by_restaurant',

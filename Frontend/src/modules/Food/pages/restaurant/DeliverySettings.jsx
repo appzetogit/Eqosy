@@ -24,6 +24,35 @@ export default function DeliverySettings() {
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [toastMessage, setToastMessage] = useState("")
   const [savingStatus, setSavingStatus] = useState(false)
+  const [codEnabled, setCodEnabled] = useState(false)
+  const [showCodWarning, setShowCodWarning] = useState(false)
+  const [savingCod, setSavingCod] = useState(false)
+
+  const saveCodEnabled = async (value) => {
+    if (savingCod) return
+    setSavingCod(true)
+    try {
+      await restaurantAPI.updateCodEnabled(value)
+      setCodEnabled(value)
+      setShowCodWarning(false)
+      showToast(value ? "Cash on Delivery enabled" : "Cash on Delivery disabled")
+    } catch (error) {
+      setShowCodWarning(false)
+      showToast("Could not update COD setting. Please try again.")
+    } finally {
+      setSavingCod(false)
+    }
+  }
+
+  const handleCodToggle = (checked) => {
+    if (savingCod) return
+    if (checked) {
+      // Enabling needs explicit confirmation.
+      setShowCodWarning(true)
+      return
+    }
+    void saveCodEnabled(false)
+  }
 
 
   const syncStatusLocally = (status) => {
@@ -52,6 +81,7 @@ export default function DeliverySettings() {
           response?.data?.restaurant ||
           null
         const nextStatus = restaurant?.isAcceptingOrders === true
+        if (!cancelled) setCodEnabled(restaurant?.codEnabled === true)
         if (!cancelled) {
           setDeliveryStatus(nextStatus)
           syncStatusLocally(nextStatus)
@@ -269,6 +299,33 @@ export default function DeliverySettings() {
           </Card>
         </motion.div>
 
+        {/* COD Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="mt-4"
+        >
+          <Card className="bg-white shadow-sm border border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-base font-bold text-gray-900 mb-1">Accept Cash on Delivery (COD)</p>
+                  <p className="text-sm text-gray-500">
+                    {codEnabled ? "Customers can pay cash on delivery" : "COD orders are not accepted"}
+                  </p>
+                </div>
+                <Switch
+                  checked={codEnabled}
+                  onCheckedChange={handleCodToggle}
+                  disabled={savingCod}
+                  className="ml-4 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Info Card */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -352,6 +409,55 @@ export default function DeliverySettings() {
                     }`}
                   >
                     {pendingStatus ? "Enable" : "Disable"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* COD Warning Dialog */}
+      <AnimatePresence>
+        {showCodWarning && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-[100]"
+              onClick={() => !savingCod && setShowCodWarning(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 flex items-center justify-center z-[100] px-4 pointer-events-none"
+            >
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 pointer-events-auto">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center bg-orange-100">
+                    <AlertCircle className="w-10 h-10 text-orange-600" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">Warning – COD Orders</h3>
+                <p className="text-sm text-gray-600 mb-6 text-center">
+                  Accepting Cash on Delivery (COD) orders may result in order cancellations, customer refusals and order returns, which could cause financial losses to your restaurant. Do you want to proceed?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCodWarning(false)}
+                    disabled={savingCod}
+                    className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveCodEnabled(true)}
+                    disabled={savingCod}
+                    className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60"
+                  >
+                    Yes, Enable COD
                   </button>
                 </div>
               </div>

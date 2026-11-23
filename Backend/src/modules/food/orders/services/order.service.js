@@ -204,6 +204,9 @@ export async function createOrder(userId, dto) {
     const allowedMethods = pricingResult.pricing.paymentMethods;
     const methodKey = paymentMethod === "razorpay_qr" ? "cash" : paymentMethod;
     if (allowedMethods && allowedMethods[methodKey] === false) {
+      if (methodKey === "cash" && pricingResult.pricing.codRestaurantEnabled === false) {
+        throw new ValidationError("This restaurant doesn't accept COD orders.");
+      }
       const label = methodKey === "cash" ? "Cash on Delivery" : methodKey === "wallet" ? "Wallet payment" : "Online payment";
       throw new ValidationError(`${label} is currently unavailable. Please choose another payment method.`);
     }

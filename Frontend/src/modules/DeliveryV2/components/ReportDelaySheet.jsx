@@ -46,7 +46,7 @@ export default function ReportDelaySheet({ orderId }) {
         <TrafficCone className="h-4 w-4" /> Report delay
       </button>
       {open && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/50" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/50" onClick={() => setOpen(false)}>
           <div className="w-full max-w-md rounded-t-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="font-bold">Report a delay</h3>

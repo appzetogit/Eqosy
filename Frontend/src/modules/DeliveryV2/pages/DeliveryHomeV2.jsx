@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useDragControls } from 'framer-motion';
+import { SheetHandle, getSheetDragProps } from '@/modules/DeliveryV2/components/SheetHandle';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
 import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
@@ -14,6 +15,7 @@ import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 // Components
 import LiveMap from '@/modules/DeliveryV2/components/map/LiveMap';
 import { NewOrderModal } from '@/modules/DeliveryV2/components/modals/NewOrderModal';
+import { OrderInfoSections, getOrderContacts } from '@/modules/DeliveryV2/components/OrderInfoSections';
 import ReportDelaySheet from '@/modules/DeliveryV2/components/ReportDelaySheet';
 import { deliveryPerformanceAPI } from '@food/api/performanceAPI';
 import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/PickupActionModal';
@@ -235,6 +237,7 @@ const compressSelfieDataUrl = async (dataUrl) => {
  * Featuring logical tab switching for Feed, Pocket, History, and Profile.
  */
 export default function DeliveryHomeV2({ tab = 'feed' }) {
+  const dropSheetDragControls = useDragControls();
   const navigate = useNavigate();
   const { isOnline, setOnline, activeOrder, tripStatus, riderLocation, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
   const { isWithinRange, distanceToTarget } = useProximityCheck();
@@ -1821,15 +1824,11 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                        {...getSheetDragProps(dropSheetDragControls, () => setIsModalMinimized(true))}
                         className="w-full max-w-lg bg-white rounded-t-[3.5rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[85vh] pointer-events-auto overflow-hidden"
                       >
-                        {/* Handle / Minimize */}
-                        <div className="w-full flex justify-center py-3 bg-white relative z-20">
-                          <button
-                            onClick={() => setIsModalMinimized(true)}
-                            className="w-12 h-1.5 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors active:scale-95"
-                          />
-                        </div>
+                        {/* Handle / Minimize: swipe down or tap */}
+                        <SheetHandle controls={dropSheetDragControls} onMinimize={() => setIsModalMinimized(true)} />
 
                         <div className="flex-1 overflow-y-auto no-scrollbar p-8 pt-4">
                           <div className="flex justify-between w-full items-center mb-8">
@@ -1909,8 +1908,15 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                             </div>
                           </div>
 
-                          {/* Payment status: already paid online / collect cash */}
-                          <PaymentBadge order={activeOrder} className="mb-6" />
+                          {/* Bill (with paid / collect-cash status), customer and restaurant details */}
+                          <div className="mb-6">
+                            <OrderInfoSections
+                              order={activeOrder}
+                              openCard="customer"
+                              customer={{ name: customerName, phone: customerPhone, address: customerAddress, mapNavUrl }}
+                              restaurant={getOrderContacts(activeOrder)}
+                            />
+                          </div>
 
                           {/* Customer Instructions Panel */}
                           {activeOrder?.note && (
@@ -1929,8 +1935,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                           )}
                         </div>
 
-                        <div className="p-8 pt-0 pb-12 bg-white border-t border-gray-50">
-                          <div className="pt-6 space-y-3">
+                        <div className="p-6 pt-0 pb-8 bg-white border-t border-gray-100 shadow-[0_-8px_20px_rgba(0,0,0,0.06)]">
+                          <div className="pt-4 space-y-3">
                             <ActionSlider
                               label="Slide to Arrive"
                               disabledLabel={

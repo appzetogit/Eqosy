@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { SheetHandle, getSheetDragProps } from '@/modules/DeliveryV2/components/SheetHandle';
 import { 
   ChefHat, MapPin, Phone, 
   ChevronDown, ChevronUp, Package, 
@@ -7,6 +8,7 @@ import {
   AlertTriangle, RefreshCw, X, MessageCircle
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
+import { OrderInfoSections, getOrderContacts } from '@/modules/DeliveryV2/components/OrderInfoSections';
 import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { uploadAPI, deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
@@ -30,6 +32,7 @@ export const PickupActionModal = ({
   onOpenChat,
   unreadChatCount = 0
 }) => {
+  const dragControls = useDragControls();
   const [showItems, setShowItems] = useState(false);
   const [isUploadingBill, setIsUploadingBill] = useState(false);
   const [billImageUploaded, setBillImageUploaded] = useState(false);
@@ -169,18 +172,13 @@ export const PickupActionModal = ({
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="w-full max-w-lg bg-white rounded-t-[3.5rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[88vh] overflow-hidden"
+        {...getSheetDragProps(dragControls, onMinimize)}
+        className="w-full max-w-lg bg-white rounded-t-[3.5rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[88vh] overflow-y-auto overscroll-contain"
       >
-        {/* Handle / Minimize */}
-        <div className="w-full flex justify-center py-3 bg-white relative z-20">
-          <button 
-            onClick={onMinimize} 
-            className="w-12 h-1.5 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors active:scale-95"
-            aria-label="Minimize"
-          />
-        </div>
+        {/* Handle / Minimize: swipe down or tap */}
+        <SheetHandle controls={dragControls} onMinimize={onMinimize} />
 
-        <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="shrink-0">
           {/* Restaurant Header */}
           <div className="p-8 pb-6">
             <div className="flex items-start justify-between mb-6 pb-6 border-b border-gray-50">
@@ -318,76 +316,31 @@ export const PickupActionModal = ({
                 </div>
               )}
 
-              {/* Order Items Summary */}
-              <div className="space-y-4">
-                <button 
-                  onClick={() => setShowItems(!showItems)}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/80 rounded-[2rem] border border-gray-100 hover:bg-gray-100 transition-all group"
-                >
-                  <div className="flex items-center gap-4 text-gray-900">
-                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-gray-400 group-hover:text-blue-500 transition-colors">
-                      <Package className="w-5 h-5" />
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-[11px] font-black uppercase tracking-widest text-gray-400">Order Contents</span>
-                      <span className="text-sm font-black tracking-tight">{items.length || 0} Items Reserved</span>
-                    </div>
-                  </div>
-                  {showItems ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronUp className="w-5 h-5 text-gray-400" />}
-                </button>
-
-                <AnimatePresence>
-                  {showItems && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden space-y-2 px-2"
-                    >
-                      {items.map((item, idx) => {
-                        const variant = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName || item.size || '';
-                        const addons = Array.isArray(item.addons) ? item.addons.map(a => a.name || a.title || a).join(', ') : '';
-                        return (
-                          <div key={idx} className="flex justify-between items-start p-3.5 bg-gray-50/50 rounded-2xl border border-gray-100">
-                            <div className="flex-1 pr-2">
-                              <span className="text-gray-900 text-sm font-black uppercase tracking-tight block">
-                                {item.name || 'Item Name'}
-                              </span>
-                              {variant && (
-                                <span className="text-xs font-bold text-orange-600 block mt-0.5">
-                                  Variation: {variant}
-                                </span>
-                              )}
-                              {addons && (
-                                <span className="text-[11px] font-semibold text-gray-500 block mt-0.5">
-                                  Addons: {addons}
-                                </span>
-                              )}
-                              {item.notes && (
-                                <span className="text-[11px] italic text-gray-400 block mt-0.5">
-                                  Note: {item.notes}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-emerald-700 font-black bg-emerald-100/60 px-3 py-1 rounded-xl text-xs shrink-0">
-                              x{item.quantity || 1}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              {/* Bill, customer and restaurant details */}
+              <OrderInfoSections
+                order={order}
+                openCard="restaurant"
+                restaurant={getOrderContacts(order)}
+                customer={{
+                  name: order.customerName || order.deliveryAddress?.fullName || order.deliveryAddress?.name || order.userId?.name || order.user?.name || '',
+                  phone: order.userPhone || order.customerPhone || order.deliveryAddress?.phone || order.userId?.phone || order.user?.phone || '',
+                  address: order.customerAddress || order.customer_address || [order.deliveryAddress?.street, order.deliveryAddress?.additionalDetails, order.deliveryAddress?.city, order.deliveryAddress?.state, order.deliveryAddress?.zipCode].filter(Boolean).join(', '),
+                  mapNavUrl: (() => {
+                    const loc = order.customerLocation;
+                    if (loc?.lat != null && loc?.lng != null) return `https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}`;
+                    const addr = order.customerAddress || order.customer_address || [order.deliveryAddress?.street, order.deliveryAddress?.city].filter(Boolean).join(', ');
+                    return addr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}` : null;
+                  })(),
+                }}
+              />
             </div>
           </div>
         </div>
 
         {/* Action Sliders (Sticky Bottom) */}
-        <div className="p-8 pt-0 pb-12 space-y-6 bg-white border-t border-gray-50">
+        <div className="p-6 pt-0 pb-8 space-y-4 bg-white border-t border-gray-100 sticky bottom-0 z-20 shadow-[0_-8px_20px_rgba(0,0,0,0.06)]">
           {!isAtPickup ? (
             <div className="pt-6 space-y-3">
-              <PaymentBadge order={order} />
               <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-2 transition-colors ${
                 isWithinRange ? 'text-emerald-600' : 'text-orange-500 font-bold'
               }`}>
@@ -426,7 +379,6 @@ export const PickupActionModal = ({
           ) : (
             <div className="pt-6 space-y-6">
               {/* Always visible next to the bill capture: is the order already paid or COD? */}
-              <PaymentBadge order={order} />
               <div className="flex justify-center items-center gap-4 w-full">
                  {!billImageUploaded && !isUploadingBill && (
                    <>

@@ -429,8 +429,23 @@ export async function notifyRestaurantNewOrder(orderDoc) {
 
     const io = getIO();
     if (io) {
+      // Include customer name/phone so the restaurant popup can show & call the customer.
+      let customer = null;
+      try {
+        const rawUser = orderDoc.userId;
+        if (rawUser && typeof rawUser === 'object' && (rawUser.name || rawUser.phone)) {
+          customer = { _id: rawUser._id, name: rawUser.name, phone: rawUser.phone };
+        } else if (rawUser) {
+          const { FoodUser } = await import('../../../../core/users/user.model.js');
+          const u = await FoodUser.findById(rawUser?._id || rawUser).select('name phone').lean();
+          if (u) customer = { _id: u._id, name: u.name, phone: u.phone };
+        }
+      } catch (e) {
+        logger.warn(`notifyRestaurantNewOrder: customer lookup failed: ${e?.message || e}`);
+      }
       const payload = {
         ...orderDoc.toObject(),
+        ...(customer ? { userId: customer, customerName: customer.name, customerPhone: customer.phone } : {}),
         restaurantId: targetRestaurantId,
         orderMongoId: orderDoc._id?.toString?.() || undefined,
         orderId: orderDoc.order_id || orderDoc._id?.toString?.(),

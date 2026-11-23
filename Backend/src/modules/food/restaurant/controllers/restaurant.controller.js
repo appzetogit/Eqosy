@@ -7,6 +7,7 @@ import {
     updateRestaurantProfile,
     updateRestaurantAcceptingOrders,
     updateCurrentRestaurantDiningSettings,
+    updateRestaurantCodEnabled,
     uploadRestaurantProfileImage,
     uploadRestaurantMenuImage,
     uploadRestaurantCoverImages,
@@ -98,6 +99,16 @@ export const updateRestaurantAcceptingOrdersController = async (req, res, next) 
         const restaurantId = req.user?.userId;
         const restaurant = await updateRestaurantAcceptingOrders(restaurantId, req.body?.isAcceptingOrders);
         return sendResponse(res, 200, 'Restaurant availability updated successfully', { restaurant });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateRestaurantCodController = async (req, res, next) => {
+    try {
+        const restaurantId = req.user?.userId;
+        const restaurant = await updateRestaurantCodEnabled(restaurantId, req.body?.codEnabled);
+        return sendResponse(res, 200, 'COD setting updated successfully', { restaurant });
     } catch (error) {
         next(error);
     }

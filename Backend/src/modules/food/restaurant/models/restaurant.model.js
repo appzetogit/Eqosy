@@ -140,6 +140,11 @@ const restaurantSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    /** Restaurant-level Cash on Delivery opt-in. OFF unless the restaurant explicitly enables it. */
+    codEnabled: {
+      type: Boolean,
+      default: false,
+    },
     isSponsored: {
       type: Boolean,
       default: false,
