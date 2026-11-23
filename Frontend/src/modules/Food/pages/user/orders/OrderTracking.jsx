@@ -2101,7 +2101,9 @@ export default function OrderTracking({ isSharedView = false }) {
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{storeWord}</p>
                   {restaurantContactPhone && (
-                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">{restaurantContactPhone}</p>
+                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">
+                      {String(restaurantContactPhone).replace(/\D/g, "").replace(/^(?:\+?91|0)(?=\d{10}$)/, "").slice(-10)}
+                    </p>
                   )}
                 </div>
               </div>
