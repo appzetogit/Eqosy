@@ -1,5 +1,6 @@
 import * as svc from '../services/partialFulfilment.service.js';
 import { sendResponse } from '../../../../utils/response.js';
+import { stopOrderRing } from '../services/orderRingStop.service.js';
 
 const wrap = (fn, message = 'OK') => async (req, res, next) => {
     try {
@@ -19,7 +20,12 @@ export const decide = wrap((req) => svc.submitDecision(req.params.orderId, req.u
 export const verifyPayment = wrap((req) => svc.verifyAdditionalPayment(req.params.orderId, req.user.userId, req.body || {}), 'Payment verified');
 
 /* Store */
-export const reportUnavailable = wrap((req) => svc.reportUnavailableItems(req.params.orderId, req.user.userId, req.body || {}), 'Customer notified');
+export const reportUnavailable = wrap(async (req) => {
+    const result = await svc.reportUnavailableItems(req.params.orderId, req.user.userId, req.body || {});
+    // The store acted on the order, so stop the new-order ring on its phone.
+    stopOrderRing('RESTAURANT', req.user.userId, req.params.orderId, { body: 'Customer asked about unavailable items' });
+    return result;
+}, 'Customer notified');
 export const storeAlternatives = wrap((req) => svc.getStoreAlternatives(req.params.orderId, req.user.userId));
 
 /* Admin */

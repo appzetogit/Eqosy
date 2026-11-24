@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { dismissOrderAlertNotifications } from '@food/utils/orderAlertCleanup';
 import io from 'socket.io-client';
 import { API_BASE_URL, resolveSocketOrigin } from '@food/api/config';
 import { restaurantAPI } from '@food/api';
@@ -280,8 +281,7 @@ export const useRestaurantNotifications = () => {
         stopAlertLoop();
         activeOrderRef.current = null;
         toast.error(`❌ Table Booking #${orderData?.bookingId || orderData?.orderId || ''} Cancelled by guest`);
-        playNotificationSound(orderData);
-        setTimeout(() => stopAlertLoop(), 3000);
+        dismissOrderAlertNotifications(orderData);
         return;
       }
       if (!shouldProcessOrderAlert(orderData)) {
@@ -818,6 +818,7 @@ export const useRestaurantNotifications = () => {
     socketRef.current.on('order_cancelled', (data) => {
       debugLog('❌ Order cancelled event received:', data);
       stopAlertLoop();
+      dismissOrderAlertNotifications(data);
       setNewOrder(null);
       activeOrderRef.current = null;
       const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
@@ -834,22 +835,10 @@ export const useRestaurantNotifications = () => {
     });
 
 
-    // Cancellation, penalty, warning and "due soon" alerts ring like a new order (the server marks them ring: true).
+    // Cancellation, penalty, warning and "due soon" alerts are shown without a ring: only a new order rings.
     const handlePenaltyAlert = (data) => {
       const text = data?.message || data?.title || 'You have a new alert';
-      const ringing = Boolean(data?.ring);
-      toast(data?.title ? `${data.title}: ${text}` : text, {
-        duration: ringing ? 20000 : 10000,
-        ...(ringing ? { action: { label: 'Stop ring', onClick: () => { stopAlertLoop(); activeOrderRef.current = null; } } } : {}),
-      });
-      if (ringing) {
-        // Exactly the new-order ring: same tone, vibration, native bridge and repeat-while-hidden loop.
-        activeOrderRef.current = { id: `alert-${Date.now()}`, ...data };
-        try {
-          playNotificationSound({ ...data, alertTitle: data?.title, alertBody: text });
-          startAlertLoop(20000);
-        } catch (e) { /* sound is best-effort */ }
-      }
+      toast(data?.title ? `${data.title}: ${text}` : text, { duration: 10000 });
       window.dispatchEvent(new CustomEvent('performance_alert', { detail: data }));
     };
     socketRef.current.on('cancellation_update', handlePenaltyAlert);
@@ -882,6 +871,7 @@ export const useRestaurantNotifications = () => {
 
       if (shouldStop) {
         stopAlertLoop();
+        dismissOrderAlertNotifications(data);
         setNewOrder(null);
         activeOrderRef.current = null;
         if (statusStr.includes('cancel')) {
@@ -1037,8 +1027,10 @@ export const useRestaurantNotifications = () => {
     }
   };
 
+  // Called after accept / reject / items unavailable / closing the popup: also removes the ringing tray notification.
   const clearNewOrder = () => {
     stopAlertLoop();
+    dismissOrderAlertNotifications(activeOrderRef.current || newOrder || undefined);
     if (audioRef.current) {
       try {
         audioRef.current.pause();

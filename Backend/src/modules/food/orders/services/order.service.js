@@ -205,7 +205,12 @@ export async function createOrder(userId, dto) {
     const methodKey = paymentMethod === "razorpay_qr" ? "cash" : paymentMethod;
     if (allowedMethods && allowedMethods[methodKey] === false) {
       if (methodKey === "cash" && pricingResult.pricing.codRestaurantEnabled === false) {
-        throw new ValidationError("This restaurant doesn't accept COD orders.");
+        const max = Number(pricingResult.pricing.codRestaurantMaxAmount);
+        throw new ValidationError(
+          Number.isFinite(max) && max > 0
+            ? `This restaurant accepts Cash on Delivery only for orders up to Rs ${max}. Please pay online.`
+            : "This restaurant doesn't accept COD orders."
+        );
       }
       const label = methodKey === "cash" ? "Cash on Delivery" : methodKey === "wallet" ? "Wallet payment" : "Online payment";
       throw new ValidationError(`${label} is currently unavailable. Please choose another payment method.`);
@@ -280,6 +285,20 @@ export async function createOrder(userId, dto) {
       normalizedPricing.total >= pricingResult.pricing.codLimit
     ) {
       throw new ValidationError('COD unavailable for this order amount');
+    }
+
+    // Final total can differ from the quote (tip etc.), so check the restaurant's COD maximum again.
+    const restaurantCodMax = Number(pricingResult.pricing.codRestaurantMaxAmount);
+    if (
+      (paymentMethod === "cash" || paymentMethod === "razorpay_qr") &&
+      Number.isFinite(restaurantCodMax) &&
+      (restaurantCodMax <= 0 || normalizedPricing.total > restaurantCodMax)
+    ) {
+      throw new ValidationError(
+        restaurantCodMax > 0
+          ? `This restaurant accepts Cash on Delivery only for orders up to Rs ${restaurantCodMax}. Please pay online.`
+          : "This restaurant doesn't accept COD orders."
+      );
     }
 
     if (paymentMethod === "razorpay" && !isRazorpayConfigured()) {

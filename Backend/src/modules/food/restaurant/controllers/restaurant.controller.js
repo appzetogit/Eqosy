@@ -8,6 +8,7 @@ import {
     updateRestaurantAcceptingOrders,
     updateCurrentRestaurantDiningSettings,
     updateRestaurantCodEnabled,
+    updateRestaurantCodMaxOrderAmount,
     uploadRestaurantProfileImage,
     uploadRestaurantMenuImage,
     uploadRestaurantCoverImages,
@@ -107,7 +108,11 @@ export const updateRestaurantAcceptingOrdersController = async (req, res, next) 
 export const updateRestaurantCodController = async (req, res, next) => {
     try {
         const restaurantId = req.user?.userId;
-        const restaurant = await updateRestaurantCodEnabled(restaurantId, req.body?.codEnabled);
+        const body = req.body || {};
+        // New panel sends the maximum COD order amount; older app builds still send the codEnabled switch.
+        const restaurant = body.codMaxOrderAmount !== undefined
+            ? await updateRestaurantCodMaxOrderAmount(restaurantId, body.codMaxOrderAmount)
+            : await updateRestaurantCodEnabled(restaurantId, body.codEnabled);
         return sendResponse(res, 200, 'COD setting updated successfully', { restaurant });
     } catch (error) {
         next(error);

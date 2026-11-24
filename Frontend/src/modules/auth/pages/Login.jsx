@@ -294,7 +294,7 @@ export default function UnifiedOTPFastLogin() {
     setLoading(true)
     try {
       const otpSendResponse = await authAPI.sendUnifiedOTP(phoneNumber)
-      console.log("[Auth] OTP send response:", otpSendResponse?.data || otpSendResponse)
+      if (import.meta.env.DEV) console.log("[Auth] OTP send response:", otpSendResponse?.data || otpSendResponse)
       setOtpSent(true)
       setOtp("")
       setStep(2)
@@ -321,7 +321,7 @@ export default function UnifiedOTPFastLogin() {
     setLoading(true)
     try {
       const otpResendResponse = await authAPI.sendUnifiedOTP(phoneNumber)
-      console.log("[Auth] OTP resend response:", otpResendResponse?.data || otpResendResponse)
+      if (import.meta.env.DEV) console.log("[Auth] OTP resend response:", otpResendResponse?.data || otpResendResponse)
       setOtp("")
       setOtpSent(true)
       setResendTimer(RESEND_COOLDOWN_SECONDS)
@@ -387,7 +387,7 @@ export default function UnifiedOTPFastLogin() {
         }
       }
 
-      console.log("[Auth] FCM token for login:", {
+      if (import.meta.env.DEV) console.log("[Auth] FCM token for login:", {
         platform,
         length: fcmToken.length,
         preview: `${fcmToken.slice(0, 12)}...`,

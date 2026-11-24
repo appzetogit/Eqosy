@@ -140,10 +140,19 @@ const restaurantSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
-    /** Restaurant-level Cash on Delivery opt-in. OFF unless the restaurant explicitly enables it. */
+    /** Legacy COD on/off switch. No longer used for checkout: codMaxOrderAmount decides COD now. */
     codEnabled: {
       type: Boolean,
       default: false,
+    },
+    /**
+     * Highest order total (Rs) this restaurant takes as Cash on Delivery. Orders above it must be paid online.
+     * 0 = no COD orders at all. Missing on older restaurants = DEFAULT_COD_MAX_ORDER_AMOUNT (300).
+     */
+    codMaxOrderAmount: {
+      type: Number,
+      min: 0,
+      default: 300,
     },
     isSponsored: {
       type: Boolean,

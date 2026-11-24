@@ -6,6 +6,7 @@ const sanitize = (value) => String(value || "").trim().replace(/^['"]|['"]$/g, "
 const PUSH_DEBUG_PREFIX = "[push-sw]";
 const pushDebugLog = () => { };
 const getNotificationKey = (payload) =>
+  payload?.data?.notificationTag ||
   payload?.data?.notificationId ||
   payload?.data?.messageId ||
   payload?.messageId ||
@@ -15,6 +16,24 @@ const getNotificationKey = (payload) =>
     payload?.data?.orderId || "",
     payload?.data?.targetUrl || payload?.data?.link || "",
   ].join("::");
+
+// The restaurant / rider acted on an order (accept, reject, expired): remove its ringing notification.
+async function closeOrderNotifications(payload = {}) {
+  const data = payload?.data || {};
+  const id = String(data.orderMongoId || data.orderId || "").trim();
+  const tags = new Set([data.notificationTag, id && `order-${id}`, id && `restaurant-order-${id}`, id && `delivery-order-${id}`].filter(Boolean));
+  try {
+    const list = await self.registration.getNotifications();
+    list.forEach((n) => {
+      const nId = String(n?.data?.orderMongoId || n?.data?.orderId || "");
+      if (tags.has(n.tag) || (id && nId === id)) n.close();
+    });
+  } catch {
+    // best effort
+  }
+}
+
+const isRingStop = (payload = {}) => String(payload?.data?.type || "").toLowerCase() === "ring_stop";
 
 // Only new-order style pushes (data.ring === "true") and chat may make a sound.
 // Status updates (rider arrived, picked up, delivered...) are shown silently.
@@ -171,6 +190,12 @@ async function loadFirebaseWebConfig() {
   messaging.onBackgroundMessage(async (payload) => {
     pushDebugLog(PUSH_DEBUG_PREFIX, "Received Firebase background message", { payload });
 
+    if (isRingStop(payload)) {
+      await closeOrderNotifications(payload);
+      await notifyOpenClients(payload);
+      return;
+    }
+
     const visibleClient = await hasVisibleClientForTarget(payload);
 
     if (!visibleClient) {
@@ -228,6 +253,12 @@ self.addEventListener("push", (event) => {
       }
 
       pushDebugLog(PUSH_DEBUG_PREFIX, "Received push event in service worker", { payload });
+
+      if (isRingStop(payload)) {
+        await closeOrderNotifications(payload);
+        await notifyOpenClients(payload);
+        return;
+      }
 
       const title = payload?.notification?.title || payload?.data?.title || "Eqosy Notification";
       const body = payload?.notification?.body || payload?.data?.body || "";

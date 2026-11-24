@@ -1,19 +1,27 @@
 import { useEffect, useState } from "react"
-import { AlertCircle } from "lucide-react"
+import { Banknote, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { Switch } from "@food/components/ui/switch"
 import { restaurantAPI } from "@food/api"
 
+const DEFAULT_COD_MAX_ORDER_AMOUNT = 300
+
+const readMax = (restaurant) => {
+  const n = Number(restaurant?.codMaxOrderAmount)
+  return restaurant?.codMaxOrderAmount == null || !Number.isFinite(n) || n < 0
+    ? DEFAULT_COD_MAX_ORDER_AMOUNT
+    : n
+}
+
 /**
- * Restaurant-level "Accept Cash on Delivery (COD)" toggle.
- * OFF by default. Turning it ON needs explicit confirmation (risk warning).
+ * Restaurant-level "Maximum COD order amount".
+ * COD orders up to this amount reach the restaurant; above it the customer must pay online. 0 = no COD orders.
  * Text is plain so the app's page translator renders it in the selected language.
  */
 export default function CodToggleCard({ className = "" }) {
-  const [codEnabled, setCodEnabled] = useState(false)
+  const [savedMax, setSavedMax] = useState(DEFAULT_COD_MAX_ORDER_AMOUNT)
+  const [value, setValue] = useState(String(DEFAULT_COD_MAX_ORDER_AMOUNT))
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showWarning, setShowWarning] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -22,7 +30,10 @@ export default function CodToggleCard({ className = "" }) {
       .then((response) => {
         const restaurant =
           response?.data?.data?.restaurant || response?.data?.restaurant || null
-        if (!cancelled) setCodEnabled(restaurant?.codEnabled === true)
+        if (cancelled) return
+        const max = readMax(restaurant)
+        setSavedMax(max)
+        setValue(String(max))
       })
       .catch(() => {})
       .finally(() => {
@@ -33,90 +44,80 @@ export default function CodToggleCard({ className = "" }) {
     }
   }, [])
 
-  const save = async (value) => {
-    if (saving) return
+  const parsed = value.trim() === "" ? NaN : Number(value)
+  const isValid = Number.isInteger(parsed) && parsed >= 0 && parsed <= 100000
+  const isDirty = isValid && parsed !== savedMax
+
+  const save = async () => {
+    if (saving || !isValid || !isDirty) return
     setSaving(true)
     try {
-      await restaurantAPI.updateCodEnabled(value)
-      setCodEnabled(value)
-      toast.success(value ? "Cash on Delivery enabled" : "Cash on Delivery disabled")
-    } catch {
-      toast.error("Could not update COD setting. Please try again.")
+      await restaurantAPI.updateCodMaxOrderAmount(parsed)
+      setSavedMax(parsed)
+      toast.success(
+        parsed === 0
+          ? "COD turned off. You will not get Cash on Delivery orders."
+          : `Saved. You will get COD orders up to ₹${parsed}.`,
+      )
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not save the COD limit. Please try again.")
     } finally {
       setSaving(false)
-      setShowWarning(false)
     }
-  }
-
-  const handleToggle = (checked) => {
-    if (saving) return
-    if (checked) {
-      setShowWarning(true)
-      return
-    }
-    void save(false)
   }
 
   return (
-    <>
-      <div className={`bg-white border border-gray-200 rounded-xl px-4 py-3 ${className}`}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-900">Accept Cash on Delivery (COD)</p>
-            <p className="text-xs text-gray-500">
-              {codEnabled ? "Customers can pay cash on delivery" : "COD orders are not accepted"}
-            </p>
-          </div>
-          <Switch
-            checked={codEnabled}
-            onCheckedChange={handleToggle}
-            disabled={!loaded || saving}
-            className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
-          />
+    <div className={`bg-white border border-gray-200 rounded-xl px-4 py-3 ${className}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+          <Banknote className="w-5 h-5 text-amber-600" />
         </div>
-        {codEnabled && (
-          <p className="mt-2 text-xs text-orange-700 flex items-start gap-1">
-            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            COD is on at your own risk. It can lead to order cancellations, customer refusals and returns.
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-gray-900">Maximum COD order amount</p>
+          <p className="text-xs text-gray-500">
+            {savedMax === 0
+              ? "No Cash on Delivery orders will come to you"
+              : `COD orders up to ₹${savedMax} only. Above this, customers pay online.`}
           </p>
-        )}
+        </div>
       </div>
 
-      {showWarning && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => !saving && setShowWarning(false)}
+      <form
+        className="mt-3 flex items-stretch gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void save()
+        }}
+      >
+        <div
+          className={`flex-1 flex items-center rounded-lg border-2 bg-gray-50 px-3 focus-within:bg-white ${
+            value !== "" && !isValid ? "border-red-400" : "border-gray-200 focus-within:border-gray-900"
+          }`}
+        >
+          <span className="text-sm font-bold text-gray-500 mr-1">₹</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-label="Maximum COD order amount in rupees"
+            value={value}
+            disabled={!loaded || saving}
+            onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            className="w-full bg-transparent py-2 text-base font-bold text-gray-900 outline-none"
+            placeholder="300"
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-orange-100">
-                <AlertCircle className="w-10 h-10 text-orange-600" />
-              </div>
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">Warning – COD Orders</h3>
-            <p className="text-sm text-gray-600 mb-6 text-center">
-              Accepting Cash on Delivery (COD) orders may result in order cancellations, customer refusals and order returns, which could cause financial losses to your restaurant. Do you want to proceed?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowWarning(false)}
-                disabled={saving}
-                className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void save(true)}
-                disabled={saving}
-                className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60"
-              >
-                Yes, Enable COD
-              </button>
-            </div>
-          </div>
         </div>
-      )}
-    </>
+        <button
+          type="submit"
+          disabled={!loaded || saving || !isDirty}
+          className="px-4 rounded-lg bg-gray-900 text-white text-sm font-bold disabled:bg-gray-200 disabled:text-gray-500 flex items-center justify-center min-w-[72px]"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+        </button>
+      </form>
+      <p className="mt-1.5 text-[11px] text-gray-400">
+        {value !== "" && !isValid ? "Enter an amount from ₹0 to ₹1,00,000" : "Set ₹0 to stop all COD orders."}
+      </p>
+    </div>
   )
 }

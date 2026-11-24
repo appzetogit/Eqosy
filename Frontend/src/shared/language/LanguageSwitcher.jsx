@@ -5,7 +5,13 @@ import { LANGUAGES } from './languages.js'
 import { LANGUAGE_CHANGED_EVENT, OPEN_LANGUAGE_EVENT } from './languages.js'
 import { getStoredLanguage, hasChosenLanguage, initLanguage, setLanguage } from './googleTranslate.js'
 
-// Fixed top-right globe on every app, plus a "choose your language" sheet on first launch.
+// Partner apps still ask for a language on first launch. Customers are never asked during sign-up / OTP:
+// many picked a language by mistake and could not find the way back, so they change it later from Profile > Language.
+const FIRST_RUN_PICKER_PREFIXES = ['/food/restaurant', '/food/delivery', '/taxi/driver', '/taxi/owner', '/restaurant', '/delivery', '/driver', '/owner']
+const isPartnerPath = (pathname) =>
+  FIRST_RUN_PICKER_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+
+// Fixed top-right globe on admin, the picker opened from Profile, and a first-launch sheet on partner apps only.
 export default function LanguageSwitcher() {
   const { pathname } = useLocation()
   const [current, setCurrent] = useState(getStoredLanguage)
@@ -72,10 +78,10 @@ export default function LanguageSwitcher() {
         </div>
       )}
 
-      {(firstRun || open) && (
+      {((firstRun && isPartnerPath(pathname)) || open) && (
         <div
           className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          onClick={() => !firstRun && setOpen(false)}
+          onClick={() => setOpen(false)}
         >
           <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center gap-2 text-lg font-black text-neutral-900">
@@ -83,7 +89,7 @@ export default function LanguageSwitcher() {
             </div>
             <p className="mb-4 text-sm text-neutral-500">अपनी भाषा चुनें · You can change this anytime from Profile.</p>
             {list}
-            {!firstRun && (
+            {(open || !firstRun) && (
               <button type="button" onClick={() => setOpen(false)} className="mt-3 w-full rounded-xl bg-neutral-100 py-2.5 text-sm font-semibold text-neutral-700">
                 Close
               </button>

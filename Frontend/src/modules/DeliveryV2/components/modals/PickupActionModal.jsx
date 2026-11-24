@@ -173,7 +173,7 @@ export const PickupActionModal = ({
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         {...getSheetDragProps(dragControls, onMinimize)}
-        className="w-full max-w-lg bg-white rounded-t-[3.5rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[88vh] overflow-y-auto overscroll-contain"
+        className="w-full max-w-lg bg-white rounded-t-[2rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col h-[100dvh] max-h-[100dvh] pt-[env(safe-area-inset-top)] overflow-y-auto overscroll-contain"
       >
         {/* Handle / Minimize: swipe down or tap */}
         <SheetHandle controls={dragControls} onMinimize={onMinimize} />

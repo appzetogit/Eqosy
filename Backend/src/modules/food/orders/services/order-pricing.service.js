@@ -17,6 +17,7 @@ import { haversineKm } from './order.helpers.js';
 import { getGoogleRoadDistance } from '../utils/googleMaps.js';
 import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
+import { getRestaurantCodMaxOrderAmount, isWithinRestaurantCodLimit } from '../../utils/codLimit.js';
 function extractCoords(addressLike) {
   if (!addressLike) return null;
   const coords = addressLike?.location?.coordinates || addressLike?.coordinates;
@@ -240,7 +241,7 @@ export function evaluateAdditionalCharges(configuredCharges, itemTotal) {
 
 export async function calculateOrderPricing(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
-    .select("status restaurantName isRestaurant zoneId location isAcceptingOrders codEnabled isActive openingTime closingTime outletTimings deliveryTimings openDays")
+    .select("status restaurantName isRestaurant zoneId location isAcceptingOrders codEnabled codMaxOrderAmount isActive openingTime closingTime outletTimings deliveryTimings openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
 
@@ -666,7 +667,9 @@ export async function calculateOrderPricing(userId, dto) {
       additionalChargesTotal,
       penaltyAmount,
       cancellationPenaltyAmount,
-      codRestaurantEnabled: restaurant.codEnabled === true,
+      // COD follows the restaurant's own maximum COD order amount (0 = no COD, default 300).
+      codRestaurantEnabled: isWithinRestaurantCodLimit(restaurant, total),
+      codRestaurantMaxAmount: getRestaurantCodMaxOrderAmount(restaurant),
       codBlocked: Boolean(codStatus.blocked),
       codBlockedAmount: codStatus.amount || 0,
       discount,
@@ -680,7 +683,7 @@ export async function calculateOrderPricing(userId, dto) {
       // Checkout options the admin has left open (online also needs working Razorpay keys).
       paymentMethods: {
         // Cash on Delivery stays off while any cancellation charge is unpaid; it returns the moment it is paid.
-        cash: feeSettings?.paymentMethods?.cash !== false && !codStatus.blocked && restaurant.codEnabled === true,
+        cash: feeSettings?.paymentMethods?.cash !== false && !codStatus.blocked && isWithinRestaurantCodLimit(restaurant, total),
         razorpay: feeSettings?.paymentMethods?.online !== false && isRazorpayConfigured(),
         wallet: feeSettings?.paymentMethods?.wallet !== false,
       },

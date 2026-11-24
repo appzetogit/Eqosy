@@ -3972,9 +3972,9 @@ function CartInner() {
                     {
                       id: 'cash',
                       name: 'Cash on Delivery',
-                      description: pricing?.codRestaurantEnabled === false ? "This restaurant doesn't accept COD orders." : (pricing?.codLimit != null && total >= pricing.codLimit) ? `COD is available only for orders below ${RUPEE_SYMBOL}${pricing.codLimit}` : pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
+                      description: pricing?.codRestaurantEnabled === false ? (Number(pricing?.codRestaurantMaxAmount) > 0 ? `This restaurant accepts COD only for orders up to ${RUPEE_SYMBOL}${pricing.codRestaurantMaxAmount}` : "This restaurant doesn't accept COD orders.") : (pricing?.codLimit != null && total >= pricing.codLimit) ? `COD is available only for orders below ${RUPEE_SYMBOL}${pricing.codLimit}` : pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
                       disabled: pricing?.codRestaurantEnabled === false || (pricing?.codLimit != null && total >= pricing.codLimit) || Boolean(pricing?.codBlocked),
-                      disabledText: pricing?.codRestaurantEnabled === false ? 'Not available' : (pricing?.codLimit != null && total >= pricing.codLimit) ? 'Order too high' : 'Pay charges first',
+                      disabledText: pricing?.codRestaurantEnabled === false ? (Number(pricing?.codRestaurantMaxAmount) > 0 ? 'Order too high' : 'Not available') : (pricing?.codLimit != null && total >= pricing.codLimit) ? 'Order too high' : 'Pay charges first',
                       icon: <Banknote className="w-5 h-5" />,
                       color: 'bg-orange-50 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400',
                       selectedColor: 'bg-orange-500 text-white'

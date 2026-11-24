@@ -2,7 +2,7 @@ import { env } from '../../../config/env.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 
-const SMS_INDIA_HUB_ENDPOINT = 'http://cloud.smsindiahub.in/api/mt/SendSMS';
+const SMS_INDIA_HUB_ENDPOINT = 'https://cloud.smsindiahub.in/api/mt/SendSMS';
 const DLT_TEMPLATE_TEXT =
   process.env.SMS_DLT_TEMPLATE_TEXT ||
   'Welcome to Eqosy. Your OTP for registration is ##var##.BGADEC';
@@ -209,10 +209,10 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
   const templateId = (env.sms?.indiaHub?.dltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
   const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 
-  console.log(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
+  console.log(`[SMS] Dispatching live SMS OTP to ******${msisdn.slice(-4)} via SMS India Hub...`);
 
   // Primary: GET request on /api/mt/SendSMS (exact method as user sign in)
-  const sendUrl = new URL('http://cloud.smsindiahub.in/api/mt/SendSMS');
+  const sendUrl = new URL('https://cloud.smsindiahub.in/api/mt/SendSMS');
   sendUrl.searchParams.append('APIKey', apiKey);
   sendUrl.searchParams.append('senderid', senderId);
   sendUrl.searchParams.append('channel', 'Trans');
@@ -230,7 +230,7 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
   try {
     const primaryRes = await fetch(sendUrl.toString(), { signal: AbortSignal.timeout(15000) });
     finalResponseText = (await primaryRes.text()).trim();
-    console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${finalResponseText}`);
+    console.log(`[SMS] Primary SendSMS response for ******${msisdn.slice(-4)}: ${finalResponseText}`);
     const parsed = parseProviderResponse(finalResponseText);
     const isSuccess = primaryRes.ok && (
       (parsed && String(parsed.ErrorCode || '') === '000') ||

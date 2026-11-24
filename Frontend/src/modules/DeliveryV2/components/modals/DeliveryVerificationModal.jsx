@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { PaymentBadge, getRiderPaymentInfo } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { openCamera, openGallery } from "@food/utils/imageUploadUtils";
+import { CustomerUnreachablePanel } from '@/modules/DeliveryV2/components/CustomerUnreachablePanel';
 
 const Backdrop = ({ onClose }) => (
   <motion.div
@@ -104,7 +105,10 @@ const CustomerContactBar = ({ contact }) => {
   );
 };
 
-const OtpModal = ({ order, contact, onVerified, onClose }) => {
+const OtpModal = ({ order, contact, onVerified, onClose, onReturnStatusChange, onReturned }) => {
+  const [returnStatus, setReturnStatus] = useState(order?.undeliveredReturn?.status || 'none');
+  // Once admin approves taking the food back, the handover code no longer applies.
+  const isReturning = returnStatus === 'approved' || returnStatus === 'returned';
   const [otp, setOtp] = useState(['', '', '', '']);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
@@ -189,7 +193,8 @@ const OtpModal = ({ order, contact, onVerified, onClose }) => {
 
           <PaymentBadge order={order} className="mb-6" />
 
-          <div className="flex justify-center gap-4 mb-10">
+          {!isReturning && (
+          <div className="flex justify-center gap-4 mb-6">
             {otp.map((digit, i) => (
               <input
                 key={i}
@@ -207,8 +212,24 @@ const OtpModal = ({ order, contact, onVerified, onClose }) => {
               />
             ))}
           </div>
+          )}
+
+          {/* Customer not answering: after the wait timer, rider can ask admin to approve returning the order */}
+          {!isOtpVerified && !isAlreadyVerified && (
+            <div className="mb-4">
+              <CustomerUnreachablePanel
+                order={order}
+                onStatusChange={(s) => {
+                  setReturnStatus(s);
+                  onReturnStatusChange?.(s);
+                }}
+                onReturned={onReturned}
+              />
+            </div>
+          )}
         </div>
 
+        {!isReturning && (
         <div className="p-8 pt-0 pb-12 bg-white border-t border-gray-50">
           <div className="pt-6">
             <ActionSlider
@@ -221,6 +242,7 @@ const OtpModal = ({ order, contact, onVerified, onClose }) => {
             />
           </div>
         </div>
+        )}
       </motion.div>
     </div>
   );
@@ -709,7 +731,7 @@ const HandoverPhotoModal = ({ order, contact, verifiedOtp, onComplete, onClose }
   );
 };
 
-export const DeliveryVerificationModal = ({ order, contact, onComplete, onClose }) => {
+export const DeliveryVerificationModal = ({ order, contact, onComplete, onClose, onReturnStatusChange, onReturned }) => {
   const alreadyVerified = !!order?.deliveryVerification?.dropOtp?.verified;
   const paymentMethod = (
     order?.paymentMethod ||
@@ -750,6 +772,8 @@ export const DeliveryVerificationModal = ({ order, contact, onComplete, onClose 
           contact={contact}
           onVerified={handleOtpVerified}
           onClose={onClose || (() => { })}
+          onReturnStatusChange={onReturnStatusChange}
+          onReturned={onReturned}
         />
       )}
       {step === 'payment' && (

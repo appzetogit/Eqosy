@@ -3393,7 +3393,9 @@ export const forgotPassword = async (email) => {
     `,
   });
 
-  console.log(`[ADMIN FORGOT PASSWORD] OTP for ${email}: ${otp}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[ADMIN FORGOT PASSWORD] OTP for ${email}: ${otp}`);
+  }
 
   return { message: 'OTP sent to your email' };
 };

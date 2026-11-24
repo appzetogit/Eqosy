@@ -1226,6 +1226,19 @@ export const restaurantAPI = {
         restaurantCurrentCacheTime = 0;
         return res;
       }),
+  /** PATCH /food/restaurant/cod. Body: { codMaxOrderAmount: number } (0 = no COD orders). */
+  updateCodMaxOrderAmount: (amount) =>
+    apiClient
+      .patch(
+        "/food/restaurant/cod",
+        { codMaxOrderAmount: Number(amount) },
+        { contextModule: "restaurant" },
+      )
+      .then((res) => {
+        restaurantCurrentCached = null;
+        restaurantCurrentCacheTime = 0;
+        return res;
+      }),
   /** Upload and set restaurant profile image (multipart). Field name: file */
   uploadProfileImage: (file) => {
     if (!file) return Promise.reject(new Error("File is required"));

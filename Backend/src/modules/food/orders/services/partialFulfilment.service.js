@@ -16,6 +16,7 @@ import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
+import { getRestaurantCodMaxOrderAmount, isWithinRestaurantCodLimit } from '../../utils/codLimit.js';
 import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { ValidationError, NotFoundError } from '../../../../core/auth/errors.js';
 import { logger } from '../../../../utils/logger.js';
@@ -463,6 +464,11 @@ async function buildProposal(order, decision = {}) {
         const feeDoc = await FoodFeeSettings.findOne({ isActive: true }).sort({ createdAt: -1 }).select('codLimit').lean();
         if (feeDoc?.codLimit != null && calc.pricing.total >= Number(feeDoc.codLimit)) {
             throw new ValidationError(`Cash on delivery is not available for orders of ${inr(feeDoc.codLimit)} or more. Please choose a cheaper replacement or continue without the item.`);
+        }
+        // The restaurant's own maximum COD order amount applies to replacements too.
+        const restaurantDoc = await FoodRestaurant.findById(order.restaurantId?._id || order.restaurantId).select('codMaxOrderAmount').lean();
+        if (restaurantDoc && !isWithinRestaurantCodLimit(restaurantDoc, calc.pricing.total)) {
+            throw new ValidationError(`This restaurant accepts Cash on Delivery only up to ${inr(getRestaurantCodMaxOrderAmount(restaurantDoc))}. Please choose a cheaper replacement or continue without the item.`);
         }
     }
     const kinds = new Set(summary.map((s) => s.action));

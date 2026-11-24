@@ -9,6 +9,7 @@ import { logger } from '../../../../utils/logger.js';
 import { config } from '../../../../config/env.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { addOrderJob } from '../../../../queues/producers/order.producer.js';
+import { stopOrderRing } from './orderRingStop.service.js';
 import {
   buildDeliverySocketPayload,
   buildOrderIdentityFilter,
@@ -545,6 +546,8 @@ export async function processDispatchTimeout(orderId, partnerId) {
     order.dispatch.status = 'unassigned';
     order.dispatch.deliveryPartnerId = null;
     await order.save();
+    // The offer moved on: stop the ring on the rider who did not answer in time.
+    stopOrderRing('DELIVERY_PARTNER', partnerId, String(order._id), { order, body: 'Order request expired' });
 
     const attempt = (order.dispatch?.offeredTo?.length || 0) + 1;
     await tryAutoAssign(orderId, { attempt });

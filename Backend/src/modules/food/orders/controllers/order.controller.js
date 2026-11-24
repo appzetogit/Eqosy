@@ -1,5 +1,6 @@
 import { sendResponse } from '../../../../utils/response.js';
 import * as orderService from '../services/order.service.js';
+import { stopOrderRing } from '../services/orderRingStop.service.js';
 import * as foodOrderPaymentService from '../services/foodOrderPayment.service.js';
 import {
     validateCalculateOrderDto,
@@ -193,6 +194,14 @@ export async function updateOrderStatusRestaurantController(req, res, next) {
         const orderId = req.params.orderId;
         const dto = validateOrderStatusDto(req.body);
         const order = await orderService.updateOrderStatusRestaurant(orderId, restaurantId, dto.orderStatus, dto.note, dto.reasonCode, dto.prepMinutes);
+        // Accept / reject inside the app must also silence the ringing new-order notification on the phone.
+        const nextStatus = String(dto.orderStatus || '').toLowerCase();
+        if (nextStatus === 'preparing' || nextStatus === 'confirmed' || nextStatus.includes('cancel') || nextStatus.includes('reject')) {
+            stopOrderRing('RESTAURANT', restaurantId, orderId, {
+                order,
+                body: nextStatus === 'preparing' || nextStatus === 'confirmed' ? 'Order accepted' : 'Order rejected',
+            });
+        }
         return sendResponse(res, 200, 'Order status updated', { order });
     } catch (err) {
         next(err);
@@ -214,6 +223,7 @@ export async function acceptOrderDeliveryController(req, res, next) {
         const deliveryPartnerId = req.user?.userId;
         const orderId = req.params.orderId;
         const order = await orderService.acceptOrderDelivery(orderId, deliveryPartnerId);
+        stopOrderRing('DELIVERY_PARTNER', deliveryPartnerId, orderId, { order, body: 'Order accepted' });
         return sendResponse(res, 200, 'Order accepted', { order });
     } catch (err) {
         next(err);
@@ -228,6 +238,7 @@ export async function rejectOrderDeliveryController(req, res, next) {
             reason: String(req.body?.reason || req.body?.note || '').slice(0, 300),
             reasonCode: String(req.body?.reasonCode || '').slice(0, 60)
         });
+        stopOrderRing('DELIVERY_PARTNER', deliveryPartnerId, orderId, { order, body: 'Order rejected' });
         return sendResponse(res, 200, 'Order rejected', { order });
     } catch (err) {
         next(err);

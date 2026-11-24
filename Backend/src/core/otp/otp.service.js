@@ -6,8 +6,15 @@ import { logger } from '../../utils/logger.js';
 import { ValidationError } from '../auth/errors.js';
 import { sendOtpSms } from '../../modules/taxi/services/smsService.js';
 
-// Phones that always log in with OTP 1234 (no SMS): team numbers + seeded Dewas demo restaurants (scripts/seed-dewas-demo.js).
-const STATIC_OTP_NUMBERS = ['9755633147', '7974161582', '7354126134', '9000030001', '9000030002', '9000030003', '9000030004', '9000030005'];
+// Phones that always log in with OTP 1234 (no SMS): team numbers.
+const STATIC_OTP_NUMBERS = ['9755633147', '7974161582', '7354126134'];
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+// Logs never carry a full phone number in production: keep only the last 4 digits.
+const maskPhone = (phone) => {
+    const d = String(phone || '').replace(/\D/g, '');
+    return d.length > 4 ? `******${d.slice(-4)}` : '****';
+};
 
 const generateOtpCode = () => {
     const code = crypto.randomInt(1000, 9999);
@@ -42,10 +49,10 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         const templateId = (config.smsDltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
         const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
 
-        logger.info(`[SMS] Dispatching live SMS OTP ${otp} to ${msisdn} via SMS India Hub...`);
+        logger.info(`[SMS] Dispatching live SMS OTP to ${maskPhone(msisdn)} via SMS India Hub...`);
 
         // Primary: MT SendSMS GET endpoint
-        const sendUrl = new URL('http://cloud.smsindiahub.in/api/mt/SendSMS');
+        const sendUrl = new URL('https://cloud.smsindiahub.in/api/mt/SendSMS');
         sendUrl.searchParams.append('APIKey', apiKey);
         sendUrl.searchParams.append('senderid', senderId);
         sendUrl.searchParams.append('channel', 'Trans');
@@ -59,7 +66,7 @@ const sendSmsViaIndiaHub = async (phone, otp) => {
         try {
             const res = await fetch(sendUrl.toString(), { signal: AbortSignal.timeout(15000) });
             const text = await res.text();
-            logger.info(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
+            logger.info(`[SMS] Primary SendSMS response for ${maskPhone(msisdn)}: ${text}`);
             console.log(`[SMS] Primary SendSMS response for ${msisdn}: ${text}`);
             // Check for success without blindly matching 'error' due to 'ErrorMessage' key
             const isSuccess = res.ok && (
@@ -117,19 +124,18 @@ export const createOrUpdateOtp = async (phone, scope = 'default') => {
     let otp;
     if (isStaticNumber) {
         otp = '1234';
-        logger.info(`Static OTP mode enabled for ${normalizedPhone} – OTP is 1234`);
+        logger.info(`Static OTP mode enabled for ${maskPhone(normalizedPhone)}`);
     } else if (config.useDefaultOtp) {
         otp = '1234';
-        logger.info(`Default OTP mode enabled – OTP is ${otp} for phone ${normalizedPhone}`);
+        logger.info(`Default OTP mode enabled for ${maskPhone(normalizedPhone)}`);
     } else {
         otp = generateOtpCode();
     }
 
-    // Dev debugging: print generated OTP in backend logs.
-    // Keep this enabled only for local/testing usage.
-    logger.info(`[OTP DEBUG] Generated OTP ${otp} for phone ${normalizedPhone}`);
-    // eslint-disable-next-line no-console
-    console.log(`[OTP DEBUG] Generated OTP ${otp} for phone ${normalizedPhone}`);
+    // Dev debugging only: never write a live OTP into production logs.
+    if (!IS_PRODUCTION) {
+        logger.info(`[OTP DEBUG] Generated OTP ${otp} for phone ${normalizedPhone}`);
+    }
 
     // Expiry calculation: prioritize seconds, then minutes, then fallback to MS string
     let ttlMs;

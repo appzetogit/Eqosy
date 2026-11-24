@@ -170,266 +170,152 @@ export const printOrderInvoice = (order) => {
 
     const items = Array.isArray(order.items) ? order.items : [];
     let foodTotal = 0;
+    let totalQty = 0;
+
+    // Thermal printers render user text verbatim, so escape it before putting it into the bill HTML.
+    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const money = (n) => Number(n || 0).toFixed(2);
 
     const itemRows = items.map((item) => {
-      const qty = item.quantity || item.qty || 1;
+      const qty = Number(item.quantity || item.qty || 1) || 1;
       const price = isNaN(Number(item.price)) ? 0 : Number(item.price || 0);
       const lineTotal = price * qty;
       foodTotal += lineTotal;
+      totalQty += qty;
 
       const v = item.variantName || item.variant || item.variation || item.selectedVariant?.name || item.optionName;
       const nameWithVariant = v && String(v).trim() ? `${item.name || "Item"} (${String(v).trim()})` : (item.name || "Item");
+      const addons = Array.isArray(item.addons) && item.addons.length > 0
+        ? item.addons.map((a) => a?.name || a?.title || a).filter(Boolean).join(", ")
+        : "";
 
+      // Two-line layout fits both 58mm and 80mm rolls: name on its own line, then qty x price ... amount.
       return `
-        <tr style="border-bottom: 1px dashed #cccccc;">
-          <td style="padding: 7px 4px; text-align: left; font-size: 13px; color: #000000;">
-            <div style="font-weight: 700;">${nameWithVariant}</div>
-            ${item.notes ? `<div style="font-size: 10px; color: #444444; font-style: italic;">Note: ${item.notes}</div>` : ''}
-            ${Array.isArray(item.addons) && item.addons.length > 0 ? `
-              <div style="font-size: 10px; color: #444444;">
-                Addons: ${item.addons.map(a => a.name || a.title || a).join(', ')}
-              </div>
-            ` : ''}
-          </td>
-          <td style="padding: 7px 4px; text-align: center; font-size: 13px; font-weight: 800; color: #000000;">${qty}</td>
-          <td style="padding: 7px 4px; text-align: right; font-size: 13px; color: #000000;">₹${price.toFixed(2)}</td>
-          <td style="padding: 7px 4px; text-align: right; font-size: 13px; font-weight: 800; color: #000000;">₹${lineTotal.toFixed(2)}</td>
-        </tr>
+        <div class="item">
+          <div class="item-name">${esc(nameWithVariant)}</div>
+          ${addons ? `<div class="item-sub">+ ${esc(addons)}</div>` : ""}
+          ${item.notes ? `<div class="item-sub">* ${esc(item.notes)}</div>` : ""}
+          <div class="row"><span>&nbsp;&nbsp;${qty} x ${money(price)}</span><span class="b">${money(lineTotal)}</span></div>
+        </div>
       `;
-    }).join('');
+    }).join("");
 
     const packaging = isNaN(Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges)) ? 0 : Number(order.pricing?.packagingFee || order.pricing?.restaurantPackagingCharges || 0);
     const rawTotal = order.total || order.pricing?.total || (foodTotal + packaging);
     const grandTotal = isNaN(Number(rawTotal)) ? (foodTotal + packaging) : Number(rawTotal);
 
+    const paymentMethod = String(order.paymentMethod || order.payment?.method || "").toLowerCase();
+    const paymentLabel = paymentMethod
+      ? (paymentMethod === "cod" || paymentMethod === "cash" ? "CASH ON DELIVERY" : "PAID ONLINE")
+      : "";
+
+    let savedWidth = "80";
+    try { savedWidth = localStorage.getItem("restaurant_bill_paper_width") === "58" ? "58" : "80"; } catch (e) { /* storage blocked */ }
+
     const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>Order Receipt #${orderId}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bill #${esc(orderId)}</title>
+  <style id="page-size">@page { size: ${savedWidth}mm auto; margin: 0; }</style>
   <style>
-    @media print {
-      @page { size: 80mm auto; margin: 3mm; }
-      body { width: 100%; margin: 0; padding: 0; background: #ffffff !important; }
-      .no-print-action-bar { display: none !important; }
-    }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #e5e7eb; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      max-width: 420px;
-      margin: 0 auto;
-      padding: 12px;
-      color: #000000;
-      background: #f8fafc;
-      font-size: 12px;
+      font-family: "Courier New", Courier, "Lucida Console", monospace;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .no-print-action-bar {
-      background: #1e293b;
-      color: #ffffff;
-      padding: 10px 14px;
-      border-radius: 10px;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .no-print-btn {
-      background: #16a34a;
-      color: #ffffff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .no-print-close-btn {
-      background: #475569;
-      color: #ffffff;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      margin-left: 6px;
-    }
-    .receipt-container {
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-    .text-center { text-align: center; }
-    .restaurant-name {
-      font-size: 19px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: #000000;
-      margin-bottom: 3px;
-    }
-    .restaurant-sub {
-      font-size: 11px;
-      color: #222222;
-      font-weight: 500;
-      line-height: 1.3;
-    }
-    .divider {
-      border-top: 1.5px dashed #000000;
-      margin: 10px 0;
-    }
-    .divider-solid {
-      border-top: 2px solid #000000;
-      margin: 10px 0;
-    }
-    .box {
-      background: #ffffff;
-      border: 1.5px solid #111111;
-      border-radius: 8px;
-      padding: 9px 12px;
-      margin-bottom: 10px;
-    }
-    .box-title {
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      color: #000000;
-      margin-bottom: 5px;
-      letter-spacing: 0.6px;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 3px;
-    }
-    .info-label { color: #333333; font-weight: 600; }
-    .info-val { font-weight: 800; color: #000000; }
-    .items-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 8px 0;
-    }
-    .items-table th {
-      font-size: 11px;
-      font-weight: 900;
-      text-transform: uppercase;
-      padding: 6px 4px;
-      border-bottom: 2px solid #000000;
-      color: #000000;
-    }
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      font-size: 12px;
-      font-weight: 600;
-      color: #111111;
-    }
-    .grand-total {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      font-size: 16px;
-      font-weight: 900;
-      border-top: 2px solid #000000;
-      margin-top: 6px;
-      color: #000000;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 14px;
-      font-size: 11px;
-      color: #333333;
+    /* Printable width: 80mm roll ~72mm, 58mm roll ~48mm */
+    .receipt { width: 72mm; margin: 12px auto; padding: 3mm 0 6mm; background: #fff; font-size: 12px; line-height: 1.35; font-weight: 600; }
+    body.w58 .receipt { width: 48mm; font-size: 10.5px; }
+    .inner { padding: 0 2mm; }
+    .c { text-align: center; }
+    .b { font-weight: 800; }
+    .shop { font-size: 1.45em; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; word-break: break-word; }
+    .sub { font-size: 0.92em; word-break: break-word; }
+    .hr { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
+    .hr2 { border: 0; border-top: 2px solid #000; margin: 5px 0; }
+    .row { display: flex; justify-content: space-between; gap: 6px; }
+    .row > span:last-child { text-align: right; white-space: nowrap; }
+    .label { font-size: 0.85em; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+    .item { padding: 3px 0; }
+    .item-name { font-weight: 800; word-break: break-word; }
+    .item-sub { font-size: 0.88em; padding-left: 8px; word-break: break-word; }
+    .total { font-size: 1.3em; font-weight: 900; }
+    .tag { border: 1.5px solid #000; padding: 3px; margin-top: 5px; text-align: center; font-weight: 900; text-transform: uppercase; }
+    .bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;
+      padding: 8px; background: #1f2937; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .bar button { border: 0; border-radius: 6px; padding: 8px 12px; font-weight: 700; font-size: 12px; color: #fff; background: #475569; cursor: pointer; }
+    .bar button.on { background: #16a34a; }
+    .bar .print { background: #2563eb; }
+    @media print {
+      html, body { background: #fff; width: auto; }
+      .bar { display: none !important; }
+      .receipt { margin: 0; padding-top: 1mm; }
     }
   </style>
 </head>
-<body>
-  <div class="no-print-action-bar">
-    <span style="font-weight: 700; font-size: 13px;">🧾 Bill Receipt #${orderId}</span>
-    <div>
-      <button class="no-print-btn" onclick="window.print()">🖨️ Print Bill</button>
-      <button class="no-print-close-btn" onclick="window.close()">✖ Close</button>
-    </div>
+<body class="${savedWidth === "58" ? "w58" : ""}">
+  <div class="bar">
+    <button type="button" data-w="80">80mm</button>
+    <button type="button" data-w="58">58mm</button>
+    <button type="button" class="print" onclick="window.print()">Print</button>
   </div>
 
-  <div class="receipt-container">
-    <div class="text-center">
-      <div class="restaurant-name">${restaurantName}</div>
-      ${restaurantAddress ? `<div class="restaurant-sub">${restaurantAddress}</div>` : ''}
-      ${restaurantPhone ? `<div class="restaurant-sub">Ph: ${restaurantPhone}</div>` : ''}
+  <div class="receipt"><div class="inner">
+    <div class="c">
+      <div class="shop">${esc(restaurantName)}</div>
+      ${restaurantAddress ? `<div class="sub">${esc(restaurantAddress)}</div>` : ""}
+      ${restaurantPhone ? `<div class="sub">Ph: ${esc(restaurantPhone)}</div>` : ""}
     </div>
 
-    <div class="divider"></div>
+    <hr class="hr"/>
+    <div class="row"><span>Order</span><span class="b">#${esc(orderId)}</span></div>
+    <div class="row"><span>Date</span><span>${esc(orderDate)}</span></div>
+    ${paymentLabel ? `<div class="row"><span>Payment</span><span class="b">${paymentLabel}</span></div>` : ""}
 
-    <div class="box">
-      <div class="info-row">
-        <span class="info-label">Order ID:</span>
-        <span class="info-val">#${orderId}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Date:</span>
-        <span class="info-val">${orderDate}</span>
-      </div>
-    </div>
+    <hr class="hr"/>
+    <div class="label">Customer</div>
+    <div class="b">${esc(customerName)}</div>
+    ${customerPhone ? `<div>Ph: ${esc(customerPhone)}</div>` : ""}
+    ${customerAddress ? `<div class="sub">${esc(customerAddress)}</div>` : ""}
 
-    <div class="box">
-      <div class="box-title">CUSTOMER DETAILS</div>
-      <div style="font-size: 13px; font-weight: 800; color: #000000;">${customerName}</div>
-      ${customerPhone ? `<div style="color: #222222; font-weight: 600; margin-top: 2px;">📞 ${customerPhone}</div>` : ''}
-      ${customerAddress ? `<div style="color: #222222; font-weight: 500; margin-top: 3px; line-height: 1.3;">📍 ${customerAddress}</div>` : ''}
-    </div>
+    <hr class="hr"/>
+    <div class="row label"><span>Item</span><span>Amount</span></div>
+    <hr class="hr"/>
+    ${itemRows}
 
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th style="text-align: left;">ITEM</th>
-          <th style="text-align: center;">QTY</th>
-          <th style="text-align: right;">PRICE</th>
-          <th style="text-align: right;">AMOUNT</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemRows}
-      </tbody>
-    </table>
+    <hr class="hr"/>
+    <div class="row"><span>Items (${totalQty})</span><span>${money(foodTotal)}</span></div>
+    ${packaging > 0 ? `<div class="row"><span>Packaging</span><span>${money(packaging)}</span></div>` : ""}
+    <hr class="hr2"/>
+    <div class="row total"><span>TOTAL</span><span>Rs ${money(grandTotal)}</span></div>
+    <hr class="hr2"/>
 
-    <div class="divider-solid"></div>
+    ${order.sendCutlery !== undefined ? `<div class="tag">${order.sendCutlery === false ? "No cutlery" : "Cutlery requested"}</div>` : ""}
+    ${order.note ? `<div style="margin-top:5px;"><span class="b">Note:</span> ${esc(order.note)}</div>` : ""}
 
-    <div>
-      <div class="summary-row">
-        <span>Items Total</span>
-        <span>₹${foodTotal.toFixed(2)}</span>
-      </div>
-      ${packaging > 0 ? `<div class="summary-row"><span>Packaging</span><span>₹${packaging.toFixed(2)}</span></div>` : ''}
-      <div class="grand-total">
-        <span>TOTAL BILL</span>
-        <span>₹${grandTotal.toFixed(2)}</span>
-      </div>
-    </div>
-
-    ${order.sendCutlery !== undefined ? `
-      <div style="font-size: 11px; margin-top: 10px; padding: 7px; background: #fffbe6; border: 1.5px solid #ffe58f; border-radius: 6px; text-align: center; font-weight: 800; color: #000000;">
-        ${order.sendCutlery === false ? "🚫 Cutlery Not Requested" : "🍴 Cutlery Requested"}
-      </div>
-    ` : ''}
-
-    ${order.note ? `
-      <div style="font-size: 11px; margin-top: 8px; padding: 7px; background: #e6f7ff; border: 1.5px solid #91d5ff; border-radius: 6px; color: #000000; font-weight: 600;">
-        <strong>Note:</strong> ${order.note}
-      </div>
-    ` : ''}
-
-    <div class="footer">
-      <div style="font-weight: 700;">Thank You For Your Order!</div>
-      <div style="font-size: 9px; margin-top: 2px; color: #555555;">Powered by Eqosy</div>
-    </div>
-  </div>
+    <hr class="hr"/>
+    <div class="c b">Thank you for your order!</div>
+    <div class="c sub">Powered by Eqosy</div>
+  </div></div>
 
   <script>
+    (function () {
+      var setWidth = function (w) {
+        document.body.className = w === "58" ? "w58" : "";
+        document.getElementById("page-size").textContent = "@page { size: " + w + "mm auto; margin: 0; }";
+        var btns = document.querySelectorAll(".bar button[data-w]");
+        for (var i = 0; i < btns.length; i++) btns[i].className = btns[i].getAttribute("data-w") === w ? "on" : "";
+        try { localStorage.setItem("restaurant_bill_paper_width", w); } catch (e) {}
+      };
+      var btns = document.querySelectorAll(".bar button[data-w]");
+      for (var i = 0; i < btns.length; i++) btns[i].onclick = function () { setWidth(this.getAttribute("data-w")); };
+      setWidth("${savedWidth}");
+    })();
     window.onload = function() {
       setTimeout(function() {
         try { window.print(); } catch(e) {}
@@ -1288,7 +1174,7 @@ function TableBookings() {
   );
 }
 
-function AllOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
+function AllOrders({ onSelectOrder, onCancel, onRespond, refreshToken = 0 }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -1483,7 +1369,10 @@ function AllOrders({ onSelectOrder, onCancel, refreshToken = 0 }) {
                   markingReadyOrderIds[order.mongoId || order.orderId],
                 )}
                 onAccept={
-                  normalizedStatus === "confirmed" ? handleAccept : undefined
+                  normalizedStatus === "confirmed" && !onRespond ? handleAccept : undefined
+                }
+                onRespond={
+                  normalizedStatus === "confirmed" ? onRespond : undefined
                 }
                 isAccepting={Boolean(
                   acceptingOrderIds[order.mongoId || order.orderId],
@@ -2215,6 +2104,37 @@ export default function OrdersMain() {
     printOrderInvoice(orderToPrint);
   };
 
+  // Reopen the accept / items-unavailable / reject popup for a pending order the restaurant closed earlier.
+  const handleReopenNewOrderPopup = (order) => {
+    if (!order) return;
+    const createdMs = order.createdAt ? new Date(order.createdAt).getTime() : Date.now();
+    const remaining = Math.max(0, 240 - Math.floor((Date.now() - createdMs) / 1000));
+    setPopupOrder({
+      orderId: order.orderId,
+      orderMongoId: order._id,
+      restaurantId: order.restaurantId,
+      restaurantName: order.restaurantName,
+      items: order.items || [],
+      total: order.pricing?.total || 0,
+      pricing: order.pricing,
+      customerAddress: order.address,
+      status: order.status,
+      createdAt: order.createdAt,
+      scheduledAt: order.scheduledAt,
+      estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
+      note: order.note || "",
+      sendCutlery: order.sendCutlery,
+      paymentMethod: order.paymentMethod || order.payment?.method || null,
+      payment: order.payment,
+      fulfilment: order.fulfilment,
+      fulfilmentResolved: order.fulfilmentResolved,
+    });
+    setPrepTime(defaultPrep);
+    setCountdown(remaining);
+    setAcceptSwipeProgress(0);
+    setShowNewOrderPopup(true);
+  };
+
   // Handle reject order
   const handleRejectClick = () => {
     setShowRejectPopup(true);
@@ -2463,6 +2383,7 @@ export default function OrdersMain() {
           <AllOrders
             onSelectOrder={handleSelectOrder}
             onCancel={handleCancelClick}
+            onRespond={handleReopenNewOrderPopup}
             refreshToken={ordersRefreshToken}
           />
         );
@@ -2761,12 +2682,12 @@ export default function OrdersMain() {
         {showNewOrderPopup && (
           <>
             <motion.div
-              className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}>
               <motion.div
-                className="w-[95%] max-w-md max-h-[calc(100vh-2rem)] bg-white rounded-[2rem] shadow-2xl overflow-hidden p-1 flex flex-col"
+                className="w-[95%] max-w-md max-h-full bg-white rounded-[2rem] shadow-2xl overflow-hidden p-1 flex flex-col"
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -3183,7 +3104,7 @@ export default function OrdersMain() {
         {showRejectPopup && (
           <>
             <motion.div
-              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3524,6 +3445,7 @@ function OrderCard({
   isMarkingReady = false,
   onAccept,
   isAccepting = false,
+  onRespond,
 }) {
   const normalizedStatus = String(status || "").toLowerCase();
   const isReady = normalizedStatus === "ready";
@@ -3748,6 +3670,14 @@ function OrderCard({
 
         {/* Mark Ready + ETA */}
         <div className="flex items-center gap-2 shrink-0">
+          {normalizedStatus === "confirmed" && onRespond && fullOrder && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRespond(fullOrder); }}
+              className="h-8 px-3 rounded-lg text-[11px] font-bold bg-blue-600 text-white active:bg-blue-700 transition-colors shadow-sm">
+              Respond
+            </button>
+          )}
           {normalizedStatus === "confirmed" && onAccept && (
             <button
               type="button"

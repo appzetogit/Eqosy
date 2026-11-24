@@ -196,8 +196,17 @@ const isRingEvent = (payload = {}) => {
         return false;
     }
 
-    // Explicit ring request from the sender (penalty / cancellation / warning alerts to restaurants and riders).
-    if (String(data.ring || payload.ring || '').toLowerCase() === 'true') {
+    // A "stop ring" replacement is always silent.
+    if (type === RING_STOP_TYPE) {
+        return false;
+    }
+
+    // Restaurant and delivery partner apps ring ONLY for a new order / booking / assignment.
+    // Penalty, cancellation, warning and status alerts reach them as normal silent notifications.
+    const isPartnerApp = Boolean(payload.__partnerApp);
+
+    // Explicit ring request from the sender (admin alerts, taxi ride requests).
+    if (!isPartnerApp && String(data.ring || payload.ring || '').toLowerCase() === 'true') {
         return true;
     }
 
@@ -253,17 +262,30 @@ const isRingEvent = (payload = {}) => {
         type.includes('order_assigned') ||
         type.includes('order_assign') ||
         type.includes('delivery_assigned') ||
-        type.includes('gig_reminder') ||
+        (!isPartnerApp && type.includes('gig_reminder')) ||
         title.includes('assigned')
     ) {
         return true;
     }
 
-    if (sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
+    if (!isPartnerApp && sound && sound !== 'none' && sound !== 'false' && sound !== 'silent' && sound !== 'default') {
         return true;
     }
 
     return false;
+};
+
+const RING_STOP_TYPE = 'ring_stop';
+
+/**
+ * Partner-app notifications about one order share a tag, so a later notification for the same order REPLACES the
+ * earlier one in the tray. Replacing a ringing new-order notification with a silent one stops its ringtone at once.
+ */
+const getOrderNotificationTag = (payload = {}) => {
+    if (!payload.__partnerApp) return '';
+    const data = payload.data || {};
+    const id = sanitizeString(data.orderMongoId || data.orderId || data.bookingId);
+    return id ? `order-${id}` : '';
 };
 
 const buildMessagePayload = (payload = {}, token) => {
@@ -302,9 +324,13 @@ const buildMessagePayload = (payload = {}, token) => {
     const ringChannelId = process.env.FCM_RING_CHANNEL_ID || 'default';
     const ringSound = process.env.FCM_RING_SOUND || 'default';
 
+    const orderTag = getOrderNotificationTag(payload);
+    if (orderTag) data.notificationTag = orderTag;
+
     message.android = {
         priority: 'high',
         notification: {
+            ...(orderTag ? { tag: orderTag } : {}),
             channel_id: isChat ? 'chat_messages' : (ring ? ringChannelId : 'silent_channel'),
             ...(ring ? { sound: payload.sound || ringSound } : (isChat ? { sound: 'default' } : {})),
             default_vibrate_timings: ring || isChat,
@@ -323,14 +349,15 @@ const buildMessagePayload = (payload = {}, token) => {
             title: notification.title,
             body: notification.body,
             icon: image || payload.icon || '/favicon.ico',
-            silent: !(ring || isChat)
+            silent: !(ring || isChat),
+            ...(orderTag ? { tag: orderTag, renotify: ring } : {})
         },
         ...(targetLink ? { fcm_options: { link: targetLink } } : {})
     };
 
     // iOS (APNs): without this block iOS plays no sound at all.
     message.apns = {
-        headers: { 'apns-priority': '10' },
+        headers: { 'apns-priority': '10', ...(orderTag ? { 'apns-collapse-id': orderTag } : {}) },
         payload: {
             aps: {
                 ...(ring ? { sound: 'ride-request-alert.caf' } : (isChat ? { sound: 'default' } : {})),
@@ -626,6 +653,7 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
 
     // 💡 Clone the payload to avoid side-effects (e.g. adding multiple prefixes to the same object during broadcasting)
     const enrichedPayload = { ...payload };
+    enrichedPayload.__partnerApp = normalizedOwnerType === 'RESTAURANT' || normalizedOwnerType === 'DELIVERY_PARTNER';
 
     // 🏷️ Add Highlighter Prefix to the Title
     // Zomato/Swiggy style: keep notification title as is without emoji prefixes or custom highlighter
@@ -734,6 +762,30 @@ export const notifyOwnerSafely = async (target = {}, payload = {}) => {
         return await sendNotificationToOwner({ ...target, payload });
     } catch (error) {
         logger.warn(`FCM individual push failed: ${error.message}`);
+        return null;
+    }
+};
+
+/**
+ * Stops a ringing new-order notification on the restaurant / delivery partner's phone after they act on it
+ * (accept, reject, offer expired, order cancelled). Sends a SILENT notification with the same order tag,
+ * which replaces the ringing one in the tray; Android stops the ringtone when it is replaced.
+ */
+export const stopOrderRingSafely = async ({ ownerType, ownerId, orderId, title, body } = {}) => {
+    const id = sanitizeString(orderId);
+    if (!ownerType || !ownerId || !id) return null;
+    try {
+        return await sendNotificationToOwner({
+            ownerType,
+            ownerId,
+            payload: {
+                title: title || 'Order updated',
+                body: body || 'This order has been handled.',
+                data: { type: RING_STOP_TYPE, orderId: id, orderMongoId: id },
+            },
+        });
+    } catch (error) {
+        logger.warn(`FCM stop-ring push failed: ${error.message}`);
         return null;
     }
 };

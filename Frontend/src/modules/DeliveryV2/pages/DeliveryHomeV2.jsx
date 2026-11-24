@@ -1811,7 +1811,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     }}
                   />
                 )}
-                {(tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && activeOrder && (
+                {tripStatus === 'REACHED_DROP' && activeOrder && (
                   <div className="absolute right-3 top-24 z-[130] pointer-events-auto">
                     <ReportDelaySheet orderId={activeOrder.orderId || activeOrder._id} />
                   </div>
@@ -1825,12 +1825,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         exit={{ y: '100%' }}
                         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
                         {...getSheetDragProps(dropSheetDragControls, () => setIsModalMinimized(true))}
-                        className="w-full max-w-lg bg-white rounded-t-[3.5rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[85vh] pointer-events-auto overflow-hidden"
+                        className="w-full max-w-lg bg-white rounded-t-[2rem] shadow-[0_-25px_80px_rgba(0,0,0,0.5)] flex flex-col h-[100dvh] max-h-[100dvh] pt-[env(safe-area-inset-top)] pointer-events-auto overflow-hidden"
                       >
                         {/* Handle / Minimize: swipe down or tap */}
                         <SheetHandle controls={dropSheetDragControls} onMinimize={() => setIsModalMinimized(true)} />
 
-                        <div className="flex-1 overflow-y-auto no-scrollbar p-8 pt-4">
+                        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-8 pt-4">
                           <div className="flex justify-between w-full items-center mb-8">
                             <div className="flex items-center gap-4">
                               <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden border-4 border-gray-50 shadow-xl ring-1 ring-gray-100">
@@ -1908,6 +1908,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                             </div>
                           </div>
 
+                          {activeOrder && (
+                            <div className="mb-4 flex justify-end">
+                              <ReportDelaySheet orderId={activeOrder.orderId || activeOrder._id} />
+                            </div>
+                          )}
+
                           {/* Bill (with paid / collect-cash status), customer and restaurant details */}
                           <div className="mb-6">
                             <OrderInfoSections
@@ -1935,7 +1941,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                           )}
                         </div>
 
-                        <div className="p-6 pt-0 pb-8 bg-white border-t border-gray-100 shadow-[0_-8px_20px_rgba(0,0,0,0.06)]">
+                        <div className="shrink-0 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white border-t border-gray-100 shadow-[0_-8px_20px_rgba(0,0,0,0.06)]">
                           <div className="pt-4 space-y-3">
                             <ActionSlider
                               label="Slide to Arrive"
@@ -2012,6 +2018,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       return res;
                     }}
                     onClose={() => setShowVerification(false)}
+                    onReturnStatusChange={setReturnStatus}
+                    onReturned={() => {
+                      setShowVerification(false);
+                      setReturnStatus('none');
+                      resetTrip();
+                    }}
                   />
                 )}
                 {tripStatus === 'COMPLETED' && <OrderSummaryModal order={activeOrder} onDone={resetTrip} />}

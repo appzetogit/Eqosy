@@ -8,6 +8,7 @@ import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInb
 import { toast } from 'sonner';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
 import { isPushRingEvent } from '@food/utils/firebaseMessaging';
+import { dismissOrderAlertNotifications } from '@food/utils/orderAlertCleanup';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -538,6 +539,7 @@ export const useDeliveryNotifications = (options = {}) => {
 
   // An order is gone (cancelled / taken / reassigned): drop it from the queue, and advance if it was the one on screen.
   const dropOrderAndAdvance = useCallback((data = {}) => {
+    dismissOrderAlertNotifications(data);
     const key = getOrderAlertKey(data);
     if (key) {
       const before = pendingOrderQueueRef.current.length;
@@ -1328,23 +1330,10 @@ export const useDeliveryNotifications = (options = {}) => {
     });
 
 
-    // Cancellation, penalty, warning and "due soon" alerts ring like a new order (the server marks them ring: true).
+    // Cancellation, penalty, warning and "due soon" alerts are shown without a ring: only a new order rings.
     const handlePenaltyAlert = (data) => {
       const text = data?.message || data?.title || 'You have a new alert';
-      const ringing = Boolean(data?.ring);
-      toast(data?.title ? `${data.title}: ${text}` : text, {
-        duration: ringing ? 20000 : 10000,
-        ...(ringing ? { action: { label: 'Stop ring', onClick: () => { stopAlertLoop(); activeOrderRef.current = null; } } } : {}),
-      });
-      if (ringing) {
-        // Exactly the new-order ring: same tone, vibration, native bridge and repeat-while-hidden loop.
-        activeOrderRef.current = { id: `alert-${Date.now()}`, ...data };
-        const withText = { ...data, alertTitle: data?.title, alertBody: text };
-        try {
-          playNotificationSound(withText);
-          startAlertLoop(playNotificationSound);
-        } catch (e) { /* sound is best-effort */ }
-      }
+      toast(data?.title ? `${data.title}: ${text}` : text, { duration: 10000 });
       window.dispatchEvent(new CustomEvent('performance_alert', { detail: data }));
     };
     socketRef.current.on('cancellation_update', handlePenaltyAlert);
@@ -1404,8 +1393,7 @@ export const useDeliveryNotifications = (options = {}) => {
           return;
         }
 
-        // Play single sound ONCE (no alarm loop)
-        playNotificationSound(payload);
+        // Shift reminders are shown without sound: only a new order rings.
 
         const notifMessage = payload?.message || payload?.data?.body || payload?.body || 'Aapki gig shift shuru hone wali hai!';
 
@@ -1453,8 +1441,7 @@ export const useDeliveryNotifications = (options = {}) => {
         return;
       }
 
-      playNotificationSound(data);
-
+      // Shift reminders are shown without sound: only a new order rings.
       const notifMessage = data?.message || data?.title || 'Your shift starts soon. Please go online!';
 
       toast.info(notifMessage, {
@@ -1579,6 +1566,8 @@ export const useDeliveryNotifications = (options = {}) => {
   // Called when the rider accepts / passes / dismisses the offer on screen: bring up (and ring for) the next queued one.
   const clearNewOrder = () => {
     stopAlertLoop();
+    // The rider accepted / passed this offer: remove its ringing tray notification too.
+    dismissOrderAlertNotifications(newOrderRef.current || activeOrderRef.current || undefined);
     activeOrderRef.current = null;
     if (isOnlineRef.current) {
       showNextQueuedOrder();

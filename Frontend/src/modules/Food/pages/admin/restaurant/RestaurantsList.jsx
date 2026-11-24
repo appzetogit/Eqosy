@@ -266,6 +266,7 @@ export default function RestaurantsList() {
             isRestaurant: restaurant.isRestaurant !== false,
             isSponsored: restaurant.isSponsored === true,
             codEnabled: restaurant.codEnabled === true,
+            codMaxOrderAmount: restaurant.codMaxOrderAmount == null ? 300 : Number(restaurant.codMaxOrderAmount),
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: getPrimaryRestaurantImage(restaurant, PLACEHOLDER_40),
             originalData: restaurant,
@@ -1385,8 +1386,8 @@ export default function RestaurantsList() {
                             <span className="text-[11px] text-slate-500">
                               Outlet: {restaurant.isActive ? "Active" : "Inactive"}
                             </span>
-                            <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${restaurant.codEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                              COD: {restaurant.codEnabled ? "Enabled" : "Disabled"}
+                            <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${restaurant.codMaxOrderAmount > 0 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                              COD: {restaurant.codMaxOrderAmount > 0 ? `up to ₹${restaurant.codMaxOrderAmount}` : "Off"}
                             </span>
                           </div>
                         </td>
@@ -1924,7 +1925,7 @@ export default function RestaurantsList() {
                             Outlet: {(r?.isActive !== false) ? "Active" : "Inactive"}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            Cash on Delivery: {r?.codEnabled === true ? "Enabled" : "Disabled"}
+                            Cash on Delivery: {(r?.codMaxOrderAmount == null ? 300 : Number(r.codMaxOrderAmount)) > 0 ? `up to ₹${r?.codMaxOrderAmount == null ? 300 : Number(r.codMaxOrderAmount)}` : "Off"}
                           </p>
                         </div>
                       </div>

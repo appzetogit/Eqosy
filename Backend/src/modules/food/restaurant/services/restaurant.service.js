@@ -1,4 +1,5 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { getRestaurantCodMaxOrderAmount } from '../../utils/codLimit.js';
 import { haversineKm } from '../../orders/services/order.helpers.js';
 import { getGoogleRoadDistance } from '../../orders/utils/googleMaps.js';
 
@@ -243,6 +244,7 @@ const toRestaurantProfile = (doc) => {
         },
         isAcceptingOrders: doc.isAcceptingOrders !== false,
         codEnabled: doc.codEnabled === true,
+        codMaxOrderAmount: getRestaurantCodMaxOrderAmount(doc),
         status: doc.status || null,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
@@ -673,6 +675,7 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
                 'diningSettings',
                 'isAcceptingOrders',
                 'codEnabled',
+                'codMaxOrderAmount',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -745,6 +748,7 @@ export const updateRestaurantAcceptingOrders = async (restaurantId, isAcceptingO
                 'diningSettings',
                 'isAcceptingOrders',
                 'codEnabled',
+                'codMaxOrderAmount',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -842,6 +846,7 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
                 'diningSettings',
                 'isAcceptingOrders',
                 'codEnabled',
+                'codMaxOrderAmount',
                 'status',
                 'createdAt',
                 'updatedAt'
@@ -2299,6 +2304,27 @@ export async function updateRestaurantOffer(restaurantId, offerId, body) {
     await doc.save();
     return doc.toObject();
 }
+
+export const updateRestaurantCodMaxOrderAmount = async (restaurantId, amount) => {
+    if (!restaurantId) {
+        throw new ValidationError('Invalid restaurant id');
+    }
+    const n = Number(amount);
+    if (amount === null || amount === undefined || amount === '' || !Number.isFinite(n) || n < 0) {
+        throw new ValidationError('Maximum COD order amount must be 0 or more');
+    }
+    if (n > 100000) {
+        throw new ValidationError('Maximum COD order amount cannot be more than Rs 1,00,000');
+    }
+    // Only affects new orders: existing orders keep their own payment.method.
+    const doc = await FoodRestaurant.findByIdAndUpdate(
+        restaurantId,
+        { $set: { codMaxOrderAmount: Math.round(n) } },
+        { new: true, runValidators: true }
+    ).lean();
+    if (!doc) throw new ValidationError('Restaurant not found');
+    return toRestaurantProfile(doc);
+};
 
 export const updateRestaurantCodEnabled = async (restaurantId, codEnabled) => {
     if (!restaurantId) {
