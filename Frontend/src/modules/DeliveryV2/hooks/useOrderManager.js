@@ -60,7 +60,8 @@ export const useOrderManager = () => {
           customerLocation: cusLoc
         });
 
-        updateTripStatus('PICKING_UP');
+        // COD order: the rider first calls the customer to confirm it (CodVerificationPanel), then picks it up.
+        updateTripStatus(fullOrder?.orderStatus === 'pending_cod_verification' ? 'COD_VERIFY' : 'PICKING_UP');
         // toast.success('Order Accepted! Opening Map...');
       } else {
         const msg = response?.data?.message || 'Accepted by other driver';

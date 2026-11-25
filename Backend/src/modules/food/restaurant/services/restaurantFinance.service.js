@@ -314,6 +314,167 @@ export async function getRestaurantFinance(restaurantId, query = {}) {
 }
 
 
+const WITHDRAWAL_PAID_STATUSES = ['approved', 'processing', 'completed', 'settled'];
+
+/**
+ * Admin payout overview: for every restaurant, the same lifetime figures the restaurant sees in its own wallet
+ * (getRestaurantFinance), plus what the platform still owes it.
+ *   earned            = lifetime earning from completed orders
+ *   paidOut           = approved / processed withdrawals (money already sent)
+ *   pendingRequests   = withdrawal requests waiting for admin action
+ *   availableBalance  = earned - paidOut - pendingRequests   (what the restaurant can still request)
+ *   totalPayable      = earned - paidOut                     (what the platform still has to pay)
+ * Query: search (restaurant name), onlyPayable ('true'), sort ('payable' | 'earned' | 'pending' | 'name').
+ */
+export async function getRestaurantPayoutOverview(query = {}) {
+    const round = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const byRestaurant = new Map();
+    const row = (rid) => {
+        const key = String(rid);
+        if (!byRestaurant.has(key)) {
+            byRestaurant.set(key, {
+                restaurantId: key,
+                earned: 0,
+                completedOrders: 0,
+                paidOut: 0,
+                paidCount: 0,
+                pendingRequests: 0,
+                pendingCount: 0,
+                lastWithdrawalAt: null,
+            });
+        }
+        return byRestaurant.get(key);
+    };
+
+    // 1. Earnings from transactions (same completion + payout rules as getRestaurantFinance).
+    const countedOrderIds = new Set();
+    const txCursor = FoodTransaction.find({ restaurantId: { $ne: null } })
+        .populate('orderId', 'pricing orderStatus deliveryState')
+        .select('restaurantId amounts.restaurantShare amounts.restaurantCommission status payment orderId')
+        .lean()
+        .cursor();
+    for await (const tx of txCursor) {
+        if (!isCompletedTx(tx)) continue;
+        const r = row(tx.restaurantId);
+        r.earned += Number(resolveTxPayout(tx)) || 0;
+        r.completedOrders += 1;
+        const oid = String(tx?.orderId?._id || tx?.orderId || '');
+        if (oid) countedOrderIds.add(oid);
+    }
+
+    // 2. Delivered orders that never got a transaction row.
+    const orderCursor = FoodOrder.find({
+        $or: [
+            { orderStatus: { $in: ['delivered', 'completed'] } },
+            { 'deliveryState.currentPhase': { $in: ['delivered', 'completed'] } },
+        ],
+    }).select('restaurantId pricing').lean().cursor();
+    for await (const order of orderCursor) {
+        if (!order.restaurantId || countedOrderIds.has(String(order._id))) continue;
+        const r = row(order.restaurantId);
+        const share = Math.max(
+            0,
+            (Number(order?.pricing?.subtotal) || 0) + (Number(order?.pricing?.packagingFee) || 0) - (Number(order?.pricing?.restaurantCommission) || 0),
+        );
+        r.earned += share;
+        r.completedOrders += 1;
+    }
+
+    // 3. Withdrawals: pending vs already paid (rejected ones go back to the balance and are ignored).
+    const withdrawals = await FoodRestaurantWithdrawal.aggregate([
+        { $project: { restaurantId: 1, amount: 1, createdAt: 1, status: { $toLower: { $trim: { input: '$status' } } } } },
+        { $match: { status: { $in: ['pending', ...WITHDRAWAL_PAID_STATUSES] } } },
+        {
+            $group: {
+                _id: { restaurantId: '$restaurantId', status: '$status' },
+                total: { $sum: '$amount' },
+                count: { $sum: 1 },
+                last: { $max: '$createdAt' },
+            },
+        },
+    ]);
+    for (const w of withdrawals) {
+        if (!w._id?.restaurantId) continue;
+        const r = row(w._id.restaurantId);
+        if (w._id.status === 'pending') {
+            r.pendingRequests += Number(w.total) || 0;
+            r.pendingCount += Number(w.count) || 0;
+        } else {
+            r.paidOut += Number(w.total) || 0;
+            r.paidCount += Number(w.count) || 0;
+        }
+        if (w.last && (!r.lastWithdrawalAt || w.last > r.lastWithdrawalAt)) r.lastWithdrawalAt = w.last;
+    }
+
+    // 4. Names / bank details for the rows we have.
+    const ids = [...byRestaurant.keys()].filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+    const restaurants = await FoodRestaurant.find({ _id: { $in: ids } })
+        .select('restaurantName ownerName phone ownerPhone city area profileImage accountNumber ifscCode bankName upiId')
+        .lean();
+    const infoById = new Map(restaurants.map((r) => [String(r._id), r]));
+
+    let rows = [...byRestaurant.values()].map((r) => {
+        const info = infoById.get(r.restaurantId) || {};
+        const earned = round(r.earned);
+        const paidOut = round(r.paidOut);
+        const pendingRequests = round(r.pendingRequests);
+        const accountNumber = String(info.accountNumber || '');
+        return {
+            restaurantId: r.restaurantId,
+            restaurantName: info.restaurantName || 'Deleted restaurant',
+            ownerName: info.ownerName || '',
+            phone: info.phone || info.ownerPhone || '',
+            city: info.city || info.area || '',
+            profileImage: info.profileImage || '',
+            payoutTo: info.upiId
+                ? `UPI ${info.upiId}`
+                : accountNumber
+                    ? `${info.bankName || 'Bank'} ••${accountNumber.slice(-4)}`
+                    : '',
+            completedOrders: r.completedOrders,
+            earned,
+            paidOut,
+            paidCount: r.paidCount,
+            pendingRequests,
+            pendingCount: r.pendingCount,
+            // Same formula as the restaurant's own wallet.
+            availableBalance: round(Math.max(0, earned - paidOut - pendingRequests)),
+            totalPayable: round(Math.max(0, earned - paidOut)),
+            lastWithdrawalAt: r.lastWithdrawalAt,
+        };
+    });
+
+    const totals = rows.reduce(
+        (acc, r) => {
+            acc.earned += r.earned;
+            acc.paidOut += r.paidOut;
+            acc.pendingRequests += r.pendingRequests;
+            acc.pendingCount += r.pendingCount;
+            acc.availableBalance += r.availableBalance;
+            acc.totalPayable += r.totalPayable;
+            if (r.totalPayable > 0) acc.restaurantsWithBalance += 1;
+            return acc;
+        },
+        { earned: 0, paidOut: 0, pendingRequests: 0, pendingCount: 0, availableBalance: 0, totalPayable: 0, restaurantsWithBalance: 0 },
+    );
+    for (const k of ['earned', 'paidOut', 'pendingRequests', 'availableBalance', 'totalPayable']) totals[k] = round(totals[k]);
+    totals.restaurantCount = rows.length;
+
+    const search = String(query.search || '').trim().toLowerCase();
+    if (search) rows = rows.filter((r) => r.restaurantName.toLowerCase().includes(search) || r.ownerName.toLowerCase().includes(search));
+    if (String(query.onlyPayable) === 'true') rows = rows.filter((r) => r.totalPayable > 0);
+    const sortKey = String(query.sort || 'payable');
+    const sorters = {
+        payable: (a, b) => b.totalPayable - a.totalPayable,
+        earned: (a, b) => b.earned - a.earned,
+        pending: (a, b) => b.pendingRequests - a.pendingRequests,
+        name: (a, b) => a.restaurantName.localeCompare(b.restaurantName),
+    };
+    rows.sort(sorters[sortKey] || sorters.payable);
+
+    return { totals, restaurants: rows, generatedAt: new Date() };
+}
+
 /**
  * Sales report for a restaurant: delivered orders only, with sales / earning / admin commission.
  * Query: from, to (ISO dates), page, limit.

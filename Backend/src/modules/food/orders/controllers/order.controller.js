@@ -1,6 +1,7 @@
 import { sendResponse } from '../../../../utils/response.js';
 import * as orderService from '../services/order.service.js';
 import { stopOrderRing } from '../services/orderRingStop.service.js';
+import * as codVerificationService from '../services/codVerification.service.js';
 import * as foodOrderPaymentService from '../services/foodOrderPayment.service.js';
 import {
     validateCalculateOrderDto,
@@ -225,6 +226,34 @@ export async function acceptOrderDeliveryController(req, res, next) {
         const order = await orderService.acceptOrderDelivery(orderId, deliveryPartnerId);
         stopOrderRing('DELIVERY_PARTNER', deliveryPartnerId, orderId, { order, body: 'Order accepted' });
         return sendResponse(res, 200, 'Order accepted', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ----- COD phone verification (delivery partner) -----
+export async function logCodCallAttemptController(req, res, next) {
+    try {
+        const data = await codVerificationService.logCodCallAttempt(req.params.orderId, req.user?.userId);
+        return sendResponse(res, 200, 'Call attempt recorded', data);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function confirmCodOrderController(req, res, next) {
+    try {
+        const order = await codVerificationService.confirmCodOrderByRider(req.params.orderId, req.user?.userId);
+        return sendResponse(res, 200, 'Order confirmed and sent to the restaurant', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function markCodCustomerUnreachableController(req, res, next) {
+    try {
+        const order = await codVerificationService.markCodCustomerUnreachable(req.params.orderId, req.user?.userId);
+        return sendResponse(res, 200, 'Order cancelled: customer not reachable', { order });
     } catch (err) {
         next(err);
     }

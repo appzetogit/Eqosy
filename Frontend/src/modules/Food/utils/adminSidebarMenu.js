@@ -224,6 +224,7 @@ export const adminSidebarMenu = [
     label: "TRANSACTION MANAGEMENT",
     items: [
       { type: "link", label: "Restaurant Withdraws", path: "/admin/food/restaurant-withdraws", icon: "CreditCard" },
+      { type: "link", label: "Restaurant Payouts", path: "/admin/food/restaurant-payouts", icon: "Wallet" },
     ],
   },
   {

@@ -504,6 +504,7 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
  */
 function mapBackendOrderStatusToUi(raw) {
   const s = String(raw || "").toLowerCase()
+  if (s === "pending_cod_verification") return "cod_verify"
   if (!s || s === "pending" || s === "created") return "placed"
   if (s === "confirmed" || s === "accepted") return "confirmed"
   if (s === "preparing" || s === "processed") return "preparing"
@@ -1781,6 +1782,13 @@ export default function OrderTracking({ isSharedView = false }) {
   }
 
   const statusConfig = {
+    // Cash on Delivery: a delivery partner calls the customer to confirm before the order goes to the restaurant.
+    cod_verify: {
+      title: "Confirming your order 📞",
+      subtitle: "Our delivery partner will call you shortly. Please answer to confirm your Cash on Delivery order.",
+      color: "bg-amber-500",
+      iconType: 'food'
+    },
     placed: {
       title: "Order Placed",
       subtitle: `Waiting for ${storeWord.toLowerCase()} to accept`,

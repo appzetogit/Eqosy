@@ -428,6 +428,13 @@ export async function verifyReturnOtpDelivery(orderId, partnerId, otp) {
   }
 
   const from = order.orderStatus;
+  // The COD charge is paid only for an order that is actually delivered: take it back out of the earning.
+  const codChargePay = Number(order.riderCodChargePay || 0) || 0;
+  if (codChargePay > 0) {
+    order.riderEarning = Math.max(0, Math.round(((Number(order.riderEarning) || 0) - codChargePay) * 100) / 100);
+    order.riderTotalPayout = Math.max(0, Math.round(((Number(order.riderTotalPayout) || 0) - codChargePay) * 100) / 100);
+    order.riderCodChargePay = 0;
+  }
   const payout = Number(order.riderEarning || order.riderTotalPayout || 0) || 0;
 
   order.orderStatus = 'returned_to_restaurant';

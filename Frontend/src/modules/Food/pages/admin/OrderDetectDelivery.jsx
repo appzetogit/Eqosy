@@ -55,6 +55,7 @@ const mapOrderStatus = (order) => {
 
   // Map backend status to frontend status
   const statusMap = {
+    'pending_cod_verification': 'COD Confirmation Pending',
     'created': 'Ordered',
     'pending': 'Ordered',
     'confirmed': 'Restaurant Accepted',

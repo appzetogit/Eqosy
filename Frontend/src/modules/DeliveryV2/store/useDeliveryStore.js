@@ -25,6 +25,8 @@ export function deriveTripStatusFromOrder(order) {
   const currentPhase = order.deliveryState?.currentPhase;
   const deliveryStatus = String(order.deliveryState?.status || '').toLowerCase();
 
+  // COD order the rider accepted but has not yet confirmed with the customer by phone.
+  if (backendStatus === 'pending_cod_verification') return 'COD_VERIFY';
   if (['delivered', 'completed'].includes(backendStatus) || ['delivered', 'completed'].includes(deliveryStatus)) {
     return 'COMPLETED';
   }
@@ -56,7 +58,7 @@ export const useDeliveryStore = create(
       
       // --- Trip State ---
       activeOrder: null, // ActiveOrder | null
-      tripStatus: 'IDLE', // 'IDLE' | 'PICKING_UP' | 'REACHED_PICKUP' | 'PICKED_UP' | 'DELIVERING' | 'REACHED_DROP' | 'COMPLETED'
+      tripStatus: 'IDLE', // 'IDLE' | 'COD_VERIFY' | 'PICKING_UP' | 'REACHED_PICKUP' | 'PICKED_UP' | 'DELIVERING' | 'REACHED_DROP' | 'COMPLETED'
       
       // --- Admin / Business Settings ---
       settings: {
@@ -87,6 +89,7 @@ export const useDeliveryStore = create(
         // Status priority map to prevent regressing tripStatus when order updates arrive
         const STATUS_RANK = {
           'IDLE': 0,
+          'COD_VERIFY': 0.5,
           'PICKING_UP': 1,
           'REACHED_PICKUP': 2,
           'PICKED_UP': 3,

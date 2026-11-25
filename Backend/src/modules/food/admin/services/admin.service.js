@@ -2300,6 +2300,8 @@ export async function upsertFeeSettings(body) {
         if (body.codLimit === null) $unset.codLimit = 1;
         else if (body.codLimit !== undefined) $set.codLimit = body.codLimit;
 
+        if (body.codCharge !== undefined) $set.codCharge = body.codCharge;
+
         if (body.isActive !== undefined) $set.isActive = body.isActive;
 
         const update = {};
@@ -2330,6 +2332,7 @@ export async function upsertFeeSettings(body) {
     if (body.surgeTitle !== undefined && body.surgeTitle !== null) payload.surgeTitle = body.surgeTitle;
     if (body.gstRate !== undefined && body.gstRate !== null) payload.gstRate = body.gstRate;
     if (body.codLimit !== undefined && body.codLimit !== null) payload.codLimit = body.codLimit;
+    if (body.codCharge !== undefined) payload.codCharge = body.codCharge;
 
     const created = await FoodFeeSettings.create(payload);
     return created.toObject();

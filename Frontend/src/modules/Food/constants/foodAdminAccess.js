@@ -273,6 +273,7 @@ const PATH_RESOURCE_RULES = [
   { prefix: '/admin/food/wallet', resource: 'wallet' },
   { prefix: '/admin/food/transactions', resource: 'wallet' },
   { prefix: '/admin/food/restaurant-withdraws', resource: 'wallet' },
+  { prefix: '/admin/food/restaurant-payouts', resource: 'wallet' },
 
   { prefix: '/admin/food/campaigns', resource: 'promotions' },
   { prefix: '/admin/food/coupons', resource: 'promotions' },

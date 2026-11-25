@@ -397,7 +397,10 @@ export function buildDeliverySocketPayload(orderDoc, restaurantDoc = null) {
 }
 
 export function canExposeOrderToRestaurant(orderLike) {
-  if (String(orderLike?.orderStatus || "").toLowerCase() === "pending_payment") return false;
+  const st = String(orderLike?.orderStatus || "").toLowerCase();
+  if (st === "pending_payment") return false;
+  // Cash orders are hidden from the restaurant until a delivery partner confirmed them with the customer.
+  if (st === "pending_cod_verification") return false;
   const method = String(orderLike?.payment?.method || "").toLowerCase();
   const status = String(orderLike?.payment?.status || "").toLowerCase();
   if (["cash", "wallet"].includes(method)) return true;

@@ -18,6 +18,7 @@ import { getGoogleRoadDistance } from '../utils/googleMaps.js';
 import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.js';
 import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
 import { getRestaurantCodMaxOrderAmount, isWithinRestaurantCodLimit } from '../../utils/codLimit.js';
+import { computeCodCharge } from '../utils/codCharge.js';
 function extractCoords(addressLike) {
   if (!addressLike) return null;
   const coords = addressLike?.location?.coordinates || addressLike?.coordinates;
@@ -637,6 +638,8 @@ export async function calculateOrderPricing(userId, dto) {
   const total = Math.round(rawTotal);
   const roundOff = Math.round((total - rawTotal) * 100) / 100;
   const savings = Math.max(0, Math.round(discount));
+  // COD handling charge: added on top of `total` only when the customer pays cash (never on online/wallet).
+  const codChargeInfo = computeCodCharge(feeSettings);
 
   return {
     // Server-priced cart lines; createOrder stores these instead of the client's items.
@@ -680,6 +683,12 @@ export async function calculateOrderPricing(userId, dto) {
       couponCode: appliedCoupon?.code || codeRaw || null,
       appliedCoupon,
       codLimit: feeSettings?.codLimit ?? null,
+      // `total` excludes the COD charge; cash checkout shows totalWithCod. Prepaid orders simply save codChargeTotal.
+      codCharge: codChargeInfo.amount,
+      codChargeGstRate: codChargeInfo.gstRate,
+      codChargeGst: codChargeInfo.gst,
+      codChargeTotal: codChargeInfo.total,
+      totalWithCod: Math.round((total + codChargeInfo.total) * 100) / 100,
       // Checkout options the admin has left open (online also needs working Razorpay keys).
       paymentMethods: {
         // Cash on Delivery stays off while any cancellation charge is unpaid; it returns the moment it is paid.

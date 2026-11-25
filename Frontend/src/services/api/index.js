@@ -353,6 +353,12 @@ export const adminAPI = {
       params,
       contextModule: "admin",
     }),
+  /** Per-restaurant earned / paid / pending / payable + platform totals. */
+  getRestaurantPayoutOverview: (params = {}) =>
+    apiClient.get("/food/admin/restaurant-payouts/overview", {
+      params,
+      contextModule: "admin",
+    }),
   /** Update status of a withdrawal request. */
   updateWithdrawalStatus: (id, body) =>
     apiClient.patch(`/food/admin/withdrawals/${id}`, body, {
@@ -2174,6 +2180,15 @@ export const deliveryAPI = {
         contextModule: "delivery",
       },
     ),
+  /** COD verification: count a call to the customer (3 are needed before "not reachable"). */
+  logCodCallAttempt: (orderId) =>
+    apiClient.post(`/food/delivery/orders/${String(orderId)}/cod-verification/call`, {}, { contextModule: "delivery" }),
+  /** COD verification: customer confirmed on the phone, send the order to the restaurant. */
+  confirmCodOrder: (orderId) =>
+    apiClient.post(`/food/delivery/orders/${String(orderId)}/cod-verification/confirm`, {}, { contextModule: "delivery" }),
+  /** COD verification: customer did not answer 3+ calls, cancel the order. */
+  markCodCustomerUnreachable: (orderId) =>
+    apiClient.post(`/food/delivery/orders/${String(orderId)}/cod-verification/not-reachable`, {}, { contextModule: "delivery" }),
   /** Customer is not answering: ask admin to approve returning the food to the restaurant. */
   requestCustomerUnreachable: (orderId, body = {}) =>
     apiClient.post(

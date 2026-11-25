@@ -40,6 +40,8 @@ import * as cancellationService from '../../cancellation/services/cancellation.s
 import * as deliveryService from './order-delivery.service.js';
 import * as paymentService from './order-payment.service.js';
 import * as partialFulfilmentService from './partialFulfilment.service.js';
+import * as codVerificationService from './codVerification.service.js';
+import { stopOrderRing } from './orderRingStop.service.js';
 import {
   enqueueOrderEvent,
   generateFourDigitDeliveryOtp,
@@ -305,6 +307,17 @@ export async function createOrder(userId, dto) {
       throw new ValidationError("Razorpay payment gateway is not configured");
     }
 
+    // COD handling charge (admin-set, + 18% GST) is added to cash orders only; online/wallet orders never carry it.
+    // The COD limits above are checked on the food bill without it, matching what checkout showed.
+    if (isCash && Number(pricingResult.pricing.codChargeTotal) > 0) {
+      normalizedPricing.codCharge = Number(pricingResult.pricing.codCharge) || 0;
+      normalizedPricing.codChargeGstRate = Number(pricingResult.pricing.codChargeGstRate) || 0;
+      normalizedPricing.codChargeGst = Number(pricingResult.pricing.codChargeGst) || 0;
+      normalizedPricing.total = Math.round(
+        (normalizedPricing.total + normalizedPricing.codCharge + normalizedPricing.codChargeGst) * 100,
+      ) / 100;
+    }
+
     const payment = {
       method: paymentMethod,
       status: isCash ? "cod_pending" : isWallet ? "paid" : "created",
@@ -351,7 +364,16 @@ export async function createOrder(userId, dto) {
       restaurantCommission,
     );
 
-    const initialStatus = (paymentMethod === "razorpay" || paymentMethod === "card") ? "pending_payment" : "created";
+    // Cash orders are first confirmed with the customer by a delivery partner (codVerification.service.js);
+    // they reach the restaurant only after that. Future scheduled ones start verifying 30 min before the slot.
+    const needsCodVerification = isCash;
+    const isScheduledFutureAtCreate =
+      Boolean(dto.scheduledAt) && new Date(dto.scheduledAt).getTime() - Date.now() > 30 * 60 * 1000;
+    const initialStatus = (paymentMethod === "razorpay" || paymentMethod === "card")
+      ? "pending_payment"
+      : needsCodVerification
+        ? codVerificationService.PENDING_COD_STATUS
+        : "created";
 
     const order = new FoodOrder({
       userId: toObjectId(userId, 'User ID'),
@@ -370,6 +392,9 @@ export async function createOrder(userId, dto) {
       pricing: normalizedPricing,
       payment,
       orderStatus: initialStatus,
+      ...(needsCodVerification
+        ? { codVerification: codVerificationService.buildInitialCodVerification({ scheduled: isScheduledFutureAtCreate }) }
+        : {}),
       dispatch: { modeAtCreation: dispatchMode, status: "unassigned" },
       statusHistory: [
         {
@@ -377,7 +402,11 @@ export async function createOrder(userId, dto) {
           byRole: "SYSTEM",
           from: "",
           to: initialStatus,
-          note: initialStatus === "pending_payment" ? "Order created, awaiting payment" : "Order placed",
+          note: initialStatus === "pending_payment"
+            ? "Order created, awaiting payment"
+            : needsCodVerification
+              ? "Order placed, awaiting COD confirmation by delivery partner"
+              : "Order placed",
         },
       ],
       note: String(dto.note || ""),
@@ -492,15 +521,21 @@ export async function createOrder(userId, dto) {
       const formattedScheduledTime = order.scheduledAt
         ? new Date(order.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
+      const isCodConfirmNow = needsCodVerification && !isScheduledFutureOrder;
+      const codConfirmBody = `Order #${order.order_id || order._id} is placed. Our delivery partner will call you in a moment to confirm your Cash on Delivery order. Please keep your phone nearby.`;
 
       await notifyOwnersSafely([{ ownerType: "USER", ownerId: userId }], {
         title: isAwaitingOnlinePayment
           ? "Complete Payment to Confirm Order"
           : isScheduledFutureOrder
           ? `Order Scheduled for ${formattedScheduledTime} ⏰`
+          : isCodConfirmNow
+          ? "Order Placed - Please answer our call 📞"
           : "Order Confirmed! 🎉",
         body: isAwaitingOnlinePayment
           ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
+          : isCodConfirmNow
+          ? codConfirmBody
           : isScheduledFutureOrder
           ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before your scheduled time.`
           : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
@@ -513,8 +548,13 @@ export async function createOrder(userId, dto) {
         },
       });
 
-      // Restaurant gets new-order request only if NOT a future scheduled order (> 35 mins away)
-      if (!isScheduledFutureOrder) {
+      // Restaurant gets new-order request only if NOT a future scheduled order (> 35 mins away).
+      // Cash orders go to a delivery partner for phone confirmation first (restaurant is notified after that).
+      if (isCodConfirmNow) {
+        void codVerificationService.startCodVerification(order._id).catch((err) =>
+          logger.error(`COD verification start failed for order ${order._id}: ${err.message}`),
+        );
+      } else if (!isScheduledFutureOrder) {
         order.scheduledDispatched = true;
         await order.save();
         await notifyRestaurantNewOrder(order);
@@ -532,9 +572,13 @@ export async function createOrder(userId, dto) {
             ? "Complete Payment to Confirm Order"
             : isScheduledFutureOrder
             ? "Order Scheduled!"
+            : isCodConfirmNow
+            ? "Order Placed!"
             : "Order Confirmed!",
           message: isAwaitingOnlinePayment
             ? `Order #${order.order_id || order._id} is created. Please complete payment to send it to ${restaurant.restaurantName || "the restaurant"}.`
+            : isCodConfirmNow
+            ? codConfirmBody
             : isScheduledFutureOrder
             ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before scheduled time.`
             : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
@@ -878,6 +922,11 @@ export async function processScheduledFoodOrders() {
 
     for (const order of dueOrders) {
       try {
+        if (codVerificationService.isAwaitingCodVerification(order)) {
+          await codVerificationService.startCodVerification(order._id);
+          logger.info(`[Scheduled Order] COD order #${order.order_id || order._id} released for delivery-partner confirmation.`);
+          continue;
+        }
         order.scheduledDispatched = true;
         await order.save();
         await notifyRestaurantNewOrder(order);
@@ -965,7 +1014,7 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     return normalizeOrderForClient(await FoodOrder.findById(order._id));
   }
 
-  const allowed = ["created", "placed", "pending", "pending_payment"];
+  const allowed = ["created", "placed", "pending", "pending_payment", codVerificationService.PENDING_COD_STATUS];
   if (!allowed.includes(order.orderStatus))
     throw new ValidationError("Order cannot be cancelled because the restaurant has already accepted or processed it.");
 
@@ -974,6 +1023,17 @@ export async function cancelOrder(orderId, userId, payload = {}) {
   const displayReason = cancellationReason === 'Other' && cancellationComment ? cancellationComment : (cancellationReason || cancellationComment || 'No reason provided');
 
   const from = order.orderStatus;
+  // Rider(s) offered / verifying a COD order; they are released below.
+  const codRiderIds = from === codVerificationService.PENDING_COD_STATUS
+    ? [order.codVerification?.currentOfferPartnerId, order.codVerification?.approvedBy].filter(Boolean).map(String)
+    : [];
+  if (from === codVerificationService.PENDING_COD_STATUS && order.codVerification) {
+    order.codVerification.state = "cancelled";
+    order.codVerification.cancelledAt = new Date();
+    order.codVerification.cancelReason = "Cancelled by customer";
+    order.codVerification.offerExpiresAt = null;
+    order.dispatch.status = "cancelled";
+  }
   order.orderStatus = "cancelled_by_user";
   order.cancellationReason = cancellationReason;
   order.cancellationComment = cancellationComment;
@@ -1085,6 +1145,10 @@ export async function cancelOrder(orderId, userId, payload = {}) {
   ];
   if (order.deliveryPartnerId) {
     notificationTargets.push({ ownerType: "DELIVERY_PARTNER", ownerId: order.deliveryPartnerId });
+  }
+  // COD verification rider: stop the ring (the delivery_partners socket broadcast below closes the popup / trip).
+  for (const riderId of codRiderIds) {
+    stopOrderRing("DELIVERY_PARTNER", riderId, String(order._id), { order, body: "Order cancelled by customer" });
   }
 
   // Stage 1 (restaurant has not accepted): free cancellation with the admin-configured messages.
@@ -1403,6 +1467,8 @@ export async function listOrdersRestaurant(restaurantId, query) {
           { "payment.status": { $in: ["paid", "authorized", "captured", "settled", "refunded"] } },
         ],
       },
+      // Cash orders reach the restaurant only after a delivery partner confirmed them with the customer.
+      { orderStatus: { $ne: codVerificationService.PENDING_COD_STATUS } },
       // Hide scheduled orders that are still on hold (released 30 min before scheduledAt)
       {
         $or: [
@@ -2016,7 +2082,10 @@ export async function listOrdersAdmin(query = {}, adminContext = null) {
   if (rawStatus && rawStatus !== "all") {
     switch (rawStatus) {
       case "pending":
-        filter.orderStatus = { $in: ["pending_payment", "created", "confirmed", "pending"] };
+        filter.orderStatus = { $in: ["pending_payment", "pending_cod_verification", "created", "confirmed", "pending"] };
+        break;
+      case "pending_cod_verification":
+        filter.orderStatus = "pending_cod_verification";
         break;
       case "pending_payment":
         filter.orderStatus = "pending_payment";

@@ -1462,6 +1462,16 @@ function CartInner() {
   };
   const gstBreakdown = getGstBreakdown();
   const total = Math.round(baseTotal + deliveryPartnerTip)
+  // COD charge (+18% GST) is paid only on Cash on Delivery; the server adds it when the order is placed.
+  // `total` stays the food bill (COD limits are checked on it), `payableTotal` is what this customer pays.
+  const codChargeAmount = Number(pricing?.codCharge || 0)
+  const codChargeGst = Number(pricing?.codChargeGst || 0)
+  const codChargeGstRate = Number(pricing?.codChargeGstRate || 18)
+  const codChargeTotal = Number(pricing?.codChargeTotal || 0)
+  const isCashSelected = selectedPaymentMethod === "cash"
+  const payableTotal = isCashSelected && codChargeTotal > 0 ? Math.round((total + codChargeTotal) * 100) / 100 : total
+  const payableTotalLabel = Number.isInteger(payableTotal) ? String(payableTotal) : payableTotal.toFixed(2)
+  const formatRupees = (n) => (Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(2))
 
   // Savings: Only genuine coupon discounts or item MRP differences (never roundoff differences)
   const itemSavings = cart.reduce((sum, item) => {
@@ -3315,13 +3325,13 @@ function CartInner() {
                         {savings > 0 ? (
                           <>
                             <span className="text-base text-gray-400 dark:text-gray-500 line-through font-medium">{RUPEE_SYMBOL}{Math.round(total + savings)}</span>
-                            <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{Math.round(total)}</span>
+                            <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{payableTotalLabel}</span>
                             <span className="text-[11px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded text-center ml-1 font-semibold border border-blue-200 dark:border-blue-800">
                               You saved {RUPEE_SYMBOL}{Math.round(savings)}
                             </span>
                           </>
                         ) : (
-                          <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{Math.round(total)}</span>
+                          <span className="text-base font-bold text-gray-900 dark:text-white">{RUPEE_SYMBOL}{payableTotalLabel}</span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Incl. taxes and charges</p>
@@ -3409,10 +3419,29 @@ function CartInner() {
                         <span>-{RUPEE_SYMBOL}{Math.round(discount)}</span>
                       </div>
                     )}
+                    {isPricingAvailable && isCashSelected && codChargeTotal > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">COD Charge</span>
+                          <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{codChargeAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">GST on COD charge ({codChargeGstRate}%)</span>
+                          <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{codChargeGst.toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between text-base font-bold pt-3 mt-1 border-t border-gray-100 dark:border-gray-800 text-gray-900 dark:text-white">
                       <span>To Pay</span>
-                      <span>{RUPEE_SYMBOL}{Math.round(total)}</span>
+                      <span>{RUPEE_SYMBOL}{payableTotalLabel}</span>
                     </div>
+                    {isPricingAvailable && codChargeTotal > 0 && (
+                      <p className={`text-xs font-semibold mt-1 ${isCashSelected ? "text-gray-500 dark:text-gray-400" : "text-green-600 dark:text-green-400"}`}>
+                        {isCashSelected
+                          ? `Pay online and save ${RUPEE_SYMBOL}${formatRupees(codChargeTotal)} COD charge.`
+                          : `You save ${RUPEE_SYMBOL}${formatRupees(codChargeTotal)} COD charge by paying online.`}
+                      </p>
+                    )}
                     {pricingError && (
                       <div className="mt-3 p-3.5 bg-red-50 dark:bg-red-950/40 rounded-2xl border border-red-200 dark:border-red-800 flex items-start gap-3 shadow-xs">
                         <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -3622,7 +3651,7 @@ function CartInner() {
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
-                  <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{Math.round(total)}</span>
+                  <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{payableTotalLabel}</span>
                   <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-white/80 mt-[-2px]">Total</span>
                 </div>
               )}
@@ -3972,7 +4001,7 @@ function CartInner() {
                     {
                       id: 'cash',
                       name: 'Cash on Delivery',
-                      description: pricing?.codRestaurantEnabled === false ? (Number(pricing?.codRestaurantMaxAmount) > 0 ? `This restaurant accepts COD only for orders up to ${RUPEE_SYMBOL}${pricing.codRestaurantMaxAmount}` : "This restaurant doesn't accept COD orders.") : (pricing?.codLimit != null && total >= pricing.codLimit) ? `COD is available only for orders below ${RUPEE_SYMBOL}${pricing.codLimit}` : pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : 'Pay when order arrives',
+                      description: pricing?.codRestaurantEnabled === false ? (Number(pricing?.codRestaurantMaxAmount) > 0 ? `This restaurant accepts COD only for orders up to ${RUPEE_SYMBOL}${pricing.codRestaurantMaxAmount}` : "This restaurant doesn't accept COD orders.") : (pricing?.codLimit != null && total >= pricing.codLimit) ? `COD is available only for orders below ${RUPEE_SYMBOL}${pricing.codLimit}` : pricing?.codBlocked ? `Unavailable until your ${RUPEE_SYMBOL}${pricing.codBlockedAmount} cancellation charge is paid` : codChargeTotal > 0 ? `Pay when order arrives · +${RUPEE_SYMBOL}${formatRupees(codChargeTotal)} COD charge (incl. GST)` : 'Pay when order arrives',
                       disabled: pricing?.codRestaurantEnabled === false || (pricing?.codLimit != null && total >= pricing.codLimit) || Boolean(pricing?.codBlocked),
                       disabledText: pricing?.codRestaurantEnabled === false ? (Number(pricing?.codRestaurantMaxAmount) > 0 ? 'Order too high' : 'Not available') : (pricing?.codLimit != null && total >= pricing.codLimit) ? 'Order too high' : 'Pay charges first',
                       icon: <Banknote className="w-5 h-5" />,
@@ -4055,7 +4084,7 @@ function CartInner() {
                 >
                   <div className="flex-shrink-0">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
-                    <p className="text-xl font-black text-[color:var(--app-primary,#EB590E)] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
+                    <p className="text-xl font-black text-[color:var(--app-primary,#EB590E)] tabular-nums">{RUPEE_SYMBOL}{payableTotalLabel}</p>
                   </div>
                   <Button
                     onClick={() => setShowPaymentSheet(false)}

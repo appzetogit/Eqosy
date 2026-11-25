@@ -51,6 +51,10 @@ router.get('/orders/available', authMiddleware, requireRoles('DELIVERY_PARTNER')
 router.get('/orders/:orderId', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.getOrderByIdDeliveryController);
 router.patch('/orders/:orderId/accept', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.acceptOrderDeliveryController);
 router.patch('/orders/:orderId/reject', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.rejectOrderDeliveryController);
+// COD orders: rider confirms with the customer by phone before the order reaches the restaurant.
+router.post('/orders/:orderId/cod-verification/call', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.logCodCallAttemptController);
+router.post('/orders/:orderId/cod-verification/confirm', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmCodOrderController);
+router.post('/orders/:orderId/cod-verification/not-reachable', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.markCodCustomerUnreachableController);
 router.post('/orders/:orderId/handover', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.handoverDeliveryOrderController);
 router.post('/orders/:orderId/customer-unreachable', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.requestUndeliveredReturnController);
 router.post('/orders/:orderId/return/verify-otp', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.verifyReturnOtpDeliveryController);

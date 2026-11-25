@@ -92,6 +92,18 @@ const feeSettingsSchema = new mongoose.Schema(
         additionalCharges: { type: [additionalChargeSchema], default: [] },
         gstRate: { type: Number, min: 0, max: 100 },
         codLimit: { type: Number, min: 0 },
+        // COD handling charge added to Cash on Delivery orders only (never shown on online/wallet orders).
+        // The amount goes to the delivery partner who verifies the order; 18% GST is charged on top of it.
+        codCharge: {
+            type: new mongoose.Schema(
+                {
+                    isEnabled: { type: Boolean, default: false },
+                    amount: { type: Number, min: 0, default: 0 }
+                },
+                { _id: false }
+            ),
+            default: () => ({ isEnabled: false, amount: 0 })
+        },
         // Which payment options customers may use at checkout (all open by default).
         paymentMethods: {
             type: new mongoose.Schema(

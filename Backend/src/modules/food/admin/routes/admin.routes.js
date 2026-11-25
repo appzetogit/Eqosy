@@ -246,6 +246,7 @@ router.put('/delivery-emergency-help', requireFoodResourceAccess('delivery', 'de
 
 // ----- Withdrawals (admin) -----
 router.get('/withdrawals', requireFoodResourceAccess('wallet', 'wallet'), adminController.getWithdrawals);
+router.get('/restaurant-payouts/overview', requireFoodResourceAccess('wallet', 'wallet'), adminController.getRestaurantPayoutOverview);
 router.patch('/withdrawals/:id', requireFoodResourceAccess('wallet', 'wallet'), adminController.updateWithdrawalStatus);
 router.get('/delivery/withdrawals', requireFoodResourceAccess('delivery', 'delivery'), adminController.getDeliveryWithdrawals);
 router.patch('/delivery/withdrawals/:id', requireFoodResourceAccess('delivery', 'delivery'), adminController.updateDeliveryWithdrawalStatus);

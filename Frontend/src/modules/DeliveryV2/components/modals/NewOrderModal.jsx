@@ -21,7 +21,13 @@ const PASS_REASONS = [
 
 export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize }) => {
   const { riderLocation } = useDeliveryStore();
-  const [timeLeft, setTimeLeft] = useState(30);
+  // COD verification offers carry their own server deadline (2 min); normal offers keep the 30s popup.
+  const isCodVerification = Boolean(order?.codVerification === true || order?.codVerification === 'true');
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const expiresAt = order?.offerExpiresAt ? new Date(order.offerExpiresAt).getTime() : NaN;
+    if (Number.isFinite(expiresAt)) return Math.max(1, Math.round((expiresAt - Date.now()) / 1000));
+    return isCodVerification ? Number(order?.offerWindowSec) || 120 : 30;
+  });
   const [showPass, setShowPass] = useState(false);
   const [passReason, setPassReason] = useState(null);
   const isClosedOnly = Boolean(order?.isClaimedByOther || order?.isAcceptedByOther || order?.status === 'accepted_by_other');
@@ -108,6 +114,8 @@ export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize })
     const tip = Number(order?.pricing?.deliveryPartnerTip ?? order?.deliveryPartnerTip ?? 0);
     return baseFee + surge + tip;
   }, [order]);
+  // The COD charge is earned once the customer confirms; show it on top of the trip earning.
+  const codCharge = isCodVerification ? Number(order?.codCharge ?? order?.pricing?.codCharge ?? 0) || 0 : 0;
 
   const restaurantName = order.restaurantName || order.restaurant_name || (order.restaurantId?.restaurantName || order.restaurantId?.name) || 'Restaurant';
   const restaurantAddress = order.restaurantAddress || order.restaurant_address || (order.restaurantId?.location?.formattedAddress || order.restaurantId?.location?.address || [order.restaurantId?.addressLine1, order.restaurantId?.area, order.restaurantId?.city].filter(Boolean).join(', ')) || 'Address not available';
@@ -236,7 +244,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize })
               </div>
               <div className="flex items-baseline gap-1">
                 <span className="text-xl font-bold opacity-80">₹</span>
-                <h2 className="text-4xl font-black tracking-tighter">{Math.round(Number(earnings || 0))}</h2>
+                <h2 className="text-4xl font-black tracking-tighter">{Math.round(Number(earnings || 0) + codCharge)}</h2>
               </div>
             </div>
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2 text-white flex flex-col items-center min-w-[80px]">
@@ -267,6 +275,16 @@ export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize })
                 </div>
               </div>
             </div>
+
+            {isCodVerification && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[11px] font-black uppercase tracking-wider text-amber-800">COD order: confirm with customer</p>
+                <p className="mt-0.5 text-xs font-semibold text-amber-700">
+                  After accepting, call the customer and confirm the order within 2 minutes. It goes to the restaurant only after they confirm.
+                  {codCharge > 0 ? ` Includes ₹${codCharge} COD charge.` : ''}
+                </p>
+              </div>
+            )}
 
             {/* Payment: already paid online/wallet vs collect cash */}
             <PaymentBadge order={order} />

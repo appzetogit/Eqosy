@@ -28,6 +28,7 @@ let scheduledOrdersInterval = null;
 let performanceSweepInterval = null;
 let cancellationSweepInterval = null;
 let fulfilmentSweepInterval = null;
+let codVerificationSweepInterval = null;
 let selfieCleanupInterval = null;
 
 const gracefulShutdown = async (signal) => {
@@ -49,6 +50,7 @@ const gracefulShutdown = async (signal) => {
             if (performanceSweepInterval) clearInterval(performanceSweepInterval);
             if (cancellationSweepInterval) clearInterval(cancellationSweepInterval);
             if (fulfilmentSweepInterval) clearInterval(fulfilmentSweepInterval);
+            if (codVerificationSweepInterval) clearInterval(codVerificationSweepInterval);
             if (selfieCleanupInterval) clearInterval(selfieCleanupInterval);
             logger.info('Graceful shutdown complete');
             process.exit(0);
@@ -228,6 +230,22 @@ const startServer = async () => {
             }
         };
         fulfilmentSweepInterval = setInterval(runFulfilmentSweep, 20 * 1000);
+
+        // COD phone verification deadlines: 2-min rider offer, 2-min customer call window, rider-search timeout.
+        let codSweepRunning = false;
+        const runCodVerificationSweep = async () => {
+            if (codSweepRunning) return;
+            codSweepRunning = true;
+            try {
+                const { runCodVerificationSweep: sweep } = await import('./src/modules/food/orders/services/codVerification.service.js');
+                await sweep();
+            } catch (err) {
+                logger.error(`COD verification sweep error: ${err.message}`);
+            } finally {
+                codSweepRunning = false;
+            }
+        };
+        codVerificationSweepInterval = setInterval(runCodVerificationSweep, 5 * 1000);
 
         // Delivery verification selfies are removed (file + DB) after 2 days (SELFIE_RETENTION_DAYS).
         const runSelfieCleanup = async () => {

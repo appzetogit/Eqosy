@@ -71,6 +71,8 @@ export default function FeeSettings() {
     surgeTitle: "Surge Charge",
     gstRate: "",
     codLimit: "",
+    codChargeEnabled: false,
+    codChargeAmount: "",
   })
   const [additionalCharges, setAdditionalCharges] = useState([])
   const emptyChargeForm = { _id: "", name: "", amount: "", applicableUnder: "", belowMessage: "", freeMessage: "", freeLabel: "" }
@@ -161,6 +163,8 @@ export default function FeeSettings() {
           surgeTitle: saved.surgeTitle || "Surge Charge",
           gstRate: saved.gstRate ?? "",
           codLimit: saved.codLimit ?? "",
+          codChargeEnabled: saved.codCharge?.isEnabled === true,
+          codChargeAmount: saved.codCharge?.amount != null ? String(saved.codCharge.amount) : "",
         })
       } else {
         setFeeSettings({
@@ -174,6 +178,8 @@ export default function FeeSettings() {
           platformFee: "",
           gstRate: "",
           codLimit: "",
+          codChargeEnabled: false,
+          codChargeAmount: "",
         })
       }
     } catch {
@@ -378,6 +384,15 @@ export default function FeeSettings() {
         toast.error("COD order limit must be 0 or greater")
         return
       }
+      const codChargeAmount = feeSettings.codChargeAmount === "" ? 0 : Number(feeSettings.codChargeAmount)
+      if (!Number.isFinite(codChargeAmount) || codChargeAmount < 0 || codChargeAmount > 1000) {
+        toast.error("COD charge must be between 0 and 1000")
+        return
+      }
+      if (feeSettings.codChargeEnabled && codChargeAmount <= 0) {
+        toast.error("Enter a COD charge greater than 0, or switch the COD charge off")
+        return
+      }
 
       setSavingFeeSettings(true)
       const response = await adminAPI.createOrUpdateFeeSettings({
@@ -396,6 +411,7 @@ export default function FeeSettings() {
         surgeTitle: String(feeSettings.surgeTitle || "").trim() || "Surge Charge",
         gstRate,
         codLimit,
+        codCharge: { isEnabled: feeSettings.codChargeEnabled === true, amount: codChargeAmount },
         isActive: true,
       })
       if (response?.data?.success) {
@@ -1087,6 +1103,57 @@ export default function FeeSettings() {
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
                     placeholder="Leave empty for no limit"
                   />
+                </div>
+              </div>
+
+              {/* COD charge: Cash on Delivery orders only; goes to the delivery partner who verifies the order. */}
+              <div className="border-t border-slate-200 pt-6 mt-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">COD Charge</h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                      Added to Cash on Delivery orders only; online and wallet orders never pay it. The charge goes to the
+                      delivery partner once they confirm the order with the customer by phone. 18% GST is added on top.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={feeSettings.codChargeEnabled === true}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, codChargeEnabled: e.target.checked }))}
+                    />
+                    Enabled
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">COD Charge (₹)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.codChargeAmount}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, codChargeAmount: e.target.value }))}
+                      min="0"
+                      max="1000"
+                      step="1"
+                      disabled={!feeSettings.codChargeEnabled}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all disabled:bg-slate-100"
+                      placeholder="e.g. 20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">Customer pays on a COD order</label>
+                    {(() => {
+                      const amt = Number(feeSettings.codChargeAmount) || 0
+                      const gst = Math.round(amt * 0.18 * 100) / 100
+                      return (
+                        <div className="px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+                          {feeSettings.codChargeEnabled && amt > 0
+                            ? `₹${amt} + ₹${gst} GST (18%) = ₹${Math.round((amt + gst) * 100) / 100} · Delivery partner earns ₹${amt}`
+                            : "No COD charge"}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
               </div>
             </>

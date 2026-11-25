@@ -42,6 +42,10 @@ const feeSettingsUpsertSchema = z.object({
     surgeTitle: z.string().optional(),
     gstRate: z.number().min(0).max(100).nullable().optional(),
     codLimit: z.number().min(0).nullable().optional(),
+    codCharge: z.object({
+        isEnabled: z.boolean(),
+        amount: z.number({ invalid_type_error: 'COD charge must be a number' }).min(0, 'COD charge must be 0 or greater').max(1000, 'COD charge must be 1000 or less')
+    }).optional(),
     isActive: z.boolean().optional()
 });
 
@@ -117,6 +121,12 @@ export const validateFeeSettingsUpsertDto = (body) => {
                 : body?.codLimit !== undefined
                     ? Number(body.codLimit)
                     : undefined,
+        codCharge: body?.codCharge && typeof body.codCharge === 'object'
+            ? {
+                isEnabled: body.codCharge.isEnabled === true,
+                amount: body.codCharge.amount === '' || body.codCharge.amount == null ? 0 : Number(body.codCharge.amount)
+            }
+            : undefined,
         isActive: body?.isActive !== undefined ? Boolean(body.isActive) : undefined
     };
 
@@ -166,6 +176,10 @@ export const validateFeeSettingsUpsertDto = (body) => {
             minOrderAmount: Math.round((Number(result.data.deliveryPartnerIncentiveRule.minOrderAmount || 0)) * 100) / 100,
             incentivePercent: Math.round((Number(result.data.deliveryPartnerIncentiveRule.incentivePercent || 0)) * 100) / 100,
         };
+    }
+
+    if (result.data.codCharge) {
+        result.data.codCharge.amount = Math.round(result.data.codCharge.amount * 100) / 100;
     }
 
     return result.data;

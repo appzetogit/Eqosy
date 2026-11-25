@@ -1493,6 +1493,17 @@ export async function processRefund(req, res, next) {
         next(error);
     }
 }
+/** Per-restaurant earned / paid / pending / payable, plus platform-wide totals. */
+export async function getRestaurantPayoutOverview(req, res, next) {
+    try {
+        const { getRestaurantPayoutOverview: overview } = await import('../../restaurant/services/restaurantFinance.service.js');
+        const data = await overview(req.query || {});
+        res.status(200).json({ success: true, message: 'Restaurant payout overview fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function getWithdrawals(req, res, next) {
     try {
         const data = await adminService.getWithdrawals(req.query || {});

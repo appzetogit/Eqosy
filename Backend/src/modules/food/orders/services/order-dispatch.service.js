@@ -118,7 +118,7 @@ export function isPartnerInZoneStrict(partner, targetZoneId, activeZones = []) {
   return isPointInPolygon(Number(partner.lastLat), Number(partner.lastLng), zone.coordinates || []);
 }
 
-async function listNearbyOnlineDeliveryPartners(
+export async function listNearbyOnlineDeliveryPartners(
   restaurantId,
   { maxKm = 15, limit = 25, orderDeliveryDistance = 0 } = {},
 ) {
@@ -265,7 +265,7 @@ async function listNearbyOnlineDeliveryPartners(
  * A partner below the limit may still be offered a COD order that pushes them over it: they complete it and
  * are then forced offline (see enforceCashLimitAfterDelivery); the offer carries a warning for the popup.
  */
-async function filterPartnersByCodCashLimit(partners = [], order = null) {
+export async function filterPartnersByCodCashLimit(partners = [], order = null) {
   if (!Array.isArray(partners) || partners.length === 0) return [];
 
   const blockedSet = await getCashBlockedSet(partners.map((p) => p?.partnerId));

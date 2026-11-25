@@ -23,6 +23,7 @@ import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modal
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
 import { PaymentBadge } from '@/modules/DeliveryV2/components/PaymentBadge';
 import { CustomerUnreachablePanel } from '@/modules/DeliveryV2/components/CustomerUnreachablePanel';
+import { CodVerificationPanel } from '@/modules/DeliveryV2/components/CodVerificationPanel';
 import { BookGigModal } from '@/modules/DeliveryV2/components/modals/BookGigModal';
 import { SelfieVerificationModal } from '@/modules/DeliveryV2/components/modals/SelfieVerificationModal';
 import LocationPermissionModal from '@/modules/DeliveryV2/components/modals/LocationPermissionModal';
@@ -592,7 +593,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           const currentPhase = serverData.deliveryState?.currentPhase;
 
           let targetTripStatus = 'PICKING_UP';
-          if (['delivered', 'completed', 'DELIVERED'].includes(backendStatus)) {
+          if (backendStatus === 'pending_cod_verification') {
+            targetTripStatus = 'COD_VERIFY';
+          } else if (['delivered', 'completed', 'DELIVERED'].includes(backendStatus)) {
             targetTripStatus = 'COMPLETED';
           } else if (currentPhase === 'at_drop' || ['reached_drop', 'REACHED_DROP'].includes(backendStatus)) {
             targetTripStatus = 'REACHED_DROP';
@@ -1403,7 +1406,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     if (orderStatusUpdate) {
       const status = String(orderStatusUpdate.orderStatus || orderStatusUpdate.status || '').toLowerCase();
       if (status.includes('cancel')) {
-        toast.error('Order cancelled by restaurant');
+        toast.error(orderStatusUpdate.message || 'Order cancelled by restaurant');
         resetTrip();
       } else if (activeOrder) {
         const isReady = status === 'ready_for_pickup' || status === 'ready' || Boolean(orderStatusUpdate.isFoodReady);
@@ -1766,6 +1769,24 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       clearNewOrder();
                     }}
                     onMinimize={() => setIsModalMinimized(true)}
+                  />
+                )}
+                {tripStatus === 'COD_VERIFY' && activeOrder && (
+                  <CodVerificationPanel
+                    order={activeOrder}
+                    onConfirmed={(fresh) => {
+                      setActiveOrder({
+                        ...activeOrder,
+                        ...(fresh && typeof fresh === 'object' ? fresh : {}),
+                        orderStatus: fresh?.orderStatus && fresh.orderStatus !== 'pending_cod_verification' ? fresh.orderStatus : 'created',
+                        restaurantLocation: activeOrder.restaurantLocation,
+                        customerLocation: activeOrder.customerLocation,
+                      }, 'PICKING_UP');
+                    }}
+                    onCancelled={() => {
+                      resetTrip();
+                      clearActiveOrder();
+                    }}
                   />
                 )}
                 {(tripStatus === 'PICKING_UP' || tripStatus === 'REACHED_PICKUP') && (

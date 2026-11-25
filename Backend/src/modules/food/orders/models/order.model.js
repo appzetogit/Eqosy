@@ -84,6 +84,10 @@ const pricingSchema = new mongoose.Schema(
         restaurantCommissionLeague: { type: String, default: '' },
         restaurantCommissionMonth: { type: String, default: '' },
         discount: { type: Number, default: 0, min: 0 },
+        /** COD handling charge (admin-set). Only on cash orders; the charge goes to the rider who verifies the order. */
+        codCharge: { type: Number, default: 0, min: 0 },
+        codChargeGstRate: { type: Number, default: 0, min: 0, max: 100 },
+        codChargeGst: { type: Number, default: 0, min: 0 },
         deliveryPartnerTip: { type: Number, default: 0, min: 0 },
         total: { type: Number, required: true, min: 0 },
         currency: { type: String, default: 'INR' }
@@ -269,6 +273,47 @@ const undeliveredReturnSchema = new mongoose.Schema(
 );
 
 /**
+ * COD phone verification, done by a delivery partner BEFORE the order reaches the restaurant.
+ * awaiting_rider (offered to one rider at a time, 2 min each) -> calling (rider approved; 2 min to reach the
+ * customer) -> confirmed (order goes to the restaurant) | cancelled. `scheduled` = future order, started 30 min
+ * before scheduledAt. See codVerification.service.js.
+ */
+const codVerificationSchema = new mongoose.Schema(
+    {
+        state: {
+            type: String,
+            enum: ['scheduled', 'awaiting_rider', 'calling', 'confirmed', 'cancelled'],
+            default: 'awaiting_rider'
+        },
+        startedAt: { type: Date, default: null },
+        /** Give up (cancel) if no rider has approved by this time. */
+        searchDeadlineAt: { type: Date, default: null },
+        currentOfferPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        offerExpiresAt: { type: Date, default: null },
+        /** No rider was free: try again at this time. */
+        nextRetryAt: { type: Date, default: null },
+        /** Optimistic lock so two workers never offer the order at the same time. */
+        offerVersion: { type: Number, default: 0 },
+        offers: [{
+            _id: false,
+            partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner' },
+            at: { type: Date, default: Date.now },
+            action: { type: String, enum: ['offered', 'approved', 'rejected', 'timeout', 'released'], default: 'offered' }
+        }],
+        approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        approvedAt: { type: Date, default: null },
+        /** Customer must be reached and confirm before this time, otherwise the order is cancelled. */
+        callDeadlineAt: { type: Date, default: null },
+        callAttempts: { type: Number, default: 0, min: 0 },
+        callLog: [{ _id: false, at: { type: Date, default: Date.now } }],
+        confirmedAt: { type: Date, default: null },
+        cancelledAt: { type: Date, default: null },
+        cancelReason: { type: String, default: '' }
+    },
+    { _id: false }
+);
+
+/**
  * Smart partial fulfilment / item replacement. Additive: orders that never hit an unavailable item keep
  * `state: 'none'` and behave exactly as before. The order's own `orderStatus` is NOT changed by this flow
  * (it stays `created` until the store confirms the final order), so dispatch/cancellation/payout logic is untouched.
@@ -388,6 +433,8 @@ const orderSchema = new mongoose.Schema(
             type: String,
             enum: [
                 'pending_payment',
+                /** COD order waiting for a delivery partner to confirm it with the customer by phone. */
+                'pending_cod_verification',
                 'created',
                 'confirmed',
                 'preparing',
@@ -425,6 +472,8 @@ const orderSchema = new mongoose.Schema(
             ),
             default: () => ({})
         },
+        /** COD phone verification by the delivery partner (see codVerificationSchema). Absent on prepaid orders. */
+        codVerification: { type: codVerificationSchema, default: undefined },
         /** Partial fulfilment / replacement workflow state (see fulfilmentSchema). */
         fulfilment: { type: fulfilmentSchema, default: undefined },
         /** Customer-cancellation policy result (stage, penalty, rescue state), synced to all apps. */
@@ -531,6 +580,8 @@ const orderSchema = new mongoose.Schema(
         riderSurgePay: { type: Number, default: 0, min: 0 },
         riderDeliveryFeeShare: { type: Number, default: 0, min: 0 },
         riderIncentivePay: { type: Number, default: 0, min: 0 },
+        /** COD charge earned by the rider who verified the order (added to riderTotalPayout on confirmation). */
+        riderCodChargePay: { type: Number, default: 0, min: 0 },
         riderTotalPayout: { type: Number, default: 0, min: 0 },
         riderEarning: { type: Number, default: 0, min: 0 },
         platformProfit: { type: Number, default: 0, min: 0 },
@@ -567,6 +618,7 @@ orderSchema.index({ 'dispatch.deliveryPartnerId': 1, 'dispatch.status': 1, updat
 orderSchema.index({ 'payment.status': 1, createdAt: -1 });
 orderSchema.index({ 'payment.method': 1, createdAt: -1 });
 orderSchema.index({ 'fulfilment.state': 1, 'fulfilment.deadlineAt': 1 }, { sparse: true });
+orderSchema.index({ orderStatus: 1, 'codVerification.state': 1 }, { sparse: true });
 
 orderSchema.pre('save', async function (next) {
     if (!this.order_id) {

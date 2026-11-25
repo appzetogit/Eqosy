@@ -44,6 +44,7 @@ const getOrderPhase = (order) =>
   String(order?.deliveryState?.currentPhase || "").toLowerCase();
 
 const ACTIVE_PHASES = new Set([
+  "pending_cod_verification",
   "created",
   "confirmed",
   "preparing",
@@ -396,6 +397,7 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     if (activeOrder?.deliveryState?.isFoodReady === true && !["picked_up", "reached_drop", "delivered", "completed"].includes(s) && p !== "en_route_to_delivery" && p !== "at_drop") {
       return "Food ready – delivery partner will pick it up 🟢";
     }
+    if (s === "pending_cod_verification") return "Please answer our call to confirm your order 📞";
     if (s === "confirmed") return "Order confirmed";
     if (s === "preparing" || s === "created" || s === "pending") {
       if (p === "at_pickup" || s === "reached_pickup") {

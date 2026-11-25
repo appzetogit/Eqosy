@@ -21,6 +21,7 @@ import { isPartnerInActiveZoneSync, isPartnerInZoneStrict, resolveRestaurantZone
 import * as paymentService from './order-payment.service.js';
 import { assertCashLimitNotBreached, enforceCashLimitAfterDelivery } from '../../delivery/services/deliveryCashLimit.service.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
+import * as codVerificationService from './codVerification.service.js';
 
 import {
   buildOrderIdentityFilter,
@@ -391,6 +392,14 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   // Above the COD cash limit: no new orders until a deposit is verified by admin.
   await assertCashLimitNotBreached(deliveryPartnerId);
 
+  // COD order still waiting for phone confirmation: accepting = approving it and calling the customer.
+  {
+    const pending = await FoodOrder.findOne(identity).select('orderStatus').lean();
+    if (codVerificationService.isAwaitingCodVerification(pending)) {
+      return codVerificationService.approveCodOrderByRider(orderId, deliveryPartnerId);
+    }
+  }
+
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
   // Cycle / electric scooter riders cannot take long trips, even if the order reached their app some other way.
@@ -674,6 +683,9 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId, details = 
 
   const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
   if (!order) throw new NotFoundError('Order not found');
+  if (codVerificationService.isAwaitingCodVerification(order)) {
+    return codVerificationService.rejectCodOrderByRider(orderId, deliveryPartnerId);
+  }
   if (order.dispatch.deliveryPartnerId?.toString() !== deliveryPartnerId.toString()) {
     throw new ForbiddenError('Not your order');
   }
