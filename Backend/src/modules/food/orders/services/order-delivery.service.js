@@ -283,6 +283,12 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
             orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'ready'] },
           },
           {
+            orderStatus: 'pending_cod_verification',
+            'codVerification.state': 'awaiting_rider',
+            'codVerification.currentOfferPartnerId': partnerObjId,
+            'codVerification.offerExpiresAt': { $gt: new Date() },
+          },
+          {
             'dispatch.deliveryPartnerId': partnerObjId,
             orderStatus: {
               $nin: [
@@ -336,8 +342,11 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     if (activeZones.length > 0) {
       // Strict: a rider only sees open orders of restaurants in their own zone.
       filteredDocs = filteredDocs.filter((doc) => {
-        // Orders already assigned to this partner always show
+        // Orders already assigned or offered directly (COD verification) to this partner always show
         if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) {
+          return true;
+        }
+        if (doc.orderStatus === 'pending_cod_verification' && String(doc.codVerification?.currentOfferPartnerId) === String(deliveryPartnerId)) {
           return true;
         }
         const restZoneId = resolveRestaurantZoneId(doc.restaurantId, activeZones);
@@ -351,6 +360,9 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     const dispatchSettings = await dispatchService.getDispatchSettings();
     filteredDocs = filteredDocs.filter((doc) => {
       if (doc.dispatch?.deliveryPartnerId && String(doc.dispatch.deliveryPartnerId) === String(deliveryPartnerId)) return true;
+      if (doc.orderStatus === 'pending_cod_verification' && String(doc.codVerification?.currentOfferPartnerId) === String(deliveryPartnerId)) {
+        return true;
+      }
       return !exceedsVehicleTripLimit(partner.vehicleType, { deliveryKm: getOrderTripKm(doc) }, dispatchSettings);
     });
   }
@@ -373,8 +385,20 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
           transactionStatus: tx.status || doc.transactionStatus,
         }
       : doc;
+    const isCodOffer = merged.orderStatus === 'pending_cod_verification';
     // Rider must see "PAID online" vs "COLLECT ₹X" on every card.
-    return { ...merged, ...buildRiderPaymentFields(merged) };
+    return {
+      ...merged,
+      ...buildRiderPaymentFields(merged),
+      ...(isCodOffer
+        ? {
+            isCodVerification: true,
+            codCharge: Number(merged.pricing?.codCharge) || 0,
+            offerExpiresAt: merged.codVerification?.offerExpiresAt || null,
+            offerWindowSec: Math.round(codVerificationService.COD_OFFER_WINDOW_MS / 1000),
+          }
+        : {}),
+    };
   });
 
   return buildPaginatedResult({ docs: enriched, total: filteredDocs.length, page, limit });
@@ -749,6 +773,9 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
   ) {
     throw new ForbiddenError('Not your order');
   }
+  if (['pending_cod_verification', 'pending_payment'].includes(String(order.orderStatus || '').toLowerCase())) {
+    throw new ValidationError('Confirm the COD order with the customer before arriving at the restaurant.');
+  }
   if (order.orderStatus === 'delivered') {
     throw new ValidationError('Order already delivered');
   }
@@ -834,6 +861,15 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
   }
 
   const from = order.orderStatus;
+  if (from === 'pending_cod_verification') {
+    throw new ValidationError('Confirm the COD order with the customer before picking up.');
+  }
+  if (from === 'pending_payment') {
+    throw new ValidationError('Payment is still pending for this order.');
+  }
+  if (from === 'created') {
+    throw new ValidationError('Wait for the restaurant to accept this order before picking up.');
+  }
   const nextStatus = 'picked_up';
   if (!isStatusAdvance(from, nextStatus)) {
     throw new ValidationError(`Order is already at status '${from}'. Cannot re-mark as '${nextStatus}'.`);

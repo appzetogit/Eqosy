@@ -653,6 +653,102 @@ export const processNoShows = async () => {
 };
 
 
+const SHIFT_END_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Tell a delivery partner (who was just set offline) that their gig shift ended.
+ *
+ * The shift-end alert rings ONCE on every device of the partner (push type `shift_ended`) and is sent
+ * at most once per gig booking: `shiftEndAlertSentAt` is claimed atomically, so the cron, the
+ * active-gig API and server restarts can never send it a second time. Stop on the device ends the ring.
+ * A partner who had no ended gig (went online without one) still gets the plain silent `auto_offline` push.
+ */
+export const notifyShiftEnded = async (partnerId) => {
+  const partnerObjId = new mongoose.Types.ObjectId(String(partnerId));
+  const nowMs = Date.now();
+  const notificationTitle = 'Shift Ended — You are now Offline ⏰';
+  const notificationBody = 'Your gig shift has ended. Book a new gig to go online again.';
+
+  // The gig that just ended: the latest non-cancelled booking whose gig ended within the last 24h.
+  let endedBooking = null;
+  try {
+    const bookings = await FoodGigBooking.find({
+      deliveryPartnerId: { $in: [partnerObjId, String(partnerId)] },
+      status: { $ne: 'cancelled' },
+    })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate('gigId', 'endDateTime')
+      .lean();
+    for (const b of bookings) {
+      const endMs = b.gigId?.endDateTime ? new Date(b.gigId.endDateTime).getTime() : NaN;
+      if (!Number.isFinite(endMs) || endMs > nowMs || nowMs - endMs > SHIFT_END_LOOKBACK_MS) continue;
+      if (!endedBooking || endMs > endedBooking.endMs) endedBooking = { ...b, endMs };
+    }
+  } catch (err) {
+    logger.warn(`[ShiftEnd] Booking lookup failed for partner ${partnerId}: ${err.message}`);
+  }
+
+  // Claim the alert for this booking; only the first caller wins.
+  let alertId = '';
+  if (endedBooking) {
+    const claim = await FoodGigBooking.updateOne(
+      { _id: endedBooking._id, shiftEndAlertSentAt: null },
+      { $set: { shiftEndAlertSentAt: new Date() } },
+    ).catch(() => ({ modifiedCount: 0 }));
+    if (claim.modifiedCount) alertId = String(endedBooking._id);
+  }
+  const alreadyAlerted = Boolean(endedBooking) && !alertId;
+
+  // The status change always reaches the app (keeps its online toggle right); the alert only once.
+  try {
+    const io = getIO();
+    if (io) {
+      io.to(rooms.delivery(partnerObjId)).emit('availability_status_changed', {
+        availabilityStatus: 'offline',
+        reason: 'gig_expired',
+        message: notificationBody,
+        ...(alertId ? { shiftEndAlert: { alertId, bookingId: alertId, title: notificationTitle, message: notificationBody } } : {}),
+      });
+    }
+  } catch {
+    // ignore socket errors
+  }
+
+  if (alreadyAlerted) return { alerted: false, reason: 'already_sent' };
+
+  try {
+    const { createInboxNotifications } = await import('../../../../core/notifications/notification.service.js');
+    await createInboxNotifications({
+      notifications: [
+        {
+          ownerType: 'DELIVERY_PARTNER',
+          ownerId: partnerObjId,
+          title: notificationTitle,
+          message: notificationBody,
+          category: 'gig_expired',
+          metadata: { reason: 'gig_expired', ...(alertId ? { bookingId: alertId } : {}) },
+        },
+      ],
+    });
+  } catch (inboxErr) {
+    logger.warn(`[ShiftEnd] Failed to create inbox notification: ${inboxErr.message}`);
+  }
+
+  await notifyOwnerSafely(
+    { ownerType: 'DELIVERY_PARTNER', ownerId: partnerObjId },
+    {
+      title: notificationTitle,
+      body: notificationBody,
+      data: alertId
+        ? { type: 'shift_ended', reason: 'gig_expired', bookingId: alertId, alertId, targetUrl: '/food/delivery/feed' }
+        : { type: 'auto_offline', reason: 'gig_expired' },
+    },
+  );
+
+  return { alerted: Boolean(alertId), alertId };
+};
+
 export const checkAndAutoOfflineExpiredGigs = async () => {
   const now = new Date();
   const nowMs = now.getTime();
@@ -726,55 +822,7 @@ export const checkAndAutoOfflineExpiredGigs = async () => {
 
       logger.info(`[AutoOffline] Partner ${partner.name || partner._id} auto-offlined (gig expired, no active orders).`);
 
-      const notificationTitle = 'Shift Ended — You are now Offline ⏰';
-      const notificationBody = 'Your gig shift has ended. Book a new gig to go online again.';
-
-      // Create Inbox Notification
-      try {
-        const { createInboxNotifications } = await import('../../../../core/notifications/notification.service.js');
-        await createInboxNotifications({
-          notifications: [
-            {
-              ownerType: 'DELIVERY_PARTNER',
-              ownerId: partner._id,
-              title: notificationTitle,
-              message: notificationBody,
-              category: 'gig_expired',
-              metadata: { reason: 'gig_expired' }
-            }
-          ]
-        });
-      } catch (inboxErr) {
-        logger.warn(`[AutoOffline] Failed to create inbox notification: ${inboxErr.message}`);
-      }
-
-      // Notify partner via socket
-      try {
-        const io = getIO();
-        if (io) {
-          io.to(rooms.delivery(partner._id)).emit('availability_status_changed', {
-            availabilityStatus: 'offline',
-            reason: 'gig_expired',
-            message: notificationBody
-          });
-        }
-      } catch (socketErr) {
-        // ignore socket errors
-      }
-
-      // Push notification (silent/standard notification, no custom alarm sound)
-      try {
-        await notifyOwnerSafely(
-          { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
-          {
-            title: notificationTitle,
-            body: notificationBody,
-            data: { type: 'auto_offline', reason: 'gig_expired' }
-          }
-        );
-      } catch (pushErr) {
-        // ignore push errors
-      }
+      await notifyShiftEnded(partner._id);
     } catch (updateErr) {
       logger.warn(`[AutoOffline] Failed to auto-offline partner ${partner._id}: ${updateErr.message}`);
     }

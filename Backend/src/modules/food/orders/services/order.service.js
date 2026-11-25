@@ -57,6 +57,7 @@ import {
   applyAggregateRating,
   buildDeliverySocketPayload,
   notifyRestaurantNewOrder,
+  canExposeOrderToRestaurant,
   isScheduledOrderOnHold,
   isStatusAdvance,
   emitOrderStatusSocket,
@@ -811,6 +812,8 @@ export async function getOrderById(
     throw new ForbiddenError("Not your order");
   if (restaurantId && orderRestaurantId !== restaurantId.toString())
     throw new ForbiddenError("Not your restaurant order");
+  if (restaurantId && !canExposeOrderToRestaurant(order))
+    throw new NotFoundError("Order not found");
   if (deliveryPartnerId && orderPartnerId !== deliveryPartnerId.toString())
     throw new ForbiddenError("Not assigned to you");
 
@@ -982,7 +985,7 @@ export async function resyncState(userId, role) {
       "dispatch.deliveryPartnerId": new mongoose.Types.ObjectId(userId),
       "dispatch.status": { $in: ["assigned", "accepted"] },
       orderStatus: {
-        $nin: ["delivered", "returned_to_restaurant", "cancelled_by_user", "cancelled_by_restaurant"],
+        $nin: ["delivered", "returned_to_restaurant", "cancelled_by_user", "cancelled_by_restaurant", "cancelled_by_admin"],
       },
     })
       .populate("restaurantId")
@@ -1139,14 +1142,26 @@ export async function cancelOrder(orderId, userId, payload = {}) {
     (finalPaymentStatus === "paid" || finalPaymentStatus === "refunded");
   const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing?.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
 
+  const wasExposedToRestaurant = canExposeOrderToRestaurant({ orderStatus: from, payment: order.payment });
   const notificationTargets = [
     { ownerType: "USER", ownerId: userId },
-    { ownerType: "RESTAURANT", ownerId: order.restaurantId },
+    ...(wasExposedToRestaurant ? [{ ownerType: "RESTAURANT", ownerId: order.restaurantId }] : []),
   ];
-  if (order.deliveryPartnerId) {
-    notificationTargets.push({ ownerType: "DELIVERY_PARTNER", ownerId: order.deliveryPartnerId });
+  const allRiderIds = new Set(
+    [
+      order.deliveryPartnerId,
+      order.dispatch?.deliveryPartnerId,
+      order.codVerification?.currentOfferPartnerId,
+      order.codVerification?.approvedBy,
+      ...codRiderIds,
+    ]
+      .filter(Boolean)
+      .map(String),
+  );
+  for (const riderId of allRiderIds) {
+    notificationTargets.push({ ownerType: "DELIVERY_PARTNER", ownerId: riderId });
   }
-  // COD verification rider: stop the ring (the delivery_partners socket broadcast below closes the popup / trip).
+  // COD verification / offered riders: stop the ring immediately.
   for (const riderId of codRiderIds) {
     stopOrderRing("DELIVERY_PARTNER", riderId, String(order._id), { order, body: "Order cancelled by customer" });
   }
@@ -1189,17 +1204,17 @@ export async function cancelOrder(orderId, userId, payload = {}) {
       io.to(rooms.user(userId)).emit("order_status_update", payload);
       io.to(rooms.user(userId)).emit("order_cancelled", payload);
 
-      if (order.restaurantId) {
+      if (wasExposedToRestaurant && order.restaurantId) {
         io.to(rooms.restaurant(order.restaurantId)).emit("order_status_update", payload);
         io.to(rooms.restaurant(order.restaurantId)).emit("order_cancelled", payload);
       }
 
-      if (order.deliveryPartnerId) {
-        io.to(rooms.delivery(order.deliveryPartnerId)).emit("order_status_update", payload);
-        io.to(rooms.delivery(order.deliveryPartnerId)).emit("order_cancelled", payload);
+      for (const riderId of allRiderIds) {
+        io.to(rooms.delivery(riderId)).emit("order_status_update", payload);
+        io.to(rooms.delivery(riderId)).emit("order_cancelled", payload);
       }
 
-      // Also broadcast to delivery_partners room so any pending order popup stops ringing for online drivers
+      // Also broadcast to delivery_partners room if subscribed
       io.to("delivery_partners").emit("order_cancelled", payload);
       io.to("delivery_partners").emit("order_status_update", payload);
     }
@@ -1507,6 +1522,13 @@ export async function updateOrderStatusRestaurant(
     restaurantId: new mongoose.Types.ObjectId(restaurantId),
   });
   if (!order) throw new NotFoundError("Order not found");
+  if (!canExposeOrderToRestaurant(order)) {
+    throw new ValidationError(
+      order.orderStatus === codVerificationService.PENDING_COD_STATUS
+        ? "This Cash on Delivery order is still awaiting customer confirmation by the delivery partner."
+        : "This order is not available to the restaurant yet.",
+    );
+  }
   if (isScheduledOrderOnHold(order)) {
     throw new ValidationError("This is a scheduled order and will be available 30 minutes before the scheduled time");
   }
@@ -2123,7 +2145,9 @@ export async function listOrdersAdmin(query = {}, adminContext = null) {
         break;
       case "offline-payments":
         filter["payment.method"] = "cash";
-        filter.orderStatus = { $in: ["created", "confirmed", "delivered"] };
+        filter.orderStatus = {
+          $in: ["created", "confirmed", "preparing", "ready_for_pickup", "ready", "reached_pickup", "picked_up", "reached_drop", "delivered"],
+        };
         break;
       case "scheduled":
         filter.scheduledAt = { $ne: null };
@@ -2876,12 +2900,25 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
 
   const reason = String(payload.reason || payload.cancellationReason || "").trim() || "Cancelled by admin";
   const from = order.orderStatus;
+  const wasExposedToRestaurant = canExposeOrderToRestaurant({ orderStatus: from, payment: order.payment });
   const assignedRiderId = order.dispatch?.deliveryPartnerId || order.deliveryPartnerId || null;
+  const codRiders = [order.codVerification?.currentOfferPartnerId, order.codVerification?.approvedBy].filter(Boolean);
+  const allRiderIds = new Set(
+    [assignedRiderId, ...codRiders, ...(order.dispatch?.offeredTo || []).map((o) => o?.partnerId)]
+      .filter(Boolean)
+      .map(String),
+  );
 
   order.orderStatus = "cancelled_by_admin";
   order.cancellationReason = reason;
   order.cancelledAt = new Date();
   order.cancelledBy = "ADMIN";
+  if (from === codVerificationService.PENDING_COD_STATUS && order.codVerification) {
+    order.codVerification.state = "cancelled";
+    order.codVerification.cancelledAt = order.cancelledAt;
+    order.codVerification.cancelReason = reason;
+    order.codVerification.offerExpiresAt = null;
+  }
   void releasePenaltiesForCancelledOrder(order._id);
   if (order.dispatch) {
     order.dispatch.status = "cancelled";
@@ -2897,6 +2934,10 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
   }
 
   await order.save();
+
+  for (const rId of allRiderIds) {
+    stopOrderRing("DELIVERY_PARTNER", rId, String(order._id), { order, body: "Order cancelled by admin" });
+  }
 
   try {
     const finalStatus = String(order.payment?.status || "").toLowerCase();
@@ -2919,9 +2960,12 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
     : "";
   const targets = [
     { ownerType: "USER", ownerId: order.userId },
-    { ownerType: "RESTAURANT", ownerId: order.restaurantId },
+    ...(wasExposedToRestaurant ? [{ ownerType: "RESTAURANT", ownerId: order.restaurantId }] : []),
   ];
-  if (assignedRiderId) targets.push({ ownerType: "DELIVERY_PARTNER", ownerId: assignedRiderId });
+  const notifyRiderIds = new Set([assignedRiderId, ...codRiders].filter(Boolean).map(String));
+  for (const rId of notifyRiderIds) {
+    targets.push({ ownerType: "DELIVERY_PARTNER", ownerId: rId });
+  }
   await notifyOwnersSafely(targets, {
     title: "Order Cancelled ❌",
     body: `Order #${displayId} was cancelled by admin. ${reason}.${refundLine}`,
@@ -2947,11 +2991,11 @@ export async function cancelOrderAdmin(orderId, adminId, payload = {}, adminCont
         cancellationReason: reason,
         message: `Order #${displayId} was cancelled by admin.${refundLine}`,
       };
-      const roomList = [rooms.user(order.userId), rooms.restaurant(order.restaurantId), rooms.tracking(order._id)];
-      if (assignedRiderId) roomList.push(rooms.delivery(assignedRiderId));
-      // Riders who were only offered the order must stop ringing too.
-      for (const offer of order.dispatch?.offeredTo || []) {
-        if (offer?.partnerId) roomList.push(rooms.delivery(offer.partnerId));
+      const roomList = [rooms.user(order.userId), rooms.tracking(order._id)];
+      if (wasExposedToRestaurant && order.restaurantId) roomList.push(rooms.restaurant(order.restaurantId));
+      // Assigned rider, COD verification rider, and offered riders all dismiss/stop ringing.
+      for (const rId of allRiderIds) {
+        roomList.push(rooms.delivery(rId));
       }
       for (const room of new Set(roomList)) {
         io.to(room).emit("order_status_update", socketPayload);

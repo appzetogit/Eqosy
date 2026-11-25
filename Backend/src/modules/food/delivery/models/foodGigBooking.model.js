@@ -67,6 +67,11 @@ const foodGigBookingSchema = new mongoose.Schema(
     ringCount: {
       type: Number,
       default: 0
+    },
+    /** Shift-end alert (one ring per device) already sent for this booking — never send it again. */
+    shiftEndAlertSentAt: {
+      type: Date,
+      default: null
     }
   },
   {

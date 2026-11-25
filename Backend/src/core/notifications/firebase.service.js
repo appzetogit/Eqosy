@@ -177,6 +177,16 @@ const normalizeDataMap = (data = {}) => {
     return result;
 };
 
+const DELIVERY_OFFER_PUSH_TYPES = new Set([
+    'new_order',
+    'new_order_available',
+    'order_assigned',
+    'order_assign',
+    'delivery_assigned',
+]);
+
+const SHIFT_END_PUSH_TYPE = 'shift_ended';
+
 const isRingEvent = (payload = {}) => {
     const data = payload.data || {};
     const type = String(data.type || payload.type || payload.category || '').toLowerCase();
@@ -203,14 +213,20 @@ const isRingEvent = (payload = {}) => {
 
     // Restaurant and delivery partner apps ring ONLY for a new order / booking / assignment.
     // Penalty, cancellation, warning and status alerts reach them as normal silent notifications.
+    const ownerType = String(payload.__ownerType || '').toUpperCase();
     const isPartnerApp = Boolean(payload.__partnerApp);
+
+    // Gig shift ended: rings ONCE on each delivery-partner device (sent once per booking, Stop ends it).
+    if (ownerType === 'DELIVERY_PARTNER' && type === SHIFT_END_PUSH_TYPE) {
+        return true;
+    }
 
     // Explicit ring request from the sender (admin alerts, taxi ride requests).
     if (!isPartnerApp && String(data.ring || payload.ring || '').toLowerCase() === 'true') {
         return true;
     }
 
-    // 2. Status updates, rider arrival, pickup, drop, delivery events are SILENT status notifications (NO RING)
+    // 2. Status updates, rider arrival, pickup, drop, delivery, handover, return, penalty events are SILENT notifications (NO RING)
     if (
         type.includes('rider_arrived') ||
         type.includes('partner_arrived') ||
@@ -227,6 +243,17 @@ const isRingEvent = (payload = {}) => {
         type.includes('order_ready') ||
         type.includes('ready_for_pickup') ||
         type.includes('cancel') ||
+        type.includes('gig_reminder') ||
+        type.includes('auto_offline') ||
+        type.includes('handover') ||
+        type.includes('return') ||
+        type.includes('penalty') ||
+        type.includes('performance') ||
+        type.includes('due_soon') ||
+        type.includes('delay') ||
+        type.includes('offline') ||
+        type.includes('delivery_accepted') ||
+        type.includes('admin_broadcast') ||
         title.includes('arrived') ||
         title.includes('picked up') ||
         title.includes('completed') ||
@@ -236,6 +263,14 @@ const isRingEvent = (payload = {}) => {
         title.includes('ready')
     ) {
         return false;
+    }
+
+    // Delivery partners ring STRICTLY for an incoming delivery order / assignment offer — never for any other notification.
+    if (ownerType === 'DELIVERY_PARTNER') {
+        return (
+            DELIVERY_OFFER_PUSH_TYPES.has(type) ||
+            String(data.codVerification || '').toLowerCase() === 'true'
+        );
     }
 
     // 3. New Order (Food or Dining reservation/booking) -> RING Loudly
@@ -257,13 +292,12 @@ const isRingEvent = (payload = {}) => {
         return true;
     }
 
-    // 4. Delivery partner order dispatch or gig reminder -> RING
+    // 4. Non-partner dispatch / legacy offer fallback
     if (
         type.includes('order_assigned') ||
         type.includes('order_assign') ||
         type.includes('delivery_assigned') ||
-        (!isPartnerApp && type.includes('gig_reminder')) ||
-        title.includes('assigned')
+        (!isPartnerApp && (type.includes('gig_reminder') || title.includes('assigned')))
     ) {
         return true;
     }
@@ -633,18 +667,20 @@ export const sendPushNotification = async (tokens, payload = {}) => {
 export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, platform } = {}) => {
     const normalizedOwnerType = normalizeOwnerType(ownerType);
 
-    // Safety Guard: For DELIVERY_PARTNER order assignment notifications, do NOT notify if rider is offline
+    // Safety Guard: For DELIVERY_PARTNER incoming order offer/assignment pushes, do NOT notify if rider is offline.
+    // Status alerts for an already-accepted order (order_cancelled, handover_approved, return_*, etc.) still go through.
     if (normalizedOwnerType === 'DELIVERY_PARTNER') {
         const dataType = String(payload?.data?.type || '').toLowerCase();
-        const isOrderNotification = dataType.includes('order') || dataType.includes('delivery');
-        const isReminderOrSystem = dataType.includes('reminder') || dataType.includes('alarm') || dataType.includes('gig_');
+        const isDispatchOffer =
+            DELIVERY_OFFER_PUSH_TYPES.has(dataType) ||
+            String(payload?.data?.codVerification || '').toLowerCase() === 'true';
 
-        if (isOrderNotification && !isReminderOrSystem) {
+        if (isDispatchOffer) {
             const partnerId = resolveRoomOwnerId(ownerId);
             if (partnerId) {
                 const partner = await FoodDeliveryPartner.findById(partnerId).select('availabilityStatus').lean();
                 if (!partner || partner.availabilityStatus !== 'online') {
-                    logger.info(`[FCM Push Guard] Skipped order notification (${dataType}) for offline delivery partner ${ownerId}`);
+                    logger.info(`[FCM Push Guard] Skipped order offer notification (${dataType}) for offline delivery partner ${ownerId}`);
                     return { successCount: 0, failureCount: 0, results: [] };
                 }
             }
@@ -653,6 +689,7 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
 
     // 💡 Clone the payload to avoid side-effects (e.g. adding multiple prefixes to the same object during broadcasting)
     const enrichedPayload = { ...payload };
+    enrichedPayload.__ownerType = normalizedOwnerType;
     enrichedPayload.__partnerApp = normalizedOwnerType === 'RESTAURANT' || normalizedOwnerType === 'DELIVERY_PARTNER';
 
     // 🏷️ Add Highlighter Prefix to the Title

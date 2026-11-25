@@ -7,8 +7,8 @@ import originalSound from '@food/assets/audio/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 import { toast } from 'sonner';
 import { showChatNotification } from '@/shared/utils/chatNotificationSound';
-import { isPushRingEvent } from '@food/utils/firebaseMessaging';
 import { dismissOrderAlertNotifications } from '@food/utils/orderAlertCleanup';
+import { presentShiftEndAlert } from '@food/utils/shiftEndAlert';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -552,6 +552,52 @@ export const useDeliveryNotifications = (options = {}) => {
     showNextQueuedOrder();
   }, [stopAlertLoop, showNextQueuedOrder]);
 
+  // Helper: only real incoming delivery order offers/assignments may trigger the ring alarm.
+  const isIncomingOrderOfferAlert = useCallback((orderData = {}) => {
+    const dataType = String(orderData?.type || orderData?.data?.type || '').toLowerCase();
+    const chatType = String(orderData?.chatType || orderData?.data?.chatType || '').toLowerCase();
+    if (
+      dataType.includes('chat') ||
+      chatType.includes('chat') ||
+      orderData?.openChat === 'true' ||
+      orderData?.conversationId ||
+      dataType.includes('gig_reminder') ||
+      dataType.includes('auto_offline') ||
+      dataType.includes('shift_ended') ||
+      dataType.includes('order_ready') ||
+      dataType.includes('ready_for_pickup') ||
+      dataType.includes('handover') ||
+      dataType.includes('return') ||
+      dataType.includes('penalty') ||
+      dataType.includes('performance') ||
+      dataType.includes('due_soon') ||
+      dataType.includes('delay') ||
+      dataType.includes('cancel') ||
+      dataType.includes('ring_stop') ||
+      dataType.includes('admin_broadcast') ||
+      dataType.includes('wallet')
+    ) {
+      return false;
+    }
+    if (String(orderData?.ring || orderData?.data?.ring || '').toLowerCase() === 'false') {
+      return false;
+    }
+    const orderStatus = String(orderData?.orderStatus || orderData?.status || '').toLowerCase();
+    if (
+      orderStatus.includes('cancel') ||
+      ['delivered', 'completed', 'returned_to_restaurant', 'picked_up', 'reached_drop'].includes(orderStatus)
+    ) {
+      return false;
+    }
+    // Offers for food that is already ready (late dispatch / reassignment) must still ring;
+    // only a "ready" update for an order this rider already accepted stays silent.
+    const dispatchStatus = String(orderData?.dispatch?.status || '').toLowerCase();
+    if (dispatchStatus === 'accepted' && ['ready', 'ready_for_pickup'].includes(orderStatus)) {
+      return false;
+    }
+    return Boolean(getOrderAlertKey(orderData) || orderData?.codVerification || orderData?.order || orderData?.restaurantName);
+  }, []);
+
   const handleIncomingOrderAlert = useCallback((orderData = {}) => {
     if (!isOnlineRef.current) {
       debugLog('Delivery partner is offline; suppressing incoming order alert sound and notification');
@@ -583,20 +629,12 @@ export const useDeliveryNotifications = (options = {}) => {
       return;
     }
 
-    if (!shouldProcessOrderAlert(orderData)) {
-      return;
-    }
-
-    // SPECIAL CASE: Gig Reminders should play sound ONCE and NEVER enter the continuous alarm loop
+    // SPECIAL CASE: Gig Reminders are shown silently — NEVER ring or enter alarm loop.
     if (dataType.includes('gig_reminder')) {
       const gigId = orderData?.data?.bookingId || orderData?.data?.gigId || orderData?.gigId || '';
-      const currentPartnerId = String(deliveryPartnerId || '').trim();
       if (gigId && isGigReminderDismissed(gigId, currentPartnerId)) {
-        debugLog('[GigReminder] Already dismissed — skipping sound');
         return;
       }
-
-      playNotificationSound(orderData);
 
       const notifMessage = orderData?.message || orderData?.title || orderData?.body || 'Your shift starts soon. Please log in and go online!';
 
@@ -631,16 +669,23 @@ export const useDeliveryNotifications = (options = {}) => {
       return;
     }
 
-    activeOrderRef.current = orderData || { id: Date.now() };
-    if (isPushRingEvent(orderData)) {
-      playNotificationSound(orderData);
-      startAlertLoop(playNotificationSound);
+    if (!isIncomingOrderOfferAlert(orderData)) {
+      debugLog('Suppressed ring for non-order notification:', dataType || orderData);
+      return;
     }
+
+    if (!shouldProcessOrderAlert(orderData)) {
+      return;
+    }
+
+    activeOrderRef.current = orderData;
+    playNotificationSound(orderData);
+    startAlertLoop(playNotificationSound);
 
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       showBackgroundOrderNotification(orderData);
     }
-  }, [deliveryPartnerId, playNotificationSound, showBackgroundOrderNotification, startAlertLoop]);
+  }, [deliveryPartnerId, isIncomingOrderOfferAlert, playNotificationSound, showBackgroundOrderNotification, startAlertLoop]);
 
   const recoverDeliveryState = useCallback(async () => {
     if (!deliveryPartnerId) return;
@@ -662,6 +707,12 @@ export const useDeliveryNotifications = (options = {}) => {
 
       if (currentTrip) {
         debugLog('Recovered current delivery trip after reconnect/focus:', currentTrip);
+        if (newOrderRef.current && getOrderAlertKey(newOrderRef.current) === getOrderAlertKey(currentTrip)) {
+          stopAlertLoop();
+          activeOrderRef.current = null;
+          newOrderRef.current = null;
+          setNewOrder(null);
+        }
         setOrderStatusUpdate({
           ...currentTrip,
           recoverySource: 'delivery_reconnect',
@@ -692,6 +743,15 @@ export const useDeliveryNotifications = (options = {}) => {
             : [];
 
       const isOpenOrder = (order) => {
+        const orderStatus = String(order?.orderStatus || '').toLowerCase();
+        if (orderStatus === 'pending_cod_verification') {
+          const cv = order?.codVerification || {};
+          const expiresAt = cv.offerExpiresAt ? new Date(cv.offerExpiresAt).getTime() : NaN;
+          return (
+            cv.state === 'awaiting_rider' &&
+            (!Number.isFinite(expiresAt) || expiresAt > Date.now())
+          );
+        }
         const dispatchStatus = order?.dispatch?.status;
         return (
           ['unassigned', 'assigned'].includes(dispatchStatus) &&
@@ -717,7 +777,7 @@ export const useDeliveryNotifications = (options = {}) => {
     } catch (error) {
       debugWarn('Delivery recovery sync failed:', error?.message || error);
     }
-  }, [deliveryPartnerId, handleIncomingOrderAlert]);
+  }, [deliveryPartnerId, handleIncomingOrderAlert, stopAlertLoop]);
 
   const joinDeliveryRoomIfPossible = useCallback(() => {
     if (!socketRef.current?.connected || !deliveryPartnerId) {
@@ -826,7 +886,8 @@ export const useDeliveryNotifications = (options = {}) => {
     const onVisibilityChange = () => {
       if (typeof document === 'undefined') return;
       if (document.visibilityState !== 'hidden') return;
-      if (!activeOrderRef.current) return;
+      if (!isOnlineRef.current || !activeOrderRef.current || !newOrderRef.current) return;
+      if (!isIncomingOrderOfferAlert(activeOrderRef.current)) return;
 
       playNotificationSound(activeOrderRef.current);
       showBackgroundOrderNotification(activeOrderRef.current);
@@ -836,7 +897,7 @@ export const useDeliveryNotifications = (options = {}) => {
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [playNotificationSound, showBackgroundOrderNotification]);
+  }, [isIncomingOrderOfferAlert, playNotificationSound, showBackgroundOrderNotification]);
 
   // Track user interaction for autoplay policy
   useEffect(() => {
@@ -1170,21 +1231,19 @@ export const useDeliveryNotifications = (options = {}) => {
         debugLog('Ignoring play_notification_sound because delivery partner is offline');
         return;
       }
-      debugLog('play_notification_sound received', {
-        orderId: data?.orderId || data?.orderMongoId || data?.order_id,
-      });
       const normalizedData = {
         orderId: data?.orderId || data?.order_id,
         orderMongoId: data?.orderMongoId || data?.order_mongo_id,
         ...data
       };
-      // Force immediate buzz for notification events, even if dedupe would skip.
-      activeOrderRef.current = normalizedData || { id: Date.now() };
-      playNotificationSound(normalizedData);
-      startAlertLoop(playNotificationSound);
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        showBackgroundOrderNotification(normalizedData);
+      if (!isIncomingOrderOfferAlert(normalizedData)) {
+        debugLog('Ignoring play_notification_sound for non-order event:', normalizedData?.type || normalizedData?.data?.type);
+        return;
       }
+      debugLog('play_notification_sound received', {
+        orderId: normalizedData?.orderId || normalizedData?.orderMongoId,
+      });
+      presentIncomingOrder(normalizedData);
       handleIncomingOrderAlert(normalizedData);
     });
 
@@ -1193,9 +1252,6 @@ export const useDeliveryNotifications = (options = {}) => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
       });
       setOrderReady(orderData);
-      if (isPushRingEvent(orderData)) {
-        playNotificationSound(orderData);
-      }
     });
 
     socketRef.current.on('order_status_update', (statusData) => {
@@ -1223,12 +1279,16 @@ export const useDeliveryNotifications = (options = {}) => {
       if (data?.availabilityStatus === 'offline') {
         const reason = data?.reason || '';
         const message = data?.message || 'You have been set to offline.';
-        toast.info(message);
+        if (data?.shiftEndAlert) {
+          // Gig shift ended: one ring with a Stop button, never repeated for the same shift.
+          presentShiftEndAlert(data.shiftEndAlert);
+        } else {
+          toast.info(message);
+        }
         // Update local gig store
-        try {
-          const { useGigStore } = require('../store/gigStore');
-          useGigStore.getState().goOffline();
-        } catch (_) {}
+        import('@food/store/gigStore')
+          .then(({ useGigStore }) => useGigStore?.getState?.().goOffline?.())
+          .catch(() => {});
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('deliveryStatusChanged', { detail: { availabilityStatus: 'offline', reason, ...data } }));
         }
@@ -1339,11 +1399,20 @@ export const useDeliveryNotifications = (options = {}) => {
     socketRef.current.on('cancellation_update', handlePenaltyAlert);
     socketRef.current.on('performance_update', handlePenaltyAlert);
 
+    const formatCancelToast = (data = {}) => {
+      const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
+      const by = String(data?.cancelledBy || '').toLowerCase();
+      if (by === 'system') return data?.message || `COD order #${displayId} was cancelled`;
+      if (by === 'admin') return `Admin cancelled order #${displayId}`;
+      if (by === 'restaurant') return `Restaurant cancelled order #${displayId}`;
+      return `User cancelled order #${displayId}`;
+    };
+
     socketRef.current.on('order_cancelled', (data) => {
       debugLog('❌ Order cancelled event received in delivery partner app:', data);
       dropOrderAndAdvance(data);
       const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
-      toast.error(`User cancelled order #${displayId}`);
+      toast.error(formatCancelToast(data), { id: `cancel-${displayId}` });
       window.dispatchEvent(new CustomEvent('delivery_order_cancelled', { detail: data }));
     });
 
@@ -1352,7 +1421,7 @@ export const useDeliveryNotifications = (options = {}) => {
       if (statusStr.includes('cancel')) {
         dropOrderAndAdvance(data);
         const displayId = data?.orderId || data?.displayId || data?.order_id || data?.orderMongoId || '';
-        toast.error(`User cancelled order #${displayId}`);
+        toast.error(formatCancelToast(data), { id: `cancel-${displayId}` });
       }
       window.dispatchEvent(new CustomEvent('delivery_order_status_updated', { detail: data }));
     });
@@ -1515,8 +1584,10 @@ export const useDeliveryNotifications = (options = {}) => {
     // Push rang but the socket may have missed new_order (app was backgrounded) — fetch the offer.
     const handlePushReceived = (event) => {
       if (!isOnlineRef.current) return;
-      const type = String(event?.detail?.data?.type || event?.detail?.type || '').toLowerCase();
-      if (type.includes('new_order') || type.includes('order_assign') || type.includes('order_ready')) {
+      const data = event?.detail?.data || event?.detail || {};
+      const type = String(data?.type || '').toLowerCase();
+      const isCodOffer = String(data?.codVerification || '').toLowerCase() === 'true';
+      if (isCodOffer || type.includes('new_order') || type.includes('order_assign') || type.includes('delivery_assigned') || type.includes('order_ready')) {
         void recoverDeliveryState();
       }
     };
@@ -1542,7 +1613,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, handleIncomingOrderAlert, presentIncomingOrder, dropOrderAndAdvance, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
+  }, [deliveryPartnerId, handleIncomingOrderAlert, isIncomingOrderOfferAlert, presentIncomingOrder, dropOrderAndAdvance, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
 
   useEffect(() => {
     if (!deliveryPartnerId) {

@@ -83,48 +83,8 @@ export const getActiveGigHandler = asyncHandler(async (req, res) => {
           await partner.save();
           availabilityStatus = 'offline';
 
-          const notificationTitle = 'Shift Ended — You are now Offline ⏰';
-          const notificationBody = 'Your gig shift has ended. Book a new gig to go online again.';
-
-          try {
-            const { getIO, rooms } = await import('../../../../config/socket.js');
-            const io = getIO();
-            if (io) {
-              io.to(rooms.delivery(partner._id)).emit('availability_status_changed', {
-                availabilityStatus: 'offline',
-                reason: 'gig_expired',
-                message: notificationBody
-              });
-            }
-          } catch (_) {}
-
-          try {
-            const { notifyOwnerSafely } = await import('../../../../core/notifications/firebase.service.js');
-            await notifyOwnerSafely(
-              { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
-              {
-                title: notificationTitle,
-                body: notificationBody,
-                data: { type: 'auto_offline', reason: 'gig_expired' }
-              }
-            );
-          } catch (_) {}
-
-          try {
-            const { createInboxNotifications } = await import('../../../../core/notifications/notification.service.js');
-            await createInboxNotifications({
-              notifications: [
-                {
-                  ownerType: 'DELIVERY_PARTNER',
-                  ownerId: partner._id,
-                  title: notificationTitle,
-                  message: notificationBody,
-                  category: 'gig_expired',
-                  metadata: { reason: 'gig_expired' }
-                }
-              ]
-            });
-          } catch (_) {}
+          // Rings once per device and only once per gig (deduped inside notifyShiftEnded).
+          await gigService.notifyShiftEnded(partner._id).catch(() => {});
         }
       } catch (err) {}
     }

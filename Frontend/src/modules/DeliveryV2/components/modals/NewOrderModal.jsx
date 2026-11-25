@@ -22,15 +22,29 @@ const PASS_REASONS = [
 export const NewOrderModal = ({ order, onAccept, onReject, onPass, onMinimize }) => {
   const { riderLocation } = useDeliveryStore();
   // COD verification offers carry their own server deadline (2 min); normal offers keep the 30s popup.
-  const isCodVerification = Boolean(order?.codVerification === true || order?.codVerification === 'true');
-  const [timeLeft, setTimeLeft] = useState(() => {
-    const expiresAt = order?.offerExpiresAt ? new Date(order.offerExpiresAt).getTime() : NaN;
+  const isCodVerification = Boolean(
+    order?.codVerification === true ||
+      order?.codVerification === 'true' ||
+      order?.isCodVerification === true ||
+      order?.codVerification?.state === 'awaiting_rider' ||
+      order?.orderStatus === 'pending_cod_verification',
+  );
+  const computeInitialTimeLeft = (o, isCod) => {
+    const expiresAt = o?.offerExpiresAt ? new Date(o.offerExpiresAt).getTime() : NaN;
     if (Number.isFinite(expiresAt)) return Math.max(1, Math.round((expiresAt - Date.now()) / 1000));
-    return isCodVerification ? Number(order?.offerWindowSec) || 120 : 30;
-  });
+    return isCod ? Number(o?.offerWindowSec) || 120 : 30;
+  };
+  const [timeLeft, setTimeLeft] = useState(() => computeInitialTimeLeft(order, isCodVerification));
   const [showPass, setShowPass] = useState(false);
   const [passReason, setPassReason] = useState(null);
   const isClosedOnly = Boolean(order?.isClaimedByOther || order?.isAcceptedByOther || order?.status === 'accepted_by_other');
+
+  const orderKey = order?.orderId || order?._id || order?.orderMongoId || '';
+  useEffect(() => {
+    setTimeLeft(computeInitialTimeLeft(order, isCodVerification));
+    setShowPass(false);
+    setPassReason(null);
+  }, [orderKey, order?.offerExpiresAt, isCodVerification]);
 
   useEffect(() => {
     if (timeLeft <= 0) {

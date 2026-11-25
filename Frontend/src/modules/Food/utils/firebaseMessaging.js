@@ -3,6 +3,7 @@ import { userAPI, restaurantAPI, deliveryAPI, adminAPI } from "@food/api";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import fallbackNotificationSound from "@food/assets/audio/alert.mp3";
 import { playChatNotificationSound } from "@/shared/utils/chatNotificationSound";
+import { isShiftEndPush, presentShiftEndAlert } from "@food/utils/shiftEndAlert";
 
 const pushNotificationSoundPath = "/zomato_sms.mp3";
 
@@ -270,24 +271,41 @@ export function isPushRingEvent(payload = {}) {
     return false;
   }
 
-  // 2. EXPLICIT GUARD: Status updates (Order Status Update, Food Ready, Preparing, Pickup, Arrived, Delivered, Cancelled)
-  // must show notifications but NEVER play loud order ringtone!
+  // 2. EXPLICIT GUARD: Status updates, cancellations, reminders, handovers, returns & penalty alerts
+  // must show notifications cleanly without playing the order ringtone!
+  const silentTypeMarkers = [
+    'rider_arrived',
+    'partner_arrived',
+    'reached_pickup',
+    'picked_up',
+    'out_for_delivery',
+    'reached_drop',
+    'at_drop',
+    'delivered',
+    'order_completed',
+    'order_status_update',
+    'status_update',
+    'order_ready',
+    'ready_for_pickup',
+    'completed',
+    'cancel',
+    'ring_stop',
+    'gig_reminder',
+    'auto_offline',
+    'handover',
+    'return',
+    'penalty',
+    'performance',
+    'due_soon',
+    'delay',
+    'offline',
+    'delivery_accepted',
+    'admin_broadcast',
+    'wallet',
+  ];
+
   if (
-    type.includes('rider_arrived') ||
-    type.includes('partner_arrived') ||
-    type.includes('reached_pickup') ||
-    type.includes('picked_up') ||
-    type.includes('out_for_delivery') ||
-    type.includes('reached_drop') ||
-    type.includes('at_drop') ||
-    type.includes('delivered') ||
-    type.includes('order_completed') ||
-    type.includes('order_status_update') ||
-    type.includes('status_update') ||
-    type.includes('order_ready') ||
-    type.includes('ready_for_pickup') ||
-    type.includes('completed') ||
-    type.includes('cancel') ||
+    silentTypeMarkers.some((marker) => type.includes(marker)) ||
     title.includes('ready') ||
     title.includes('prepared') ||
     title.includes('completed') ||
@@ -300,48 +318,33 @@ export function isPushRingEvent(payload = {}) {
     return false;
   }
 
-  // 3. EXPLICIT GUARD: Delivery Partner dispatch/request pushes (e.g. "New order request! 🛵")
-  const isDeliveryRequest =
-    title.includes('request') ||
-    title.includes('nearby') ||
-    body.includes('accept now') ||
-    type.includes('order_assigned') ||
-    type.includes('order_assign') ||
-    type.includes('delivery_assigned') ||
-    type.includes('gig_reminder');
+  // Backend data.ring === 'false' is authoritative for partner/status pushes
+  if (String(data.ring || payload?.ring || '').toLowerCase() === 'false') {
+    return false;
+  }
 
-  if (isDeliveryRequest) {
-    // Delivery requests should ONLY ring when the app is currently in the delivery module AND authenticated!
-    if (moduleName !== 'delivery') {
-      return false;
-    }
+  // 3. EXPLICIT GUARD: Delivery Partner incoming order offer/assignment pushes ONLY
+  if (moduleName === 'delivery') {
     const deliveryToken = typeof localStorage !== 'undefined' ? localStorage.getItem('delivery_accessToken') : null;
     if (!deliveryToken) {
       return false;
     }
 
-    // Extra guard for gig_reminder: check if partner already dismissed it
-    if (type.includes('gig_reminder')) {
-      const gigId = data?.bookingId || data?.gigId || payload?.gigId || '';
-      const GIG_DISMISS_PREFIX = 'gig_reminder_dismissed_';
-      if (gigId) {
-        try {
-          for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(GIG_DISMISS_PREFIX) && k.includes(String(gigId))) {
-              const val = localStorage.getItem(k);
-              if (val) {
-                const ts = new Date(val).getTime();
-                if (!isNaN(ts) && Date.now() - ts <= 24 * 60 * 60 * 1000) {
-                  return false;
-                }
-              }
-            }
-          }
-        } catch { /* ignore */ }
-      }
+    const targetStr = String(data.link || data.targetUrl || '').toLowerCase();
+    if (targetStr.includes('/restaurant')) {
+      return false;
     }
-    return true;
+
+    const isDeliveryOrderPush =
+      type === 'new_order' ||
+      type === 'new_order_available' ||
+      type.includes('order_assigned') ||
+      type.includes('order_assign') ||
+      type.includes('delivery_assigned') ||
+      String(data.codVerification || '').toLowerCase() === 'true' ||
+      (!type && (title.includes('nearby') || body.includes('accept now') || title.includes('cod order')));
+
+    return isDeliveryOrderPush;
   }
 
   // 4. Restaurant / User New Order or Dining Reservation Ring Event
@@ -361,10 +364,6 @@ export function isPushRingEvent(payload = {}) {
     title.includes('new dining');
 
   if (isRestaurantNewOrder) {
-    // If we're currently in the delivery module, restaurant new order should NOT ring the driver!
-    if (moduleName === 'delivery') {
-      return false;
-    }
     // "order_created" is the customer's own confirmation push — never ring a restaurant tab for it.
     if (moduleName === 'restaurant' && type.includes('order_created')) {
       return false;
@@ -378,6 +377,10 @@ export function isPushRingEvent(payload = {}) {
     if (isPushForOtherRestaurant(payload)) {
       return false;
     }
+    return true;
+  }
+
+  if (String(data.ring || payload?.ring || '').toLowerCase() === 'true') {
     return true;
   }
 
@@ -409,6 +412,16 @@ async function playPushSound(payload = {}) {
     if (isChat) {
       pushDebugLog(PUSH_DEBUG_PREFIX, "Push notification is a chat message, playing soft chat chime", { payload });
       playChatNotificationSound();
+      return;
+    }
+
+    // Gig shift ended: ring once with a Stop button; the same shift never rings twice on this device.
+    if (isShiftEndPush(payload)) {
+      presentShiftEndAlert({
+        alertId: data.alertId || data.bookingId,
+        title: payload?.notification?.title || data.title,
+        message: payload?.notification?.body || data.body,
+      });
       return;
     }
 

@@ -225,7 +225,6 @@ const toRestaurantProfile = (doc) => {
         upiId: doc.upiId || '',
         upiQrImage: doc.upiQrImage ? { url: doc.upiQrImage } : null,
         payoutVerification: summarizePayoutVerification(doc.payoutVerification),
-        pureVegRestaurant: Boolean(doc.pureVegRestaurant),
         profileImage: doc.profileImage ? { url: doc.profileImage } : null,
         menuImages,
         coverImages,
@@ -1594,7 +1593,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         filter.cuisines = { $in: [new RegExp(escapeRegex(cuisine), 'i')] };
     }
     if (query.hasOffers === 'true') {
-        filter.offer = { $exists: true, $ne: null, $ne: '' };
+        filter.offer = { $exists: true, $nin: [null, ''] };
     }
     const minRating = toFiniteNumber(query.minRating);
     if (minRating !== null) {

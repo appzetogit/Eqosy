@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { invalidateCategoryCache } from '../../restaurant/services/restaurantCategory.service.js';
 import { ValidationError, ForbiddenError } from '../../../../core/auth/errors.js';
+import { logger } from '../../../../utils/logger.js';
 import { isSuperAdminLike, normalizeObjectIdList } from '../../../../core/admin/adminHierarchy.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';

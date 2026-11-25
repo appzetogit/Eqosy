@@ -200,8 +200,8 @@ async function sendOnce(caseId, key, { ownerType, ownerId, title, body, type, da
         const claimed = await FoodCancellationCase.updateOne({ _id: caseId, notified: { $ne: marker } }, { $addToSet: { notified: marker } }).catch(() => ({ modifiedCount: 0 }));
         if (!claimed.modifiedCount) return false; // already sent
     }
-    // Restaurant and delivery partner alerts ring like a new order; customers get a normal notification.
-    const ring = ownerType !== 'USER';
+    // Cancellation alerts reach parties as standard notifications without ringing (only new orders ring).
+    const ring = false;
     const payload = { title, body, data: { type, orderId: String(orderId || ''), orderMongoId: String(orderId || ''), ...(ring ? { ring: 'true' } : {}), ...data } };
     let ok = false;
     for (let attempt = 1; attempt <= 3 && !ok; attempt += 1) {
@@ -408,9 +408,13 @@ export async function recordFreeCancellation(order, userId, { reasonCode = '', r
     const label = orderLabel(order);
     const meta = { orderId: order._id, statusLabel: 'CANCELLED' };
     await sendOnce(caseDoc._id, 's1', { ownerType: 'USER', ownerId: userId, title: 'Order cancelled', body: render(cfg.messages.s1_customer), type: 'order_cancelled', ...meta });
-    await sendOnce(caseDoc._id, 's1', { ownerType: 'RESTAURANT', ownerId: order.restaurantId, title: 'Order cancelled by customer', body: render(cfg.messages.s1_restaurant, { orderId: label }), type: 'order_cancelled', ...meta });
-    if (order.dispatch?.deliveryPartnerId) {
-        await sendOnce(caseDoc._id, 's1', { ownerType: 'DELIVERY_PARTNER', ownerId: order.dispatch.deliveryPartnerId, title: 'Order cancelled', body: render(cfg.messages.s1_rider, { orderId: label }), type: 'order_cancelled', ...meta });
+    const wasExposedToRestaurant = !['pending_cod_verification', 'pending_payment'].includes(String(order.orderStatus || '').toLowerCase());
+    if (wasExposedToRestaurant) {
+        await sendOnce(caseDoc._id, 's1', { ownerType: 'RESTAURANT', ownerId: order.restaurantId, title: 'Order cancelled by customer', body: render(cfg.messages.s1_restaurant, { orderId: label }), type: 'order_cancelled', ...meta });
+    }
+    const riderId = order.dispatch?.deliveryPartnerId || order.codVerification?.approvedBy || order.codVerification?.currentOfferPartnerId;
+    if (riderId) {
+        await sendOnce(caseDoc._id, 's1', { ownerType: 'DELIVERY_PARTNER', ownerId: riderId, title: 'Order cancelled', body: render(cfg.messages.s1_rider, { orderId: label }), type: 'order_cancelled', ...meta });
     }
     return true;
 }

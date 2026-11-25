@@ -1322,6 +1322,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
           const dispatchStatus = String(order?.dispatch?.status || '').toLowerCase();
           const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
+          if (orderStatus === 'pending_cod_verification') {
+            const cv = order?.codVerification || {};
+            const expiresAt = cv.offerExpiresAt ? new Date(cv.offerExpiresAt).getTime() : NaN;
+            return (
+              cv.state === 'awaiting_rider' &&
+              (!Number.isFinite(expiresAt) || expiresAt > Date.now())
+            );
+          }
           return (
             ['unassigned', 'assigned'].includes(dispatchStatus) &&
             ['created', 'confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(orderStatus)
@@ -1462,13 +1470,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     const interval = setInterval(async () => {
       try {
         const res = await deliveryAPI.getCurrentDelivery();
-        const serverOrder = res?.data?.data?.order || res?.data?.data || res?.data;
+        const dataWrap = res?.data?.data || res?.data;
+        const serverOrder =
+          dataWrap && Object.prototype.hasOwnProperty.call(dataWrap, 'activeOrder')
+            ? dataWrap.activeOrder
+            : dataWrap?.order || dataWrap;
+        if (dataWrap && Object.prototype.hasOwnProperty.call(dataWrap, 'activeOrder') && dataWrap.activeOrder === null) {
+          resetTrip();
+          clearActiveOrder();
+          return;
+        }
         if (serverOrder && (serverOrder.orderStatus || serverOrder._id)) {
           const s = String(serverOrder.orderStatus || '').toLowerCase();
+          if (s.includes('cancel') || s === 'delivered' || s === 'returned_to_restaurant') {
+            resetTrip();
+            clearActiveOrder();
+            return;
+          }
           const isReady = s === 'ready_for_pickup' || s === 'ready' || Boolean(serverOrder.isFoodReady) || Boolean(serverOrder.deliveryState?.isFoodReady);
+          const codStateChanged = serverOrder.codVerification?.state !== activeOrder.codVerification?.state ||
+            serverOrder.codVerification?.callAttempts !== activeOrder.codVerification?.callAttempts;
           if (
             serverOrder.orderStatus !== activeOrder.orderStatus ||
-            isReady !== Boolean(activeOrder.isFoodReady)
+            isReady !== Boolean(activeOrder.isFoodReady) ||
+            codStateChanged
           ) {
             setActiveOrder({
               ...activeOrder,

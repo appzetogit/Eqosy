@@ -304,6 +304,11 @@ export async function updateDispatchSettings(payload, adminId) {
   return getDispatchSettings();
 }
 
+/** A rider who let an offer time out is not rung again for the same order before this. */
+export const RE_OFFER_COOLDOWN_MS = 2 * 60 * 1000;
+/** Most times one rider is rung for one order (first offer included). */
+export const MAX_OFFERS_PER_RIDER = 3;
+
 export async function tryAutoAssign(orderId, options = {}) {
   const attempt = options.attempt || 1;
   const lockTimeout = 55000; // 55 seconds lock interval
@@ -425,10 +430,25 @@ export async function tryAutoAssign(orderId, options = {}) {
     const onlineIdsSet = new Set(onlineDocs.map(d => d._id.toString()));
 
     const codEligibleOnlinePartners = codEligiblePartners.filter(p => onlineIdsSet.has(p.partnerId?.toString?.()));
+    // Re-offering to riders who were already rung: never after reject / handover; after a timeout only once
+    // the cool-down has passed, and at most MAX_OFFERS_PER_RIDER rings per rider for one order.
+    const offerStats = new Map();
+    for (const o of order.dispatch?.offeredTo || []) {
+      const pid = o.partnerId?.toString?.() || String(o.partnerId);
+      const s = offerStats.get(pid) || { count: 0, blocked: false, lastTimeoutAt: 0 };
+      s.count += 1;
+      if (['rejected', 'handover'].includes(o.action)) s.blocked = true;
+      if (o.action === 'timeout') s.lastTimeoutAt = Math.max(s.lastTimeoutAt, new Date(o.at || 0).getTime());
+      offerStats.set(pid, s);
+    }
+    const nowMs = Date.now();
     const excludedPartnerIds = new Set(
-      (order.dispatch?.offeredTo || [])
-        .filter(o => ['rejected', 'handover', 'timeout'].includes(o.action))
-        .map(o => (o.partnerId?.toString?.() || String(o.partnerId)))
+      [...offerStats.entries()]
+        .filter(([, s]) =>
+          s.blocked ||
+          s.count >= MAX_OFFERS_PER_RIDER ||
+          (s.lastTimeoutAt && nowMs - s.lastTimeoutAt < RE_OFFER_COOLDOWN_MS))
+        .map(([pid]) => pid)
     );
 
     const eligible = codEligibleOnlinePartners.filter(p => !offeredIds.includes(p.partnerId.toString()));
@@ -532,30 +552,36 @@ export async function processDispatchTimeout(orderId, partnerId) {
   const order = await FoodOrder.findById(orderId);
   if (!order) return;
 
-  const stillAssigned = order.dispatch?.status === 'assigned' &&
-    String(order.dispatch?.deliveryPartnerId) === String(partnerId) &&
-    !order.dispatch?.acceptedAt;
+  const dispatchStatus = order.dispatch?.status;
+  // Accepted (by this or another rider), cancelled or delivered: nothing to time out.
+  if (order.dispatch?.acceptedAt || !['unassigned', 'assigned'].includes(dispatchStatus)) return;
+  if (dispatchStatus === 'assigned' && String(order.dispatch?.deliveryPartnerId) !== String(partnerId)) return;
 
-  if (stillAssigned) {
+  // tryAutoAssign leaves an offered order 'unassigned', so the offer itself (not the status) tells us the
+  // rider never answered. Mark it timed out: this stops the ring and keeps the rider from being re-rung at once.
+  const offers = order.dispatch?.offeredTo || [];
+  let pending = null;
+  for (let i = offers.length - 1; i >= 0; i -= 1) {
+    if (String(offers[i].partnerId) === String(partnerId) && offers[i].action === 'offered') {
+      pending = offers[i];
+      break;
+    }
+  }
+
+  if (pending) {
     logger.info(`Dispatch timeout for partner ${partnerId} on order ${orderId}. Re-trying hunt...`);
-    const offer = order.dispatch.offeredTo.find(
-      o => String(o.partnerId) === String(partnerId) && o.action === 'offered'
-    );
-    if (offer) offer.action = 'timeout';
-
-    order.dispatch.status = 'unassigned';
-    order.dispatch.deliveryPartnerId = null;
+    pending.action = 'timeout';
+    if (dispatchStatus === 'assigned') {
+      order.dispatch.status = 'unassigned';
+      order.dispatch.deliveryPartnerId = null;
+    }
     await order.save();
     // The offer moved on: stop the ring on the rider who did not answer in time.
     stopOrderRing('DELIVERY_PARTNER', partnerId, String(order._id), { order, body: 'Order request expired' });
-
-    const attempt = (order.dispatch?.offeredTo?.length || 0) + 1;
-    await tryAutoAssign(orderId, { attempt });
-  } else if (order.dispatch?.status === 'unassigned') {
-    // If it's already unassigned (e.g. from a previous timeout), just keep hunting
-    const attempt = (order.dispatch?.offeredTo?.length || 0) + 1;
-    await tryAutoAssign(orderId, { attempt });
   }
+
+  const attempt = (order.dispatch?.offeredTo?.length || 0) + 1;
+  await tryAutoAssign(orderId, { attempt });
 }
 
 

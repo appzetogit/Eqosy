@@ -258,6 +258,8 @@ export const PickupActionModal = ({
               {/* Real-time Food Preparation Status Banner */}
               {(() => {
                 const normalizedStatus = String(order?.orderStatus || order?.status || order?.deliveryState?.status || '').toLowerCase();
+                const isWaitingRestaurantAccept =
+                  normalizedStatus === 'created' || normalizedStatus === 'pending_cod_verification';
                 const isFoodReady = 
                   normalizedStatus === 'ready_for_pickup' || 
                   normalizedStatus === 'ready' || 
@@ -282,17 +284,23 @@ export const PickupActionModal = ({
                           <p className={`text-xs font-black uppercase tracking-widest ${
                             isFoodReady ? 'text-emerald-800' : 'text-amber-800'
                           }`}>
-                            {isFoodReady ? '🟢 Food Ready for Pickup' : '🟠 Food Preparation in Progress'}
+                            {isFoodReady
+                              ? '🟢 Food Ready for Pickup'
+                              : isWaitingRestaurantAccept
+                              ? '⏳ Waiting for Restaurant Acceptance'
+                              : '🟠 Food Preparation in Progress'}
                           </p>
                           <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
                             isFoodReady ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-amber-100 border-amber-300 text-amber-800'
                           }`}>
-                            {isFoodReady ? 'Ready' : 'Preparing'}
+                            {isFoodReady ? 'Ready' : isWaitingRestaurantAccept ? 'Sent to Store' : 'Preparing'}
                           </span>
                         </div>
                         <p className="text-xs font-bold text-gray-700 mt-1 leading-relaxed">
                           {isFoodReady 
                             ? 'Your order is ready. Please collect the order from the restaurant.'
+                            : isWaitingRestaurantAccept
+                            ? 'Order has been sent to the restaurant. Waiting for the restaurant to accept before pickup.'
                             : 'The restaurant is still preparing your order. You can wait outside until the order is marked ready.'}
                         </p>
                       </div>
@@ -422,19 +430,29 @@ export const PickupActionModal = ({
                  />
               </div>
 
-              <div>
-                <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${billImageUploaded ? 'text-emerald-600' : 'text-gray-400'}`}>
-                  {billImageUploaded ? "Order Ready - Swipe to pick up" : "Capture bill to unlock pickup"}
-                </p>
-                <ActionSlider 
-                  key="action-pickup"
-                  label="Slide to Pick Up" 
-                  successLabel="Picked Up!"
-                  disabled={!billImageUploaded}
-                  onConfirm={() => onPickedUp(billImageUrl)}
-                  color="bg-orange-500"
-                />
-              </div>
+              {(() => {
+                const pickStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
+                const awaitingStoreAccept = pickStatus === 'created' || pickStatus === 'pending_cod_verification';
+                return (
+                  <div>
+                    <p className={`text-center text-[10px] font-black uppercase tracking-[0.2em] mb-4 ${awaitingStoreAccept ? 'text-amber-600' : billImageUploaded ? 'text-emerald-600' : 'text-gray-400'}`}>
+                      {awaitingStoreAccept
+                        ? 'Waiting for restaurant to accept order'
+                        : billImageUploaded
+                        ? 'Order Ready - Swipe to pick up'
+                        : 'Capture bill to unlock pickup'}
+                    </p>
+                    <ActionSlider 
+                      key="action-pickup"
+                      label="Slide to Pick Up" 
+                      successLabel="Picked Up!"
+                      disabled={!billImageUploaded || awaitingStoreAccept}
+                      onConfirm={() => onPickedUp(billImageUrl)}
+                      color="bg-orange-500"
+                    />
+                  </div>
+                );
+              })()}
             </div>
           )}
 

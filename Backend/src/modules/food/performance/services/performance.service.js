@@ -261,8 +261,8 @@ function pickRejectionSlab(slabs = [], occurrence) {
 
 async function notify(party, partyId, title, body, type, extra = {}) {
     try {
-        // Restaurant and delivery-partner penalty / delay alerts ring like a new order.
-        const ring = party === 'RESTAURANT' || party === 'DELIVERY_PARTNER' || extra.ring === true;
+        // Penalty / delay alerts reach restaurant & delivery partner without ringing; only new order dispatch rings.
+        const ring = extra.ring === true;
         const data = { type, ...extra };
         delete data.ring;
         if (ring) data.ring = 'true';
@@ -1406,7 +1406,11 @@ export async function restaurantDashboard(restaurantId, month) {
     month = month || monthKey(new Date(), cfg.timezoneOffsetMin);
     const rid = oid(restaurantId);
     const [start, end] = monthRange(month, cfg.timezoneOffsetMin);
-    const orders = await FoodOrder.find({ restaurantId: rid, createdAt: { $gte: start, $lt: end } })
+    const orders = await FoodOrder.find({
+        restaurantId: rid,
+        orderStatus: { $nin: ['pending_payment', 'pending_cod_verification'] },
+        createdAt: { $gte: start, $lt: end },
+    })
         .select('orderStatus prep deliveryState').lean();
     const rejected = orders.filter((o) => o.orderStatus === 'cancelled_by_restaurant' && !o.prep?.acceptedAt).length;
     const accepted = orders.filter((o) => o.prep?.acceptedAt);

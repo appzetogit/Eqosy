@@ -337,12 +337,14 @@ export async function recomputePricing(order, newItems) {
     const incentivePercent = num(p.deliveryPartnerIncentivePercent);
     const incentiveEligible = incentiveEnabled && incentivePercent > 0 && subtotal >= num(incentiveRule.minOrderAmount);
     const incentiveAmount = incentiveEligible ? r2(subtotal * (incentivePercent / 100)) : 0;
-    const riderTotalPayout = r2(num(order.riderDeliveryFeeShare) + num(order.riderSurgePay) + incentiveAmount + num(p.deliveryPartnerTip));
+    const riderTotalPayout = r2(
+        num(order.riderDeliveryFeeShare) + num(order.riderSurgePay) + incentiveAmount + num(p.deliveryPartnerTip) + num(order.riderCodChargePay),
+    );
 
     let total = Math.max(
         0,
         subtotal + tax + num(p.packagingFee) + num(p.deliveryFee) + num(p.platformFee) + num(p.surgeAmount)
-            + additionalChargesTotal + num(p.deliveryPartnerTip) - discount,
+            + additionalChargesTotal + num(p.deliveryPartnerTip) + num(p.codCharge) + num(p.codChargeGst) - discount,
     );
     // Whole-rupee bills stay whole-rupee (cash collection and gateway amounts remain exact).
     total = Number.isInteger(num(p.total)) ? Math.round(total) : r2(total);

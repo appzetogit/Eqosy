@@ -44,7 +44,13 @@ const SILENT_STATUS_TYPES = [
   "rider_arrived", "partner_arrived", "reached_pickup", "picked_up", "out_for_delivery",
   "reached_drop", "at_drop", "delivered", "order_completed", "mark_completed",
   "order_status_update", "status_update", "order_ready", "ready_for_pickup", "cancel",
+  "gig_reminder", "auto_offline", "handover", "return", "penalty", "performance",
+  "due_soon", "delay", "offline", "delivery_accepted", "admin_broadcast", "wallet",
 ];
+
+function isChatMessage(type, data) {
+  return type.includes("chat") || data.openChat === "true" || Boolean(data.conversationId);
+}
 
 function isTaxiRideType(type, data) {
   return (
@@ -59,7 +65,7 @@ function isTaxiRideType(type, data) {
 function shouldPlaySound(payload = {}) {
   const data = payload?.data || {};
   const type = String(data.type || payload?.type || "").toLowerCase();
-  if (type.includes("chat") || data.openChat === "true" || data.conversationId) return true;
+  if (isChatMessage(type, data)) return true;
   if (SILENT_STATUS_TYPES.some((t) => type.includes(t))) return false;
   // The backend decides (data.ring) when it can; it is authoritative.
   if (data.ring === "true") return true;
@@ -71,6 +77,7 @@ function shouldPlaySound(payload = {}) {
 function getSoundPath(payload = {}) {
   const data = payload?.data || {};
   const type = String(data.type || payload?.type || "").toLowerCase();
+  if (isChatMessage(type, data)) return "/notification_message-notify-8-313753.mp3";
   const serviceType = String(data.serviceType || "").toLowerCase();
   const isTaxiRide =
     type.includes("ride") ||
@@ -216,7 +223,9 @@ async function loadFirebaseWebConfig() {
       });
 
       const playSound = shouldPlaySound(payload);
-      const isRide = isTaxiRideType(String(payload?.data?.type || "").toLowerCase(), payload?.data || {});
+      const msgType = String(payload?.data?.type || payload?.type || "").toLowerCase();
+      const isChat = isChatMessage(msgType, payload?.data || {});
+      const isRide = isTaxiRideType(msgType, payload?.data || {});
 
       self.registration.showNotification(title, {
         body,
@@ -226,7 +235,7 @@ async function loadFirebaseWebConfig() {
         tag: notificationKey || ("ride_" + Date.now()),
         renotify: true,
         silent: !playSound,
-        requireInteraction: playSound,
+        requireInteraction: playSound && !isChat,
         sound: playSound ? getSoundPath(payload) : undefined,
         vibrate: playSound
           ? (isRide ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200, 100, 300])
@@ -275,7 +284,9 @@ self.addEventListener("push", (event) => {
       // If app/tab is closed or in background, show native OS notification popup!
       if (!visibleClient) {
         const playSound = shouldPlaySound(payload);
-        const isRide = isTaxiRideType(String(payload?.data?.type || "").toLowerCase(), payload?.data || {});
+        const msgType = String(payload?.data?.type || payload?.type || "").toLowerCase();
+        const isChat = isChatMessage(msgType, payload?.data || {});
+        const isRide = isTaxiRideType(msgType, payload?.data || {});
 
         await self.registration.showNotification(title, {
           body,
@@ -285,7 +296,7 @@ self.addEventListener("push", (event) => {
           tag: notificationKey || ("push_" + Date.now()),
           renotify: true,
           silent: !playSound,
-          requireInteraction: playSound,
+          requireInteraction: playSound && !isChat,
           sound: playSound ? getSoundPath(payload) : undefined,
           vibrate: playSound
             ? (isRide ? [500, 200, 500, 200, 500, 200, 500] : [200, 100, 200, 100, 300])
@@ -343,8 +354,8 @@ self.addEventListener("notificationclick", (event) => {
     if (notificationData.type === 'chat_message' || notificationData.chatType === 'food_order_chat' || notificationData.openChat === 'true') {
       if (orderId) {
         const isDelivery = notificationData.role === 'delivery' || notificationData.ownerType === 'DELIVERY_PARTNER';
-        rawLink = isDelivery 
-          ? `/food/delivery/orders/${orderId}/chat` 
+        rawLink = isDelivery
+          ? `/food/delivery/orders/${orderId}/chat`
           : `/food/user/orders/${orderId}/chat`;
       }
     } else if (rideId) {
