@@ -19,6 +19,37 @@ import { applyDemoLocationBypass } from '../../admin/services/demoMode.service.j
 import { isRazorpayConfigured } from '../helpers/razorpay.helper.js';
 import { getRestaurantCodMaxOrderAmount, isWithinRestaurantCodLimit } from '../../utils/codLimit.js';
 import { computeCodCharge } from '../utils/codCharge.js';
+
+export function computePrepaidDiscount(feeSettings, subtotal, maxDiscount = Infinity) {
+  const cfg = feeSettings?.prepaidDiscount || {};
+  const discountType = cfg.discountType === 'flat' ? 'flat' : 'percentage';
+  const value = Math.max(0, Number(cfg.value) || 0);
+  const minOrderAmount = Math.max(0, Number(cfg.minOrderAmount) || 0);
+  const sub = Math.max(0, Number(subtotal) || 0);
+  const enabled = cfg.isEnabled === true && value > 0;
+
+  if (!enabled || sub < minOrderAmount) {
+    return {
+      isEnabled: enabled,
+      discountType,
+      value,
+      minOrderAmount,
+      amount: 0,
+    };
+  }
+
+  const raw = discountType === 'percentage' ? sub * (value / 100) : value;
+  const cap = Number.isFinite(Number(maxDiscount)) ? Math.max(0, Number(maxDiscount)) : raw;
+  const amount = Math.round(Math.min(raw, cap) * 100) / 100;
+
+  return {
+    isEnabled: true,
+    discountType,
+    value,
+    minOrderAmount,
+    amount: Math.max(0, amount),
+  };
+}
 function extractCoords(addressLike) {
   if (!addressLike) return null;
   const coords = addressLike?.location?.coordinates || addressLike?.coordinates;
@@ -640,6 +671,8 @@ export async function calculateOrderPricing(userId, dto) {
   const savings = Math.max(0, Math.round(discount));
   // COD handling charge: added on top of `total` only when the customer pays cash (never on online/wallet).
   const codChargeInfo = computeCodCharge(feeSettings);
+  // Prepaid discount: applied to online (razorpay) & wallet orders on item subtotal (never on COD).
+  const prepaidDiscountInfo = computePrepaidDiscount(feeSettings, subtotal, total);
 
   return {
     // Server-priced cart lines; createOrder stores these instead of the client's items.
@@ -689,6 +722,12 @@ export async function calculateOrderPricing(userId, dto) {
       codChargeGst: codChargeInfo.gst,
       codChargeTotal: codChargeInfo.total,
       totalWithCod: Math.round((total + codChargeInfo.total) * 100) / 100,
+      prepaidDiscountEnabled: prepaidDiscountInfo.isEnabled,
+      prepaidDiscountType: prepaidDiscountInfo.discountType,
+      prepaidDiscountValue: prepaidDiscountInfo.value,
+      prepaidDiscountMinOrderAmount: prepaidDiscountInfo.minOrderAmount,
+      prepaidDiscount: prepaidDiscountInfo.amount,
+      totalWithPrepaidDiscount: Math.max(0, Math.round((total - prepaidDiscountInfo.amount) * 100) / 100),
       // Checkout options the admin has left open (online also needs working Razorpay keys).
       paymentMethods: {
         // Cash on Delivery stays off while any cancellation charge is unpaid; it returns the moment it is paid.

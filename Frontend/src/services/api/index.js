@@ -2238,6 +2238,14 @@ export const deliveryAPI = {
         contextModule: "delivery",
       },
     ),
+  resendDropOtp: (orderId) =>
+    apiClient.post(
+      `/food/delivery/orders/${String(orderId)}/resend-drop-otp`,
+      {},
+      {
+        contextModule: "delivery",
+      },
+    ),
   verifyDropOtp: (orderId, otp) =>
     apiClient.post(
       `/food/delivery/orders/${String(orderId)}/verify-drop-otp`,

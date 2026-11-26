@@ -98,7 +98,7 @@ export function buildInitialCodVerification({ scheduled = false } = {}) {
   return { state: scheduled ? 'scheduled' : 'awaiting_rider', startedAt: null, offers: [] };
 }
 
-/** Starts the rider search (new order, or a scheduled order reaching its 30-minute window). Idempotent. */
+/** Starts the rider search (new order, or a scheduled order reaching its 20-minute window). Idempotent. */
 export async function startCodVerification(orderId) {
   const now = new Date();
   const started = await FoodOrder.findOneAndUpdate(

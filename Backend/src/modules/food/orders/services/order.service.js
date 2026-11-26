@@ -59,6 +59,8 @@ import {
   notifyRestaurantNewOrder,
   canExposeOrderToRestaurant,
   isScheduledOrderOnHold,
+  SCHEDULED_DISPATCH_LEAD_MINUTES,
+  SCHEDULED_DISPATCH_LEAD_MS,
   isStatusAdvance,
   emitOrderStatusSocket,
 } from './order.helpers.js';
@@ -241,6 +243,7 @@ export async function createOrder(userId, dto) {
       additionalCharges: Array.isArray(pricingResult.pricing.additionalCharges) ? pricingResult.pricing.additionalCharges : [],
       additionalChargesTotal: Number(pricingResult.pricing.additionalChargesTotal ?? 0) || 0,
       discount: Number(pricingResult.pricing.discount ?? 0) || 0,
+      prepaidDiscount: 0,
       deliveryPartnerTip: 0,
       total: Number(pricingResult.pricing.total ?? 0) || 0,
       currency: String(pricingResult.pricing.currency || "INR"),
@@ -319,6 +322,16 @@ export async function createOrder(userId, dto) {
       ) / 100;
     }
 
+    // Prepaid discount applies only to online (razorpay) and wallet orders.
+    if ((paymentMethod === "razorpay" || isWallet) && Number(pricingResult.pricing.prepaidDiscount) > 0) {
+      const appliedPrepaid = Math.min(Number(pricingResult.pricing.prepaidDiscount) || 0, normalizedPricing.total);
+      normalizedPricing.prepaidDiscount = Math.round(appliedPrepaid * 100) / 100;
+      normalizedPricing.total = Math.max(
+        0,
+        Math.round((normalizedPricing.total - normalizedPricing.prepaidDiscount) * 100) / 100,
+      );
+    }
+
     const payment = {
       method: paymentMethod,
       status: isCash ? "cod_pending" : isWallet ? "paid" : "created",
@@ -366,10 +379,10 @@ export async function createOrder(userId, dto) {
     );
 
     // Cash orders are first confirmed with the customer by a delivery partner (codVerification.service.js);
-    // they reach the restaurant only after that. Future scheduled ones start verifying 30 min before the slot.
+    // they reach the restaurant only after that. Future scheduled ones start verifying 20 min before the slot.
     const needsCodVerification = isCash;
     const isScheduledFutureAtCreate =
-      Boolean(dto.scheduledAt) && new Date(dto.scheduledAt).getTime() - Date.now() > 30 * 60 * 1000;
+      Boolean(dto.scheduledAt) && new Date(dto.scheduledAt).getTime() - Date.now() > SCHEDULED_DISPATCH_LEAD_MS;
     const initialStatus = (paymentMethod === "razorpay" || paymentMethod === "card")
       ? "pending_payment"
       : needsCodVerification
@@ -517,7 +530,7 @@ export async function createOrder(userId, dto) {
 
       const isScheduledFutureOrder =
         Boolean(order.scheduledAt) &&
-        (new Date(order.scheduledAt).getTime() - Date.now() > 30 * 60 * 1000);
+        (new Date(order.scheduledAt).getTime() - Date.now() > SCHEDULED_DISPATCH_LEAD_MS);
 
       const formattedScheduledTime = order.scheduledAt
         ? new Date(order.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -538,7 +551,7 @@ export async function createOrder(userId, dto) {
           : isCodConfirmNow
           ? codConfirmBody
           : isScheduledFutureOrder
-          ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before your scheduled time.`
+          ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant ${SCHEDULED_DISPATCH_LEAD_MINUTES} minutes before your scheduled time.`
           : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
         image: "https://i.ibb.co/5GzXz7r/Eqosy-Brand-Image.png",
         data: {
@@ -549,7 +562,7 @@ export async function createOrder(userId, dto) {
         },
       });
 
-      // Restaurant gets new-order request only if NOT a future scheduled order (> 35 mins away).
+      // Restaurant gets new-order request only if NOT a future scheduled order (> 20 mins away).
       // Cash orders go to a delivery partner for phone confirmation first (restaurant is notified after that).
       if (isCodConfirmNow) {
         void codVerificationService.startCodVerification(order._id).catch((err) =>
@@ -560,7 +573,7 @@ export async function createOrder(userId, dto) {
         await order.save();
         await notifyRestaurantNewOrder(order);
       } else {
-        logger.info(`[Scheduled Order Created] Order #${order.order_id || order._id} is scheduled for ${order.scheduledAt}. Dispatch to restaurant deferred to 30 minutes prior.`);
+        logger.info(`[Scheduled Order Created] Order #${order.order_id || order._id} is scheduled for ${order.scheduledAt}. Dispatch to restaurant deferred to ${SCHEDULED_DISPATCH_LEAD_MINUTES} minutes prior.`);
       }
 
       emitOrderStatusSocket(
@@ -581,7 +594,7 @@ export async function createOrder(userId, dto) {
             : isCodConfirmNow
             ? codConfirmBody
             : isScheduledFutureOrder
-            ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant 30 minutes before scheduled time.`
+            ? `Your order #${order.order_id || order._id} is scheduled for ${formattedScheduledTime}. It will be sent to the restaurant ${SCHEDULED_DISPATCH_LEAD_MINUTES} minutes before scheduled time.`
             : `Your order #${order.order_id || order._id} from ${restaurant.restaurantName || "the restaurant"} has been placed successfully.`,
         },
       );
@@ -667,7 +680,7 @@ export async function verifyPayment(userId, dto) {
   void cancellationService.markPenaltiesPaidForOrder(order._id, 'online');
 
   // After online payment is verified, now notify restaurant about the new order.
-  // Scheduled orders stay on hold until 30 min before scheduledAt (released by processScheduledFoodOrders).
+  // Scheduled orders stay on hold until 20 min before scheduledAt (released by processScheduledFoodOrders).
   if (!isScheduledOrderOnHold(order)) {
     if (order.scheduledAt) {
       order.scheduledDispatched = true;
@@ -812,7 +825,7 @@ export async function getOrderById(
     throw new ForbiddenError("Not your order");
   if (restaurantId && orderRestaurantId !== restaurantId.toString())
     throw new ForbiddenError("Not your restaurant order");
-  if (restaurantId && !canExposeOrderToRestaurant(order))
+  if (restaurantId && (!canExposeOrderToRestaurant(order) || isScheduledOrderOnHold(order)))
     throw new NotFoundError("Order not found");
   if (deliveryPartnerId && orderPartnerId !== deliveryPartnerId.toString())
     throw new ForbiddenError("Not assigned to you");
@@ -907,14 +920,14 @@ export async function recoverStuckOrders() {
 }
 
 /**
- * Watchdog / Worker: Processes scheduled food orders whose scheduledAt time is within 30 minutes.
- * Dispatches them to the restaurant if not already dispatched.
+ * Watchdog / Worker: Processes scheduled food orders whose scheduledAt time is within the configured lead window (20 minutes).
+ * Dispatches them to the restaurant (or starts COD rider verification) if not already dispatched.
  */
 export async function processScheduledFoodOrders() {
   try {
-    const thirtyMinsFromNow = new Date(Date.now() + 30 * 60 * 1000);
+    const dispatchCutoff = new Date(Date.now() + SCHEDULED_DISPATCH_LEAD_MS);
     const dueOrders = await FoodOrder.find({
-      scheduledAt: { $exists: true, $ne: null, $lte: thirtyMinsFromNow },
+      scheduledAt: { $exists: true, $ne: null, $lte: dispatchCutoff },
       scheduledDispatched: { $ne: true },
       orderStatus: { $nin: ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'pending_payment'] }
     });
@@ -930,10 +943,18 @@ export async function processScheduledFoodOrders() {
           logger.info(`[Scheduled Order] COD order #${order.order_id || order._id} released for delivery-partner confirmation.`);
           continue;
         }
-        order.scheduledDispatched = true;
-        await order.save();
-        await notifyRestaurantNewOrder(order);
-        logger.info(`[Scheduled Order Dispatched] Order #${order.order_id || order._id} sent to restaurant.`);
+        const claimed = await FoodOrder.findOneAndUpdate(
+          {
+            _id: order._id,
+            scheduledDispatched: { $ne: true },
+            orderStatus: { $nin: ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'pending_payment'] },
+          },
+          { $set: { scheduledDispatched: true } },
+          { new: true },
+        );
+        if (!claimed) continue;
+        await notifyRestaurantNewOrder(claimed);
+        logger.info(`[Scheduled Order Dispatched] Order #${claimed.order_id || claimed._id} sent to restaurant.`);
       } catch (orderErr) {
         logger.error(`[Scheduled Order Dispatch Error] Order #${order._id}: ${orderErr.message}`);
       }
@@ -1484,12 +1505,12 @@ export async function listOrdersRestaurant(restaurantId, query) {
       },
       // Cash orders reach the restaurant only after a delivery partner confirmed them with the customer.
       { orderStatus: { $ne: codVerificationService.PENDING_COD_STATUS } },
-      // Hide scheduled orders that are still on hold (released 30 min before scheduledAt)
+      // Hide scheduled orders that are still on hold (released 20 min before scheduledAt)
       {
         $or: [
           { scheduledAt: null },
           { scheduledDispatched: true },
-          { scheduledAt: { $lte: new Date(Date.now() + 30 * 60 * 1000) } },
+          { scheduledAt: { $lte: new Date(Date.now() + SCHEDULED_DISPATCH_LEAD_MS) } },
         ],
       },
     ],
@@ -1530,7 +1551,7 @@ export async function updateOrderStatusRestaurant(
     );
   }
   if (isScheduledOrderOnHold(order)) {
-    throw new ValidationError("This is a scheduled order and will be available 30 minutes before the scheduled time");
+    throw new ValidationError(`This is a scheduled order and will be available ${SCHEDULED_DISPATCH_LEAD_MINUTES} minutes before the scheduled time`);
   }
   // Partial fulfilment: the store cannot accept/prepare until the customer has decided and any extra payment is done.
   if (['confirmed', 'preparing'].includes(String(orderStatus))) {
@@ -1920,6 +1941,10 @@ export async function confirmPickupDelivery(
 
 export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
   return deliveryService.confirmReachedDropDelivery(orderId, deliveryPartnerId);
+}
+
+export async function resendDropOtpDelivery(orderId, deliveryPartnerId) {
+  return deliveryService.resendDropOtpDelivery(orderId, deliveryPartnerId);
 }
 
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {

@@ -61,6 +61,7 @@ router.post('/orders/:orderId/return/verify-otp', authMiddleware, requireRoles('
 router.patch('/orders/:orderId/reached-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmReachedPickupDeliveryController);
 router.patch('/orders/:orderId/confirm-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmPickupDeliveryController);
 router.patch('/orders/:orderId/reached-drop', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.confirmReachedDropDeliveryController);
+router.post('/orders/:orderId/resend-drop-otp', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.resendDropOtpDeliveryController);
 router.post('/orders/:orderId/verify-drop-otp', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.verifyDropOtpDeliveryController);
 router.patch('/orders/:orderId/complete', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.completeDeliveryController);
 router.patch('/orders/:orderId/status', authMiddleware, requireRoles('DELIVERY_PARTNER'), orderController.updateOrderStatusDeliveryController);

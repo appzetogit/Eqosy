@@ -104,6 +104,19 @@ const feeSettingsSchema = new mongoose.Schema(
             ),
             default: () => ({ isEnabled: false, amount: 0 })
         },
+        // Discount given to prepaid (online / wallet) orders only, calculated on item subtotal.
+        prepaidDiscount: {
+            type: new mongoose.Schema(
+                {
+                    isEnabled: { type: Boolean, default: false },
+                    discountType: { type: String, enum: ['percentage', 'flat'], default: 'percentage' },
+                    value: { type: Number, min: 0, default: 0 },
+                    minOrderAmount: { type: Number, min: 0, default: 0 }
+                },
+                { _id: false }
+            ),
+            default: () => ({ isEnabled: false, discountType: 'percentage', value: 0, minOrderAmount: 0 })
+        },
         // Which payment options customers may use at checkout (all open by default).
         paymentMethods: {
             type: new mongoose.Schema(

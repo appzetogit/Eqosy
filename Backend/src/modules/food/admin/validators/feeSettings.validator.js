@@ -46,6 +46,12 @@ const feeSettingsUpsertSchema = z.object({
         isEnabled: z.boolean(),
         amount: z.number({ invalid_type_error: 'COD charge must be a number' }).min(0, 'COD charge must be 0 or greater').max(1000, 'COD charge must be 1000 or less')
     }).optional(),
+    prepaidDiscount: z.object({
+        isEnabled: z.boolean(),
+        discountType: z.enum(['percentage', 'flat']),
+        value: z.number({ invalid_type_error: 'Prepaid discount value must be a number' }).min(0, 'Prepaid discount must be 0 or greater').max(10000, 'Prepaid discount must be 10000 or less'),
+        minOrderAmount: z.number({ invalid_type_error: 'Min order amount must be a number' }).min(0, 'Min order amount must be 0 or greater')
+    }).optional(),
     isActive: z.boolean().optional()
 });
 
@@ -127,6 +133,14 @@ export const validateFeeSettingsUpsertDto = (body) => {
                 amount: body.codCharge.amount === '' || body.codCharge.amount == null ? 0 : Number(body.codCharge.amount)
             }
             : undefined,
+        prepaidDiscount: body?.prepaidDiscount && typeof body.prepaidDiscount === 'object'
+            ? {
+                isEnabled: body.prepaidDiscount.isEnabled === true,
+                discountType: body.prepaidDiscount.discountType === 'flat' ? 'flat' : 'percentage',
+                value: body.prepaidDiscount.value === '' || body.prepaidDiscount.value == null ? 0 : Number(body.prepaidDiscount.value),
+                minOrderAmount: body.prepaidDiscount.minOrderAmount === '' || body.prepaidDiscount.minOrderAmount == null ? 0 : Number(body.prepaidDiscount.minOrderAmount)
+            }
+            : undefined,
         isActive: body?.isActive !== undefined ? Boolean(body.isActive) : undefined
     };
 
@@ -180,6 +194,22 @@ export const validateFeeSettingsUpsertDto = (body) => {
 
     if (result.data.codCharge) {
         result.data.codCharge.amount = Math.round(result.data.codCharge.amount * 100) / 100;
+    }
+
+    if (result.data.prepaidDiscount) {
+        const pd = result.data.prepaidDiscount;
+        if (pd.discountType === 'percentage' && pd.value > 100) {
+            throw new ValidationError('Prepaid discount percentage cannot exceed 100%');
+        }
+        if (pd.isEnabled && pd.value <= 0) {
+            throw new ValidationError('Prepaid discount value must be greater than 0 when enabled');
+        }
+        result.data.prepaidDiscount = {
+            isEnabled: pd.isEnabled === true,
+            discountType: pd.discountType,
+            value: Math.round(pd.value * 100) / 100,
+            minOrderAmount: Math.round(pd.minOrderAmount * 100) / 100,
+        };
     }
 
     return result.data;

@@ -78,6 +78,17 @@ function normalizePaymentMethod(value) {
     return method;
 }
 
+const optionalScheduledAtSchema = z.preprocess(
+    (v) => {
+        if (v === '' || v === null || v === undefined) return undefined;
+        return v instanceof Date ? v.toISOString() : String(v);
+    },
+    z.string().trim().min(1).refine(
+        (val) => Number.isFinite(new Date(val).getTime()),
+        { message: 'Invalid scheduled time. Please select a valid delivery time.' }
+    ).optional()
+);
+
 export function validateCalculateOrderDto(body) {
     const schema = z.object({
         items: z.array(orderItemSchema).min(1, 'At least one item required'),
@@ -87,7 +98,8 @@ export function validateCalculateOrderDto(body) {
         address: calculateAddressSchema.optional(),
         zoneId: z.string().optional(),
         couponCode: z.string().optional(),
-        deliveryFleet: z.string().optional()
+        deliveryFleet: z.string().optional(),
+        scheduledAt: optionalScheduledAtSchema
     });
     const result = schema.safeParse(body);
     if (!result.success) {
@@ -123,7 +135,8 @@ export function validateCreateOrderDto(body) {
             normalizePaymentMethod,
             z.enum(['cash', 'razorpay', 'razorpay_qr', 'wallet'])
         ),
-        zoneId: z.string().nullable().optional()
+        zoneId: z.string().nullable().optional(),
+        scheduledAt: optionalScheduledAtSchema
     });
     const result = schema.safeParse(body);
     if (!result.success) {

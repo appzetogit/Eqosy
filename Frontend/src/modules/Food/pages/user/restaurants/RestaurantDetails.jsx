@@ -156,7 +156,6 @@ function RestaurantDetailsContent() {
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null)
   const [expandedCoupons, setExpandedCoupons] = useState(new Set())
-  const [showMenuSheet, setShowMenuSheet] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [availabilityTick, setAvailabilityTick] = useState(Date.now())
@@ -3006,7 +3005,7 @@ function RestaurantDetailsContent() {
       </div>
 
       {/* FSSAI License Information - Bottom of page */}
-      {restaurant?.onboarding?.step3?.fssai?.registrationNumber && (
+      {restaurant?.onboarding?.step3?.fssai?.registrationNumber ? (
         <div className="px-4 py-4 mt-2 mb-24 border-t border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/30 dark:bg-white/5 mx-4 rounded-xl">
           <div className="flex items-center gap-4">
             <div className="h-12 w-20 flex items-center justify-center bg-white rounded-lg p-1.5 shadow-sm border border-gray-100">
@@ -3026,117 +3025,9 @@ function RestaurantDetailsContent() {
             </div>
           </div>
         </div>
+      ) : (
+        <div className="h-20" aria-hidden="true" />
       )}
-
-      {/* Menu Button - Sticky at page bottom right (hidden when filter or menu sheet open) */}
-      {!showFilterSheet && !showMenuSheet && !showMenuOptionsSheet && (
-        <div className="sticky dark:bg-[#1a1a1a] bottom-4 flex justify-end px-4 z-50 mt-auto">
-          <Button
-            className="bg-[#1a1a1a] dark:bg-[#EB590E] hover:bg-black dark:hover:bg-[#D94F0C] text-white flex items-center gap-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/10 dark:border-[#EB590E]/20 px-6 py-6 rounded-full font-bold transform transition-all duration-300 hover:scale-110 active:scale-95 group"
-            size="lg"
-            onClick={() => setShowMenuSheet(true)}
-          >
-            <Utensils className="h-5 w-5 text-[color:var(--app-primary,#EB590E)] dark:text-white group-hover:rotate-12 transition-transform" />
-            <span className="tracking-wide">MENU</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Menu Categories Bottom Sheet - Rendered via Portal */}
-      {typeof window !== "undefined" &&
-        createPortal(
-          <AnimatePresence>
-            {showMenuSheet && (
-              <>
-                {/* Backdrop */}
-                <motion.div
-                  className="fixed inset-0 bg-black/40 z-[9999]"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => setShowMenuSheet(false)}
-                />
-
-                {/* Menu Sheet */}
-                <motion.div
-                  className="fixed left-0 right-0 bottom-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-[10000] bg-white dark:bg-[#1a1a1a] rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[85vh] md:max-h-[90vh] md:max-w-lg w-full md:w-auto flex flex-col"
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={{ duration: 0.2, type: "spring", damping: 30, stiffness: 400 }}
-                  style={{ willChange: "transform" }}
-                >
-                  {/* Scrollable Content */}
-                  <div className="flex-1 overflow-y-auto px-4 py-6">
-                    <div className="space-y-1">
-                      {menuCategories.map((category, index) => (
-                        <button
-                          key={index}
-                          className="w-full flex items-center justify-between py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors text-left"
-                          onClick={() => {
-                            setShowMenuSheet(false)
-                            // Make sure every category is reachable: show all sections and open the chosen one
-                            setSelectedMenuCategory("all")
-                            setExpandedSections((prev) => new Set(prev).add(category.sectionIndex))
-                            // Scroll to category section
-                            setTimeout(() => {
-                              const sectionId = `menu-section-${category.sectionIndex}`
-                              const sectionElement = document.getElementById(sectionId)
-                              if (sectionElement) {
-                                sectionElement.scrollIntoView({
-                                  behavior: 'smooth',
-                                  block: 'start'
-                                })
-                              }
-                            }, 450) // Small delay to allow the sheet to close and the section to expand
-                          }}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {category.image ? (
-                              <img
-                                src={category.image}
-                                alt={category.name}
-                                className="h-10 w-10 rounded-xl object-cover border border-gray-200"
-                                onError={(event) => {
-                                  event.currentTarget.style.display = "none"
-                                }}
-                              />
-                            ) : (
-                              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-sm font-bold uppercase text-gray-500">
-                                {category.name?.charAt(0) || "C"}
-                              </span>
-                            )}
-                            <span className="text-base font-medium text-gray-900 dark:text-white truncate">
-                              {category.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {category.count > 0 ? category.count : ""}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Close Button */}
-                  <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-4 bg-white dark:bg-[#1a1a1a]">
-                    <Button
-                      className="w-full bg-[#1a1a1a] dark:bg-[color:var(--app-primary,#EB590E)] hover:bg-[color:var(--app-primary,#EB590E)] dark:hover:bg-[color:var(--app-secondary,#D94F0C)] text-white border-0 flex items-center justify-center gap-2 py-6 rounded-xl font-bold transition-all shadow-lg"
-                      onClick={() => setShowMenuSheet(false)}
-                    >
-                      <X className="h-5 w-5" />
-                      Close
-                    </Button>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
 
       {/* Filters and Sorting Bottom Sheet - Rendered via Portal */}
       {typeof window !== "undefined" &&
@@ -4409,7 +4300,7 @@ function RestaurantDetailsContent() {
       {typeof window !== "undefined" &&
         createPortal(
           <AddToCartAnimation
-            bottomOffset={80}
+            bottomOffset={12}
             linkTo="/food/user/cart"
             hideOnPages={true}
           />,

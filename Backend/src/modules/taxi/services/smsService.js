@@ -30,6 +30,10 @@ const normalizeIndianPhone = (phone) => {
     return digits;
   }
 
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return `91${digits.slice(1)}`;
+  }
+
   if (digits.length === 10) {
     return `91${digits}`;
   }
@@ -193,7 +197,7 @@ const buildSmsPayload = ({ phone, otp, appName, authMode = 'apiKey' }) => {
   return payload;
 };
 
-export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
+const dispatchSmsIndiaHub = async ({ phone, message, templateId, purpose = 'otp' }) => {
   if (isTruthy(env.sms.useDefaultOtp)) {
     return {
       mode: 'debug',
@@ -201,27 +205,30 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     };
   }
 
-  const digits = String(phone || '').replace(/\D/g, '');
-  const msisdn = digits.startsWith('91') ? digits : `91${digits}`;
-  const apiKey = (env.sms?.indiaHub?.apiKey || process.env.SMS_INDIA_HUB_API_KEY || '').trim();
-  const senderId = (env.sms?.indiaHub?.senderId || process.env.SMS_INDIA_HUB_SENDER_ID || 'BGADEC').trim();
-  const peId = (env.sms?.indiaHub?.peId || process.env.SMS_INDIA_HUB_PE_ID || '1001164203633432409').trim();
-  const templateId = (env.sms?.indiaHub?.dltTemplateId || process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID || '1007282516644508833').trim();
-  const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
+  const msisdn = normalizeIndianPhone(phone);
+  if (!/^91\d{10}$/.test(msisdn)) {
+    throw new ApiError(400, 'A valid Indian mobile number is required for OTP');
+  }
 
-  console.log(`[SMS] Dispatching live SMS OTP to ******${msisdn.slice(-4)} via SMS India Hub...`);
+  const config = getSmsIndiaHubConfig();
+  const resolvedTemplateId = readValue(templateId, config.templateId, '1007282516644508833');
+  if (!config.apiKey) {
+    throw new ApiError(500, 'SMS India Hub API key is not configured');
+  }
+
+  console.log(`[SMS] Dispatching ${purpose} SMS to ******${msisdn.slice(-4)} via SMS India Hub...`);
 
   // Primary: GET request on /api/mt/SendSMS (exact method as user sign in)
-  const sendUrl = new URL('https://cloud.smsindiahub.in/api/mt/SendSMS');
-  sendUrl.searchParams.append('APIKey', apiKey);
-  sendUrl.searchParams.append('senderid', senderId);
+  const sendUrl = new URL(SMS_INDIA_HUB_ENDPOINT);
+  sendUrl.searchParams.append('APIKey', config.apiKey);
+  sendUrl.searchParams.append('senderid', config.senderId);
   sendUrl.searchParams.append('channel', 'Trans');
   sendUrl.searchParams.append('DCS', '0');
   sendUrl.searchParams.append('flashsms', '0');
   sendUrl.searchParams.append('number', msisdn);
   sendUrl.searchParams.append('text', message);
-  sendUrl.searchParams.append('TemplateId', templateId);
-  sendUrl.searchParams.append('PEID', peId);
+  sendUrl.searchParams.append('TemplateId', resolvedTemplateId);
+  sendUrl.searchParams.append('PEID', config.peId);
 
   let finalResponseText = '';
   let delivered = false;
@@ -242,15 +249,13 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
       jobId = parsed?.JobId || null;
     }
   } catch (primaryErr) {
-    console.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}. Trying vendor fallback...`);
+    console.warn(`[SMS] Primary SendSMS failed: ${primaryErr.message}.`);
   }
-
-
 
   if (!delivered) {
     throw new ApiError(
       502,
-      `SMS India Hub rejected ${purpose} request: ${finalResponseText}`,
+      `SMS India Hub rejected ${purpose} request: ${finalResponseText || 'No response'}`,
     );
   }
 
@@ -260,4 +265,70 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     providerResponse: finalResponseText,
     jobId,
   };
+};
+
+export const formatDeliveryDropOtpMessage = ({ otp, orderId = '', templateText = '' }) => {
+  const code = String(otp || '').trim();
+  const displayOrderId = String(orderId || '').trim();
+  const rawTemplate = String(templateText || '').trim();
+  if (!rawTemplate) {
+    return `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${code}.BGADEC`;
+  }
+
+  if (/##otp##|\{otp\}|##order_id##|\{orderId\}/i.test(rawTemplate)) {
+    return rawTemplate
+      .replace(/##otp##|\{otp\}/gi, code)
+      .replace(/##order_id##|\{orderId\}/gi, displayOrderId || 'Eqosy');
+  }
+
+  const varMatches = rawTemplate.match(/##var##/gi) || [];
+  if (varMatches.length >= 2) {
+    let idx = 0;
+    return rawTemplate.replace(/##var##/gi, () => {
+      idx += 1;
+      return idx === 1 ? (displayOrderId || 'Eqosy') : code;
+    });
+  }
+  if (varMatches.length === 1) {
+    return rawTemplate.replace(/##var##/gi, code);
+  }
+  return rawTemplate;
+};
+
+export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
+  const message = `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${otp}.BGADEC`;
+  return dispatchSmsIndiaHub({ phone, message, purpose });
+};
+
+/**
+ * Send handover OTP SMS to the recipient of an "Order for someone else" food order.
+ * Uses dedicated delivery DLT env vars when present, falling back to the approved registration template.
+ */
+export const sendDeliveryDropOtpSms = async ({ phone, otp, orderId = '' }) => {
+  const code = String(otp || '').trim();
+  if (!code) {
+    throw new ApiError(400, 'Delivery OTP is required');
+  }
+
+  const config = getSmsIndiaHubConfig();
+  const deliveryTemplateId = readValue(process.env.SMS_INDIA_HUB_DELIVERY_OTP_TEMPLATE_ID);
+  const deliveryTemplateText = readValue(process.env.SMS_DELIVERY_OTP_DLT_TEMPLATE_TEXT);
+
+  const templateId = deliveryTemplateId || config.templateId;
+  const message = deliveryTemplateId
+    ? formatDeliveryDropOtpMessage({
+        otp: code,
+        orderId,
+        templateText:
+          deliveryTemplateText ||
+          `Your Eqosy delivery OTP is ${code}. Share with delivery partner.BGADEC`,
+      })
+    : `Welcome to the Eqosy powered by Appzeto.Your OTP for registration is ${code}.BGADEC`;
+
+  return dispatchSmsIndiaHub({
+    phone,
+    message,
+    templateId,
+    purpose: 'delivery_drop_otp',
+  });
 };

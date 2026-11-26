@@ -13,6 +13,7 @@ import { logger } from '../../../../utils/logger.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { getFirebaseDB } from '../../../../config/firebase.js';
 import { fetchPolyline } from '../utils/googleMaps.js';
+import { sendDeliveryDropOtpSms } from '../../../taxi/services/smsService.js';
 
 import * as foodTransactionService from './foodTransaction.service.js';
 import * as dispatchService from './order-dispatch.service.js';
@@ -31,6 +32,8 @@ import {
   generateFourDigitDeliveryOtp,
   exceedsVehicleTripLimit,
   haversineKm,
+  isScheduledOrderOnHold,
+  SCHEDULED_DISPATCH_LEAD_MINUTES,
   notifyOwnerSafely,
   notifyOwnersSafely,
   pushStatusHistory,
@@ -335,8 +338,8 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     FoodOrder.countDocuments(filter),
   ]);
 
-  // Zone-based filtering: only show orders from restaurants in the partner's zone
-  let filteredDocs = docs || [];
+  // Scheduled orders stay hidden from delivery partners until 20 min before scheduledAt.
+  let filteredDocs = (docs || []).filter((doc) => !isScheduledOrderOnHold(doc));
   if (partner) {
     const activeZones = await FoodZone.find({ isActive: true }).select('_id coordinates').lean();
     if (activeZones.length > 0) {
@@ -418,7 +421,10 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   // COD order still waiting for phone confirmation: accepting = approving it and calling the customer.
   {
-    const pending = await FoodOrder.findOne(identity).select('orderStatus').lean();
+    const pending = await FoodOrder.findOne(identity).select('orderStatus scheduledAt scheduledDispatched').lean();
+    if (isScheduledOrderOnHold(pending)) {
+      throw new ValidationError(`This is a scheduled order and will be available ${SCHEDULED_DISPATCH_LEAD_MINUTES} minutes before the scheduled time.`);
+    }
     if (codVerificationService.isAwaitingCodVerification(pending)) {
       return codVerificationService.approveCodOrderByRider(orderId, deliveryPartnerId);
     }
@@ -928,6 +934,67 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
   return order.toObject();
 }
 
+const DROP_OTP_RESEND_COOLDOWN_MS = 30 * 1000;
+
+export function resolveOtherRecipientPhone(order) {
+  if (!order?.recipient?.isSomeoneElse) return '';
+  const digits = String(order.recipient?.phone || '').replace(/\D/g, '').trim();
+  return digits.length >= 10 ? digits : '';
+}
+
+export function isOrderForOther(order) {
+  return Boolean(resolveOtherRecipientPhone(order));
+}
+
+function maskRecipientPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 4 ? `******${digits.slice(-4)}` : '****';
+}
+
+async function dispatchOtherRecipientDropOtpSms(order, { throwOnError = false } = {}) {
+  const recipientPhone = resolveOtherRecipientPhone(order);
+  const otpCode = String(order?.deliveryOtp || '').trim();
+  if (!recipientPhone || !otpCode) {
+    return { sent: false, skipped: true };
+  }
+
+  try {
+    await sendDeliveryDropOtpSms({
+      phone: recipientPhone,
+      otp: otpCode,
+      orderId: order.order_id || order._id?.toString?.() || '',
+    });
+
+    if (!order.deliveryVerification) order.deliveryVerification = { dropOtp: {} };
+    order.deliveryVerification.dropOtp = {
+      ...(order.deliveryVerification?.dropOtp?.toObject?.() ||
+        order.deliveryVerification?.dropOtp ||
+        {}),
+      required: true,
+      verified: Boolean(order.deliveryVerification?.dropOtp?.verified),
+      lastSmsSentAt: new Date(),
+    };
+    order.markModified('deliveryVerification');
+    return { sent: true, maskedPhone: maskRecipientPhone(recipientPhone) };
+  } catch (err) {
+    logger.warn(
+      `Delivery drop OTP SMS failed for order ${order?._id?.toString?.() || ''}: ${err?.message || err}`,
+    );
+    if (throwOnError) {
+      throw err;
+    }
+    return { sent: false, error: err?.message || 'SMS dispatch failed' };
+  }
+}
+
+export function resolveDropOtpForReachedDrop(existingOtp) {
+  const normalized = String(existingOtp || '').trim();
+  if (normalized) {
+    return { otp: normalized, generated: false };
+  }
+  return { otp: generateFourDigitDeliveryOtp(), generated: true };
+}
+
 export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
@@ -954,14 +1021,22 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
     order.orderStatus ||
     '';
 
-  const existingOtp = String(order.deliveryOtp || '').trim();
-  if (!alreadyAtDrop || !existingOtp) {
-    order.deliveryOtp = generateFourDigitDeliveryOtp();
+  const { otp: resolvedOtp, generated: shouldGenerateOtp } = resolveDropOtpForReachedDrop(
+    order.deliveryOtp,
+  );
+  order.deliveryOtp = resolvedOtp;
+  if (shouldGenerateOtp || !alreadyAtDrop || !order.deliveryVerification?.dropOtp?.required) {
     order.deliveryVerification = {
       ...(order.deliveryVerification?.toObject?.() ||
         order.deliveryVerification ||
         {}),
-      dropOtp: { required: true, verified: false },
+      dropOtp: {
+        ...(order.deliveryVerification?.dropOtp?.toObject?.() ||
+          order.deliveryVerification?.dropOtp ||
+          {}),
+        required: true,
+        verified: Boolean(order.deliveryVerification?.dropOtp?.verified),
+      },
     };
   }
 
@@ -984,6 +1059,15 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
 
   await order.save();
 
+  // Only for "Order for someone else": send handover OTP SMS to recipient's registered phone.
+  const shouldNotifyDropArrival = !alreadyAtDrop || shouldGenerateOtp;
+  if (shouldNotifyDropArrival && isOrderForOther(order)) {
+    const smsRes = await dispatchOtherRecipientDropOtpSms(order, { throwOnError: false });
+    if (smsRes.sent) {
+      await order.save();
+    }
+  }
+
   emitDeliveryDropOtpToUser(order, String(order.deliveryOtp || '').trim());
   emitOrderUpdate(order, deliveryPartnerId);
   enqueueOrderEvent('reached_drop', {
@@ -994,6 +1078,63 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
     dropOtpVerified: order.deliveryVerification?.dropOtp?.verified ?? false,
   });
   return sanitizeOrderForExternal(order);
+}
+
+export async function resendDropOtpDelivery(orderId, deliveryPartnerId) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError('Order id required');
+
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
+  if (
+    order.dispatch?.deliveryPartnerId?.toString() !== deliveryPartnerId.toString()
+  ) {
+    throw new ForbiddenError('Not your order');
+  }
+
+  if (order.deliveryVerification?.dropOtp?.verified || order.orderStatus === 'delivered') {
+    throw new ValidationError('Delivery OTP is already verified for this order.');
+  }
+
+  if (order.undeliveredReturn?.status === 'approved' || order.orderStatus === 'returned_to_restaurant') {
+    throw new ValidationError('This order is being returned to the restaurant.');
+  }
+
+  if (!isOrderForOther(order)) {
+    throw new ValidationError('OTP SMS resend is only available for orders placed for someone else.');
+  }
+
+  const lastSentAt = order.deliveryVerification?.dropOtp?.lastSmsSentAt
+    ? new Date(order.deliveryVerification.dropOtp.lastSmsSentAt).getTime()
+    : 0;
+  if (lastSentAt > 0) {
+    const elapsed = Date.now() - lastSentAt;
+    if (elapsed < DROP_OTP_RESEND_COOLDOWN_MS) {
+      const waitSec = Math.ceil((DROP_OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
+      throw new ValidationError(`Please wait ${waitSec}s before resending OTP.`);
+    }
+  }
+
+  if (!String(order.deliveryOtp || '').trim()) {
+    order.deliveryOtp = generateFourDigitDeliveryOtp();
+  }
+  if (!order.deliveryVerification) order.deliveryVerification = { dropOtp: {} };
+  order.deliveryVerification.dropOtp = {
+    ...(order.deliveryVerification?.dropOtp?.toObject?.() ||
+      order.deliveryVerification?.dropOtp ||
+      {}),
+    required: true,
+    verified: false,
+  };
+  order.markModified('deliveryVerification');
+
+  const smsRes = await dispatchOtherRecipientDropOtpSms(order, { throwOnError: true });
+  await order.save();
+
+  return {
+    order: sanitizeOrderForExternal(order),
+    maskedPhone: smsRes.maskedPhone,
+  };
 }
 
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {

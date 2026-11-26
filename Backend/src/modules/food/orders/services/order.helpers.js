@@ -75,6 +75,7 @@ export function sanitizeOrderForExternal(orderDoc) {
       dropOtp: {
         required: Boolean(d.required),
         verified: Boolean(d.verified),
+        lastSmsSentAt: d.lastSmsSentAt || null,
       },
     };
   }
@@ -408,11 +409,12 @@ export function canExposeOrderToRestaurant(orderLike) {
 }
 
 
-export const SCHEDULED_DISPATCH_LEAD_MS = 30 * 60 * 1000;
+export const SCHEDULED_DISPATCH_LEAD_MINUTES = 20;
+export const SCHEDULED_DISPATCH_LEAD_MS = SCHEDULED_DISPATCH_LEAD_MINUTES * 60 * 1000;
 
 /**
  * A scheduled order stays on hold (not shown to restaurant / delivery partners) until
- * 30 minutes before scheduledAt, at which point the watchdog releases it.
+ * 20 minutes before scheduledAt, at which point the watchdog releases it.
  */
 export function isScheduledOrderOnHold(orderLike) {
   if (!orderLike?.scheduledAt || orderLike.scheduledDispatched === true) return false;

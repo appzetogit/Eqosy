@@ -276,6 +276,14 @@ export const useRestaurantNotifications = () => {
     const statusStr = String(orderData?.status || orderData?.orderStatus || '').toLowerCase();
     const isDining = rawType.includes('dining') || rawType.includes('table') || rawType.includes('reservation');
 
+    // Never ring for a future scheduled order still on hold (> 20 min before scheduledAt).
+    if (!isDining && orderData?.scheduledAt && orderData?.scheduledDispatched !== true) {
+      const schedMs = new Date(orderData.scheduledAt).getTime();
+      if (Number.isFinite(schedMs) && schedMs - Date.now() > 20 * 60000) {
+        return;
+      }
+    }
+
     if (isDining) {
       if (statusStr.includes('cancel')) {
         stopAlertLoop();
@@ -382,7 +390,10 @@ export const useRestaurantNotifications = () => {
           newPendingOrders.forEach((o) => {
             const key = getOrderAlertKey(o);
             const createdAtMs = new Date(o.createdAt || o.updatedAt || 0).getTime();
-            if (key && now - createdAtMs > 60000 && o?.fulfilment?.state !== 'resolved') {
+            const releaseAtMs = o.scheduledAt
+              ? Math.max(createdAtMs, new Date(o.scheduledAt).getTime() - 20 * 60000)
+              : createdAtMs;
+            if (key && now - releaseAtMs > 60000 && o?.fulfilment?.state !== 'resolved') {
               alertedOrderIdsRef.current.add(key);
             }
           });

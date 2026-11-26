@@ -84,6 +84,8 @@ const pricingSchema = new mongoose.Schema(
         restaurantCommissionLeague: { type: String, default: '' },
         restaurantCommissionMonth: { type: String, default: '' },
         discount: { type: Number, default: 0, min: 0 },
+        /** Prepaid (online / wallet) discount configured by admin. */
+        prepaidDiscount: { type: Number, default: 0, min: 0 },
         /** COD handling charge (admin-set). Only on cash orders; the charge goes to the rider who verifies the order. */
         codCharge: { type: Number, default: 0, min: 0 },
         codChargeGstRate: { type: Number, default: 0, min: 0, max: 100 },
@@ -238,7 +240,8 @@ const deliveryVerificationSchema = new mongoose.Schema(
     {
         dropOtp: {
             required: { type: Boolean, default: false },
-            verified: { type: Boolean, default: false }
+            verified: { type: Boolean, default: false },
+            lastSmsSentAt: { type: Date, default: null }
         },
         handoverImageUrl: { type: String, default: '' },
         handoverUploadedAt: { type: Date, default: null }
@@ -275,7 +278,7 @@ const undeliveredReturnSchema = new mongoose.Schema(
 /**
  * COD phone verification, done by a delivery partner BEFORE the order reaches the restaurant.
  * awaiting_rider (offered to one rider at a time, 2 min each) -> calling (rider approved; 2 min to reach the
- * customer) -> confirmed (order goes to the restaurant) | cancelled. `scheduled` = future order, started 30 min
+ * customer) -> confirmed (order goes to the restaurant) | cancelled. `scheduled` = future order, started 20 min
  * before scheduledAt. See codVerification.service.js.
  */
 const codVerificationSchema = new mongoose.Schema(

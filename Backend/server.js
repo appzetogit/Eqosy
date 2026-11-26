@@ -187,16 +187,21 @@ const startServer = async () => {
         runGigReminderCheck();
         gigReminderInterval = setInterval(runGigReminderCheck, 60 * 1000);
 
+        let scheduledOrdersRunning = false;
         const runScheduledOrdersCheck = async () => {
+            if (scheduledOrdersRunning) return;
+            scheduledOrdersRunning = true;
             try {
                 const { processScheduledFoodOrders } = await import('./src/modules/food/orders/services/order.service.js');
                 await processScheduledFoodOrders();
             } catch (err) {
                 logger.error(`Scheduled food orders check error: ${err.message}`);
+            } finally {
+                scheduledOrdersRunning = false;
             }
         };
         runScheduledOrdersCheck();
-        scheduledOrdersInterval = setInterval(runScheduledOrdersCheck, 60 * 1000);
+        scheduledOrdersInterval = setInterval(runScheduledOrdersCheck, 20 * 1000);
 
         const runPerformanceSweep = async () => {
             try {

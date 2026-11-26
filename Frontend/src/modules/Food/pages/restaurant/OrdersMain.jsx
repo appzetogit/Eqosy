@@ -1642,7 +1642,7 @@ export default function OrdersMain() {
         ? new Date(newOrder.scheduledAt).getTime()
         : null;
       const isFutureScheduled =
-        scheduledAt && scheduledAt > Date.now() + 30 * 60000;
+        scheduledAt && scheduledAt > Date.now() + 20 * 60000;
 
       if (isFutureScheduled) {
         toast.info(
@@ -1782,7 +1782,10 @@ export default function OrdersMain() {
             // Mark existing orders created more than 120 seconds ago as already shown
             allOrders.forEach((o) => {
               const createdAt = new Date(o.createdAt || o.updatedAt || 0).getTime();
-              if (now - createdAt > 120000) {
+              const releaseAt = o.scheduledAt
+                ? Math.max(createdAt, new Date(o.scheduledAt).getTime() - 20 * 60000)
+                : createdAt;
+              if (now - releaseAt > 120000) {
                 markOrderAsShown(o);
               }
             });
@@ -1836,8 +1839,8 @@ export default function OrdersMain() {
               (order.status === "created" || order.status === "confirmed")
             ) {
               const scheduledTime = new Date(order.scheduledAt).getTime();
-              // Show popup if scheduled time is <= 30 mins from now
-              if (scheduledTime <= now + 30 * 60000) return true;
+              // Show popup if scheduled time is <= 20 mins from now
+              if (scheduledTime <= now + 20 * 60000) return true;
             }
 
             return false;
@@ -2108,7 +2111,10 @@ export default function OrdersMain() {
   const handleReopenNewOrderPopup = (order) => {
     if (!order) return;
     const createdMs = order.createdAt ? new Date(order.createdAt).getTime() : Date.now();
-    const remaining = Math.max(0, 240 - Math.floor((Date.now() - createdMs) / 1000));
+    const releaseMs = order.scheduledAt
+      ? Math.max(createdMs, new Date(order.scheduledAt).getTime() - 20 * 60000)
+      : createdMs;
+    const remaining = Math.max(0, 240 - Math.floor((Date.now() - releaseMs) / 1000));
     setPopupOrder({
       orderId: order.orderId,
       orderMongoId: order._id,

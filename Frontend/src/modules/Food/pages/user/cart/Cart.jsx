@@ -323,11 +323,22 @@ function CartInner() {
   const [loadingCoupons, setLoadingCoupons] = useState(false)
   const [userOrderCount, setUserOrderCount] = useState(0)
 
+  const parseLocalScheduledDateTime = (dateStr, timeStr) => {
+    if (!dateStr) return null
+    const [y, mon, d] = String(dateStr).split('-').map(Number)
+    if (!y || !mon || !d) return null
+    if (!timeStr) return new Date(y, mon - 1, d, 12, 0, 0, 0)
+    const [hh, mm] = String(timeStr).split(':').map(Number)
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+    const dt = new Date(y, mon - 1, d, hh, mm, 0, 0)
+    return Number.isNaN(dt.getTime()) ? null : dt
+  }
+
   const availableTimeSlots = useMemo(() => {
     if (!isScheduled || !scheduledDate || !restaurantData) return []
 
     try {
-      const targetDate = new Date(scheduledDate)
+      const targetDate = parseLocalScheduledDateTime(scheduledDate) || new Date(scheduledDate)
       const status = getRestaurantAvailabilityStatus(restaurantData, targetDate)
 
       const parseTimeTo24Hour = (timeStr, defaultHour) => {
@@ -1282,6 +1293,12 @@ function CartInner() {
     fetchCouponsForCartItems()
   }, [cart, restaurantId])
 
+  const getActiveScheduledAtIso = () => (
+    isScheduled && scheduledDate && scheduledTime && scheduledTimeAvailability.isValid
+      ? parseLocalScheduledDateTime(scheduledDate, scheduledTime)?.toISOString()
+      : undefined
+  )
+
   // Calculate pricing from backend whenever cart, address, or coupon changes
   useEffect(() => {
     const calculatePricing = async () => {
@@ -1308,13 +1325,15 @@ function CartInner() {
 
         const resolvedRestaurantId = restaurantData?._id || restaurantData?.restaurantId || restaurantId || undefined
         const resolvedCouponCode = appliedCoupon?.code || couponCode || undefined
+        const scheduledAtIso = getActiveScheduledAtIso()
 
         const response = await orderAPI.calculateOrder({
           items,
           restaurantId: resolvedRestaurantId,
           deliveryAddress: defaultAddress,
           zoneId: zoneId || undefined,
-          couponCode: resolvedCouponCode
+          couponCode: resolvedCouponCode,
+          ...(scheduledAtIso ? { scheduledAt: scheduledAtIso } : {})
         })
 
         if (response?.data?.success && response?.data?.data?.pricing) {
@@ -1347,7 +1366,7 @@ function CartInner() {
     }
 
     calculatePricing()
-  }, [cart, defaultAddress, appliedCoupon, couponCode, restaurantId, restaurantData, zoneId])
+  }, [cart, defaultAddress, appliedCoupon, couponCode, restaurantId, restaurantData, zoneId, isScheduled, scheduledDate, scheduledTime, scheduledTimeAvailability.isValid])
 
   // Fetch wallet balance
   useEffect(() => {
@@ -1468,20 +1487,33 @@ function CartInner() {
   const codChargeGst = Number(pricing?.codChargeGst || 0)
   const codChargeGstRate = Number(pricing?.codChargeGstRate || 18)
   const codChargeTotal = Number(pricing?.codChargeTotal || 0)
+  const prepaidDiscountEnabled = Boolean(pricing?.prepaidDiscountEnabled)
+  const prepaidDiscountType = pricing?.prepaidDiscountType === "flat" ? "flat" : "percentage"
+  const prepaidDiscountValue = Number(pricing?.prepaidDiscountValue || 0)
+  const prepaidDiscountMinOrder = Number(pricing?.prepaidDiscountMinOrderAmount || 0)
+  const prepaidDiscountAmount = Math.max(0, Number(pricing?.prepaidDiscount || 0))
   const isCashSelected = selectedPaymentMethod === "cash"
-  const payableTotal = isCashSelected && codChargeTotal > 0 ? Math.round((total + codChargeTotal) * 100) / 100 : total
+  const isPrepaidSelected = selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet"
+  const appliedPrepaidDiscount = isPrepaidSelected && prepaidDiscountAmount > 0 ? Math.min(prepaidDiscountAmount, total) : 0
+  const walletPayableTotal = Math.max(0, Math.round((total - Math.min(prepaidDiscountAmount, total)) * 100) / 100)
+  const payableTotal = isCashSelected && codChargeTotal > 0
+    ? Math.round((total + codChargeTotal) * 100) / 100
+    : appliedPrepaidDiscount > 0
+      ? Math.max(0, Math.round((total - appliedPrepaidDiscount) * 100) / 100)
+      : total
   const payableTotalLabel = Number.isInteger(payableTotal) ? String(payableTotal) : payableTotal.toFixed(2)
   const formatRupees = (n) => (Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(2))
 
-  // Savings: Only genuine coupon discounts or item MRP differences (never roundoff differences)
+  // Savings: Only genuine coupon discounts, prepaid discount, or item MRP differences (never roundoff differences)
   const itemSavings = cart.reduce((sum, item) => {
     const orig = Number(item.originalPrice || item.mrp || 0)
     const cur = Number(item.price || 0)
     return sum + (orig > cur ? (orig - cur) * (item.quantity || 1) : 0)
   }, 0)
+  const baseSavings = pricing?.savings != null ? Number(pricing.savings) : (discount + itemSavings)
   const savings = Math.max(
     0,
-    Math.round(pricing?.savings != null ? Number(pricing.savings) : (discount + itemSavings))
+    Math.round(baseSavings + appliedPrepaidDiscount)
   )
 
   const getCartActualDistanceKm = () => {
@@ -1779,12 +1811,15 @@ function CartInner() {
           isVeg: item.isVeg !== false
         }))
 
+        const scheduledAtIso = getActiveScheduledAtIso()
+
         const response = await orderAPI.calculateOrder({
           items,
           restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
           deliveryAddress: defaultAddress,
           zoneId: zoneId || undefined,
-          couponCode: coupon.code
+          couponCode: coupon.code,
+          ...(scheduledAtIso ? { scheduledAt: scheduledAtIso } : {})
         })
 
         const pricingData = response?.data?.data?.pricing
@@ -1843,12 +1878,15 @@ function CartInner() {
         isVeg: item.isVeg !== false
       }))
 
+      const scheduledAtIso = getActiveScheduledAtIso()
+
       const response = await orderAPI.calculateOrder({
         items,
         restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
         deliveryAddress: defaultAddress,
         zoneId: zoneId || undefined,
-        couponCode: inputCode
+        couponCode: inputCode,
+        ...(scheduledAtIso ? { scheduledAt: scheduledAtIso } : {})
       })
 
       const pricingData = response?.data?.data?.pricing
@@ -1904,12 +1942,15 @@ function CartInner() {
           isVeg: item.isVeg !== false
         }))
 
+        const scheduledAtIso = getActiveScheduledAtIso()
+
         const response = await orderAPI.calculateOrder({
           items,
           restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
           deliveryAddress: defaultAddress,
           zoneId: zoneId || undefined,
-          couponCode: null
+          couponCode: null,
+          ...(scheduledAtIso ? { scheduledAt: scheduledAtIso } : {})
         })
 
         if (response?.data?.success && response?.data?.data?.pricing) {
@@ -1999,7 +2040,14 @@ function CartInner() {
       toast.error(orderingPausedMessage, { duration: 9000 })
       return
     }
-    if (isRestaurantOffline) {
+    const isOutsideHoursOnly = restaurantAvailability?.reason === 'outside-hours'
+    const canScheduleOutsideCurrentHours =
+      isScheduled &&
+      isOutsideHoursOnly &&
+      restaurantData?.isActive !== false &&
+      restaurantData?.isAcceptingOrders !== false &&
+      scheduledTimeAvailability.isValid
+    if (isRestaurantOffline && !canScheduleOutsideCurrentHours) {
       toast.error("Restaurant is offline. Cannot place order.")
       return
     }
@@ -2014,14 +2062,14 @@ function CartInner() {
       return
     }
 
+    let scheduledAtIso = undefined
     if (isScheduled) {
       if (!scheduledDate || !scheduledTime) {
         toast.error("Please select both date and time to schedule your order")
         return
       }
-      const scheduleString = `${scheduledDate}T${scheduledTime}:00`
-      const scheduleDateObj = new Date(scheduleString)
-      if (Number.isNaN(scheduleDateObj.getTime()) || scheduleDateObj.getTime() < Date.now()) {
+      const scheduleDateObj = parseLocalScheduledDateTime(scheduledDate, scheduledTime)
+      if (!scheduleDateObj || Number.isNaN(scheduleDateObj.getTime()) || scheduleDateObj.getTime() < Date.now()) {
         toast.error("Scheduled time has already passed. Please select a future time.")
         setShowTimeSlotModal(true)
         return
@@ -2031,6 +2079,7 @@ function CartInner() {
         setShowTimeSlotModal(true);
         return;
       }
+      scheduledAtIso = scheduleDateObj.toISOString()
     }
 
     if (cart.length === 0) {
@@ -2283,7 +2332,7 @@ function CartInner() {
         paymentMethod: selectedPaymentMethod,
         // `useZone()` can return `null`. Zod expects string/undefined, not null.
         zoneId: zoneId || undefined,
-        scheduledAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString() : undefined,
+        scheduledAt: scheduledAtIso,
       };
       // Log final order details (including paymentMethod for COD debugging)
       debugLog('?? FINAL: Sending order to backend with:', {
@@ -2295,8 +2344,8 @@ function CartInner() {
       });
 
       // Check wallet balance if wallet payment selected
-      if (selectedPaymentMethod === "wallet" && walletBalance < total) {
-        toast.error(`Insufficient wallet balance. Required: ${RUPEE_SYMBOL}${total.toFixed(0)}, Available: ${RUPEE_SYMBOL}${walletBalance.toFixed(0)}`)
+      if (selectedPaymentMethod === "wallet" && walletBalance < payableTotal) {
+        toast.error(`Insufficient wallet balance. Required: ${RUPEE_SYMBOL}${payableTotalLabel}, Available: ${RUPEE_SYMBOL}${walletBalance.toFixed(0)}`)
         setIsPlacingOrder(false)
         return
       }
@@ -3419,6 +3468,15 @@ function CartInner() {
                         <span>-{RUPEE_SYMBOL}{Math.round(discount)}</span>
                       </div>
                     )}
+                    {appliedPrepaidDiscount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600 dark:text-green-400 font-medium">
+                        <span>
+                          Prepaid Discount
+                          {prepaidDiscountType === "percentage" && prepaidDiscountValue > 0 ? ` (${prepaidDiscountValue}%)` : ""}
+                        </span>
+                        <span>-{RUPEE_SYMBOL}{formatRupees(appliedPrepaidDiscount)}</span>
+                      </div>
+                    )}
                     {isPricingAvailable && isCashSelected && codChargeTotal > 0 && (
                       <>
                         <div className="flex justify-between text-sm">
@@ -3440,6 +3498,18 @@ function CartInner() {
                         {isCashSelected
                           ? `Pay online and save ${RUPEE_SYMBOL}${formatRupees(codChargeTotal)} COD charge.`
                           : `You save ${RUPEE_SYMBOL}${formatRupees(codChargeTotal)} COD charge by paying online.`}
+                      </p>
+                    )}
+                    {isPricingAvailable && prepaidDiscountAmount > 0 && (
+                      <p className={`text-xs font-semibold mt-1 ${isPrepaidSelected ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}>
+                        {isPrepaidSelected
+                          ? `You save ${RUPEE_SYMBOL}${formatRupees(appliedPrepaidDiscount)} with prepaid discount.`
+                          : `Pay online or via wallet to get ${RUPEE_SYMBOL}${formatRupees(prepaidDiscountAmount)} prepaid discount.`}
+                      </p>
+                    )}
+                    {isPricingAvailable && prepaidDiscountEnabled && prepaidDiscountAmount === 0 && prepaidDiscountValue > 0 && prepaidDiscountMinOrder > Number(pricing?.subtotal || 0) && (
+                      <p className="text-xs font-semibold mt-1 text-gray-500 dark:text-gray-400">
+                        {`Add ${RUPEE_SYMBOL}${Math.ceil(prepaidDiscountMinOrder - Number(pricing?.subtotal || 0))} more to unlock ${prepaidDiscountType === "percentage" ? `${prepaidDiscountValue}%` : `${RUPEE_SYMBOL}${formatRupees(prepaidDiscountValue)}`} prepaid discount.`}
                       </p>
                     )}
                     {pricingError && (
@@ -3981,21 +4051,26 @@ function CartInner() {
                     {
                       id: 'razorpay',
                       name: 'Pay Online',
-                      description: 'UPI, Cards, Netbanking - pay in one tap',
+                      description: prepaidDiscountAmount > 0
+                        ? `UPI, Cards, Netbanking - Save ${RUPEE_SYMBOL}${formatRupees(prepaidDiscountAmount)}`
+                        : 'UPI, Cards, Netbanking - pay in one tap',
                       icon: <Zap className="w-5 h-5" />,
                       color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400',
                       selectedColor: 'bg-emerald-500 text-white',
-                      badge: 'SECURE'
+                      badge: prepaidDiscountAmount > 0 ? `SAVE ${RUPEE_SYMBOL}${formatRupees(prepaidDiscountAmount)}` : 'SECURE'
                     },
                     {
                       id: 'wallet',
                       name: 'Quick Wallet',
-                      description: 'Pay from your wallet',
+                      description: prepaidDiscountAmount > 0
+                        ? `Pay from your wallet - Save ${RUPEE_SYMBOL}${formatRupees(prepaidDiscountAmount)}`
+                        : 'Pay from your wallet',
                       icon: <Wallet className="w-5 h-5" />,
                       color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
                       selectedColor: 'bg-blue-500 text-white',
+                      ...(prepaidDiscountAmount > 0 ? { badge: `SAVE ${RUPEE_SYMBOL}${formatRupees(prepaidDiscountAmount)}` } : {}),
                       subInfo: `Bal: ${RUPEE_SYMBOL}${walletBalance.toFixed(0)}`,
-                      disabled: walletBalance < total,
+                      disabled: walletBalance < walletPayableTotal,
                       disabledText: 'Low Balance'
                     },
                     {

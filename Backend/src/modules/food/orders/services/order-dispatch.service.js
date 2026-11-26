@@ -20,6 +20,7 @@ import {
   notifyAdminsSafely,
   validateOrderDeliveryInfo,
   isScheduledOrderOnHold,
+  SCHEDULED_DISPATCH_LEAD_MINUTES,
 } from './order.helpers.js';
 
 import { FoodZone } from '../../admin/models/zone.model.js';
@@ -348,9 +349,9 @@ export async function tryAutoAssign(orderId, options = {}) {
   try {
     const forceRebroadcast = Boolean(options.forceRebroadcast);
 
-    // Scheduled orders are on hold until 30 min before scheduledAt — never offer them to riders earlier.
+    // Scheduled orders are on hold until 20 min before scheduledAt — never offer them to riders earlier.
     if (isScheduledOrderOnHold(order)) {
-      logger.info(`tryAutoAssign: Skip for ${orderId} (scheduled order on hold until 30 min before ${order.scheduledAt}).`);
+      logger.info(`tryAutoAssign: Skip for ${orderId} (scheduled order on hold until ${SCHEDULED_DISPATCH_LEAD_MINUTES} min before ${order.scheduledAt}).`);
       await FoodOrder.updateOne({ _id: order._id }, { $unset: { 'dispatch.dispatchingAt': 1 } });
       return order;
     }

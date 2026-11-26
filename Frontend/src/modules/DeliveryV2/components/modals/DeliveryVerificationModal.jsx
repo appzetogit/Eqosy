@@ -112,7 +112,32 @@ const OtpModal = ({ order, contact, onVerified, onClose, onReturnStatusChange, o
   const [otp, setOtp] = useState(['', '', '', '']);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isOtpVerified, setIsOtpVerified] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = [useRef(), useRef(), useRef(), useRef()];
+
+  const isOrderForOther = Boolean(order?.recipient?.isSomeoneElse && order?.recipient?.phone);
+  const recipientPhoneDigits = String(order?.recipient?.phone || '').replace(/\D/g, '');
+  const maskedRecipientPhone = recipientPhoneDigits.length >= 4
+    ? `••••••${recipientPhoneDigits.slice(-4)}`
+    : '';
+
+  useEffect(() => {
+    const lastSentRaw = order?.deliveryVerification?.dropOtp?.lastSmsSentAt;
+    if (!lastSentRaw) return;
+    const elapsedSec = Math.floor((Date.now() - new Date(lastSentRaw).getTime()) / 1000);
+    if (elapsedSec >= 0 && elapsedSec < 30) {
+      setResendCooldown(30 - elapsedSec);
+    }
+  }, [order?.deliveryVerification?.dropOtp?.lastSmsSentAt]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     const savedCode = order?.deliveryVerification?.dropOtp?.code;
@@ -155,6 +180,21 @@ const OtpModal = ({ order, contact, onVerified, onClose, onReturnStatusChange, o
       throw err;
     } finally {
       setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleResendRecipientOtp = async () => {
+    if (!isOrderForOther || isResendingOtp || resendCooldown > 0) return;
+    setIsResendingOtp(true);
+    try {
+      const res = await deliveryAPI.resendDropOtp(orderId);
+      const masked = res?.data?.data?.maskedPhone || maskedRecipientPhone;
+      toast.success(masked ? `OTP resent via SMS to ${masked}` : 'OTP resent to recipient');
+      setResendCooldown(30);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Could not resend OTP SMS');
+    } finally {
+      setIsResendingOtp(false);
     }
   };
 
@@ -212,6 +252,32 @@ const OtpModal = ({ order, contact, onVerified, onClose, onReturnStatusChange, o
               />
             ))}
           </div>
+          )}
+
+          {!isReturning && !isOtpVerified && !isAlreadyVerified && isOrderForOther && (
+            <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  Order For Someone Else
+                </p>
+                <p className="text-xs font-bold text-gray-800 truncate">
+                  OTP sent via SMS to {order?.recipient?.name || 'recipient'} ({maskedRecipientPhone})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResendRecipientOtp}
+                disabled={isResendingOtp || resendCooldown > 0}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gray-950 px-3 py-2 text-xs font-black text-white transition-all active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isResendingOtp ? 'animate-spin' : ''}`} />
+                {isResendingOtp
+                  ? 'Sending...'
+                  : resendCooldown > 0
+                    ? `Resend (${resendCooldown}s)`
+                    : 'Resend OTP'}
+              </button>
+            </div>
           )}
 
           {/* Customer not answering: after the wait timer, rider can ask admin to approve returning the order */}

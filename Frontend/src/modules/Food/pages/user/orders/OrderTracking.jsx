@@ -51,6 +51,8 @@ import {
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { useUserNotifications, getSocket } from "@food/hooks/useUserNotifications"
 import { getOrderDisplayDistance } from "@food/utils/common"
+import { getStoredLanguage } from "@/shared/language/googleTranslate"
+import { LANGUAGE_CHANGED_EVENT } from "@/shared/language/languages"
 import circleIcon from "@food/assets/circleicon.png"
 import { RESTAURANT_PIN_SVG, CUSTOMER_PIN_SVG, RIDER_BIKE_SVG } from "@food/constants/mapIcons"
 
@@ -525,12 +527,17 @@ function mapOrderToTrackingUiStatus(orderLike) {
   if (isFoodOrderCancelledStatus(statusRaw) || isUndeliveredReturnOrder(orderLike)) return "cancelled"
   if (statusRaw === "delivered" || statusRaw === "completed") return "delivered"
 
+  // COD order awaiting rider phone confirmation stays in cod_verify even after a rider accepts the call task.
+  const canonicalStatus = String(orderLike.orderStatus || "").toLowerCase()
+  if (canonicalStatus === "pending_cod_verification" || String(statusRaw || "").toLowerCase() === "pending_cod_verification") {
+    return "cod_verify"
+  }
+
   // Live Ride / Phase-based mapping (Highest priority for precision)
   const isRiderAccepted = orderLike.dispatch?.status === "accepted" || orderLike.assignmentInfo?.status === "accepted" || orderLike.deliveryPartner?.status === "accepted";
 
   // Restaurant has marked the food ready (canonical orderStatus, or the ready flags) while the rider is
   // still on the way to / waiting at the restaurant: show "ready, partner will pick it up", not "preparing".
-  const canonicalStatus = String(orderLike.orderStatus || "").toLowerCase()
   const foodMarkedReady =
     canonicalStatus === "ready_for_pickup" ||
     canonicalStatus === "ready" ||
@@ -622,8 +629,68 @@ const ORDER_SUPPORT_CATEGORIES = [
   "Other order issue",
 ];
 
+const COD_CONFIRMATION_NOTICE_BY_LANG = {
+  en: {
+    title: "Confirming your COD order",
+    message: "Our delivery agent will call you soon for order confirmation.",
+  },
+  hi: {
+    title: "आपका COD ऑर्डर कन्फर्म किया जा रहा है",
+    message: "ऑर्डर कन्फर्मेशन के लिए हमारे डिलीवरी एजेंट आपको जल्द ही कॉल करेंगे।",
+  },
+  bn: {
+    title: "আপনার COD অর্ডার কনফার্ম করা হচ্ছে",
+    message: "অর্ডার কনফার্মেশনের জন্য আমাদের ডেলিভারি এজেন্ট শীঘ্রই আপনাকে কল করবেন।",
+  },
+  mr: {
+    title: "तुमची COD ऑर्डर कन्फर्म केली जात आहे",
+    message: "ऑर्डर कन्फर्मेशनसाठी आमचे डिलिव्हरी एजंट तुम्हाला लवकरच कॉल करतील.",
+  },
+  gu: {
+    title: "તમારો COD ઓર્ડર કન્ફર્મ થઈ રહ્યો છે",
+    message: "ઓર્ડર કન્ફર્મેશન માટે અમારા ડિલિવરી એજન્ટ તમને જલ્દી જ કોલ કરશે.",
+  },
+  ta: {
+    title: "உங்கள் COD ஆர்டர் உறுதிப்படுத்தப்படுகிறது",
+    message: "ஆர்டரை உறுதிப்படுத்த எங்கள் டெலிவரி ஏஜென்ட் விரைவில் உங்களை அழைப்பார்.",
+  },
+  te: {
+    title: "మీ COD ఆర్డర్ నిర్ధారించబడుతోంది",
+    message: "ఆర్డర్ నిర్ధారణ కోసం మా డెలివరీ ఏజెంట్ త్వరలోనే మీకు కాల్ చేస్తారు.",
+  },
+  kn: {
+    title: "ನಿಮ್ಮ COD ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗುತ್ತಿದೆ",
+    message: "ಆರ್ಡರ್ ದೃಢೀಕರಣಕ್ಕಾಗಿ ನಮ್ಮ ಡೆಲಿವರಿ ಏಜೆಂಟ್ ಶೀಘ್ರದಲ್ಲೇ ನಿಮಗೆ ಕರೆ ಮಾಡುತ್ತಾರೆ.",
+  },
+  ml: {
+    title: "നിങ്ങളുടെ COD ഓർഡർ സ്ഥിരീകരിക്കുന്നു",
+    message: "ഓർഡർ സ്ഥിരീകരണത്തിനായി ഞങ്ങളുടെ ഡെലിവറി ഏജന്റ് ഉടൻ നിങ്ങളെ വിളിക്കും.",
+  },
+  pa: {
+    title: "ਤੁਹਾਡੇ COD ਆਰਡਰ ਦੀ ਪੁਸ਼ਟੀ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ",
+    message: "ਆਰਡਰ ਦੀ ਪੁਸ਼ਟੀ ਲਈ ਸਾਡਾ ਡਿਲੀਵਰੀ ਏਜੰਟ ਤੁਹਾਨੂੰ ਜਲਦੀ ਹੀ ਕਾਲ ਕਰੇਗਾ।",
+  },
+  or: {
+    title: "ଆପଣଙ୍କ COD ଅର୍ଡର ନିଶ୍ଚିତ କରାଯାଉଛି",
+    message: "ଅର୍ଡର ନିଶ୍ଚିତ କରିବା ପାଇଁ ଆମର ଡେଲିଭରି ଏଜେଣ୍ଟ ଶୀଘ୍ର ଆପଣଙ୍କୁ କଲ୍ କରିବେ।",
+  },
+  ur: {
+    title: "آپ کا COD آرڈر کنفرم کیا جا رہا ہے",
+    message: "آرڈر کی تصدیق کے لیے ہمارے ڈیلیوری ایجنٹ آپ کو جلد کال کریں گے۔",
+  },
+};
+
 export default function OrderTracking({ isSharedView = false }) {
   const companyName = useCompanyName()
+  const [selectedLanguage, setSelectedLanguage] = useState(getStoredLanguage)
+
+  useEffect(() => {
+    const handleLanguageChange = (event) => {
+      setSelectedLanguage(event?.detail || getStoredLanguage())
+    }
+    window.addEventListener(LANGUAGE_CHANGED_EVENT, handleLanguageChange)
+    return () => window.removeEventListener(LANGUAGE_CHANGED_EVENT, handleLanguageChange)
+  }, [])
   const { orderId: orderIdParam, shareId: shareIdParam } = useParams()
   const isShared = isSharedView || Boolean(shareIdParam)
   const shareId = shareIdParam || null
@@ -1781,11 +1848,13 @@ export default function OrderTracking({ isSharedView = false }) {
     )
   }
 
+  const codCallNotice = COD_CONFIRMATION_NOTICE_BY_LANG[selectedLanguage] || COD_CONFIRMATION_NOTICE_BY_LANG.en
+
   const statusConfig = {
     // Cash on Delivery: a delivery partner calls the customer to confirm before the order goes to the restaurant.
     cod_verify: {
-      title: "Confirming your order 📞",
-      subtitle: "Our delivery partner will call you shortly. Please answer to confirm your Cash on Delivery order.",
+      title: `${codCallNotice.title} 📞`,
+      subtitle: codCallNotice.message,
       color: "bg-amber-500",
       iconType: 'food'
     },
@@ -1870,6 +1939,13 @@ export default function OrderTracking({ isSharedView = false }) {
     isFoodOrderCancelledStatus(order?.status) ||
     isUndeliveredReturnOrder(order)
 
+  const paymentMethodLower = String(order?.paymentMethod || order?.payment?.method || "").toLowerCase()
+  const isCodAwaitingConfirmation =
+    orderStatus === "cod_verify" &&
+    !isDeliveredOrder &&
+    !isCancelledOrder &&
+    (!paymentMethodLower || ["cash", "cod", "razorpay_qr"].includes(paymentMethodLower))
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a] pb-4">
       {/* Order Confirmed Modal */}
@@ -1949,6 +2025,26 @@ export default function OrderTracking({ isSharedView = false }) {
         </div>
       </motion.div>
 
+      {/* COD Confirmation Notice (only while delivery partner is calling to confirm COD order) */}
+      {isCodAwaitingConfirmation && (
+        <div
+          role="status"
+          className={`mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10 flex items-start gap-3 ${selectedLanguage !== "en" ? "notranslate" : ""}`}
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+            <Phone className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+              {codCallNotice.title}
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+              {codCallNotice.message}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Unavailable items: customer decision / payment adjustment / waiting for store */}
       {order?.fulfilmentStage && order.fulfilmentStage.code !== 'cancelled' && (
         <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
@@ -1990,7 +2086,7 @@ export default function OrderTracking({ isSharedView = false }) {
         {/* Main Status Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-zinc-800 relative overflow-hidden">
           <div className="flex items-start justify-between relative z-10">
-            <div>
+            <div className={isCodAwaitingConfirmation && selectedLanguage !== "en" ? "notranslate" : ""}>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 dark:bg-orange-950/30 text-[color:var(--app-primary,#EB590E)] mb-3">
                 {currentStatus.title}
               </span>
@@ -2129,7 +2225,7 @@ export default function OrderTracking({ isSharedView = false }) {
         )}
 
         {/* Delivery Partner Profile Card */}
-        {!isCancelledOrder && (
+        {!isCancelledOrder && !isCodAwaitingConfirmation && (
           (order?.dispatch?.deliveryPartnerId || order?.deliveryPartnerId || order?.deliveryPartner) ? (
             <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-zinc-800">
               <div className="flex items-center justify-between">

@@ -2302,6 +2302,7 @@ export async function upsertFeeSettings(body) {
         else if (body.codLimit !== undefined) $set.codLimit = body.codLimit;
 
         if (body.codCharge !== undefined) $set.codCharge = body.codCharge;
+        if (body.prepaidDiscount !== undefined) $set.prepaidDiscount = body.prepaidDiscount;
 
         if (body.isActive !== undefined) $set.isActive = body.isActive;
 
@@ -2334,6 +2335,7 @@ export async function upsertFeeSettings(body) {
     if (body.gstRate !== undefined && body.gstRate !== null) payload.gstRate = body.gstRate;
     if (body.codLimit !== undefined && body.codLimit !== null) payload.codLimit = body.codLimit;
     if (body.codCharge !== undefined) payload.codCharge = body.codCharge;
+    if (body.prepaidDiscount !== undefined) payload.prepaidDiscount = body.prepaidDiscount;
 
     const created = await FoodFeeSettings.create(payload);
     return created.toObject();

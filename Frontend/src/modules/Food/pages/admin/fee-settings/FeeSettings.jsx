@@ -73,6 +73,10 @@ export default function FeeSettings() {
     codLimit: "",
     codChargeEnabled: false,
     codChargeAmount: "",
+    prepaidDiscountEnabled: false,
+    prepaidDiscountType: "percentage",
+    prepaidDiscountValue: "",
+    prepaidDiscountMinOrderAmount: "",
   })
   const [additionalCharges, setAdditionalCharges] = useState([])
   const emptyChargeForm = { _id: "", name: "", amount: "", applicableUnder: "", belowMessage: "", freeMessage: "", freeLabel: "" }
@@ -165,6 +169,11 @@ export default function FeeSettings() {
           codLimit: saved.codLimit ?? "",
           codChargeEnabled: saved.codCharge?.isEnabled === true,
           codChargeAmount: saved.codCharge?.amount != null ? String(saved.codCharge.amount) : "",
+          prepaidDiscountEnabled: saved.prepaidDiscount?.isEnabled === true,
+          prepaidDiscountType: saved.prepaidDiscount?.discountType === "flat" ? "flat" : "percentage",
+          prepaidDiscountValue: saved.prepaidDiscount?.value != null ? String(saved.prepaidDiscount.value) : "",
+          prepaidDiscountMinOrderAmount:
+            saved.prepaidDiscount?.minOrderAmount != null ? String(saved.prepaidDiscount.minOrderAmount) : "",
         })
       } else {
         setFeeSettings({
@@ -180,6 +189,10 @@ export default function FeeSettings() {
           codLimit: "",
           codChargeEnabled: false,
           codChargeAmount: "",
+          prepaidDiscountEnabled: false,
+          prepaidDiscountType: "percentage",
+          prepaidDiscountValue: "",
+          prepaidDiscountMinOrderAmount: "",
         })
       }
     } catch {
@@ -393,6 +406,27 @@ export default function FeeSettings() {
         toast.error("Enter a COD charge greater than 0, or switch the COD charge off")
         return
       }
+      const prepaidDiscountType = feeSettings.prepaidDiscountType === "flat" ? "flat" : "percentage"
+      const prepaidDiscountValue =
+        feeSettings.prepaidDiscountValue === "" ? 0 : Number(feeSettings.prepaidDiscountValue)
+      const prepaidDiscountMinOrder =
+        feeSettings.prepaidDiscountMinOrderAmount === "" ? 0 : Number(feeSettings.prepaidDiscountMinOrderAmount)
+      if (!Number.isFinite(prepaidDiscountValue) || prepaidDiscountValue < 0 || prepaidDiscountValue > 10000) {
+        toast.error("Prepaid discount value must be between 0 and 10000")
+        return
+      }
+      if (prepaidDiscountType === "percentage" && prepaidDiscountValue > 100) {
+        toast.error("Prepaid discount percentage cannot exceed 100%")
+        return
+      }
+      if (feeSettings.prepaidDiscountEnabled && prepaidDiscountValue <= 0) {
+        toast.error("Enter a prepaid discount greater than 0, or switch Prepaid Discount off")
+        return
+      }
+      if (!Number.isFinite(prepaidDiscountMinOrder) || prepaidDiscountMinOrder < 0) {
+        toast.error("Min order amount for prepaid discount must be 0 or greater")
+        return
+      }
 
       setSavingFeeSettings(true)
       const response = await adminAPI.createOrUpdateFeeSettings({
@@ -412,6 +446,12 @@ export default function FeeSettings() {
         gstRate,
         codLimit,
         codCharge: { isEnabled: feeSettings.codChargeEnabled === true, amount: codChargeAmount },
+        prepaidDiscount: {
+          isEnabled: feeSettings.prepaidDiscountEnabled === true,
+          discountType: prepaidDiscountType,
+          value: prepaidDiscountValue,
+          minOrderAmount: prepaidDiscountMinOrder,
+        },
         isActive: true,
       })
       if (response?.data?.success) {
@@ -1154,6 +1194,88 @@ export default function FeeSettings() {
                       )
                     })()}
                   </div>
+                </div>
+              </div>
+
+              {/* Prepaid Discount: applied on item subtotal for Online & Wallet orders when enabled. */}
+              <div className="border-t border-slate-200 pt-6 mt-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Prepaid Discount</h3>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                      Discount applied on item subtotal for prepaid orders (Online Payment &amp; Quick Wallet). Cash on
+                      Delivery orders do not receive this discount.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={feeSettings.prepaidDiscountEnabled === true}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, prepaidDiscountEnabled: e.target.checked }))}
+                    />
+                    Enabled
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">Discount Type</label>
+                    <select
+                      value={feeSettings.prepaidDiscountType}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, prepaidDiscountType: e.target.value }))}
+                      disabled={!feeSettings.prepaidDiscountEnabled}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all disabled:bg-slate-100 bg-white"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="flat">Flat (₹)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      {feeSettings.prepaidDiscountType === "flat" ? "Discount Amount (₹)" : "Discount Percentage (%)"}
+                    </label>
+                    <input
+                      type="number"
+                      value={feeSettings.prepaidDiscountValue}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, prepaidDiscountValue: e.target.value }))}
+                      min="0"
+                      max={feeSettings.prepaidDiscountType === "flat" ? "10000" : "100"}
+                      step="0.01"
+                      disabled={!feeSettings.prepaidDiscountEnabled}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all disabled:bg-slate-100"
+                      placeholder={feeSettings.prepaidDiscountType === "flat" ? "e.g. 25" : "e.g. 5"}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">Min Order Subtotal (₹, optional)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.prepaidDiscountMinOrderAmount}
+                      onChange={(e) => setFeeSettings((s) => ({ ...s, prepaidDiscountMinOrderAmount: e.target.value }))}
+                      min="0"
+                      step="1"
+                      disabled={!feeSettings.prepaidDiscountEnabled}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all disabled:bg-slate-100"
+                      placeholder="0 (no minimum)"
+                    />
+                  </div>
+                </div>
+                <div className="px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
+                  {(() => {
+                    const val = Number(feeSettings.prepaidDiscountValue) || 0
+                    const minAmt = Number(feeSettings.prepaidDiscountMinOrderAmount) || 0
+                    if (!feeSettings.prepaidDiscountEnabled || val <= 0) return "No prepaid discount"
+                    const sampleSub = Math.max(500, minAmt || 500)
+                    const sampleOff =
+                      feeSettings.prepaidDiscountType === "flat"
+                        ? val
+                        : Math.round(sampleSub * (val / 100) * 100) / 100
+                    const ruleLabel =
+                      feeSettings.prepaidDiscountType === "flat"
+                        ? `₹${val} flat off`
+                        : `${val}% off on item subtotal`
+                    const minLabel = minAmt > 0 ? `Min subtotal ₹${minAmt}` : "No minimum order"
+                    return `${ruleLabel} (${minLabel}) · e.g. ₹${sampleOff} off on a ₹${sampleSub} subtotal`
+                  })()}
                 </div>
               </div>
             </>
